@@ -1,0 +1,29 @@
+{
+  "name": "@storage/mobile",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Storage Management Mobile App (React Native Expo)",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "dev": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "check": "tsc --noEmit",
+    "lint": "biome check ."
+  },
+  "dependencies": {
+    "@storage/types": "workspace:*",
+    "expo": "~52.0.38",
+    "expo-status-bar": "~2.0.1",
+    "react": "18.3.1",
+    "react-native": "0.76.7"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@storage/tsconfig": "workspace:*",
+    "@types/react": "~18.3.12",
+    "typescript": "^5.8.2"
+  }
+}

@@ -1,0 +1,20 @@
+# Lefthook configuration — https://lefthook.dev/configuration/
+#
+# Setup:
+#   pnpm install        # runs `lefthook install` via the `prepare` script
+#
+# Bypass a hook locally:
+#   git commit --no-verify
+#   git push --no-verify
+
+pre-commit:
+  jobs:
+    - name: biome check
+      glob: "*.{js,cjs,mjs,ts,cts,mts,jsx,tsx,json,jsonc,css}"
+      run: pnpm exec biome check --write --no-errors-on-unmatched {staged_files}
+      stage_fixed: true
+
+commit-msg:
+  jobs:
+    - name: lint commit message
+      run: pnpm exec commitlint --edit {1}

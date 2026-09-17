@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -7,7 +7,15 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "ignore": ["**/.turbo", "**/.next", "**/.expo", "**/dist", "**/build", "**/node_modules"]
+    "includes": [
+      "**/*",
+      "!**/.turbo",
+      "!**/.next",
+      "!**/.expo",
+      "!**/dist",
+      "!**/build",
+      "!**/node_modules"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -18,16 +26,20 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
       "style": {
         "useImportType": "off",
         "useNodejsImportProtocol": "off"
       },
       "correctness": {
-        "useExhaustiveDependencies": "off"
+        "useExhaustiveDependencies": "off",
+        "noUnusedVariables": "warn",
+        "noUnusedImports": "warn"
       },
       "suspicious": {
         "noExplicitAny": "off"
+      },
+      "a11y": {
+        "noSvgWithoutTitle": "off"
       }
     }
   },
@@ -39,7 +51,7 @@
   },
   "overrides": [
     {
-      "include": ["apps/api/**"],
+      "includes": ["apps/api/**"],
       "javascript": {
         "parser": {
           "unsafeParameterDecoratorsEnabled": true

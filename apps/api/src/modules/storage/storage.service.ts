@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { StorageDashboardSummary, StorageItemStatus } from '@storage/types';
-import { ILike, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { CreateStorageItemDto, UpdateStorageItemDto } from './dto/create-storage-item.dto';
 import { CreateStorageLocationDto } from './dto/create-storage-location.dto';
 import { QueryStorageItemDto } from './dto/query-storage-item.dto';

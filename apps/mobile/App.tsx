@@ -1,6 +1,6 @@
 import { IStorageItem, StorageItemStatus } from '@storage/types';
 import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   FlatList,
   Modal,
@@ -58,10 +58,10 @@ const INITIAL_ITEMS: IStorageItem[] = [
 ];
 
 export default function App() {
-  const [items, setItems] = useState<IStorageItem[]>(INITIAL_ITEMS);
+  const [items, _setItems] = useState<IStorageItem[]>(INITIAL_ITEMS);
   const [search, setSearch] = useState('');
   const [scanModalVisible, setScanModalVisible] = useState(false);
-  const [scannedCode, setScannedCode] = useState('');
+  const [_scannedCode, setScannedCode] = useState('');
 
   const filteredItems = items.filter(
     (item) =>

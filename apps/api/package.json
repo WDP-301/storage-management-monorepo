@@ -14,31 +14,31 @@
     "lint": "biome check ."
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.758.0",
-    "@aws-sdk/s3-request-presigner": "^3.758.0",
-    "@nestjs/common": "^11.0.10",
-    "@nestjs/config": "^4.0.1",
-    "@nestjs/core": "^11.0.10",
-    "@nestjs/platform-express": "^11.0.10",
-    "@nestjs/swagger": "^11.0.6",
-    "@nestjs/typeorm": "^11.0.0",
+    "@aws-sdk/client-s3": "^3.800.0",
+    "@aws-sdk/s3-request-presigner": "^3.800.0",
+    "@nestjs/common": "^11.0.24",
+    "@nestjs/config": "^4.0.4",
+    "@nestjs/core": "^11.0.24",
+    "@nestjs/platform-express": "^11.0.24",
+    "@nestjs/swagger": "^11.4.7",
+    "@nestjs/typeorm": "^11.0.3",
     "@storage/types": "workspace:*",
     "class-transformer": "^0.5.1",
-    "class-validator": "^0.14.1",
-    "pg": "^8.13.3",
+    "class-validator": "^0.14.4",
+    "pg": "^8.23.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "typeorm": "^0.3.20"
+    "typeorm": "^0.3.31"
   },
   "devDependencies": {
-    "@nestjs/cli": "^11.0.5",
-    "@nestjs/schematics": "^11.0.2",
-    "@nestjs/testing": "^11.0.10",
+    "@nestjs/cli": "^11.0.24",
+    "@nestjs/schematics": "^11.0.24",
+    "@nestjs/testing": "^11.0.24",
     "@storage/tsconfig": "workspace:*",
     "@types/express": "^5.0.0",
-    "@types/multer": "^1.4.12",
+    "@types/multer": "^1.4.13",
     "@types/node": "^22.13.9",
     "@types/pg": "^8.11.11",
-    "typescript": "^5.8.2"
+    "typescript": "^5.9.3"
   }
 }

@@ -24,6 +24,6 @@
     "@babel/core": "^7.25.2",
     "@storage/tsconfig": "workspace:*",
     "@types/react": "~19.1.0",
-    "typescript": "^5.8.2"
+    "typescript": "^5.9.3"
   }
 }

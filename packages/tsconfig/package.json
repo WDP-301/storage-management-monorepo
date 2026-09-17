@@ -2,5 +2,10 @@
   "name": "@storage/tsconfig",
   "version": "0.0.1",
   "private": true,
-  "files": ["base.json", "nest.json", "react.json", "react-native.json"]
+  "files": [
+    "base.json",
+    "nest.json",
+    "react.json",
+    "react-native.json"
+  ]
 }

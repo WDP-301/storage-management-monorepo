@@ -2,11 +2,12 @@
   "name": "@storage/web",
   "version": "0.0.1",
   "private": true,
-  "description": "Storage Management Web Dashboard (Next.js + Tailwind CSS)",
+  "type": "module",
+  "description": "Storage Management Web Dashboard (React 19 + Vite + Tailwind CSS)",
   "scripts": {
-    "dev": "next dev -p 3000",
-    "build": "next build",
-    "start": "next start -p 3000",
+    "dev": "vite --port 3000",
+    "build": "tsc && vite build",
+    "preview": "vite preview --port 3000",
     "check": "tsc --noEmit",
     "lint": "biome check ."
   },
@@ -16,19 +17,20 @@
     "axios": "^1.8.2",
     "clsx": "^2.1.1",
     "lucide-react": "^0.479.0",
-    "next": "^15.2.1",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
     "tailwind-merge": "^3.0.2"
   },
   "devDependencies": {
     "@storage/tsconfig": "workspace:*",
     "@types/node": "^22.13.9",
-    "@types/react": "^19.0.10",
-    "@types/react-dom": "^19.0.4",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vite": "^6.2.0"
   }
 }

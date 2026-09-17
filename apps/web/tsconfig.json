@@ -1,13 +1,11 @@
 {
-  "extends": "@storage/tsconfig/nextjs.json",
+  "extends": "@storage/tsconfig/react.json",
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
-    },
-    "incremental": true,
-    "isolatedModules": true
+      "@/*": ["./src/*"]
+    }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
 }

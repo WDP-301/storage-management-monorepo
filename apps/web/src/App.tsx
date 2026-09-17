@@ -1,5 +1,3 @@
-'use client';
-
 import {
   IStorageItem,
   IStorageLocation,
@@ -8,7 +6,6 @@ import {
 } from '@storage/types';
 import {
   AlertTriangle,
-  ArrowUpDown,
   Boxes,
   CheckCircle2,
   Database,
@@ -20,10 +17,10 @@ import {
   Warehouse,
   XCircle,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { StorageApi } from '../lib/api';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { StorageApi } from './lib/api';
 
-export default function StorageDashboardPage() {
+export default function App() {
   const [items, setItems] = useState<IStorageItem[]>([]);
   const [locations, setLocations] = useState<IStorageLocation[]>([]);
   const [summary, setSummary] = useState<StorageDashboardSummary>({
@@ -38,7 +35,7 @@ export default function StorageDashboardPage() {
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [apiConnected, setApiConnected] = useState<boolean | null>(null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [sumRes, itemRes, locRes] = await Promise.allSettled([
@@ -57,11 +54,11 @@ export default function StorageDashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [search]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -113,7 +110,7 @@ export default function StorageDashboardPage() {
             </div>
             <div>
               <h1 className="text-lg font-bold leading-tight">Storage Management Hub</h1>
-              <p className="text-xs text-slate-500">Monorepo Web Dashboard • PostgreSQL Backed</p>
+              <p className="text-xs text-slate-500">React 19 SPA • PostgreSQL Backed</p>
             </div>
           </div>
 

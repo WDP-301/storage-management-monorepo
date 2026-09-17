@@ -31,6 +31,7 @@
     "s3:up": "docker compose up -d rustfs",
     "s3:down": "docker compose stop rustfs",
     "s3:logs": "docker compose logs -f rustfs",
+    "clean": "pnpm -r exec rm -rf dist build .turbo && rm -rf .turbo",
     "prepare": "lefthook install || true"
   },
   "devDependencies": {

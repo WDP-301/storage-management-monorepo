@@ -1,5 +1,5 @@
 # Toolchain versions managed by mise.
 # Install mise (https://mise.jdx.dev/) then run `mise install` once.
 [tools]
-node = "22"
+node = "24.11.1"
 pnpm = "10.23.0"

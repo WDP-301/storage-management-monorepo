@@ -2,7 +2,9 @@ import {
   ApiResponse,
   IStorageItem,
   IStorageLocation,
+  PresignedUploadUrlResponse,
   StorageDashboardSummary,
+  UploadedFileResponse,
 } from '@storage/types';
 import axios from 'axios';
 
@@ -41,5 +43,37 @@ export const StorageApi = {
   createItem: async (data: Partial<IStorageItem>) => {
     const res = await apiClient.post<ApiResponse<IStorageItem>>('/storage/items', data);
     return res.data.data;
+  },
+
+  // S3 / RustFS Object Storage API
+  getPresignedUploadUrl: async (
+    fileName: string,
+    mimeType: string,
+  ): Promise<PresignedUploadUrlResponse> => {
+    const res = await apiClient.post<ApiResponse<PresignedUploadUrlResponse>>(
+      '/uploads/presigned-url',
+      { fileName, mimeType },
+    );
+    return res.data.data;
+  },
+
+  uploadFileDirect: async (file: File): Promise<UploadedFileResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await apiClient.post<ApiResponse<UploadedFileResponse>>(
+      '/uploads/direct',
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      },
+    );
+    return res.data.data;
+  },
+
+  getDownloadUrl: async (fileKey: string): Promise<string> => {
+    const res = await apiClient.get<ApiResponse<{ downloadUrl: string }>>('/uploads/download-url', {
+      params: { fileKey },
+    });
+    return res.data.data.downloadUrl;
   },
 };

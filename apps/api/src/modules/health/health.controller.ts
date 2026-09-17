@@ -1,14 +1,18 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Optional } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { DataSource } from 'typeorm';
+import { UploadService } from '../upload/upload.service';
 
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    @Optional() private readonly uploadService?: UploadService,
+  ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Health check and database readiness' })
+  @ApiOperation({ summary: 'Health check and database/storage readiness' })
   @ApiResponse({ status: 200, description: 'System health status' })
   async check() {
     let dbStatus = 'disconnected';
@@ -21,6 +25,11 @@ export class HealthController {
       dbStatus = 'error';
     }
 
+    let s3Status: any = { status: 'unconfigured' };
+    if (this.uploadService) {
+      s3Status = await this.uploadService.checkHealth();
+    }
+
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
@@ -28,6 +37,10 @@ export class HealthController {
       database: {
         type: 'postgres',
         status: dbStatus,
+      },
+      storage: {
+        provider: 'rustfs (S3-compatible)',
+        ...s3Status,
       },
     };
   }

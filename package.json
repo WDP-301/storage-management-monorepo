@@ -2,7 +2,7 @@
   "name": "storage-management-monorepo",
   "version": "0.0.1",
   "private": true,
-  "description": "Storage Management Monorepo — Mobile (Expo) + Web (Next.js) + API (NestJS + PostgreSQL)",
+  "description": "Storage Management Monorepo — Mobile (Expo SDK 54) + Web (React 19 Vite) + API (NestJS + PostgreSQL + RustFS S3)",
   "packageManager": "pnpm@10.23.0",
   "engines": {
     "node": ">=20.0.0",
@@ -23,9 +23,14 @@
     "lint": "biome lint .",
     "format": "biome format --write .",
     "format:check": "biome format .",
+    "storage:up": "docker compose up -d postgres rustfs",
+    "storage:down": "docker compose down",
     "db:up": "docker compose up -d postgres",
-    "db:down": "docker compose down",
+    "db:down": "docker compose stop postgres",
     "db:logs": "docker compose logs -f postgres",
+    "s3:up": "docker compose up -d rustfs",
+    "s3:down": "docker compose stop rustfs",
+    "s3:logs": "docker compose logs -f rustfs",
     "prepare": "lefthook install || true"
   },
   "devDependencies": {

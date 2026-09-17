@@ -50,6 +50,7 @@ export interface IStorageItem {
   unit: string;
   price: number;
   status: StorageItemStatus;
+  imageUrl?: string | null;
   locationId?: string | null;
   location?: IStorageLocation | null;
   createdAt: string | Date;
@@ -62,4 +63,18 @@ export interface StorageDashboardSummary {
   totalQuantity: number;
   lowStockCount: number;
   outOfStockCount: number;
+}
+
+export interface PresignedUploadUrlResponse {
+  uploadUrl: string;
+  fileKey: string;
+  publicUrl: string;
+}
+
+export interface UploadedFileResponse {
+  key: string;
+  bucket: string;
+  url: string;
+  size: number;
+  mimeType: string;
 }

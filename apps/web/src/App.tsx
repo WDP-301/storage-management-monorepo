@@ -8,16 +8,18 @@ import {
   AlertTriangle,
   Boxes,
   CheckCircle2,
+  Cloud,
   Database,
   Layers,
   Package,
   Plus,
   RefreshCw,
   Search,
+  Upload,
   Warehouse,
   XCircle,
 } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StorageApi } from './lib/api';
 
 export default function App() {
@@ -31,9 +33,12 @@ export default function App() {
     outOfStockCount: 1,
   });
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [apiConnected, setApiConnected] = useState<boolean | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -59,6 +64,24 @@ export default function App() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setUploadMessage(null);
+    try {
+      const res = await StorageApi.uploadFileDirect(file);
+      setUploadMessage(`Uploaded to RustFS S3: ${res.key}`);
+      setTimeout(() => setUploadMessage(null), 5000);
+    } catch (err: any) {
+      setUploadMessage(`Upload failed: ${err.message}`);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -110,12 +133,13 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-lg font-bold leading-tight">Storage Management Hub</h1>
-              <p className="text-xs text-slate-500">React 19 SPA • PostgreSQL Backed</p>
+              <p className="text-xs text-slate-500">React 19 • PostgreSQL • RustFS S3</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200">
+          <div className="flex items-center gap-3">
+            {/* Status pills */}
+            <div className="hidden sm:flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-full bg-slate-100 border border-slate-200">
               <Database className="w-3.5 h-3.5 text-blue-600" />
               <span className="text-slate-600">PostgreSQL</span>
               <span
@@ -124,6 +148,17 @@ export default function App() {
                 }`}
               />
             </div>
+
+            <div className="hidden sm:flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-full bg-slate-100 border border-slate-200">
+              <Cloud className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="text-slate-600">RustFS S3</span>
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  apiConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'
+                }`}
+              />
+            </div>
+
             <button
               type="button"
               onClick={fetchData}
@@ -133,6 +168,19 @@ export default function App() {
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
+
+            {/* S3 Upload Button */}
+            <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition cursor-pointer"
+            >
+              <Upload className={`w-4 h-4 ${uploading ? 'animate-bounce text-blue-600' : ''}`} />
+              {uploading ? 'Uploading...' : 'S3 Upload'}
+            </button>
+
             <button
               type="button"
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-xs transition cursor-pointer"
@@ -143,6 +191,13 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {/* Upload Notification Banner */}
+      {uploadMessage && (
+        <div className="bg-blue-50 border-b border-blue-200 px-4 py-2.5 text-center text-xs font-medium text-blue-800 transition">
+          {uploadMessage}
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">

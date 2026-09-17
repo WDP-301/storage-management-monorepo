@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HealthModule } from './modules/health/health.module';
 import { StorageModule } from './modules/storage/storage.module';
+import { UploadModule } from './modules/upload/upload.module';
 import { ENV_KEY } from './shared/constants';
 
 @Module({
@@ -28,6 +29,7 @@ import { ENV_KEY } from './shared/constants';
     }),
     HealthModule,
     StorageModule,
+    UploadModule,
   ],
 })
 export class AppModule {}

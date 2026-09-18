@@ -6,6 +6,8 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "scheme": "storage-management",
+    "plugins": ["expo-router"],
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#2563eb"

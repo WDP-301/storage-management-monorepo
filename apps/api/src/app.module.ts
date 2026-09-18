@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { validateEnv } from './config/env.validation';
 import { HealthModule } from './modules/health/health.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { UploadModule } from './modules/upload/upload.module';
@@ -11,18 +14,20 @@ import { ENV_KEY } from './shared/constants';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
+      validate: validateEnv,
     }),
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     TypeOrmModule.forRootAsync({
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
-        host: configService.get<string>(ENV_KEY.DB_HOST, 'localhost'),
-        port: +configService.get<number>(ENV_KEY.DB_PORT, 5432),
-        username: configService.get<string>(ENV_KEY.DB_USERNAME, 'postgres'),
-        password: configService.get<string>(ENV_KEY.DB_PASSWORD, 'postgrespassword'),
-        database: configService.get<string>(ENV_KEY.DB_DATABASE, 'storage_management_db'),
+        host: configService.getOrThrow<string>(ENV_KEY.DB_HOST),
+        port: +configService.getOrThrow<number>(ENV_KEY.DB_PORT),
+        username: configService.getOrThrow<string>(ENV_KEY.DB_USERNAME),
+        password: configService.getOrThrow<string>(ENV_KEY.DB_PASSWORD),
+        database: configService.getOrThrow<string>(ENV_KEY.DB_DATABASE),
         autoLoadEntities: true,
         synchronize:
-          configService.get<string>(ENV_KEY.DB_SYNCHRONIZE, 'true').toLowerCase() === 'true',
+          configService.get<string>(ENV_KEY.DB_SYNCHRONIZE, 'false').toLowerCase() === 'true',
         logging: configService.get<string>(ENV_KEY.DB_LOGGING, 'false').toLowerCase() === 'true',
       }),
       inject: [ConfigService],
@@ -31,5 +36,6 @@ import { ENV_KEY } from './shared/constants';
     StorageModule,
     UploadModule,
   ],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

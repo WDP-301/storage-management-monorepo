@@ -37,6 +37,9 @@ export class StorageItem extends AuditWithTimezone {
   })
   status: StorageItemStatus;
 
+  @Column({ type: 'varchar', length: 500, nullable: true, name: 'image_url' })
+  imageUrl?: string;
+
   @Column({ type: 'uuid', nullable: true, name: 'location_id' })
   locationId?: string;
 

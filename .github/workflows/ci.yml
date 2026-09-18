@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -29,6 +29,12 @@ jobs:
 
       - name: Code Quality & Lint (Biome)
         run: pnpm check
+
+      - name: Typecheck All Workspaces
+        run: pnpm turbo run check
+
+      - name: Test
+        run: pnpm turbo run test
 
       - name: Build All Workspaces (Turborepo)
         run: pnpm turbo:build

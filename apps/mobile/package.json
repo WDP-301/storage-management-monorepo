@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "description": "Storage Management Mobile App (React Native Expo SDK 54)",
-  "main": "index.js",
+  "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
     "dev": "expo start",
@@ -17,6 +17,9 @@
     "@gorhom/bottom-sheet": "^5.2.14",
     "@storage/types": "workspace:*",
     "expo": "~54.0.37",
+    "expo-constants": "~18.0.14",
+    "expo-linking": "~8.0.12",
+    "expo-router": "~6.0.24",
     "expo-status-bar": "~3.0.9",
     "heroui-native": "^1.0.9",
     "react": "19.1.0",

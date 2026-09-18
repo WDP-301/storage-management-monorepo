@@ -11,7 +11,30 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "check": "tsc --noEmit",
-    "lint": "biome check ."
+    "lint": "biome check .",
+    "test": "jest",
+    "migration:generate": "pnpm run build && typeorm migration:generate -d dist/data-source.js",
+    "migration:run": "pnpm run build && typeorm migration:run -d dist/data-source.js",
+    "migration:revert": "typeorm migration:revert -d dist/data-source.js",
+    "migration:show": "typeorm migration:show -d dist/data-source.js"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "moduleNameMapper": {
+      "^@storage/types$": "<rootDir>/../../../packages/types/src/index.ts",
+      "^@shared/(.*)$": "<rootDir>/shared/$1",
+      "^@modules/(.*)$": "<rootDir>/modules/$1"
+    },
+    "testEnvironment": "node"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.800.0",
@@ -21,10 +44,12 @@
     "@nestjs/core": "^11.0.24",
     "@nestjs/platform-express": "^11.0.24",
     "@nestjs/swagger": "^11.4.7",
+    "@nestjs/throttler": "^6.7.0",
     "@nestjs/typeorm": "^11.0.3",
     "@storage/types": "workspace:*",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.4",
+    "helmet": "^8.3.0",
     "pg": "^8.23.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
@@ -36,9 +61,12 @@
     "@nestjs/testing": "^11.0.24",
     "@storage/tsconfig": "workspace:*",
     "@types/express": "^5.0.0",
+    "@types/jest": "^30.0.0",
     "@types/multer": "^1.4.13",
     "@types/node": "^22.13.9",
     "@types/pg": "^8.11.11",
+    "jest": "^30.5.1",
+    "ts-jest": "^29.4.12",
     "typescript": "^5.9.3"
   }
 }

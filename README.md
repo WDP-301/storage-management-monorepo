@@ -107,6 +107,7 @@ pnpm dev:mobile  # Expo SDK 54 Mobile Metro bundler
 | `pnpm dev:web` | Run only the React Vite web application |
 | `pnpm dev:mobile` | Run only the Expo mobile application |
 | `pnpm build` | Build all applications and packages via Turborepo |
+| `pnpm test` | Run all workspace tests (Jest API + Vitest Web) |
 | `pnpm check` | Run Biome linter & formatter check |
 | `pnpm check:fix` | Run Biome and automatically apply safe fixes |
 | `pnpm format` | Auto-format all code with Biome |
@@ -115,3 +116,5 @@ pnpm dev:mobile  # Expo SDK 54 Mobile Metro bundler
 | `pnpm storage:down` | Stop and tear down docker containers |
 | `pnpm db:logs` | View PostgreSQL database logs |
 | `pnpm s3:logs` | View RustFS S3 logs |
+| `pnpm --filter @storage/api migration:run` | Apply pending DB migrations |
+| `pnpm --filter @storage/api migration:generate src/migrations/<Name>` | Generate migration from entity changes |

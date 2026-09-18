@@ -5,6 +5,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AllExceptionsFilter } from '@shared/filters/http-exception.filter';
 import { HttpLoggingInterceptor } from '@shared/interceptors/http-logging.interceptor';
 import { HttpResponseInterceptor } from '@shared/interceptors/http-response.interceptor';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -14,10 +15,17 @@ async function bootstrap() {
 
   app.enableShutdownHooks();
 
+  // ponytail: CSP off — Swagger UI needs inline assets; re-enable when docs are dropped in prod
+  app.use(helmet({ contentSecurityPolicy: false }));
+
   const enableCors = configService.get<string>('ENABLE_CORS', 'true') === 'true';
   if (enableCors) {
+    const origins = configService
+      .get<string>('CORS_ORIGINS', 'http://localhost:3000')
+      .split(',')
+      .map((o) => o.trim());
     app.enableCors({
-      origin: '*',
+      origin: origins,
       methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
       credentials: true,
     });

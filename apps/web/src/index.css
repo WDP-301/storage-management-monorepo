@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "@heroui/styles/css";
 
 :root {
   --background: #f8fafc;

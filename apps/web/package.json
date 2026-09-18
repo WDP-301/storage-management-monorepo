@@ -12,6 +12,7 @@
     "lint": "biome check ."
   },
   "dependencies": {
+    "@heroui/react": "^3.2.6",
     "@storage/types": "workspace:*",
     "axios": "^1.20.0",
     "clsx": "^2.1.1",

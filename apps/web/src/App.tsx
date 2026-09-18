@@ -1,3 +1,4 @@
+import { Button } from '@heroui/react';
 import {
   IStorageItem,
   IStorageLocation,
@@ -181,13 +182,10 @@ export default function App() {
               {uploading ? 'Uploading...' : 'S3 Upload'}
             </button>
 
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-xs transition cursor-pointer"
-            >
+            <Button variant="primary">
               <Plus className="w-4 h-4" />
               New Item
-            </button>
+            </Button>
           </div>
         </div>
       </header>

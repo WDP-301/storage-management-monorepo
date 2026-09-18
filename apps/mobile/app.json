@@ -4,7 +4,6 @@
     "slug": "storage-management-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -16,13 +15,7 @@
       "bundleIdentifier": "com.storage.management"
     },
     "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#2563eb"
-      },
       "package": "com.storage.management"
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
     }
   }
 }

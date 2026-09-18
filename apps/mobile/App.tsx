@@ -1,6 +1,9 @@
 import { IStorageItem, StorageItemStatus } from '@storage/types';
 import { StatusBar } from 'expo-status-bar';
+import { HeroUINativeProvider } from 'heroui-native';
 import { useState } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import './global.css';
 import {
   FlatList,
   Modal,
@@ -89,121 +92,125 @@ export default function App() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <HeroUINativeProvider>
+        <SafeAreaView style={styles.container}>
+          <StatusBar style="dark" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Storage Mobile</Text>
-          <Text style={styles.headerSubtitle}>Warehouse Handheld Scanner</Text>
-        </View>
-        <TouchableOpacity style={styles.scanButton} onPress={() => setScanModalVisible(true)}>
-          <Text style={styles.scanButtonText}>📷 Scan QR</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* KPI Cards */}
-      <View style={styles.kpiContainer}>
-        <View style={styles.kpiCard}>
-          <Text style={styles.kpiLabel}>Total Items</Text>
-          <Text style={styles.kpiValue}>{items.length}</Text>
-        </View>
-        <View style={styles.kpiCard}>
-          <Text style={styles.kpiLabel}>Low Stock</Text>
-          <Text style={[styles.kpiValue, { color: '#b45309' }]}>
-            {items.filter((i) => i.status === StorageItemStatus.LOW_STOCK).length}
-          </Text>
-        </View>
-        <View style={styles.kpiCard}>
-          <Text style={styles.kpiLabel}>Out of Stock</Text>
-          <Text style={[styles.kpiValue, { color: '#b91c1c' }]}>
-            {items.filter((i) => i.status === StorageItemStatus.OUT_OF_STOCK).length}
-          </Text>
-        </View>
-      </View>
-
-      {/* Search Input */}
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search SKU or item name..."
-          placeholderTextColor="#9ca3af"
-          value={search}
-          onChangeText={setSearch}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch('')} style={styles.clearButton}>
-            <Text style={styles.clearButtonText}>✕</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Item List */}
-      <FlatList
-        data={filteredItems}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => {
-          const statusStyle = getStatusColor(item.status);
-          return (
-            <View style={styles.itemCard}>
-              <View style={styles.itemCardHeader}>
-                <Text style={styles.itemSku}>{item.sku}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-                  <Text style={[styles.statusBadgeText, { color: statusStyle.text }]}>
-                    {item.status.replace('_', ' ')}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={styles.itemName}>{item.name}</Text>
-              {item.description && (
-                <Text style={styles.itemDesc} numberOfLines={1}>
-                  {item.description}
-                </Text>
-              )}
-
-              <View style={styles.itemCardFooter}>
-                <Text style={styles.itemQuantity}>
-                  Qty: <Text style={styles.bold}>{item.quantity}</Text> {item.unit}
-                </Text>
-                <Text style={styles.itemPrice}>${Number(item.price).toFixed(2)}</Text>
-              </View>
+          {/* Header */}
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.headerTitle}>Storage Mobile</Text>
+              <Text style={styles.headerSubtitle}>Warehouse Handheld Scanner</Text>
             </View>
-          );
-        }}
-      />
-
-      {/* Scanner Simulation Modal */}
-      <Modal visible={scanModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Barcode / QR Scanner</Text>
-            <Text style={styles.modalDesc}>Simulate barcode scan by picking a sample SKU:</Text>
-
-            {items.map((it) => (
-              <TouchableOpacity
-                key={it.id}
-                style={styles.simulateItemBtn}
-                onPress={() => simulateScan(it.sku)}
-              >
-                <Text style={styles.simulateItemText}>
-                  {it.sku} - {it.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-
-            <TouchableOpacity
-              style={styles.closeModalBtn}
-              onPress={() => setScanModalVisible(false)}
-            >
-              <Text style={styles.closeModalText}>Cancel</Text>
+            <TouchableOpacity style={styles.scanButton} onPress={() => setScanModalVisible(true)}>
+              <Text style={styles.scanButtonText}>📷 Scan QR</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </Modal>
-    </SafeAreaView>
+
+          {/* KPI Cards */}
+          <View style={styles.kpiContainer}>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Total Items</Text>
+              <Text style={styles.kpiValue}>{items.length}</Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Low Stock</Text>
+              <Text style={[styles.kpiValue, { color: '#b45309' }]}>
+                {items.filter((i) => i.status === StorageItemStatus.LOW_STOCK).length}
+              </Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Out of Stock</Text>
+              <Text style={[styles.kpiValue, { color: '#b91c1c' }]}>
+                {items.filter((i) => i.status === StorageItemStatus.OUT_OF_STOCK).length}
+              </Text>
+            </View>
+          </View>
+
+          {/* Search Input */}
+          <View style={styles.searchContainer}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search SKU or item name..."
+              placeholderTextColor="#9ca3af"
+              value={search}
+              onChangeText={setSearch}
+            />
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => setSearch('')} style={styles.clearButton}>
+                <Text style={styles.clearButtonText}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Item List */}
+          <FlatList
+            data={filteredItems}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            renderItem={({ item }) => {
+              const statusStyle = getStatusColor(item.status);
+              return (
+                <View style={styles.itemCard}>
+                  <View style={styles.itemCardHeader}>
+                    <Text style={styles.itemSku}>{item.sku}</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+                      <Text style={[styles.statusBadgeText, { color: statusStyle.text }]}>
+                        {item.status.replace('_', ' ')}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.itemName}>{item.name}</Text>
+                  {item.description && (
+                    <Text style={styles.itemDesc} numberOfLines={1}>
+                      {item.description}
+                    </Text>
+                  )}
+
+                  <View style={styles.itemCardFooter}>
+                    <Text style={styles.itemQuantity}>
+                      Qty: <Text style={styles.bold}>{item.quantity}</Text> {item.unit}
+                    </Text>
+                    <Text style={styles.itemPrice}>${Number(item.price).toFixed(2)}</Text>
+                  </View>
+                </View>
+              );
+            }}
+          />
+
+          {/* Scanner Simulation Modal */}
+          <Modal visible={scanModalVisible} transparent animationType="slide">
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Barcode / QR Scanner</Text>
+                <Text style={styles.modalDesc}>Simulate barcode scan by picking a sample SKU:</Text>
+
+                {items.map((it) => (
+                  <TouchableOpacity
+                    key={it.id}
+                    style={styles.simulateItemBtn}
+                    onPress={() => simulateScan(it.sku)}
+                  >
+                    <Text style={styles.simulateItemText}>
+                      {it.sku} - {it.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+
+                <TouchableOpacity
+                  style={styles.closeModalBtn}
+                  onPress={() => setScanModalVisible(false)}
+                >
+                  <Text style={styles.closeModalText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+        </SafeAreaView>
+      </HeroUINativeProvider>
+    </GestureHandlerRootView>
   );
 }
 

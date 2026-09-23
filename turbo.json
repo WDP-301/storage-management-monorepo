@@ -11,8 +11,12 @@
       "cache": false,
       "persistent": true
     },
-    "check": {},
+    "check": {
+      "dependsOn": ["^build"]
+    },
     "lint": {},
-    "test": {}
+    "test": {
+      "dependsOn": ["^build"]
+    }
   }
 }

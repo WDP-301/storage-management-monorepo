@@ -38,6 +38,7 @@
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@storage/tsconfig": "workspace:*",
+    "@types/node": "^24.13.6",
     "@types/react": "~19.1.0",
     "typescript": "^5.9.3"
   }

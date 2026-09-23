@@ -25,6 +25,10 @@ import { ENV_KEY } from './shared/constants';
         username: configService.getOrThrow<string>(ENV_KEY.DB_USERNAME),
         password: configService.getOrThrow<string>(ENV_KEY.DB_PASSWORD),
         database: configService.getOrThrow<string>(ENV_KEY.DB_DATABASE),
+        ssl:
+          configService.get<string>(ENV_KEY.DB_SSL, 'false').toLowerCase() === 'true'
+            ? { rejectUnauthorized: false }
+            : false,
         autoLoadEntities: true,
         synchronize:
           configService.get<string>(ENV_KEY.DB_SYNCHRONIZE, 'false').toLowerCase() === 'true',

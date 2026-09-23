@@ -45,7 +45,7 @@ export const StorageApi = {
     return res.data.data;
   },
 
-  // S3 / RustFS Object Storage API
+  // S3 Object Storage API
   getPresignedUploadUrl: async (
     fileName: string,
     mimeType: string,

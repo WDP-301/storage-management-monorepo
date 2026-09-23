@@ -24,7 +24,7 @@ import { Response } from 'express';
 import { GetPresignedUrlDto } from './dto/upload.dto';
 import { UploadService } from './upload.service';
 
-@ApiTags('Uploads (RustFS S3)')
+@ApiTags('Uploads (S3)')
 @Controller('uploads')
 export class UploadController {
   constructor(private readonly uploadService: UploadService) {}
@@ -48,7 +48,7 @@ export class UploadController {
   }
 
   @Post('direct')
-  @ApiOperation({ summary: 'Upload file directly through API to RustFS S3' })
+  @ApiOperation({ summary: 'Upload file directly through API to S3' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -78,7 +78,7 @@ export class UploadController {
   }
 
   @Get('stream/*')
-  @ApiOperation({ summary: 'Stream file directly from RustFS S3 storage' })
+  @ApiOperation({ summary: 'Stream file directly from S3 storage' })
   async streamFile(@Param('0') fileKey: string, @Res() res: Response) {
     const { stream, contentType } = await this.uploadService.getFileStream(fileKey);
     res.setHeader('Content-Type', contentType);
@@ -86,7 +86,7 @@ export class UploadController {
   }
 
   @Delete(':key')
-  @ApiOperation({ summary: 'Delete file from RustFS S3' })
+  @ApiOperation({ summary: 'Delete file from S3' })
   async deleteFile(@Param('key') key: string) {
     return this.uploadService.deleteFile(key);
   }

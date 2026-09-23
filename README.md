@@ -4,8 +4,8 @@ Enterprise-grade Storage and Warehouse Management Platform starter template.
 Monorepo framework inherited and tailored from Zenith architecture:
 - **Mobile**: **Expo SDK 54** (React Native 0.81.5 + React 19.1.0)
 - **Web**: **React 19 + Vite 8 SPA** with **Tailwind CSS v4** & Lucide Icons (Pure React Hooks)
-- **Backend**: **NestJS 11** with **TypeORM** + **PostgreSQL 16** + Swagger OpenAPI
-- **Object Storage**: **RustFS S3** (high-performance, lightweight S3-compatible storage written in Rust)
+- **Backend**: **NestJS 11** with **TypeORM** + **PostgreSQL** (Render) + Swagger OpenAPI
+- **Object Storage**: **Cloudflare R2** (S3-compatible object storage)
 - **Toolchain**: **pnpm workspaces** + **Turborepo** + **Biome** + **Lefthook** + **mise**
 
 ---
@@ -17,13 +17,12 @@ storage-management-monorepo/
 ├── .github/workflows/ci.yml     # GitHub Actions CI pipeline (build & Biome check)
 ├── .vscode/                     # VS Code workspace settings (Biome format-on-save)
 ├── apps/
-│   ├── api/                     # @storage/api      — NestJS 11 + TypeORM (PostgreSQL) + RustFS S3 + Swagger
+│   ├── api/                     # @storage/api      — NestJS 11 + TypeORM (PostgreSQL) + S3 (R2) + Swagger
 │   ├── web/                     # @storage/web      — React 19 + Vite 8 SPA + Tailwind v4 + S3 Upload
 │   └── mobile/                  # @storage/mobile   — React Native Expo SDK 54 (Barcode Scanner Simulation)
 ├── packages/
 │   ├── types/                   # @storage/types    — Shared TypeScript interfaces, DTOs & S3 types
 │   └── tsconfig/                # @storage/tsconfig — Shared TypeScript compiler presets (nest, react, react-native, base)
-├── docker-compose.yml           # PostgreSQL 16 (5433) + RustFS S3 (9000 S3 API, 9001 Console)
 ├── pnpm-workspace.yaml          # pnpm monorepo workspace definition
 ├── turbo.json                   # Turborepo task orchestrator
 ├── biome.json                   # Biome linter & formatter configuration
@@ -44,8 +43,8 @@ storage-management-monorepo/
 | **Mobile App (`apps/mobile`)** | React Native, Expo SDK 54, Metro monorepo | `8081` | Handheld warehouse barcode scanner simulator & KPI view |
 | **Shared Types (`packages/types`)** | TypeScript | N/A | DTOs, entity interfaces, and API response contracts |
 | **Shared Config (`packages/tsconfig`)**| TSConfig Presets | N/A | Shared tsconfig (`nest`, `react`, `react-native`, `base`) |
-| **Relational Database** | PostgreSQL 16 (Docker) | `5433` (host) / `5432` | Primary relational database |
-| **Object Storage (S3)** | RustFS S3 (Docker) | `9000` (API) / `9001` (Console) | S3-compatible object storage for file uploads/attachments |
+| **Relational Database** | PostgreSQL (Render, managed) | `5432` | Primary relational database |
+| **Object Storage (S3)** | Cloudflare R2 | N/A | S3-compatible object storage for file uploads/attachments |
 
 ---
 
@@ -53,7 +52,7 @@ storage-management-monorepo/
 
 - **Node.js**: `>= 20.0.0` (Pinned to `24.11.1` in `mise.toml`)
 - **pnpm**: `>= 10.0.0` (`corepack enable && corepack prepare pnpm@10.23.0 --activate`)
-- **Docker & Docker Compose**: For local PostgreSQL and RustFS S3 services
+- A **Render PostgreSQL** instance and a **Cloudflare R2** bucket (credentials go into `apps/api/.env`)
 
 ---
 
@@ -64,18 +63,17 @@ storage-management-monorepo/
 pnpm install
 ```
 
-### 2. Start Storage Infrastructure (Postgres + RustFS S3)
+### 2. Configure Environment
 ```bash
-# Start both PostgreSQL and RustFS S3
-pnpm storage:up
-
-# Or start services individually:
-pnpm db:up   # PostgreSQL on port 5433
-pnpm s3:up   # RustFS S3 on ports 9000 & 9001
+cp apps/api/.env.example apps/api/.env
+# Fill in your Render Postgres credentials (DB_* + DB_SSL=true)
+# and Cloudflare R2 credentials (S3_*)
 ```
 
-- **PostgreSQL**: `localhost:5433` (user: `postgres`, password: `postgrespassword`, db: `storage_management_db`)
-- **RustFS S3 Console**: `http://localhost:9001` (access key: `rustfsadmin`, secret: `rustfspassword`)
+```bash
+# Apply DB migrations (creates tables on first run):
+pnpm --filter @storage/api migration:run
+```
 
 ### 3. Run Development Servers
 ```bash
@@ -94,7 +92,7 @@ pnpm dev:mobile  # Expo SDK 54 Mobile Metro bundler
 
 - **REST API Base URL**: `http://localhost:3001/api/v1`
 - **Swagger Documentation**: `http://localhost:3001/api/docs`
-- **Health Check**: `http://localhost:3001/api/v1/health` (checks both DB and RustFS S3)
+- **Health Check**: `http://localhost:3001/api/v1/health` (checks both DB and S3)
 
 ---
 
@@ -112,9 +110,5 @@ pnpm dev:mobile  # Expo SDK 54 Mobile Metro bundler
 | `pnpm check:fix` | Run Biome and automatically apply safe fixes |
 | `pnpm format` | Auto-format all code with Biome |
 | `pnpm clean` | Clean all `dist`, `build`, and `.turbo` caches |
-| `pnpm storage:up` | Start both PostgreSQL and RustFS S3 containers |
-| `pnpm storage:down` | Stop and tear down docker containers |
-| `pnpm db:logs` | View PostgreSQL database logs |
-| `pnpm s3:logs` | View RustFS S3 logs |
 | `pnpm --filter @storage/api migration:run` | Apply pending DB migrations |
 | `pnpm --filter @storage/api migration:generate src/migrations/<Name>` | Generate migration from entity changes |

@@ -39,7 +39,7 @@ export class HealthController {
         status: dbStatus,
       },
       storage: {
-        provider: 'rustfs (S3-compatible)',
+        provider: 'cloudflare-r2 (S3-compatible)',
         ...s3Status,
       },
     };

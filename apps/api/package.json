@@ -2,7 +2,7 @@
   "name": "@storage/api",
   "version": "0.0.1",
   "private": true,
-  "description": "Storage Management Backend API (NestJS + PostgreSQL TypeORM + RustFS S3)",
+  "description": "Storage Management Backend API (NestJS + PostgreSQL TypeORM + S3)",
   "scripts": {
     "build": "nest build",
     "start": "nest start",

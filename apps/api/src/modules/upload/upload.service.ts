@@ -25,17 +25,20 @@ export class UploadService implements OnModuleInit {
   private s3Client: S3Client;
   private bucket: string;
   private endpoint: string;
+  private publicBaseUrl: string;
 
   constructor(private readonly configService: ConfigService) {
-    this.endpoint = this.configService.get<string>(ENV_KEY.S3_ENDPOINT, 'http://localhost:9000');
+    this.endpoint = this.configService.get<string>(ENV_KEY.S3_ENDPOINT, '');
     this.bucket = this.configService.get<string>(ENV_KEY.S3_BUCKET, 'storage-management-bucket');
+    this.publicBaseUrl =
+      this.configService.get<string>(ENV_KEY.S3_PUBLIC_URL) ?? `${this.endpoint}/${this.bucket}`;
 
     this.s3Client = new S3Client({
       endpoint: this.endpoint,
       region: this.configService.get<string>(ENV_KEY.S3_REGION, 'us-east-1'),
       credentials: {
-        accessKeyId: this.configService.get<string>(ENV_KEY.S3_ACCESS_KEY, 'rustfsadmin'),
-        secretAccessKey: this.configService.get<string>(ENV_KEY.S3_SECRET_KEY, 'rustfspassword'),
+        accessKeyId: this.configService.get<string>(ENV_KEY.S3_ACCESS_KEY, ''),
+        secretAccessKey: this.configService.get<string>(ENV_KEY.S3_SECRET_KEY, ''),
       },
       forcePathStyle:
         this.configService.get<string>(ENV_KEY.S3_FORCE_PATH_STYLE, 'true').toLowerCase() ===
@@ -50,12 +53,12 @@ export class UploadService implements OnModuleInit {
   private async ensureBucketExists() {
     try {
       await this.s3Client.send(new HeadBucketCommand({ Bucket: this.bucket }));
-      this.logger.log(`RustFS S3 bucket '${this.bucket}' is ready.`);
+      this.logger.log(`S3 bucket '${this.bucket}' is ready.`);
     } catch {
       try {
-        this.logger.log(`Creating RustFS S3 bucket '${this.bucket}'...`);
+        this.logger.log(`Creating S3 bucket '${this.bucket}'...`);
         await this.s3Client.send(new CreateBucketCommand({ Bucket: this.bucket }));
-        this.logger.log(`RustFS S3 bucket '${this.bucket}' created successfully.`);
+        this.logger.log(`S3 bucket '${this.bucket}' created successfully.`);
       } catch (err: any) {
         this.logger.warn(
           `Could not auto-create S3 bucket: ${err?.message || err}. Will retry on next request.`,
@@ -85,7 +88,7 @@ export class UploadService implements OnModuleInit {
         expiresIn: 900,
       });
 
-      const publicUrl = `${this.endpoint}/${this.bucket}/${fileKey}`;
+      const publicUrl = `${this.publicBaseUrl}/${fileKey}`;
 
       return {
         uploadUrl,
@@ -129,7 +132,7 @@ export class UploadService implements OnModuleInit {
       return {
         key: fileKey,
         bucket: this.bucket,
-        publicUrl: `${this.endpoint}/${this.bucket}/${fileKey}`,
+        publicUrl: `${this.publicBaseUrl}/${fileKey}`,
         size: buffer.length,
       };
     } catch (err: any) {

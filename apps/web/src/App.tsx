@@ -74,7 +74,7 @@ export default function App() {
     setUploadMessage(null);
     try {
       const res = await StorageApi.uploadFileDirect(file);
-      setUploadMessage(`Uploaded to RustFS S3: ${res.key}`);
+      setUploadMessage(`Uploaded to S3: ${res.key}`);
       setTimeout(() => setUploadMessage(null), 5000);
     } catch (err: any) {
       setUploadMessage(`Upload failed: ${err.message}`);
@@ -134,7 +134,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-lg font-bold leading-tight">Storage Management Hub</h1>
-              <p className="text-xs text-slate-500">React 19 • PostgreSQL • RustFS S3</p>
+              <p className="text-xs text-slate-500">React 19 • PostgreSQL • Cloudflare R2</p>
             </div>
           </div>
 
@@ -152,7 +152,7 @@ export default function App() {
 
             <div className="hidden sm:flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-full bg-slate-100 border border-slate-200">
               <Cloud className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="text-slate-600">RustFS S3</span>
+              <span className="text-slate-600">Cloudflare R2</span>
               <span
                 className={`w-2 h-2 rounded-full ${
                   apiConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'

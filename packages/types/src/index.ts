@@ -78,3 +78,5 @@ export interface UploadedFileResponse {
   size: number;
   mimeType: string;
 }
+export * from './mock-data';
+export * from './self-storage';

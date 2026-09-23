@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { validateEnv } from './config/env.validation';
+import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { ENV_KEY } from './shared/constants';
@@ -35,6 +36,7 @@ import { ENV_KEY } from './shared/constants';
       }),
       inject: [ConfigService],
     }),
+    AuthModule,
     HealthModule,
     UploadModule,
   ],

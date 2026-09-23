@@ -12,6 +12,12 @@ export const ENV_KEY = {
   ENABLE_SWAGGER: 'ENABLE_SWAGGER',
   ENABLE_CORS: 'ENABLE_CORS',
 
+  // Cookie-based auth sessions (opaque token, hashed in the `sessions` table)
+  SESSION_COOKIE_NAME: 'SESSION_COOKIE_NAME',
+  SESSION_TTL_MS: 'SESSION_TTL_MS',
+  COOKIE_SECURE: 'COOKIE_SECURE',
+  COOKIE_SAME_SITE: 'COOKIE_SAME_SITE',
+
   // S3-compatible object storage (e.g. Cloudflare R2)
   S3_ENDPOINT: 'S3_ENDPOINT',
   S3_REGION: 'S3_REGION',

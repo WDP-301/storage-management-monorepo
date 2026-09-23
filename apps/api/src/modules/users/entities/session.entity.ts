@@ -18,8 +18,8 @@ export class Session {
   userId: string;
 
   @Index({ unique: true })
-  @Column({ type: 'varchar', length: 128, name: 'refresh_token_hash' })
-  refreshTokenHash: string;
+  @Column({ type: 'varchar', length: 128, name: 'session_token_hash' })
+  sessionTokenHash: string;
 
   @Column({ type: 'varchar', length: 500, nullable: true, name: 'user_agent' })
   userAgent?: string;

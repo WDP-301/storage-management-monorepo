@@ -8,7 +8,7 @@ Migration: `apps/api/src/migrations/1789776000002-AddStorageRentalBusinessSchema
 - Khóa chính UUID của 29 bảng mới dùng `uuid_generate_v7()`: 48 bit đầu là Unix timestamp theo millisecond, version 7, RFC variant và các bit còn lại lấy ngẫu nhiên từ `gen_random_uuid()`, không phụ thuộc extension UUIDv7 bên ngoài.
 - `storage_items` và `storage_locations` cũ bị drop; `down()` tạo lại schema cũ nhưng không khôi phục dữ liệu.
 - `app_users` chỉ là identity: email unique theo `lower(email)`, `password_hash` nullable, cặp `oauth_provider`/`oauth_subject` (unique, 1 provider/user), `email_verified_at`.
-- `sessions` lưu `refresh_token_hash` (hash, không lưu token thô), `user_agent`, `ip_address`, `expires_at`, `last_used_at`, `revoked_at` — hỗ trợ revoke và đa thiết bị.
+- `sessions` lưu `session_token_hash` (hash, không lưu token thô), `user_agent`, `ip_address`, `expires_at`, `last_used_at`, `revoked_at` — hỗ trợ revoke và đa thiết bị.
 - Vai trò và permission được ánh xạ cố định trong mã ứng dụng; database không có role/permission tùy chỉnh hay permission template.
 - `user_role_assignments.role` chỉ nhận 5 mã cố định: `CUSTOMER`, `FACILITY_STAFF`, `FACILITY_MANAGER`, `OPERATIONS_MANAGER`, `ADMIN`. `CUSTOMER`/`OPERATIONS_MANAGER`/`ADMIN` có `facility_id IS NULL`; `FACILITY_STAFF`/`FACILITY_MANAGER` bắt buộc có `facility_id`.
 - Hai partial unique index tách phạm vi toàn cục và theo cơ sở để ngăn phân vai trùng lặp đúng với cách PostgreSQL xử lý `NULL`.

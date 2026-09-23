@@ -216,19 +216,13 @@ describe('AuthService', () => {
   });
 
   describe('revokeSession', () => {
-    it('marks the session revoked by token hash and reports success', async () => {
-      await expect(service.revokeSession('raw-token')).resolves.toBe(true);
+    it('marks the session revoked by token hash', async () => {
+      await service.revokeSession('raw-token');
 
       expect(sessions.update).toHaveBeenCalledWith(
         { sessionTokenHash: 'hash:raw-token' },
         { revokedAt: expect.any(Date) },
       );
-    });
-
-    it('reports failure when no session matched the token', async () => {
-      sessions.update.mockResolvedValueOnce({ affected: 0 });
-
-      await expect(service.revokeSession('raw-token')).resolves.toBe(false);
     });
   });
 });

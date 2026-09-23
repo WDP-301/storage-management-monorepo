@@ -74,12 +74,12 @@ export class AuthService {
       .getOne();
 
     if (!user?.passwordHash || user.status !== UserStatus.ACTIVE) {
-      throw new UnauthorizedException('Đăng nhập thất bại');
+      throw new UnauthorizedException('Invalid email or password');
     }
 
     const passwordMatches = await verifyPassword(dto.password, user.passwordHash);
     if (!passwordMatches) {
-      throw new UnauthorizedException('Đăng nhập thất bại');
+      throw new UnauthorizedException('Invalid email or password');
     }
 
     return this.toAuthUser(user, await this.loadRoles(user.id));
@@ -130,14 +130,11 @@ export class AuthService {
     return this.toAuthUser(user, await this.loadRoles(user.id));
   }
 
-  /** Revokes the session matching the raw token; returns false when nothing was revoked. */
-  async revokeSession(token: string): Promise<boolean> {
-    const result = await this.sessions.update(
+  async revokeSession(token: string): Promise<void> {
+    await this.sessions.update(
       { sessionTokenHash: this.cookies.hashToken(token) },
       { revokedAt: new Date() },
     );
-
-    return (result.affected ?? 0) > 0;
   }
 
   private async loadRoles(userId: string): Promise<UserRole[]> {

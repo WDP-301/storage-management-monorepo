@@ -17,17 +17,12 @@ export interface AuthUserResponse {
 }
 
 export interface LoginResponse {
-  success: true;
-  message: string;
-  data: {
-    sessionId: string;
-    expiresAt: string;
-  };
+  sessionId: string;
+  expiresAt: string;
 }
 
 export interface LogoutResponse {
-  success: true;
-  message: string;
+  loggedOut: boolean;
 }
 
 /** Request-derived metadata persisted alongside the session row. */

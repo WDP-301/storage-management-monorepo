@@ -1,14 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  Post,
-  Req,
-  Res,
-  UnauthorizedException,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AuthCookieService } from './auth.cookie';
@@ -55,47 +45,34 @@ export class AuthController {
     this.cookies.set(response, session.token);
 
     return {
-      success: true,
-      message: 'Đăng nhập thành công',
-      data: {
-        sessionId: `sess_${session.sessionId.replace(/-/g, '')}`,
-        expiresAt: session.expiresAt.toISOString(),
-      },
+      sessionId: `sess_${session.sessionId.replace(/-/g, '')}`,
+      expiresAt: session.expiresAt.toISOString(),
     };
   }
 
   @Post('logout')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Revoke the current session and clear the cookie' })
-  @ApiResponse({ status: 200, description: 'Session revoked and cookie cleared' })
+  @ApiOperation({ summary: 'Revoke the current session and clear the cookie (idempotent)' })
+  @ApiResponse({ status: 200, description: 'Session revoked if present; cookie cleared' })
   async logout(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ): Promise<LogoutResponse> {
     const token = this.cookies.readToken(request);
-    if (!token) {
-      throw new UnauthorizedException('Đăng xuất thất bại');
+    if (token) {
+      await this.authService.revokeSession(token);
     }
-
-    const revoked = await this.authService.revokeSession(token);
-    if (!revoked) {
-      throw new UnauthorizedException('Đăng xuất thất bại');
-    }
-
     this.cookies.clear(response);
 
-    return {
-      success: true,
-      message: 'Đăng xuất thành công',
-    };
+    return { loggedOut: true };
   }
 
   @Get('me')
   @UseGuards(SessionGuard)
   @ApiOperation({ summary: 'Get the currently authenticated user' })
   @ApiResponse({ status: 200, description: 'Current user with roles' })
-  me(@CurrentUser() user: AuthUser): AuthUser {
-    return user;
+  me(@CurrentUser() user: AuthUser): AuthUserResponse {
+    return { user };
   }
 
   private sessionContext(request: Request): SessionContext {

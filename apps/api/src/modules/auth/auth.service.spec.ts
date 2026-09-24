@@ -1,6 +1,5 @@
 import { AppUser } from '@modules/users/entities/app-user.entity';
 import { UserRoleAssignment } from '@modules/users/entities/user-role-assignment.entity';
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { UserRole, UserStatus } from '@shared/models/domain.enums';
 import { AuthService } from './auth.service';
 import { hashPassword, verifyPassword } from './session.util';
@@ -85,7 +84,10 @@ describe('AuthService', () => {
           fullName: 'A',
           phone: '0912345678',
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'EMAIL_ALREADY_REGISTERED' },
+      });
       expect(dataSource.transaction).not.toHaveBeenCalled();
     });
 
@@ -121,9 +123,12 @@ describe('AuthService', () => {
     it('rejects an unknown email', async () => {
       mockQueryBuilder(users, null);
 
-      await expect(service.login({ email: 'nobody@example.com', password: 'x' })).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(
+        service.login({ email: 'nobody@example.com', password: 'x' }),
+      ).rejects.toMatchObject({
+        status: 401,
+        response: { code: 'INVALID_CREDENTIALS' },
+      });
     });
 
     it('rejects an inactive account', async () => {
@@ -131,15 +136,21 @@ describe('AuthService', () => {
 
       await expect(
         service.login({ email: 'user@example.com', password: 'secret123' }),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toMatchObject({
+        status: 401,
+        response: { code: 'INVALID_CREDENTIALS' },
+      });
     });
 
     it('rejects a wrong password', async () => {
       mockQueryBuilder(users, buildUser({ passwordHash: await hashPassword('correct-horse') }));
 
-      await expect(service.login({ email: 'user@example.com', password: 'wrong' })).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(
+        service.login({ email: 'user@example.com', password: 'wrong' }),
+      ).rejects.toMatchObject({
+        status: 401,
+        response: { code: 'INVALID_CREDENTIALS' },
+      });
     });
 
     it('returns the public user with active roles on success', async () => {

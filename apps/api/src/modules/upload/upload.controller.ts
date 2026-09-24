@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -20,7 +19,11 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { RawResponse } from '@shared/decorators/raw-response.decorator';
+import { DomainException } from '@shared/exceptions/domain.exception';
+import { ErrorCode } from '@shared/models/api-response';
 import { Response } from 'express';
+import { DownloadFileQueryDto, FileKeyParamDto } from './dto/download-file.dto';
 import { GetPresignedUrlDto } from './dto/upload.dto';
 import { UploadService } from './upload.service';
 
@@ -39,11 +42,8 @@ export class UploadController {
   @Get('download-url')
   @ApiOperation({ summary: 'Generate S3 presigned GET URL for secure download' })
   @ApiQuery({ name: 'fileKey', example: 'uploads/sample.png' })
-  async getDownloadUrl(@Query('fileKey') fileKey: string) {
-    if (!fileKey) {
-      throw new BadRequestException('fileKey query parameter is required');
-    }
-    const downloadUrl = await this.uploadService.generatePresignedDownloadUrl(fileKey);
+  async getDownloadUrl(@Query() query: DownloadFileQueryDto) {
+    const downloadUrl = await this.uploadService.generatePresignedDownloadUrl(query.fileKey);
     return { downloadUrl };
   }
 
@@ -64,7 +64,9 @@ export class UploadController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 15 * 1024 * 1024 } }))
   async uploadDirect(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new BadRequestException('No file provided');
+      throw new DomainException(ErrorCode.VALIDATION_FAILED, 'No file provided', 400, {
+        fields: [{ field: 'file', code: 'isNotEmpty', message: 'file is required' }],
+      });
     }
 
     const cleanName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
@@ -78,7 +80,8 @@ export class UploadController {
   }
 
   @Get('stream/*')
-  @ApiOperation({ summary: 'Stream file directly from S3 storage' })
+  @RawResponse()
+  @ApiOperation({ summary: 'Stream file directly from S3 storage (binary, not enveloped)' })
   async streamFile(@Param('0') fileKey: string, @Res() res: Response) {
     const { stream, contentType } = await this.uploadService.getFileStream(fileKey);
     res.setHeader('Content-Type', contentType);
@@ -87,7 +90,7 @@ export class UploadController {
 
   @Delete(':key')
   @ApiOperation({ summary: 'Delete file from S3' })
-  async deleteFile(@Param('key') key: string) {
-    return this.uploadService.deleteFile(key);
+  async deleteFile(@Param() params: FileKeyParamDto) {
+    return this.uploadService.deleteFile(params.key);
   }
 }

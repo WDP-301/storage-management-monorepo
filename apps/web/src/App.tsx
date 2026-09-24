@@ -1,4 +1,4 @@
-import { Button } from '@heroui/react';
+import { Button } from '@cloudflare/kumo/components/button';
 import {
   IStorageItem,
   IStorageLocation,
@@ -124,7 +124,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="isolate min-h-screen bg-slate-50 text-slate-900">
       {/* Top Header */}
       <header className="border-b border-slate-200 bg-white sticky top-0 z-30 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">

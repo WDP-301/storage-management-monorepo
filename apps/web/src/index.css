@@ -1,4 +1,7 @@
-@import "@heroui/styles/css";
+@import "@cloudflare/kumo/styles/tailwind";
+@import "tailwindcss";
+
+@source "../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
 
 :root {
   --background: #f8fafc;

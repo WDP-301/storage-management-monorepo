@@ -13,7 +13,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@heroui/react": "^3.2.6",
+    "@cloudflare/kumo": "^2.14.0",
+    "@phosphor-icons/react": "^2.1.10",
     "@storage/types": "workspace:*",
     "axios": "^1.20.0",
     "clsx": "^2.1.1",

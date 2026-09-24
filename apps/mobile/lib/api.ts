@@ -1,15 +1,10 @@
-import type {
-  ApiResponse,
-  IStorageItem,
-  IStorageLocation,
-  StorageDashboardSummary,
-} from '@storage/types';
 import { Platform } from 'react-native';
 import type { AuthUser, LoginInput, RegisterInput } from '../src/types/auth';
 
 const DEV_HOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? `http://${DEV_HOST}:3001/api/v1`;
 const REQUEST_TIMEOUT_MS = 10000;
+let unauthorizedHandler: (() => void) | undefined;
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -35,7 +30,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
@@ -64,6 +58,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const message = Array.isArray(apiMessage)
       ? apiMessage.join('\n')
       : (apiMessage ?? `API error ${response.status}`);
+    if (response.status === 401) {
+      unauthorizedHandler?.();
+    }
     throw new ApiError(message, response.status);
   }
 
@@ -74,18 +71,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   throw new ApiError('API trả về dữ liệu không hợp lệ.', response.status);
 }
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  if (!res.ok) {
-    throw new Error(`API error ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as T;
-}
-
 export const AuthApi = {
+  setUnauthorizedHandler: (handler?: () => void) => {
+    unauthorizedHandler = handler;
+  },
+
   me: async () => {
     const response = await request<{ user: AuthUser }>('/auth/me');
     return response.user;
@@ -111,20 +101,4 @@ export const AuthApi = {
     request<{ loggedOut: boolean }>('/auth/logout', {
       method: 'POST',
     }),
-};
-
-export const StorageApi = {
-  getDashboardSummary: () => get<ApiResponse<StorageDashboardSummary>>('/storage/dashboard'),
-
-  getItems: (params?: { search?: string; status?: string }) => {
-    const qs = [
-      params?.search && `search=${encodeURIComponent(params.search)}`,
-      params?.status && `status=${encodeURIComponent(params.status)}`,
-    ]
-      .filter(Boolean)
-      .join('&');
-    return get<ApiResponse<IStorageItem[]>>(`/storage/items${qs ? `?${qs}` : ''}`);
-  },
-
-  getLocations: () => get<ApiResponse<IStorageLocation[]>>('/storage/locations'),
 };

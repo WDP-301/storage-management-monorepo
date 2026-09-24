@@ -45,7 +45,7 @@ export function LoginScreen({ onAuthenticated }: { onAuthenticated: (user: AuthU
             });
       onAuthenticated(user);
     } catch (error) {
-      setSubmitError(toUserMessage(error));
+      setSubmitError(toUserMessage(error, mode));
     } finally {
       setIsSubmitting(false);
     }
@@ -196,9 +196,8 @@ function validateForm({
   return errors;
 }
 
-function toUserMessage(error: unknown) {
+function toUserMessage(error: unknown, mode: AuthMode) {
   if (!(error instanceof ApiError)) return 'Đã có lỗi xảy ra. Vui lòng thử lại.';
-  if (error.message === 'Invalid email or password') return 'Email hoặc mật khẩu không đúng.';
-  if (error.message === 'Email is already registered') return 'Email này đã được đăng ký.';
+  if (mode === 'login' && error.statusCode === 401) return 'Email hoặc mật khẩu không đúng.';
   return error.message;
 }

@@ -84,6 +84,16 @@ export default function HomeScreen() {
   const [accentColor, mutedColor] = useThemeColor(['accent', 'muted']);
 
   useEffect(() => {
+    AuthApi.setUnauthorizedHandler(() => {
+      setAuthUser(null);
+      setActiveTab('browse');
+      setHeldBooking(null);
+    });
+
+    return () => AuthApi.setUnauthorizedHandler();
+  }, []);
+
+  useEffect(() => {
     AuthApi.me()
       .then(setAuthUser)
       .catch(() => undefined)

@@ -29,6 +29,7 @@ async function bootstrap() {
       origin: origins,
       methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
       credentials: true,
+      exposedHeaders: ['X-Request-Id'],
     });
   }
 

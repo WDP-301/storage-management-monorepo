@@ -8,15 +8,11 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import {
-  Injectable,
-  InternalServerErrorException,
-  Logger,
-  NotFoundException,
-  OnModuleInit,
-} from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ENV_KEY } from '@shared/constants';
+import { DomainException } from '@shared/exceptions/domain.exception';
+import { ErrorCode } from '@shared/models/api-response';
 export interface PresignedUploadUrlResponse {
   uploadUrl: string;
   fileKey: string;
@@ -101,7 +97,11 @@ export class UploadService implements OnModuleInit {
       };
     } catch (err: any) {
       this.logger.error(`Error generating presigned URL: ${err.message}`, err.stack);
-      throw new InternalServerErrorException('Failed to generate presigned upload URL');
+      throw new DomainException(
+        ErrorCode.UPLOAD_FAILED,
+        'Failed to generate presigned upload URL',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -114,7 +114,11 @@ export class UploadService implements OnModuleInit {
       return await getSignedUrl(this.s3Client, command, { expiresIn });
     } catch (err: any) {
       this.logger.error(`Error generating download URL: ${err.message}`, err.stack);
-      throw new InternalServerErrorException('Failed to generate presigned download URL');
+      throw new DomainException(
+        ErrorCode.UPLOAD_FAILED,
+        'Failed to generate presigned download URL',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -141,7 +145,11 @@ export class UploadService implements OnModuleInit {
       };
     } catch (err: any) {
       this.logger.error(`Failed to upload file to S3: ${err.message}`, err.stack);
-      throw new InternalServerErrorException('Failed to upload file to S3 storage');
+      throw new DomainException(
+        ErrorCode.UPLOAD_FAILED,
+        'Failed to upload file to S3 storage',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -160,9 +168,18 @@ export class UploadService implements OnModuleInit {
       };
     } catch (err: any) {
       if (err.name === 'NoSuchKey') {
-        throw new NotFoundException(`File '${fileKey}' not found in S3`);
+        throw new DomainException(
+          ErrorCode.FILE_NOT_FOUND,
+          `File '${fileKey}' not found in S3`,
+          HttpStatus.NOT_FOUND,
+        );
       }
-      throw new InternalServerErrorException(`Failed to retrieve file from S3: ${err.message}`);
+      this.logger.error(`Failed to retrieve file from S3: ${err.message}`, err.stack);
+      throw new DomainException(
+        ErrorCode.UPLOAD_FAILED,
+        'Failed to retrieve file from S3',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -177,7 +194,11 @@ export class UploadService implements OnModuleInit {
       return { key: fileKey, deleted: true };
     } catch (err: any) {
       this.logger.error(`Failed to delete file from S3: ${err.message}`, err.stack);
-      throw new InternalServerErrorException('Failed to delete file from S3');
+      throw new DomainException(
+        ErrorCode.UPLOAD_FAILED,
+        'Failed to delete file from S3',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 

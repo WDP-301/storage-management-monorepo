@@ -1,13 +1,4 @@
-import {
-  Boxes,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  ShieldCheck,
-  User,
-  Warehouse,
-  X,
-} from 'lucide-react';
+import { Boxes, LayoutDashboard, LogOut, Menu, ShieldCheck, User, X } from 'lucide-react';
 import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -25,12 +16,6 @@ export const AppShell: React.FC = () => {
   };
 
   const navItems = [
-    {
-      to: '/browse',
-      label: 'Tìm kho theo cơ sở',
-      icon: <Warehouse className="w-4 h-4" />,
-      description: 'Duyệt các cơ sở và chọn kho phù hợp',
-    },
     {
       to: '/dashboard',
       label: 'Tổng quan & Hàng tồn',

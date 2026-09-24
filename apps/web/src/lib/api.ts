@@ -54,10 +54,8 @@ apiClient.interceptors.response.use(
 
     // If 401 Unauthorized, notify listener to clear session
     // Exclude /auth/login and /auth/me to avoid infinite redirect loops
-    if (status === 401 && !requestUrl.includes('/auth/login')) {
-      if (unauthorizedHandler) {
-        unauthorizedHandler();
-      }
+    if (status === 401 && !requestUrl.includes('/auth/login') && !requestUrl.includes('/auth/me')) {
+      unauthorizedHandler?.();
     }
 
     // Format error message nicely from backend NestJS responses

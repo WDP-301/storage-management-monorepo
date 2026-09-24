@@ -1,11 +1,6 @@
-export type UserRole =
-  | 'SUPER_ADMIN'
-  | 'FACILITY_ADMIN'
-  | 'FACILITY_STAFF'
-  | 'FACILITY_MANAGER'
-  | 'CUSTOMER';
+import type { UserRole, UserStatus } from '@storage/types';
 
-export type UserStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING_VERIFICATION';
+export type { UserRole, UserStatus };
 
 export interface AuthUser {
   id: string;

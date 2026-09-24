@@ -80,3 +80,4 @@ export interface UploadedFileResponse {
   size: number;
   mimeType: string;
 }
+

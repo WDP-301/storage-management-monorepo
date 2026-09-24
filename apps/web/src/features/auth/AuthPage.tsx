@@ -22,7 +22,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [mode, setMode] = useState<AuthMode>(initialMode);
+  // Mode is synchronized with the URL pathname
+  const mode: AuthMode = location.pathname === '/register' ? 'register' : initialMode;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -35,14 +36,20 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
 
   // Redirection target after login
   const fromLocation =
-    (location.state as { from?: { pathname: string } })?.from?.pathname || '/browse';
+    (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
 
   const switchMode = (newMode: AuthMode) => {
-    setMode(newMode);
     setFieldErrors({});
     setServerError(null);
     setSuccessMessage(null);
+    navigate(newMode === 'register' ? '/register' : '/login');
   };
+
+  React.useEffect(() => {
+    setFieldErrors({});
+    setServerError(null);
+    setSuccessMessage(null);
+  }, [location.pathname]);
 
   const validate = (): boolean => {
     const errors: FieldErrors = {};

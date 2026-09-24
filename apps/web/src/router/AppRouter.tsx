@@ -1,9 +1,16 @@
 import { Loader2 } from 'lucide-react';
 import React from 'react';
-import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import {
+  BrowserRouter,
+  Link,
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+} from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from '../features/auth/AuthPage';
-import { BrowseUnitsPage } from '../features/browse/BrowseUnitsPage';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
 import { AppShell } from '../layouts/AppShell';
 import { AuthLayout } from '../layouts/AuthLayout';
@@ -11,7 +18,7 @@ import { AuthLayout } from '../layouts/AuthLayout';
 /**
  * Route guard requiring active session authentication.
  */
-const ProtectedRoute: React.FC = () => {
+export const ProtectedRoute: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
@@ -36,7 +43,7 @@ const ProtectedRoute: React.FC = () => {
 /**
  * Route guard redirecting already authenticated users away from login/register.
  */
-const PublicOnlyRoute: React.FC = () => {
+export const PublicOnlyRoute: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
@@ -48,7 +55,7 @@ const PublicOnlyRoute: React.FC = () => {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/browse" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <Outlet />;
@@ -69,9 +76,9 @@ export const AppRouter: React.FC = () => {
         {/* Protected App Shell Routes */}
         <Route element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
-            <Route path="/browse" element={<BrowseUnitsPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/" element={<Navigate to="/browse" replace />} />
+            <Route path="/browse" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>
         </Route>
 
@@ -82,12 +89,12 @@ export const AppRouter: React.FC = () => {
             <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6 text-center">
               <h1 className="text-4xl font-extrabold text-foreground mb-2">404</h1>
               <p className="text-sm text-muted mb-6">Trang bạn tìm kiếm không tồn tại.</p>
-              <a
-                href="/browse"
+              <Link
+                to="/dashboard"
                 className="px-4 py-2 bg-accent text-accent-foreground font-semibold rounded-lg text-sm hover:opacity-90 transition"
               >
                 Về trang chủ
-              </a>
+              </Link>
             </div>
           }
         />

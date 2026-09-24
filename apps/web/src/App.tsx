@@ -1,25 +1,25 @@
-import { Button } from '@heroui/react';
+import { Button } from '@cloudflare/kumo/components/button';
+import {
+  ArrowClockwise,
+  CheckCircle,
+  Cloud,
+  Cube,
+  Database,
+  MagnifyingGlass,
+  Package,
+  Plus,
+  Stack,
+  UploadSimple,
+  Warehouse,
+  Warning,
+  XCircle,
+} from '@phosphor-icons/react';
 import {
   IStorageItem,
   IStorageLocation,
   StorageDashboardSummary,
   StorageItemStatus,
 } from '@storage/types';
-import {
-  AlertTriangle,
-  Boxes,
-  CheckCircle2,
-  Cloud,
-  Database,
-  Layers,
-  Package,
-  Plus,
-  RefreshCw,
-  Search,
-  Upload,
-  Warehouse,
-  XCircle,
-} from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StorageApi } from './lib/api';
 
@@ -99,13 +99,13 @@ export default function App() {
       case StorageItemStatus.IN_STOCK:
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-            <CheckCircle2 className="w-3.5 h-3.5" /> In Stock
+            <CheckCircle className="w-3.5 h-3.5" /> In Stock
           </span>
         );
       case StorageItemStatus.LOW_STOCK:
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-            <AlertTriangle className="w-3.5 h-3.5" /> Low Stock
+            <Warning className="w-3.5 h-3.5" /> Low Stock
           </span>
         );
       case StorageItemStatus.OUT_OF_STOCK:
@@ -124,13 +124,13 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="isolate min-h-screen bg-slate-50 text-slate-900">
       {/* Top Header */}
       <header className="border-b border-slate-200 bg-white sticky top-0 z-30 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
-              <Boxes className="w-5 h-5" />
+              <Cube className="w-5 h-5" />
             </div>
             <div>
               <h1 className="text-lg font-bold leading-tight">Storage Management Hub</h1>
@@ -166,7 +166,7 @@ export default function App() {
               disabled={loading}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition cursor-pointer"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <ArrowClockwise className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
 
@@ -178,7 +178,9 @@ export default function App() {
               disabled={uploading}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition cursor-pointer"
             >
-              <Upload className={`w-4 h-4 ${uploading ? 'animate-bounce text-blue-600' : ''}`} />
+              <UploadSimple
+                className={`w-4 h-4 ${uploading ? 'animate-bounce text-blue-600' : ''}`}
+              />
               {uploading ? 'Uploading...' : 'S3 Upload'}
             </button>
 
@@ -227,7 +229,7 @@ export default function App() {
 
           <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-xs flex items-center gap-4">
             <div className="w-12 h-12 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-              <AlertTriangle className="w-6 h-6" />
+              <Warning className="w-6 h-6" />
             </div>
             <div>
               <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
@@ -255,7 +257,7 @@ export default function App() {
           <section className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold flex items-center gap-2">
-                <Layers className="w-4 h-4 text-blue-600" /> Active Storage Zones
+                <Stack className="w-4 h-4 text-blue-600" /> Active Storage Zones
               </h2>
               <span className="text-xs text-slate-500">{locations.length} Zones Registered</span>
             </div>
@@ -288,7 +290,7 @@ export default function App() {
           {/* Table Toolbar */}
           <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <MagnifyingGlass className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search SKU or item name..."

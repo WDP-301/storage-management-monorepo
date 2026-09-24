@@ -1,8 +1,10 @@
 import { AppUser } from '@modules/users/entities/app-user.entity';
 import { Session } from '@modules/users/entities/session.entity';
 import { UserRoleAssignment } from '@modules/users/entities/user-role-assignment.entity';
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { DomainException } from '@shared/exceptions/domain.exception';
+import { ErrorCode } from '@shared/models/api-response';
 import { UserRole, UserStatus } from '@shared/models/domain.enums';
 import { DataSource, Repository } from 'typeorm';
 import { AuthCookieService } from './auth.cookie';
@@ -33,7 +35,11 @@ export class AuthService {
       .getOne();
 
     if (existing) {
-      throw new BadRequestException('Email is already registered');
+      throw new DomainException(
+        ErrorCode.EMAIL_ALREADY_REGISTERED,
+        'Email is already registered',
+        HttpStatus.CONFLICT,
+      );
     }
 
     const passwordHash = await hashPassword(dto.password);
@@ -74,12 +80,20 @@ export class AuthService {
       .getOne();
 
     if (!user?.passwordHash || user.status !== UserStatus.ACTIVE) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new DomainException(
+        ErrorCode.INVALID_CREDENTIALS,
+        'Invalid email or password',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
 
     const passwordMatches = await verifyPassword(dto.password, user.passwordHash);
     if (!passwordMatches) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new DomainException(
+        ErrorCode.INVALID_CREDENTIALS,
+        'Invalid email or password',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
 
     return this.toAuthUser(user, await this.loadRoles(user.id));

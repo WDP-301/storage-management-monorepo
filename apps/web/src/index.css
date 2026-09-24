@@ -1,5 +1,7 @@
+@import "@cloudflare/kumo/styles/tailwind";
 @import "tailwindcss";
-@import "@heroui/styles";
+
+@source "../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
 
 :root,
 [data-theme="light"] {

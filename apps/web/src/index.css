@@ -3,15 +3,86 @@
 
 @source "../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
 
-:root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --background: oklch(0.977 0.004 255);
+  --foreground: oklch(0.205 0.015 258);
+  --surface: oklch(1 0 0);
+  --surface-foreground: var(--foreground);
+  --surface-secondary: oklch(0.963 0.006 255);
+  --surface-secondary-foreground: var(--foreground);
+  --surface-tertiary: oklch(0.932 0.012 255);
+  --surface-tertiary-foreground: var(--foreground);
+  --overlay: oklch(1 0 0);
+  --overlay-foreground: var(--foreground);
+  --muted: oklch(0.51 0.025 257);
+  --accent: oklch(0.49 0.19 257);
+  --accent-foreground: oklch(1 0 0);
+  --default: oklch(0.94 0.008 255);
+  --default-foreground: oklch(0.28 0.02 257);
+  --field-background: oklch(0.975 0.004 255);
+  --field-foreground: var(--foreground);
+  --field-placeholder: oklch(0.57 0.02 257);
+  --field-border: oklch(0.88 0.012 255);
+  --field-border-width: 1px;
+  --warning: oklch(0.79 0.15 78);
+  --warning-foreground: oklch(0.28 0.05 61);
+  --danger: oklch(0.58 0.21 25);
+  --danger-foreground: oklch(1 0 0);
+  --success: oklch(0.69 0.16 154);
+  --success-foreground: oklch(0.2 0.04 154);
+  --border: oklch(0.89 0.012 255);
+  --separator: oklch(0.92 0.009 255);
+  --focus: var(--accent);
+  --radius: 0.5rem;
+  --surface-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+  font-family:
+    "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial,
+    sans-serif;
+  text-rendering: optimizeLegibility;
 }
 
 body {
+  min-width: 320px;
+  min-height: 100dvh;
+  margin: 0;
   color: var(--foreground);
   background: var(--background);
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans",
-    "Helvetica Neue", sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button:not(:disabled),
+select:not(:disabled) {
+  cursor: pointer;
+}
+
+::selection {
+  color: white;
+  background: oklch(0.49 0.19 257);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto;
+    transition-duration: 0.01ms;
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+  }
 }

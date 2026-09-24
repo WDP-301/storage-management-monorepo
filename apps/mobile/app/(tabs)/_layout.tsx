@@ -1,4 +1,4 @@
-import { Redirect, Tabs as RouterTabs, useRouter } from 'expo-router';
+import { Tabs as RouterTabs, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Button, useThemeColor } from 'heroui-native';
 import type { ReactNode } from 'react';
@@ -7,8 +7,6 @@ import { SafeAreaView as RNSafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { withUniwind } from 'uniwind';
 import { useHold } from '../../lib/hold';
-import { useSession } from '../../lib/session';
-import { SessionLoadingScreen } from '../../src/features/auth/SessionLoadingScreen';
 import type { CustomerTab } from '../../src/types/customer';
 
 const SafeAreaView = withUniwind(RNSafeAreaView);
@@ -21,15 +19,6 @@ const TAB_HREFS = {
 
 export default function CustomerTabsLayout() {
   const router = useRouter();
-  const { user, isCheckingSession } = useSession();
-
-  if (isCheckingSession) {
-    return <SessionLoadingScreen />;
-  }
-
-  if (!user) {
-    return <Redirect href="/login" />;
-  }
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>

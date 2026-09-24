@@ -5,7 +5,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { UserRole, UserStatus } from '@shared/models/domain.enums';
+import { UserRole, UserStatus } from '@storage/types';
 import { DataSource, Repository } from 'typeorm';
 import { AuthCookieService } from './auth.cookie';
 import { LoginDto } from './dto/login.dto';

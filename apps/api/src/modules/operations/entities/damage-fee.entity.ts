@@ -1,6 +1,6 @@
 import { InvoiceItem } from '@modules/billing/entities/invoice-item.entity';
 import { AppUser } from '@modules/users/entities/app-user.entity';
-import { DamageFeeStatus } from '@shared/models/domain.enums';
+import { DamageFeeStatus } from '@storage/types';
 import {
   Column,
   CreateDateColumn,

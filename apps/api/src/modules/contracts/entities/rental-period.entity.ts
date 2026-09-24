@@ -1,4 +1,4 @@
-import { RentalPeriodKind } from '@shared/models/domain.enums';
+import { RentalPeriodKind } from '@storage/types';
 import {
   Column,
   CreateDateColumn,

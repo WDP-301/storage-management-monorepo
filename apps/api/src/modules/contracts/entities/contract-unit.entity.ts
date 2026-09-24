@@ -1,5 +1,5 @@
 import { StorageUnit } from '@modules/facilities/entities/storage-unit.entity';
-import { ContractUnitStatus } from '@shared/models/domain.enums';
+import { ContractUnitStatus } from '@storage/types';
 import {
   Column,
   CreateDateColumn,

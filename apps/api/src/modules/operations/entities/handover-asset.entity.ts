@@ -1,6 +1,6 @@
 import { ContractUnit } from '@modules/contracts/entities/contract-unit.entity';
 import { AppUser } from '@modules/users/entities/app-user.entity';
-import { AssetType, HandoverDirection } from '@shared/models/domain.enums';
+import { AssetType, HandoverDirection } from '@storage/types';
 import {
   Column,
   CreateDateColumn,

@@ -1,5 +1,5 @@
 import { AuditWithTimezone } from '@shared/models/audit.model';
-import { UserStatus } from '@shared/models/domain.enums';
+import { UserStatus } from '@storage/types';
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('app_users')

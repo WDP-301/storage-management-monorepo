@@ -1,6 +1,6 @@
 import { Contract } from '@modules/contracts/entities/contract.entity';
 import { AppUser } from '@modules/users/entities/app-user.entity';
-import { InvoiceStatus } from '@shared/models/domain.enums';
+import { InvoiceStatus } from '@storage/types';
 import {
   Column,
   CreateDateColumn,

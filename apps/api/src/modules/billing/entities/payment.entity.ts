@@ -1,6 +1,6 @@
 import { Booking } from '@modules/bookings/entities/booking.entity';
 import { AppUser } from '@modules/users/entities/app-user.entity';
-import { PaymentMethod, PaymentStatus, PaymentType } from '@shared/models/domain.enums';
+import { PaymentMethod, PaymentStatus, PaymentType } from '@storage/types';
 import {
   Column,
   CreateDateColumn,

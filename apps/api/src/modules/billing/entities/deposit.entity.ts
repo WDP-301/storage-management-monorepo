@@ -1,5 +1,5 @@
 import { ContractUnit } from '@modules/contracts/entities/contract-unit.entity';
-import { DepositStatus } from '@shared/models/domain.enums';
+import { DepositStatus } from '@storage/types';
 import {
   Column,
   CreateDateColumn,

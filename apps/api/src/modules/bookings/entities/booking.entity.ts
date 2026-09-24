@@ -1,6 +1,6 @@
 import { Facility } from '@modules/facilities/entities/facility.entity';
 import { AppUser } from '@modules/users/entities/app-user.entity';
-import { BookingStatus } from '@shared/models/domain.enums';
+import { BookingStatus } from '@storage/types';
 import {
   Column,
   CreateDateColumn,

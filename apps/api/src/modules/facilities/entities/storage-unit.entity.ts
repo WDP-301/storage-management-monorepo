@@ -1,5 +1,5 @@
 import { AuditWithTimezone } from '@shared/models/audit.model';
-import { StorageUnitStatus } from '@shared/models/domain.enums';
+import { StorageUnitStatus } from '@storage/types';
 import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, Unique } from 'typeorm';
 import { Facility } from './facility.entity';
 import { UnitType } from './unit-type.entity';

@@ -1,5 +1,5 @@
 import { AppUser } from '@modules/users/entities/app-user.entity';
-import { NotificationChannel, NotificationStatus } from '@shared/models/domain.enums';
+import { NotificationChannel, NotificationStatus } from '@storage/types';
 import {
   Column,
   CreateDateColumn,

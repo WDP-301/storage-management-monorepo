@@ -1,6 +1,6 @@
 import { RentalPeriod } from '@modules/contracts/entities/rental-period.entity';
 import { StorageUnit } from '@modules/facilities/entities/storage-unit.entity';
-import { InvoiceItemType } from '@shared/models/domain.enums';
+import { InvoiceItemType } from '@storage/types';
 import {
   Column,
   CreateDateColumn,

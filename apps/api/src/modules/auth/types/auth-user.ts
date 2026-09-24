@@ -1,4 +1,4 @@
-import type { UserRole, UserStatus } from '@shared/models/domain.enums';
+import type { UserRole, UserStatus } from '@storage/types';
 
 /** Public representation of an authenticated `app_users` record plus its active roles. */
 export interface AuthUser {

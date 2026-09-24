@@ -1,6 +1,6 @@
 import { Booking } from '@modules/bookings/entities/booking.entity';
 import { AppUser } from '@modules/users/entities/app-user.entity';
-import { ContractStatus } from '@shared/models/domain.enums';
+import { ContractStatus } from '@storage/types';
 import {
   Column,
   CreateDateColumn,

@@ -1,6 +1,6 @@
 import { StorageUnit } from '@modules/facilities/entities/storage-unit.entity';
 import { AppUser } from '@modules/users/entities/app-user.entity';
-import { ChangeRequestStatus } from '@shared/models/domain.enums';
+import { ChangeRequestStatus } from '@storage/types';
 import {
   Column,
   CreateDateColumn,

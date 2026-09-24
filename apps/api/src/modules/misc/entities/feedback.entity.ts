@@ -1,7 +1,7 @@
 import { Contract } from '@modules/contracts/entities/contract.entity';
 import { Facility } from '@modules/facilities/entities/facility.entity';
 import { AppUser } from '@modules/users/entities/app-user.entity';
-import { FeedbackStatus } from '@shared/models/domain.enums';
+import { FeedbackStatus } from '@storage/types';
 import {
   Column,
   CreateDateColumn,

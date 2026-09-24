@@ -1,5 +1,5 @@
 import { AppUser } from '@modules/users/entities/app-user.entity';
-import { RefundStatus } from '@shared/models/domain.enums';
+import { RefundStatus } from '@storage/types';
 import {
   Column,
   CreateDateColumn,

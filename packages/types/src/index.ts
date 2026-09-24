@@ -1,3 +1,5 @@
+export * from './domain.enums';
+
 export interface ApiResponse<T = any> {
   success: boolean;
   data: T;

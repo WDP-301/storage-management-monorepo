@@ -1,5 +1,5 @@
 import { StorageUnit } from '@modules/facilities/entities/storage-unit.entity';
-import { HoldStatus } from '@shared/models/domain.enums';
+import { HoldStatus } from '@storage/types';
 import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Booking } from './booking.entity';
 

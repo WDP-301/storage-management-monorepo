@@ -1,7 +1,7 @@
 import { Facility } from '@modules/facilities/entities/facility.entity';
 import { UnitType } from '@modules/facilities/entities/unit-type.entity';
 import { AppUser } from '@modules/users/entities/app-user.entity';
-import { WaitlistStatus } from '@shared/models/domain.enums';
+import { WaitlistStatus } from '@storage/types';
 import {
   Column,
   CreateDateColumn,

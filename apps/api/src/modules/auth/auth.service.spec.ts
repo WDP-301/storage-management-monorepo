@@ -1,6 +1,6 @@
 import { AppUser } from '@modules/users/entities/app-user.entity';
 import { UserRoleAssignment } from '@modules/users/entities/user-role-assignment.entity';
-import { UserRole, UserStatus } from '@shared/models/domain.enums';
+import { UserRole, UserStatus } from '@storage/types';
 import { AuthService } from './auth.service';
 import { hashPassword, verifyPassword } from './session.util';
 

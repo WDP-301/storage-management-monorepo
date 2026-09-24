@@ -1,4 +1,4 @@
-import { UserRole } from '@shared/models/domain.enums';
+import { UserRole } from '@storage/types';
 import {
   Column,
   CreateDateColumn,

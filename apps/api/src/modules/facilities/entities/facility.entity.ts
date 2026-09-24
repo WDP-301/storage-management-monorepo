@@ -1,5 +1,5 @@
 import { AuditWithTimezone } from '@shared/models/audit.model';
-import { FacilityStatus } from '@shared/models/domain.enums';
+import { FacilityStatus } from '@storage/types';
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('facilities')

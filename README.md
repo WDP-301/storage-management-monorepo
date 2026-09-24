@@ -92,8 +92,7 @@ pnpm dev:mobile  # Expo SDK 54 Mobile Metro bundler
 
 - **REST API Base URL**: `http://localhost:3001/api/v1`
 - **Swagger Documentation**: `http://localhost:3001/api/docs`
-- **Health Readiness**: `http://localhost:3001/api/v1/health` (compatibility alias) or `/health/ready`; returns 503 when DB/S3 is unavailable
-- **Health Liveness**: `http://localhost:3001/api/v1/health/live`
+- **Health Liveness**: `http://localhost:3001/api/v1/health` or `/health/live`
 - **API response contract**: [`apps/api/API_CONTRACT.md`](apps/api/API_CONTRACT.md)
 
 ---

@@ -22,7 +22,7 @@ Error codes are stable machine-readable values grouped by validation, authentica
 
 - Registration and upload creation remain `201`; normal reads/actions remain `200` for compatibility.
 - Logout and upload deletion remain idempotent `200` with a response body to avoid a breaking change.
-- `GET /health/live` checks process liveness. `GET /health/ready` returns `503` when PostgreSQL or configured object storage is unavailable. `GET /health` is the backward-compatible readiness alias.
+- `GET /health` and `GET /health/live` check process liveness only. Database and object storage are cloud-managed and not probed per request.
 - Binary streams and explicitly decorated raw endpoints are not JSON-enveloped, but still return `X-Request-Id`.
 - `204 No Content` responses are never enveloped.
 - Internal `500` details are logged server-side; responses never expose stack traces or vendor error messages.

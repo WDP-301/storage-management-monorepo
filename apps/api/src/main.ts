@@ -1,10 +1,11 @@
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AllExceptionsFilter } from '@shared/filters/http-exception.filter';
 import { HttpLoggingInterceptor } from '@shared/interceptors/http-logging.interceptor';
 import { HttpResponseInterceptor } from '@shared/interceptors/http-response.interceptor';
+import { createApiValidationPipe } from '@shared/pipes/api-validation.pipe';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 
@@ -33,15 +34,12 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api/v1');
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-      whitelist: true,
-      transformOptions: { enableImplicitConversion: true },
-    }),
-  );
+  app.useGlobalPipes(createApiValidationPipe());
 
-  app.useGlobalInterceptors(new HttpLoggingInterceptor(), new HttpResponseInterceptor());
+  app.useGlobalInterceptors(
+    new HttpLoggingInterceptor(),
+    new HttpResponseInterceptor(app.get(Reflector)),
+  );
 
   app.useGlobalFilters(new AllExceptionsFilter());
 

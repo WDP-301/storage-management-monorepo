@@ -1,4 +1,6 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, HttpStatus, Injectable } from '@nestjs/common';
+import { DomainException } from '@shared/exceptions/domain.exception';
+import { ErrorCode } from '@shared/models/api-response';
 import { AuthCookieService } from '../auth.cookie';
 import { AuthService } from '../auth.service';
 import type { AuthenticatedRequest } from '../types/authenticated-request';
@@ -15,12 +17,20 @@ export class SessionGuard implements CanActivate {
     const token = this.cookies.readToken(request);
 
     if (!token) {
-      throw new UnauthorizedException('Authentication required');
+      throw new DomainException(
+        ErrorCode.AUTHENTICATION_REQUIRED,
+        'Authentication required',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
 
     const user = await this.authService.resolveSession(token);
     if (!user) {
-      throw new UnauthorizedException('Session is invalid or expired');
+      throw new DomainException(
+        ErrorCode.SESSION_INVALID,
+        'Session is invalid or expired',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
 
     request.user = user;

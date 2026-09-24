@@ -17,7 +17,11 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ENV_KEY } from '@shared/constants';
-import { PresignedUploadUrlResponse } from '@storage/types';
+export interface PresignedUploadUrlResponse {
+  uploadUrl: string;
+  fileKey: string;
+  publicUrl: string;
+}
 
 @Injectable()
 export class UploadService implements OnModuleInit {

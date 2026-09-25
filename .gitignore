@@ -10,6 +10,8 @@ out/
 .expo/
 web-build/
 *.tsbuildinfo
+apps/mobile/android/
+apps/mobile/ios/
 
 # Environment files
 .env

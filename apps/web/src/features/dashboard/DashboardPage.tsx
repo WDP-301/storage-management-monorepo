@@ -49,7 +49,7 @@ export const DashboardPage: React.FC = () => {
     try {
       const [sumRes, itemRes, locRes] = await Promise.allSettled([
         StorageApi.getDashboardSummary(),
-        StorageApi.getItems({ search }),
+        StorageApi.getItems(),
         StorageApi.getLocations(),
       ]);
 
@@ -63,7 +63,7 @@ export const DashboardPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, []);
 
   useEffect(() => {
     fetchData();

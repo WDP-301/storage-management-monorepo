@@ -33,6 +33,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
   const [serverError, setServerError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const redirectTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
+    };
+  }, []);
 
   // Redirection target after login
   const fromLocation =
@@ -102,7 +109,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
           phone: phone.trim(),
         });
         setSuccessMessage('Đăng ký tài khoản thành công! Đang chuyển hướng...');
-        setTimeout(() => {
+        redirectTimerRef.current = setTimeout(() => {
           navigate(fromLocation, { replace: true });
         }, 1000);
       }

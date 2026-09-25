@@ -86,7 +86,7 @@ export const AppShell: React.FC = () => {
                 key={item.to}
                 to={item.to}
                 onClick={() => setMobileMenuOpen(false)}
-                className={({ isActive }) =>
+                className={({ isActive }: { isActive: boolean }) =>
                   `flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
                     isActive
                       ? 'bg-accent/10 text-accent border border-accent/20'
@@ -119,7 +119,7 @@ export const AppShell: React.FC = () => {
             </div>
             {user?.roles?.[0] && (
               <Badge variant="accent" className="shrink-0 text-[10px]">
-                {user.roles[0] === 'CUSTOMER' ? 'Khách' : 'Admin'}
+                {user.roles[0] === 'CUSTOMER' ? 'Khách' : 'Nhân sự'}
               </Badge>
             )}
           </div>

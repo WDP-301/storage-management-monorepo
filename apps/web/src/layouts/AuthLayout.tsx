@@ -24,7 +24,6 @@ export const AuthLayout: React.FC = () => {
 
         {/* Footer info & session note */}
         <div className="mt-6 flex flex-col items-center gap-2 text-center text-xs text-muted">
-          <div className="inline-flex items-center gap-1.5 font-medium"></div>
           <p>© 2026 Storage Management Monorepo. All rights reserved.</p>
         </div>
       </div>

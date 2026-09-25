@@ -16,10 +16,12 @@ export default {
       const headers = new Headers(request.headers);
       headers.set('host', new URL(backendUrl).host);
 
+      const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
+
       return fetch(targetUrl.toString(), {
         method: request.method,
         headers,
-        body: request.body,
+        body: hasBody ? request.body : undefined,
         redirect: 'manual',
       });
     }

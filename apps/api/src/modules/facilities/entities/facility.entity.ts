@@ -16,14 +16,13 @@ export class Facility extends AuditWithTimezone {
   @Column({ length: 255, name: 'address_line' })
   addressLine: string;
 
-  @Column({ type: 'varchar', length: 100, nullable: true })
-  ward?: string;
+  /** Ward code — FK → wards.code (VN post-2025 two-level model) */
+  @Column({ type: 'varchar', length: 20, nullable: true, name: 'ward_code' })
+  wardCode?: string;
 
-  @Column({ type: 'varchar', length: 100, nullable: true })
-  district?: string;
-
-  @Column({ length: 100 })
-  city: string;
+  /** Province code — FK → provinces.code */
+  @Column({ type: 'varchar', length: 20, nullable: true, name: 'province_code' })
+  provinceCode?: string;
 
   @Column({ type: 'decimal', precision: 9, scale: 6 })
   latitude: number;

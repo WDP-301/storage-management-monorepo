@@ -9,6 +9,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
+      '@storage/types': path.resolve(import.meta.dirname, '../../packages/types/src/index.ts'),
     },
   },
   server: {

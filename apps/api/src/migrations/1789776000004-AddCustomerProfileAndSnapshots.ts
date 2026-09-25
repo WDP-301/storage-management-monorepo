@@ -12,6 +12,7 @@ export class AddCustomerProfileAndSnapshots1789776000004 implements MigrationInt
         CONSTRAINT "FK_customer_profile_user" FOREIGN KEY ("user_id") REFERENCES "app_users"("id") ON DELETE CASCADE
       )`,
       `ALTER TABLE "documents" ADD "doc_number" varchar(50)`,
+      `ALTER TABLE "documents" DROP COLUMN "deleted_at"`,
       `CREATE UNIQUE INDEX "UQ_documents_identity_number" ON "documents" ("doc_number") WHERE "type" = 'IDENTITY' AND "doc_number" IS NOT NULL`,
       `ALTER TABLE "contracts" ADD "customer_snapshot" jsonb NOT NULL DEFAULT '{}'::jsonb`,
       `ALTER TABLE "invoices" ADD "billing_info" jsonb NOT NULL DEFAULT '{}'::jsonb`,
@@ -24,6 +25,7 @@ export class AddCustomerProfileAndSnapshots1789776000004 implements MigrationInt
     const statements = [
       `DROP INDEX "UQ_documents_identity_number"`,
       `ALTER TABLE "documents" DROP COLUMN "doc_number"`,
+      `ALTER TABLE "documents" ADD "deleted_at" timestamptz`,
       `ALTER TABLE "contracts" DROP COLUMN "customer_snapshot"`,
       `ALTER TABLE "invoices" DROP COLUMN "billing_info"`,
       `DROP TABLE "customer_profiles"`,

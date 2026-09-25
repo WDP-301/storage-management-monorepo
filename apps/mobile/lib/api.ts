@@ -82,7 +82,7 @@ export const AuthApi = {
   },
 
   login: async (input: LoginInput) => {
-    await request<{ sessionId: string; expiresAt: string }>('/auth/login', {
+    await request<{ expiresAt: string }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(input),
     });

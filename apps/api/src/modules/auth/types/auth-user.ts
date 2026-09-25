@@ -17,7 +17,6 @@ export interface AuthUserResponse {
 }
 
 export interface LoginResponse {
-  sessionId: string;
   expiresAt: string;
 }
 

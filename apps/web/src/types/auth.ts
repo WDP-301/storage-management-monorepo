@@ -26,7 +26,6 @@ export interface RegisterInput {
 }
 
 export interface LoginResponse {
-  sessionId: string;
   expiresAt: string;
 }
 

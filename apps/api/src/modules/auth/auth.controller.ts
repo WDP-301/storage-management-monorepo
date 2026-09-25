@@ -44,10 +44,7 @@ export class AuthController {
     const session = await this.authService.createSession(user.id, this.sessionContext(request));
     this.cookies.set(response, session.token);
 
-    return {
-      sessionId: `sess_${session.sessionId.replace(/-/g, '')}`,
-      expiresAt: session.expiresAt.toISOString(),
-    };
+    return { expiresAt: session.expiresAt.toISOString() };
   }
 
   @Post('logout')

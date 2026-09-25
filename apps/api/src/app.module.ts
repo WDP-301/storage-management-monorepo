@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { validateEnv } from './config/env.validation';
+import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { UploadModule } from './modules/upload/upload.module';
@@ -38,6 +39,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
       inject: [ConfigService],
     }),
     AuthModule,
+    AdminModule,
     HealthModule,
     UploadModule,
   ],

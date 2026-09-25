@@ -63,8 +63,9 @@ export class AdminUsersController {
   updateStatus(
     @Param() params: UserIdParamDto,
     @Body() dto: UpdateUserStatusDto,
+    @CurrentUser('id') currentAdminId: string,
   ): Promise<AdminUserResponse> {
-    return this.adminUsers.updateStatus(params.id, dto.status);
+    return this.adminUsers.updateStatus(params.id, dto.status, currentAdminId);
   }
 
   @Post(':id/roles')

@@ -1,5 +1,6 @@
 import { Facility } from '@modules/facilities/entities/facility.entity';
 import { AppUser } from '@modules/users/entities/app-user.entity';
+import { Session } from '@modules/users/entities/session.entity';
 import { UserRoleAssignment } from '@modules/users/entities/user-role-assignment.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -31,6 +32,8 @@ export class AdminUsersService {
     private readonly roleAssignments: Repository<UserRoleAssignment>,
     @InjectRepository(Facility)
     private readonly facilities: Repository<Facility>,
+    @InjectRepository(Session)
+    private readonly sessions: Repository<Session>,
   ) {}
 
   async listUsers(query: ListUsersQueryDto): Promise<AdminUserListResponse> {
@@ -56,7 +59,10 @@ export class AdminUsersService {
     if (query.role) {
       builder.andWhere(
         `EXISTS (SELECT 1 FROM "user_role_assignments" "ura"
-          WHERE "ura"."user_id" = "user"."id" AND "ura"."role" = :role)`,
+          WHERE "ura"."user_id" = "user"."id"
+            AND "ura"."role" = :role
+            AND "ura"."starts_at" <= now()
+            AND ("ura"."ends_at" IS NULL OR "ura"."ends_at" > now()))`,
         { role: query.role },
       );
     }
@@ -82,11 +88,27 @@ export class AdminUsersService {
     return { user: this.toAdminUser(user, await this.loadAssignmentsFor(id)) };
   }
 
-  async updateStatus(id: string, status: UserStatus): Promise<AdminUserResponse> {
+  async updateStatus(
+    id: string,
+    status: UserStatus,
+    currentAdminId: string,
+  ): Promise<AdminUserResponse> {
+    if (id === currentAdminId && status !== UserStatus.ACTIVE) {
+      throw new DomainException(
+        ErrorCode.VALIDATION_FAILED,
+        'Cannot suspend or disable your own account',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     const user = await this.findUserOrFail(id);
     user.status = status;
 
     const saved = await this.users.save(user);
+
+    if (status !== UserStatus.ACTIVE) {
+      await this.sessions.update({ userId: id, revokedAt: IsNull() }, { revokedAt: new Date() });
+    }
 
     return { user: this.toAdminUser(saved, await this.loadAssignmentsFor(id)) };
   }
@@ -131,16 +153,32 @@ export class AdminUsersService {
       );
     }
 
-    await this.roleAssignments.save(
-      this.roleAssignments.create({
-        userId: id,
-        role: dto.role,
-        facilityId: facilityId ?? undefined,
-        assignedBy,
-        startsAt,
-        endsAt: endsAt ?? undefined,
-      }),
-    );
+    try {
+      await this.roleAssignments.save(
+        this.roleAssignments.create({
+          userId: id,
+          role: dto.role,
+          facilityId: facilityId ?? undefined,
+          assignedBy,
+          startsAt,
+          endsAt: endsAt ?? undefined,
+        }),
+      );
+    } catch (error: unknown) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: string }).code === '23505'
+      ) {
+        throw new DomainException(
+          ErrorCode.ROLE_ALREADY_ASSIGNED,
+          'Role is already assigned to this user',
+          HttpStatus.CONFLICT,
+        );
+      }
+      throw error;
+    }
 
     return { user: this.toAdminUser(user, await this.loadAssignmentsFor(id)) };
   }

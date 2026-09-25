@@ -58,6 +58,17 @@ describe('RolesGuard', () => {
     }
   });
 
+  it('rejects the request when user has undefined roles', () => {
+    const guard = new RolesGuard(reflectorWith([UserRole.ADMIN]));
+
+    try {
+      guard.canActivate(contextWith({ id: 'user-1', roles: undefined as never }));
+      throw new Error('expected RolesGuard to reject');
+    } catch (error) {
+      expectDomainError(error, ErrorCode.FORBIDDEN, HttpStatus.FORBIDDEN);
+    }
+  });
+
   it('rejects the request when roles are required but no user is attached', () => {
     const guard = new RolesGuard(reflectorWith([UserRole.ADMIN]));
 

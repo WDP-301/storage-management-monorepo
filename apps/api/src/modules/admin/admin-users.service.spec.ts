@@ -48,6 +48,7 @@ describe('AdminUsersService', () => {
     delete: jest.Mock;
   };
   let facilities: { findOne: jest.Mock };
+  let sessions: { update: jest.Mock };
   let service: AdminUsersService;
 
   beforeEach(() => {
@@ -60,8 +61,14 @@ describe('AdminUsersService', () => {
       delete: jest.fn().mockResolvedValue({ affected: 1 }),
     };
     facilities = { findOne: jest.fn().mockResolvedValue({ id: 'facility-1' }) };
+    sessions = { update: jest.fn().mockResolvedValue({ affected: 1 }) };
 
-    service = new AdminUsersService(users as never, roleAssignments as never, facilities as never);
+    service = new AdminUsersService(
+      users as never,
+      roleAssignments as never,
+      facilities as never,
+      sessions as never,
+    );
   });
 
   describe('listUsers', () => {
@@ -87,7 +94,7 @@ describe('AdminUsersService', () => {
         status: UserStatus.ACTIVE,
       });
       expect(builder.andWhere).toHaveBeenCalledWith(
-        expect.stringContaining('user_role_assignments'),
+        expect.stringContaining('"ura"."starts_at" <= now()'),
         { role: UserRole.ADMIN },
       );
 
@@ -138,25 +145,55 @@ describe('AdminUsersService', () => {
   });
 
   describe('updateStatus', () => {
+    it('rejects an admin attempting to suspend their own account', async () => {
+      await expect(
+        service.updateStatus('admin-1', UserStatus.SUSPENDED, 'admin-1'),
+      ).rejects.toMatchObject({
+        status: 400,
+        response: { code: 'VALIDATION_FAILED' },
+      });
+      expect(users.save).not.toHaveBeenCalled();
+      expect(sessions.update).not.toHaveBeenCalled();
+    });
+
     it('rejects an unknown user', async () => {
       users.findOne.mockResolvedValue(null);
 
-      await expect(service.updateStatus('user-1', UserStatus.SUSPENDED)).rejects.toMatchObject({
+      await expect(
+        service.updateStatus('user-1', UserStatus.SUSPENDED, 'admin-1'),
+      ).rejects.toMatchObject({
         status: 404,
         response: { code: 'RESOURCE_NOT_FOUND' },
       });
       expect(users.save).not.toHaveBeenCalled();
+      expect(sessions.update).not.toHaveBeenCalled();
     });
 
-    it('persists the new status', async () => {
+    it('persists the new status and revokes sessions when suspended', async () => {
       users.findOne.mockResolvedValue(buildUser());
 
-      const result = await service.updateStatus('user-1', UserStatus.SUSPENDED);
+      const result = await service.updateStatus('user-1', UserStatus.SUSPENDED, 'admin-1');
 
       expect(users.save).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'user-1', status: UserStatus.SUSPENDED }),
       );
+      expect(sessions.update).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-1' }),
+        expect.objectContaining({ revokedAt: expect.any(Date) }),
+      );
       expect(result.user.status).toBe(UserStatus.SUSPENDED);
+    });
+
+    it('persists the new status without revoking sessions when active', async () => {
+      users.findOne.mockResolvedValue(buildUser({ status: UserStatus.SUSPENDED }));
+
+      const result = await service.updateStatus('user-1', UserStatus.ACTIVE, 'admin-1');
+
+      expect(users.save).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'user-1', status: UserStatus.ACTIVE }),
+      );
+      expect(sessions.update).not.toHaveBeenCalled();
+      expect(result.user.status).toBe(UserStatus.ACTIVE);
     });
   });
 
@@ -240,6 +277,19 @@ describe('AdminUsersService', () => {
         response: { code: 'ROLE_ALREADY_ASSIGNED' },
       });
       expect(roleAssignments.save).not.toHaveBeenCalled();
+    });
+
+    it('handles race condition when duplicate assignment throws unique constraint error 23505', async () => {
+      users.findOne.mockResolvedValue(buildUser());
+      roleAssignments.findOne.mockResolvedValue(null);
+      roleAssignments.save.mockRejectedValue({ code: '23505' });
+
+      await expect(
+        service.assignRole('user-1', { role: UserRole.ADMIN }, 'admin-1'),
+      ).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'ROLE_ALREADY_ASSIGNED' },
+      });
     });
 
     it('grants the role and records the assigning admin', async () => {

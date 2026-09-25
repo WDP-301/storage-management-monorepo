@@ -31,7 +31,7 @@ export class RolesGuard implements CanActivate {
       );
     }
 
-    if (!requiredRoles.some((role) => user.roles.includes(role))) {
+    if (!requiredRoles.some((role) => user.roles?.includes(role))) {
       throw new DomainException(
         ErrorCode.FORBIDDEN,
         'Insufficient permissions',

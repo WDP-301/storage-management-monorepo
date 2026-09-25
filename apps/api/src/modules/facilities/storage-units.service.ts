@@ -78,7 +78,7 @@ export class StorageUnitsService {
       .getManyAndCount();
 
     return {
-      data,
+      units: data, // named key to avoid double-nesting after HttpResponseInterceptor wraps in { data: ... }
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -120,7 +120,22 @@ export class StorageUnitsService {
   }
 
   async softDelete(id: string): Promise<void> {
-    await this.findById(id);
+    const unit = await this.findById(id);
+
+    const BLOCKED_STATUSES: StorageUnitStatus[] = [
+      StorageUnitStatus.HELD,
+      StorageUnitStatus.BOOKED,
+      StorageUnitStatus.RENTED,
+    ];
+
+    if (BLOCKED_STATUSES.includes(unit.status)) {
+      throw new DomainException(
+        ErrorCode.BAD_REQUEST,
+        `Cannot delete storage unit with status '${unit.status}'. Unit must be AVAILABLE, MAINTENANCE, or INACTIVE.`,
+        HttpStatus.CONFLICT,
+      );
+    }
+
     await this.storageUnitRepo.softDelete(id);
   }
 }

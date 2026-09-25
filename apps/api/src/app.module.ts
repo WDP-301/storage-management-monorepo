@@ -7,6 +7,7 @@ import { validateEnv } from './config/env.validation';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
+import { LocationsModule } from './modules/locations/locations.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { ENV_KEY } from './shared/constants';
 import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
@@ -41,6 +42,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
     AuthModule,
     AdminModule,
     HealthModule,
+    LocationsModule,
     UploadModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

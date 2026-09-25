@@ -18,7 +18,7 @@ export class CreateBookingDto {
   })
   @IsArray()
   @ArrayMinSize(1)
-  @IsUUID('4', { each: true })
+  @IsUUID('all', { each: true }) // 'all' supports UUIDv4 and UUIDv7 (used by DB)
   storageUnitIds: string[];
 
   @ApiProperty({
@@ -35,7 +35,7 @@ export class CreateBookingDto {
   rentalMonths: number;
 
   @ApiPropertyOptional({ example: 'uuid-facility', description: 'Preferred facility ID' })
-  @IsUUID()
+  @IsUUID('all') // 'all' supports UUIDv4 and UUIDv7
   @IsOptional()
   preferredFacilityId?: string;
 }

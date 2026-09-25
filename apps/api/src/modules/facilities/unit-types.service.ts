@@ -2,9 +2,25 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { IsNull, Repository } from 'typeorm';
+import { IsNull, QueryFailedError, Repository } from 'typeorm';
 import { CreateUnitTypeDto, UpdateUnitTypeDto } from './dto/unit-type.dto';
 import { UnitType } from './entities/unit-type.entity';
+
+const PG_UNIQUE_VIOLATION = '23505';
+
+function handleDbError(err: unknown): never {
+  if (err instanceof QueryFailedError) {
+    const pg = (err as any).driverError as { code?: string };
+    if (pg?.code === PG_UNIQUE_VIOLATION) {
+      throw new DomainException(
+        ErrorCode.VALIDATION_FAILED,
+        'Unit type code already exists',
+        HttpStatus.CONFLICT,
+      );
+    }
+  }
+  throw err;
+}
 
 @Injectable()
 export class UnitTypesService {
@@ -38,12 +54,20 @@ export class UnitTypesService {
 
   async create(dto: CreateUnitTypeDto): Promise<UnitType> {
     const unitType = this.unitTypeRepo.create(dto);
-    return this.unitTypeRepo.save(unitType);
+    try {
+      return await this.unitTypeRepo.save(unitType);
+    } catch (err) {
+      handleDbError(err);
+    }
   }
 
   async update(id: string, dto: UpdateUnitTypeDto): Promise<UnitType> {
     await this.findById(id);
-    await this.unitTypeRepo.update(id, dto);
+    try {
+      await this.unitTypeRepo.update(id, dto);
+    } catch (err) {
+      handleDbError(err);
+    }
     return this.findById(id);
   }
 

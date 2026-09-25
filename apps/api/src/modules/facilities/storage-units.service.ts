@@ -3,13 +3,46 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { StorageUnitStatus } from '@storage/types';
-import { IsNull, Repository } from 'typeorm';
+import { IsNull, QueryFailedError, Repository } from 'typeorm';
 import {
   CreateStorageUnitDto,
   QueryStorageUnitsDto,
   UpdateStorageUnitDto,
 } from './dto/storage-unit.dto';
 import { StorageUnit } from './entities/storage-unit.entity';
+
+/** Postgres error codes */
+const PG_UNIQUE_VIOLATION = '23505';
+const PG_FK_VIOLATION = '23503';
+const PG_CHECK_VIOLATION = '23514';
+
+function handleDbError(err: unknown): never {
+  if (err instanceof QueryFailedError) {
+    const pg = (err as any).driverError as { code?: string; detail?: string };
+    if (pg?.code === PG_UNIQUE_VIOLATION) {
+      throw new DomainException(
+        ErrorCode.VALIDATION_FAILED,
+        'Unit code already exists in this facility',
+        HttpStatus.CONFLICT,
+      );
+    }
+    if (pg?.code === PG_FK_VIOLATION) {
+      throw new DomainException(
+        ErrorCode.BAD_REQUEST,
+        'facilityId or unitTypeId does not exist',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    if (pg?.code === PG_CHECK_VIOLATION) {
+      throw new DomainException(
+        ErrorCode.VALIDATION_FAILED,
+        'posX and posY must both be provided or both be omitted',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+  throw err;
+}
 
 @Injectable()
 export class StorageUnitsService {
@@ -19,7 +52,7 @@ export class StorageUnitsService {
   ) {}
 
   async findAll(query: QueryStorageUnitsDto) {
-    const { facilityId, unitTypeId, status, page = 1, limit = 20 } = query;
+    const { facilityId, unitTypeId, page = 1, limit = 20 } = query;
 
     const qb = this.storageUnitRepo
       .createQueryBuilder('unit')
@@ -35,10 +68,8 @@ export class StorageUnitsService {
       qb.andWhere('unit.unitTypeId = :unitTypeId', { unitTypeId });
     }
 
-    // Default to AVAILABLE for public browsing
-    qb.andWhere('unit.status = :status', {
-      status: status ?? StorageUnitStatus.AVAILABLE,
-    });
+    // #5: Public endpoint always forces AVAILABLE — prevents data leak of RENTED/internal statuses
+    qb.andWhere('unit.status = :status', { status: StorageUnitStatus.AVAILABLE });
 
     const [data, total] = await qb
       .skip((page - 1) * limit)
@@ -71,12 +102,20 @@ export class StorageUnitsService {
 
   async create(dto: CreateStorageUnitDto): Promise<StorageUnit> {
     const unit = this.storageUnitRepo.create(dto);
-    return this.storageUnitRepo.save(unit);
+    try {
+      return await this.storageUnitRepo.save(unit);
+    } catch (err) {
+      handleDbError(err);
+    }
   }
 
   async update(id: string, dto: UpdateStorageUnitDto): Promise<StorageUnit> {
     await this.findById(id);
-    await this.storageUnitRepo.update(id, dto);
+    try {
+      await this.storageUnitRepo.update(id, dto);
+    } catch (err) {
+      handleDbError(err);
+    }
     return this.findById(id);
   }
 

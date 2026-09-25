@@ -2,9 +2,25 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { IsNull, Repository } from 'typeorm';
+import { IsNull, QueryFailedError, Repository } from 'typeorm';
 import { CreateFacilityDto, UpdateFacilityDto } from './dto/facility.dto';
 import { Facility } from './entities/facility.entity';
+
+const PG_UNIQUE_VIOLATION = '23505';
+
+function handleDbError(err: unknown): never {
+  if (err instanceof QueryFailedError) {
+    const pg = (err as any).driverError as { code?: string };
+    if (pg?.code === PG_UNIQUE_VIOLATION) {
+      throw new DomainException(
+        ErrorCode.VALIDATION_FAILED,
+        'Facility code already exists',
+        HttpStatus.CONFLICT,
+      );
+    }
+  }
+  throw err;
+}
 
 @Injectable()
 export class FacilitiesService {
@@ -38,12 +54,20 @@ export class FacilitiesService {
 
   async create(dto: CreateFacilityDto): Promise<Facility> {
     const facility = this.facilityRepo.create(dto);
-    return this.facilityRepo.save(facility);
+    try {
+      return await this.facilityRepo.save(facility);
+    } catch (err) {
+      handleDbError(err);
+    }
   }
 
   async update(id: string, dto: UpdateFacilityDto): Promise<Facility> {
     await this.findById(id);
-    await this.facilityRepo.update(id, dto);
+    try {
+      await this.facilityRepo.update(id, dto);
+    } catch (err) {
+      handleDbError(err);
+    }
     return this.findById(id);
   }
 

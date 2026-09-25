@@ -44,7 +44,7 @@ export class StorageUnitsController {
 
   @Post()
   @UseGuards(SessionGuard, RolesGuard)
-  @Roles(UserRole.OPERATIONS_MANAGER)
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
   @ApiOperation({ summary: '[OPERATIONS_MANAGER] Create storage unit' })
   create(@Body() dto: CreateStorageUnitDto) {
     return this.storageUnitsService.create(dto);
@@ -52,7 +52,7 @@ export class StorageUnitsController {
 
   @Patch(':id')
   @UseGuards(SessionGuard, RolesGuard)
-  @Roles(UserRole.OPERATIONS_MANAGER)
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
   @ApiOperation({ summary: '[OPERATIONS_MANAGER] Update storage unit' })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateStorageUnitDto) {
     return this.storageUnitsService.update(id, dto);
@@ -60,7 +60,7 @@ export class StorageUnitsController {
 
   @Delete(':id')
   @UseGuards(SessionGuard, RolesGuard)
-  @Roles(UserRole.OPERATIONS_MANAGER)
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: '[OPERATIONS_MANAGER] Soft-delete storage unit' })
   remove(@Param('id', ParseUUIDPipe) id: string) {

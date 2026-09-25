@@ -1,5 +1,5 @@
 import { AuthModule } from '@modules/auth/auth.module';
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Facility } from './entities/facility.entity';
 import { StorageUnit } from './entities/storage-unit.entity';
@@ -14,7 +14,7 @@ import { UnitTypesService } from './unit-types.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Facility, UnitType, StorageUnit]),
-    forwardRef(() => AuthModule),
+    AuthModule, // provides SessionGuard and RolesGuard for controllers
   ],
   controllers: [FacilitiesController, UnitTypesController, StorageUnitsController],
   providers: [FacilitiesService, UnitTypesService, StorageUnitsService],

@@ -5,7 +5,6 @@ import { DocumentType } from '@storage/types';
 import {
   Column,
   CreateDateColumn,
-  DeleteDateColumn,
   Entity,
   JoinColumn,
   ManyToOne,
@@ -29,6 +28,9 @@ export class Document {
   @Column({ type: 'varchar', length: 30 })
   type: DocumentType;
 
+  @Column({ type: 'varchar', length: 50, nullable: true, name: 'doc_number' })
+  docNumber?: string;
+
   @Column({ length: 255 })
   name: string;
 
@@ -43,9 +45,6 @@ export class Document {
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
-
-  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true, select: false })
-  deletedAt?: Date;
 
   @ManyToOne(() => AppUser, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'owner_user_id' })

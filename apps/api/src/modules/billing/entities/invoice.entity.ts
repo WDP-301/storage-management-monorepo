@@ -45,6 +45,9 @@ export class Invoice {
   @Column({ type: 'timestamptz', nullable: true, name: 'issued_at' })
   issuedAt?: Date;
 
+  @Column({ type: 'jsonb', default: () => "'{}'", name: 'billing_info' })
+  billingInfo: Record<string, any>;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

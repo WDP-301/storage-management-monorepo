@@ -40,6 +40,9 @@ export class Contract {
   @Column({ type: 'jsonb', default: () => "'{}'", name: 'terms_snapshot' })
   termsSnapshot: Record<string, any>;
 
+  @Column({ type: 'jsonb', default: () => "'{}'", name: 'customer_snapshot' })
+  customerSnapshot: Record<string, any>;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

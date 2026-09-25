@@ -29,6 +29,9 @@ export class Document {
   @Column({ type: 'varchar', length: 30 })
   type: DocumentType;
 
+  @Column({ type: 'varchar', length: 50, nullable: true, name: 'doc_number' })
+  docNumber?: string;
+
   @Column({ length: 255 })
   name: string;
 

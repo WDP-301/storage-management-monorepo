@@ -1,6 +1,8 @@
-import { AppUser } from '@modules/users/entities/app-user.entity';
-import { UserRoleAssignment } from '@modules/users/entities/user-role-assignment.entity';
-import { UserRole, UserStatus } from '@storage/types';
+import { AppUser } from '@modules/customer/entities/app-user.entity';
+import { CustomerProfile } from '@modules/customer/entities/customer-profile.entity';
+import { UserRoleAssignment } from '@modules/customer/entities/user-role-assignment.entity';
+import { Document } from '@modules/misc/entities/document.entity';
+import { DocumentType, UserRole, UserStatus } from '@storage/types';
 import { AuthService } from './auth.service';
 import { hashPassword, verifyPassword } from './session.util';
 
@@ -17,6 +19,24 @@ const buildUser = (overrides: Partial<AppUser> = {}): AppUser =>
     updatedAt: new Date('2024-01-01T00:00:00Z'),
     ...overrides,
   }) as AppUser;
+
+const buildProfile = (overrides: Partial<CustomerProfile> = {}): CustomerProfile =>
+  ({
+    userId: 'user-1',
+    createdAt: new Date('2024-01-01T00:00:00Z'),
+    updatedAt: new Date('2024-01-01T00:00:00Z'),
+    ...overrides,
+  }) as CustomerProfile;
+
+const buildDocument = (overrides: Partial<Document> = {}): Document =>
+  ({
+    id: 'doc-1',
+    ownerUserId: 'user-1',
+    type: DocumentType.IDENTITY,
+    name: 'Identity document',
+    fileUrl: 'https://files.example.com/id.png',
+    ...overrides,
+  }) as Document;
 
 const mockQueryBuilder = (repo: { createQueryBuilder: jest.Mock }, result: unknown) => {
   const qb = {
@@ -37,6 +57,8 @@ describe('AuthService', () => {
     update: jest.Mock;
   };
   let roleAssignments: { find: jest.Mock };
+  let profiles: { findOne: jest.Mock };
+  let documents: { findOne: jest.Mock };
   let txManager: { create: jest.Mock; save: jest.Mock };
   let dataSource: { transaction: jest.Mock };
   let cookies: { generateToken: jest.Mock; hashToken: jest.Mock; ttlMs: number };
@@ -51,6 +73,8 @@ describe('AuthService', () => {
       update: jest.fn(() => Promise.resolve({ affected: 1 })),
     };
     roleAssignments = { find: jest.fn(() => Promise.resolve([])) };
+    profiles = { findOne: jest.fn().mockResolvedValue(null) };
+    documents = { findOne: jest.fn().mockResolvedValue(null) };
     txManager = {
       create: jest.fn((_entity, value) => ({ ...value })),
       save: jest.fn((x) =>
@@ -68,6 +92,8 @@ describe('AuthService', () => {
       users as never,
       sessions as never,
       roleAssignments as never,
+      profiles as never,
+      documents as never,
       dataSource as never,
       cookies as never,
     );
@@ -234,6 +260,46 @@ describe('AuthService', () => {
         { sessionTokenHash: 'hash:raw-token' },
         { revokedAt: expect.any(Date) },
       );
+    });
+  });
+
+  describe('loadCustomerProfile', () => {
+    it('returns nulls when the customer has no profile or identity document yet', async () => {
+      await expect(service.loadCustomerProfile('user-1')).resolves.toEqual({
+        profile: null,
+        identityDocument: null,
+      });
+    });
+
+    it('maps the stored profile (snake_case) and identity document', async () => {
+      profiles.findOne.mockResolvedValue(
+        buildProfile({
+          addressLine: '123 Le Loi',
+          ward: '00008',
+          province: '01',
+          companyName: 'Acme Corp',
+          taxCode: '0123456789',
+        }),
+      );
+      documents.findOne.mockResolvedValue(buildDocument({ docNumber: '001234567890' }));
+
+      await expect(service.loadCustomerProfile('user-1')).resolves.toEqual({
+        profile: {
+          user_id: 'user-1',
+          address_line: '123 Le Loi',
+          ward: '00008',
+          province: '01',
+          company_name: 'Acme Corp',
+          tax_code: '0123456789',
+          created_at: new Date('2024-01-01T00:00:00Z'),
+          updated_at: new Date('2024-01-01T00:00:00Z'),
+          deleted_at: null,
+        },
+        identityDocument: {
+          docNumber: '001234567890',
+          fileUrl: 'https://files.example.com/id.png',
+        },
+      });
     });
   });
 });

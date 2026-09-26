@@ -1,10 +1,11 @@
+import { Button, Text } from '@cloudflare/kumo';
 import { AlertCircle, CheckCircle2, Lock, Mail, Phone, User } from 'lucide-react';
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Button } from '../../design-system/Button';
 import { FieldError, Input, Label, TextField } from '../../design-system/Input';
 import { Tabs } from '../../design-system/Tabs';
+import { getRoleDefaultPath } from '../../lib/roles';
 
 type AuthMode = 'login' | 'register';
 type FieldErrors = Partial<Record<'email' | 'password' | 'fullName' | 'phone', string>>;
@@ -40,10 +41,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
       if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
     };
   }, []);
-
-  // Redirection target after login
-  const fromLocation =
-    (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
 
   const switchMode = (newMode: AuthMode) => {
     setFieldErrors({});
@@ -99,10 +96,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
     setIsSubmitting(true);
     try {
       if (mode === 'login') {
-        await login({ email: email.trim(), password });
-        navigate(fromLocation, { replace: true });
+        const loggedUser = await login({ email: email.trim(), password });
+        const defaultPath = getRoleDefaultPath(loggedUser.roles?.[0]);
+        navigate(defaultPath, { replace: true });
       } else {
-        await register({
+        const registeredUser = await register({
           email: email.trim(),
           password,
           fullName: fullName.trim(),
@@ -110,7 +108,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
         });
         setSuccessMessage('Đăng ký tài khoản thành công! Đang chuyển hướng...');
         redirectTimerRef.current = setTimeout(() => {
-          navigate(fromLocation, { replace: true });
+          const defaultPath = getRoleDefaultPath(registeredUser.roles?.[0]);
+          navigate(defaultPath, { replace: true });
         }, 1000);
       }
     } catch (err: unknown) {
@@ -125,9 +124,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
   };
 
   return (
-    <div>
+    <div className="space-y-6">
       {/* Tab Switcher */}
-      <div className="flex justify-center mb-6">
+      <div className="flex justify-center">
         <Tabs
           tabs={[
             { id: 'login', label: 'Đăng nhập' },
@@ -138,22 +137,22 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
         />
       </div>
 
-      <div className="mb-6">
-        <h2 className="text-xl font-bold text-foreground">
-          {mode === 'login' ? 'Chào mừng trở lại' : 'Tạo tài khoản mới'}
-        </h2>
-        <p className="text-xs text-muted mt-1">
-          {mode === 'login'
-            ? 'Đăng nhập để xem danh sách kho, giữ chỗ và quản lý đơn đặt của bạn.'
-            : 'Đăng ký tài khoản khách hàng để bắt đầu tìm kiếm và thuê kho ngay hôm nay.'}
-        </p>
+      <div>
+        <Text as="h2">{mode === 'login' ? 'Chào mừng trở lại' : 'Tạo tài khoản mới'}</Text>
+        <div className="mt-1">
+          <Text variant="secondary" size="xs">
+            {mode === 'login'
+              ? 'Đăng nhập để vào không gian làm việc phù hợp với vai trò của bạn.'
+              : 'Đăng ký tài khoản khách hàng để bắt đầu tìm kiếm và thuê kho ngay hôm nay.'}
+          </Text>
+        </div>
       </div>
 
       {/* Server Error Alert */}
       {serverError && (
         <div
           role="alert"
-          className="mb-5 p-3.5 rounded-lg border border-danger/25 bg-danger/10 text-danger text-xs flex items-start gap-2.5"
+          className="p-3.5 rounded-lg border border-kumo-danger/30 bg-kumo-danger-tint text-kumo-danger text-xs flex items-start gap-2.5"
         >
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <div className="flex-1 font-medium">{serverError}</div>
@@ -164,7 +163,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
       {successMessage && (
         <div
           role="alert"
-          className="mb-5 p-3.5 rounded-lg border border-success/30 bg-success/10 text-success text-xs flex items-start gap-2.5"
+          className="p-3.5 rounded-lg border border-kumo-success/30 bg-kumo-success-tint text-kumo-success text-xs flex items-start gap-2.5"
         >
           <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
           <div className="flex-1 font-medium">{successMessage}</div>
@@ -233,7 +232,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
               Mật khẩu
             </Label>
             {mode === 'login' && (
-              <span className="text-[11px] text-muted cursor-not-allowed">Quên mật khẩu?</span>
+              <span className="text-[11px] text-kumo-subtle cursor-not-allowed">
+                Quên mật khẩu?
+              </span>
             )}
           </div>
           <Input
@@ -250,20 +251,25 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
         </TextField>
 
         <div className="pt-2">
-          <Button type="submit" variant="primary" size="md" fullWidth isLoading={isSubmitting}>
+          <Button
+            type="submit"
+            variant="primary"
+            className="w-full min-h-[44px] justify-center text-sm font-medium"
+            loading={isSubmitting}
+          >
             {mode === 'login' ? 'Đăng nhập vào hệ thống' : 'Tạo tài khoản'}
           </Button>
         </div>
       </form>
 
-      <div className="mt-6 text-center text-xs text-muted">
+      <div className="mt-6 text-center text-xs text-kumo-subtle">
         {mode === 'login' ? (
           <>
             Chưa có tài khoản?{' '}
             <button
               type="button"
               onClick={() => switchMode('register')}
-              className="font-semibold text-accent hover:underline cursor-pointer"
+              className="font-semibold text-kumo-brand hover:underline cursor-pointer"
             >
               Đăng ký ngay
             </button>
@@ -274,7 +280,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
             <button
               type="button"
               onClick={() => switchMode('login')}
-              className="font-semibold text-accent hover:underline cursor-pointer"
+              className="font-semibold text-kumo-brand hover:underline cursor-pointer"
             >
               Đăng nhập tại đây
             </button>

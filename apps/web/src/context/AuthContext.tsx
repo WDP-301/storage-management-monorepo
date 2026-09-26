@@ -1,3 +1,4 @@
+import { UserRole } from '@storage/types';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { AuthApi, setUnauthorizedCallback } from '../lib/api';
 import { AuthContextType, AuthUser, LoginInput, RegisterInput } from '../types/auth';
@@ -6,6 +7,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [activeRole, setActiveRole] = useState<UserRole | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Initialize and check current session on app startup
@@ -13,9 +15,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const currentUser = await AuthApi.me();
       setUser(currentUser);
+      setActiveRole(currentUser.roles?.[0] || null);
       return currentUser;
     } catch {
       setUser(null);
+      setActiveRole(null);
       return null;
     } finally {
       setIsLoading(false);
@@ -26,6 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Set interceptor callback when backend session expires (401)
     setUnauthorizedCallback(() => {
       setUser(null);
+      setActiveRole(null);
     });
 
     checkAuth();
@@ -35,11 +40,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [checkAuth]);
 
+  const switchRole = (role: UserRole) => {
+    if (user?.roles.includes(role)) {
+      setActiveRole(role);
+    }
+  };
+
   const login = async (credentials: LoginInput): Promise<AuthUser> => {
     setIsLoading(true);
     try {
       const loggedInUser = await AuthApi.login(credentials);
       setUser(loggedInUser);
+      setActiveRole(loggedInUser.roles?.[0] || null);
       return loggedInUser;
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : '';
@@ -64,6 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const registeredUser = await AuthApi.register(data);
       setUser(registeredUser);
+      setActiveRole(registeredUser.roles?.[0] || null);
       return registeredUser;
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : '';
@@ -91,6 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Ignore network errors on logout
     } finally {
       setUser(null);
+      setActiveRole(null);
       setIsLoading(false);
     }
   };
@@ -99,9 +113,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const updated = await AuthApi.me();
       setUser(updated);
+      setActiveRole(updated.roles?.[0] || null);
       return updated;
     } catch {
       setUser(null);
+      setActiveRole(null);
       return null;
     }
   };
@@ -112,6 +128,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         isAuthenticated: !!user,
         isLoading,
+        activeRole,
+        switchRole,
         login,
         register,
         logout,

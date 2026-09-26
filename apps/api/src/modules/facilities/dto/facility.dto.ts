@@ -29,23 +29,17 @@ export class CreateFacilityDto {
   @MaxLength(255)
   addressLine: string;
 
-  @ApiPropertyOptional({ example: 'Phường Bến Nghé' })
+  @ApiPropertyOptional({ example: '00001', description: 'Ward code (FK → wards.code)' })
   @IsString()
+  @MaxLength(20)
   @IsOptional()
-  @MaxLength(100)
-  ward?: string;
+  wardCode?: string;
 
-  @ApiPropertyOptional({ example: 'Quận 1' })
+  @ApiPropertyOptional({ example: '01', description: 'Province code (FK → provinces.code)' })
   @IsString()
+  @MaxLength(20)
   @IsOptional()
-  @MaxLength(100)
-  district?: string;
-
-  @ApiProperty({ example: 'Hồ Chí Minh' })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(100)
-  city: string;
+  provinceCode?: string;
 
   @ApiProperty({ example: 10.7769, description: 'Latitude (-90 to 90)' })
   @IsLatitude()

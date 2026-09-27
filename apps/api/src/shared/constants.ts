@@ -26,4 +26,13 @@ export const ENV_KEY = {
   S3_BUCKET: 'S3_BUCKET',
   S3_FORCE_PATH_STYLE: 'S3_FORCE_PATH_STYLE',
   S3_PUBLIC_URL: 'S3_PUBLIC_URL',
+
+  // Goong Maps API
+  GOONG_API_KEY: 'GOONG_API_KEY',
 } as const;
+
+/** Goong REST API base URL */
+export const GOONG_BASE_URL = 'https://rsapi.goong.io';
+
+/** Default location bias for Goong autocomplete — Hồ Chí Minh City center */
+export const GOONG_DEFAULT_LOCATION = '10.776889,106.700806';

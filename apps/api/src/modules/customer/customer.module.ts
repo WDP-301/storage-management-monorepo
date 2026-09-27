@@ -7,10 +7,11 @@ import { CustomerController } from './customer.controller';
 import { CustomerService } from './customer.service';
 import { AppUser } from './entities/app-user.entity';
 import { CustomerProfile } from './entities/customer-profile.entity';
+import { Session } from './entities/session.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([AppUser, CustomerProfile, Document, Contract]),
+    TypeOrmModule.forFeature([AppUser, CustomerProfile, Session, Document, Contract]),
     AuthModule, // provides SessionGuard for the controller
   ],
   controllers: [CustomerController],

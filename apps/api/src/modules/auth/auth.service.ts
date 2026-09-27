@@ -149,7 +149,7 @@ export class AuthService {
     };
   }
 
-  async resolveSession(token: string): Promise<AuthUser | null> {
+  async resolveSession(token: string): Promise<{ sessionId: string; user: AuthUser } | null> {
     const session = await this.sessions.findOne({
       where: { sessionTokenHash: this.cookies.hashToken(token) },
     });
@@ -165,7 +165,7 @@ export class AuthService {
 
     await this.sessions.update({ id: session.id }, { lastUsedAt: new Date() });
 
-    return this.toAuthUser(user, await this.loadRoles(user.id));
+    return { sessionId: session.id, user: this.toAuthUser(user, await this.loadRoles(user.id)) };
   }
 
   async revokeSession(token: string): Promise<void> {

@@ -1,7 +1,8 @@
 import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
 import { SessionGuard } from '@modules/auth/guards/session.guard';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { Body, Controller, Param, ParseUUIDPipe, Patch, UseGuards } from '@nestjs/common';
+import type { AuthenticatedRequest } from '@modules/auth/types/authenticated-request';
+import { Body, Controller, Param, ParseUUIDPipe, Patch, Req, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ApiErrorResponseDto } from '@shared/models/api-response';
 import { CustomerService } from './customer.service';
@@ -37,7 +38,8 @@ export class CustomerController {
   @ApiOperation({
     summary: 'Change the authenticated customer password',
     description:
-      'Changes the password of the currently authenticated customer (identity from session)',
+      'Changes the password of the currently authenticated customer (identity from session). ' +
+      'All other active sessions of the user are revoked; the current session stays valid.',
   })
   @ApiResponse({ status: 200, description: 'Password changed' })
   @ApiResponse({ status: 400, description: 'Validation failed', type: ApiErrorResponseDto })
@@ -46,7 +48,8 @@ export class CustomerController {
   changePassword(
     @CurrentUser() user: AuthUser,
     @Body() dto: ChangePasswordDto,
+    @Req() request: AuthenticatedRequest,
   ): Promise<ChangePasswordResponse> {
-    return this.customerService.changePassword(user, dto);
+    return this.customerService.changePassword(user, dto, request.sessionId);
   }
 }

@@ -6,11 +6,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { DocumentType, UserRole } from '@storage/types';
-import { DataSource, EntityManager, QueryFailedError, Repository } from 'typeorm';
+import { DataSource, EntityManager, IsNull, Not, QueryFailedError, Repository } from 'typeorm';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { IdentityDocumentDto, UpdateCustomerProfileDto } from './dto/update-customer-profile.dto';
 import { AppUser } from './entities/app-user.entity';
 import { CustomerProfile as CustomerProfileEntity } from './entities/customer-profile.entity';
+import { Session } from './entities/session.entity';
 import type {
   ChangePasswordResponse,
   CustomerAccount,
@@ -21,9 +22,9 @@ import { toCustomerProfile } from './types/customer-profile';
 const IDENTITY_DOCUMENT_NAME = 'Identity document';
 const PG_UNIQUE_VIOLATION = '23505';
 
-/** Trims an incoming code and treats an empty string as "clear" (undefined). */
-const normalizeCode = (value: string | undefined): string | undefined =>
-  value === undefined ? undefined : value.trim() || undefined;
+/** Trims an incoming code and treats an empty string as "clear" (null). */
+const normalizeCode = (value: string | undefined): string | null | undefined =>
+  value === undefined ? undefined : value.trim() || null;
 
 function fieldValidationError(field: string, code: string, message: string): DomainException {
   return new DomainException(
@@ -45,6 +46,8 @@ export class CustomerService {
     private readonly profiles: Repository<CustomerProfileEntity>,
     @InjectRepository(Document)
     private readonly documents: Repository<Document>,
+    @InjectRepository(Session)
+    private readonly sessions: Repository<Session>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -76,10 +79,15 @@ export class CustomerService {
 
   /**
    * Changes the password of the authenticated customer (identity comes from the
-   * session, never from the request body). The current session stays valid — the
-   * `sessions` table does not reference the password hash.
+   * session, never from the request body). Every other active session of the user is
+   * revoked so a stolen session cannot survive a password change; the current
+   * session stays valid.
    */
-  async changePassword(actor: AuthUser, dto: ChangePasswordDto): Promise<ChangePasswordResponse> {
+  async changePassword(
+    actor: AuthUser,
+    dto: ChangePasswordDto,
+    sessionId: string | undefined,
+  ): Promise<ChangePasswordResponse> {
     // `password_hash` is select:false, so it must be requested explicitly.
     const user = await this.users
       .createQueryBuilder('user')
@@ -125,6 +133,13 @@ export class CustomerService {
 
     user.passwordHash = await hashPassword(dto.newPassword);
     await this.users.save(user);
+
+    if (sessionId) {
+      await this.sessions.update(
+        { userId: actor.id, id: Not(sessionId), revokedAt: IsNull() },
+        { revokedAt: new Date() },
+      );
+    }
 
     return { message: 'Password changed successfully' };
   }
@@ -229,11 +244,11 @@ export class CustomerService {
       profile = manager.create(CustomerProfileEntity, { userId });
     }
 
-    if (dto.addressLine !== undefined) profile.addressLine = dto.addressLine || undefined;
-    if (dto.ward !== undefined) profile.ward = normalizeCode(dto.ward);
-    if (dto.province !== undefined) profile.province = normalizeCode(dto.province);
-    if (dto.companyName !== undefined) profile.companyName = dto.companyName || undefined;
-    if (dto.taxCode !== undefined) profile.taxCode = dto.taxCode || undefined;
+    if (dto.addressLine !== undefined) profile.addressLine = dto.addressLine || null;
+    if (dto.ward !== undefined) profile.ward = normalizeCode(dto.ward) ?? null;
+    if (dto.province !== undefined) profile.province = normalizeCode(dto.province) ?? null;
+    if (dto.companyName !== undefined) profile.companyName = dto.companyName || null;
+    if (dto.taxCode !== undefined) profile.taxCode = dto.taxCode || null;
 
     await manager.save(profile);
   }

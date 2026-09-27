@@ -238,13 +238,14 @@ describe('AuthService', () => {
       await expect(service.resolveSession('token')).resolves.toBeNull();
     });
 
-    it('returns the user and touches lastUsedAt when the session is valid', async () => {
+    it('returns the user with its session id and touches lastUsedAt when the session is valid', async () => {
       sessions.findOne.mockResolvedValue(activeSession());
       users.findOne.mockResolvedValue(buildUser());
 
-      const user = await service.resolveSession('token');
+      const resolved = await service.resolveSession('token');
 
-      expect(user?.id).toBe('user-1');
+      expect(resolved?.sessionId).toBe('session-1');
+      expect(resolved?.user.id).toBe('user-1');
       expect(sessions.update).toHaveBeenCalledWith(
         { id: 'session-1' },
         { lastUsedAt: expect.any(Date) },

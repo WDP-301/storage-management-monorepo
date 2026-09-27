@@ -2,7 +2,7 @@ import { hashPassword, verifyPassword } from '@modules/auth/session.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { Document } from '@modules/misc/entities/document.entity';
 import { DocumentType, UserRole, UserStatus } from '@storage/types';
-import { QueryFailedError } from 'typeorm';
+import { IsNull, Not, QueryFailedError } from 'typeorm';
 import { CustomerService } from './customer.service';
 import { AppUser } from './entities/app-user.entity';
 import { CustomerProfile } from './entities/customer-profile.entity';
@@ -54,6 +54,7 @@ describe('CustomerService', () => {
   let users: { findOne: jest.Mock; createQueryBuilder: jest.Mock; save: jest.Mock };
   let profiles: { findOne: jest.Mock };
   let documents: { findOne: jest.Mock };
+  let sessions: { update: jest.Mock };
   let manager: { save: jest.Mock; findOne: jest.Mock; create: jest.Mock };
   let dataSource: { transaction: jest.Mock; query: jest.Mock };
   let service: CustomerService;
@@ -76,6 +77,7 @@ describe('CustomerService', () => {
     };
     profiles = { findOne: jest.fn().mockResolvedValue(null) };
     documents = { findOne: jest.fn().mockResolvedValue(null) };
+    sessions = { update: jest.fn().mockResolvedValue({ affected: 0 }) };
     manager = {
       save: jest.fn((value) => Promise.resolve(value)),
       findOne: jest.fn().mockResolvedValue(null),
@@ -90,6 +92,7 @@ describe('CustomerService', () => {
       users as never,
       profiles as never,
       documents as never,
+      sessions as never,
       dataSource as never,
     );
   });
@@ -274,6 +277,36 @@ describe('CustomerService', () => {
       );
     });
 
+    it('clears address fields when an empty string is sent', async () => {
+      manager.findOne.mockResolvedValue(
+        buildProfile({
+          addressLine: '123 Le Loi',
+          ward: '00008',
+          province: '01',
+          companyName: 'Acme Corp',
+          taxCode: '0123456789',
+        }),
+      );
+
+      const result = await service.updateProfile(
+        'user-1',
+        { addressLine: '', ward: '', province: '', companyName: '', taxCode: '' },
+        buildActor(),
+      );
+
+      expect(manager.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'user-1',
+          addressLine: null,
+          ward: null,
+          province: null,
+          companyName: null,
+          taxCode: null,
+        }),
+      );
+      expect(result.profile).toBeNull();
+    });
+
     it('rejects a ward that does not belong to the selected province', async () => {
       dataSource.query
         .mockResolvedValueOnce([{ code: '01' }])
@@ -376,7 +409,7 @@ describe('CustomerService', () => {
         buildUser({ passwordHash: await hashPassword('OldPassword123') }),
       );
 
-      await service.changePassword(buildActor({ id: 'user-1' }), dto());
+      await service.changePassword(buildActor({ id: 'user-1' }), dto(), 'session-1');
 
       expect(qb.where).toHaveBeenCalledWith('user.id = :id', { id: 'user-1' });
     });
@@ -386,7 +419,7 @@ describe('CustomerService', () => {
       const newPassword = 'NewPassword123';
       mockPasswordQuery(buildUser({ passwordHash: await hashPassword(oldPassword) }));
 
-      const result = await service.changePassword(buildActor(), dto({ newPassword }));
+      const result = await service.changePassword(buildActor(), dto({ newPassword }), 'session-1');
 
       const saved = users.save.mock.calls[0][0];
       expect(saved.passwordHash).not.toBe(newPassword);
@@ -395,11 +428,26 @@ describe('CustomerService', () => {
       expect(result).toEqual({ message: 'Password changed successfully' });
     });
 
+    it('revokes every other active session but keeps the current one', async () => {
+      mockPasswordQuery(buildUser({ passwordHash: await hashPassword('OldPassword123') }));
+
+      await service.changePassword(buildActor(), dto(), 'session-1');
+
+      expect(sessions.update).toHaveBeenCalledWith(
+        { userId: 'user-1', id: Not('session-1'), revokedAt: IsNull() },
+        { revokedAt: expect.any(Date) },
+      );
+    });
+
     it('rejects an incorrect current password', async () => {
       mockPasswordQuery(buildUser({ passwordHash: await hashPassword('OldPassword123') }));
 
       await expect(
-        service.changePassword(buildActor(), dto({ currentPassword: 'WrongPassword1' })),
+        service.changePassword(
+          buildActor(),
+          dto({ currentPassword: 'WrongPassword1' }),
+          'session-1',
+        ),
       ).rejects.toMatchObject({
         status: 400,
         response: {
@@ -414,7 +462,7 @@ describe('CustomerService', () => {
       mockPasswordQuery(buildUser({ passwordHash: await hashPassword('OldPassword123') }));
 
       await expect(
-        service.changePassword(buildActor(), dto({ newPassword: 'OldPassword123' })),
+        service.changePassword(buildActor(), dto({ newPassword: 'OldPassword123' }), 'session-1'),
       ).rejects.toMatchObject({
         status: 400,
         response: {
@@ -429,7 +477,7 @@ describe('CustomerService', () => {
       mockPasswordQuery(buildUser({ passwordHash: await hashPassword('OldPassword123') }));
 
       await expect(
-        service.changePassword(buildActor(), dto({ confirmPassword: 'Different123' })),
+        service.changePassword(buildActor(), dto({ confirmPassword: 'Different123' }), 'session-1'),
       ).rejects.toMatchObject({
         status: 400,
         response: {
@@ -443,7 +491,7 @@ describe('CustomerService', () => {
     it('rejects an account that has no password set', async () => {
       mockPasswordQuery(buildUser({ passwordHash: undefined }));
 
-      await expect(service.changePassword(buildActor(), dto())).rejects.toMatchObject({
+      await expect(service.changePassword(buildActor(), dto(), 'session-1')).rejects.toMatchObject({
         status: 400,
         response: {
           code: 'VALIDATION_FAILED',
@@ -456,7 +504,7 @@ describe('CustomerService', () => {
     it('rejects when the authenticated user no longer exists', async () => {
       mockPasswordQuery(null);
 
-      await expect(service.changePassword(buildActor(), dto())).rejects.toMatchObject({
+      await expect(service.changePassword(buildActor(), dto(), 'session-1')).rejects.toMatchObject({
         status: 404,
         response: { code: 'RESOURCE_NOT_FOUND' },
       });
@@ -467,7 +515,9 @@ describe('CustomerService', () => {
       mockPasswordQuery(buildUser({ passwordHash: await hashPassword('OldPassword123') }));
       users.save.mockRejectedValue(new Error('db error'));
 
-      await expect(service.changePassword(buildActor(), dto())).rejects.toThrow('db error');
+      await expect(service.changePassword(buildActor(), dto(), 'session-1')).rejects.toThrow(
+        'db error',
+      );
     });
   });
 });

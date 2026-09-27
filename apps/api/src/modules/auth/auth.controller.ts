@@ -8,6 +8,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { SessionGuard } from './guards/session.guard';
 import type {
+  AuthMeResponse,
   AuthUser,
   AuthUserResponse,
   LoginResponse,
@@ -66,10 +67,11 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(SessionGuard)
-  @ApiOperation({ summary: 'Get the currently authenticated user' })
-  @ApiResponse({ status: 200, description: 'Current user with roles' })
-  me(@CurrentUser() user: AuthUser): AuthUserResponse {
-    return { user };
+  @ApiOperation({ summary: 'Get the currently authenticated user with their customer profile' })
+  @ApiResponse({ status: 200, description: 'Current user with roles and customer profile' })
+  async me(@CurrentUser() user: AuthUser): Promise<AuthMeResponse> {
+    const { profile, identityDocument } = await this.authService.loadCustomerProfile(user.id);
+    return { user, profile, identityDocument };
   }
 
   private sessionContext(request: Request): SessionContext {

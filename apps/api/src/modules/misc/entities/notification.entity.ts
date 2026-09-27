@@ -1,4 +1,4 @@
-import { AppUser } from '@modules/users/entities/app-user.entity';
+import { AppUser } from '@modules/customer/entities/app-user.entity';
 import { NotificationChannel, NotificationStatus } from '@storage/types';
 import {
   Column,

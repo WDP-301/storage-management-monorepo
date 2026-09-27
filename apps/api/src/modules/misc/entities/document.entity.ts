@@ -1,6 +1,6 @@
 import { Contract } from '@modules/contracts/entities/contract.entity';
+import { AppUser } from '@modules/customer/entities/app-user.entity';
 import { Facility } from '@modules/facilities/entities/facility.entity';
-import { AppUser } from '@modules/users/entities/app-user.entity';
 import { DocumentType } from '@storage/types';
 import {
   Column,

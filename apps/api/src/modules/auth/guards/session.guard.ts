@@ -24,8 +24,8 @@ export class SessionGuard implements CanActivate {
       );
     }
 
-    const user = await this.authService.resolveSession(token);
-    if (!user) {
+    const resolved = await this.authService.resolveSession(token);
+    if (!resolved) {
       throw new DomainException(
         ErrorCode.SESSION_INVALID,
         'Session is invalid or expired',
@@ -33,7 +33,8 @@ export class SessionGuard implements CanActivate {
       );
     }
 
-    request.user = user;
+    request.user = resolved.user;
+    request.sessionId = resolved.sessionId;
     return true;
   }
 }

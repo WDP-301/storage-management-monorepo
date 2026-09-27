@@ -1,6 +1,9 @@
-import { AppUser } from '@modules/users/entities/app-user.entity';
-import { Session } from '@modules/users/entities/session.entity';
-import { UserRoleAssignment } from '@modules/users/entities/user-role-assignment.entity';
+import { Contract } from '@modules/contracts/entities/contract.entity';
+import { AppUser } from '@modules/customer/entities/app-user.entity';
+import { CustomerProfile } from '@modules/customer/entities/customer-profile.entity';
+import { Session } from '@modules/customer/entities/session.entity';
+import { UserRoleAssignment } from '@modules/customer/entities/user-role-assignment.entity';
+import { Document } from '@modules/misc/entities/document.entity';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthController } from './auth.controller';
@@ -10,7 +13,16 @@ import { RolesGuard } from './guards/roles.guard';
 import { SessionGuard } from './guards/session.guard';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([AppUser, Session, UserRoleAssignment])],
+  imports: [
+    TypeOrmModule.forFeature([
+      AppUser,
+      Session,
+      UserRoleAssignment,
+      CustomerProfile,
+      Document,
+      Contract,
+    ]),
+  ],
   controllers: [AuthController],
   providers: [AuthService, AuthCookieService, SessionGuard, RolesGuard],
   /**

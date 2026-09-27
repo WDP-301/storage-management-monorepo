@@ -1,6 +1,6 @@
+import { AppUser } from '@modules/customer/entities/app-user.entity';
 import { Facility } from '@modules/facilities/entities/facility.entity';
 import { StorageUnit } from '@modules/facilities/entities/storage-unit.entity';
-import { AppUser } from '@modules/users/entities/app-user.entity';
 import { TicketPriority, TicketStatus, TicketType } from '@storage/types';
 import {
   Column,

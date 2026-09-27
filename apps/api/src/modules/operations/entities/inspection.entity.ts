@@ -1,5 +1,5 @@
 import { ContractUnit } from '@modules/contracts/entities/contract-unit.entity';
-import { AppUser } from '@modules/users/entities/app-user.entity';
+import { AppUser } from '@modules/customer/entities/app-user.entity';
 import { InspectionStatus, InspectionType } from '@storage/types';
 import {
   Column,

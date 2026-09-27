@@ -10,9 +10,11 @@ export class CustomerProfile extends AuditWithTimezone {
   @Column({ length: 255, nullable: true, name: 'address_line' })
   addressLine?: string;
 
+  /** Ward code — FK → wards.code (VN post-2025 two-level model) */
   @Column({ type: 'varchar', length: 100, nullable: true })
   ward?: string;
 
+  /** Province code — FK → provinces.code */
   @Column({ type: 'varchar', length: 100, nullable: true })
   province?: string;
 

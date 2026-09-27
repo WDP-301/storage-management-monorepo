@@ -1,17 +1,20 @@
-import { AppUser } from '@modules/users/entities/app-user.entity';
-import { Session } from '@modules/users/entities/session.entity';
-import { UserRoleAssignment } from '@modules/users/entities/user-role-assignment.entity';
+import { AppUser } from '@modules/customer/entities/app-user.entity';
+import { CustomerProfile as CustomerProfileEntity } from '@modules/customer/entities/customer-profile.entity';
+import { Session } from '@modules/customer/entities/session.entity';
+import { UserRoleAssignment } from '@modules/customer/entities/user-role-assignment.entity';
+import { toCustomerProfile } from '@modules/customer/types/customer-profile';
+import { Document } from '@modules/misc/entities/document.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { UserRole, UserStatus } from '@storage/types';
+import { DocumentType, UserRole, UserStatus } from '@storage/types';
 import { DataSource, Repository } from 'typeorm';
 import { AuthCookieService } from './auth.cookie';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { hashPassword, verifyPassword } from './session.util';
-import type { AuthUser, SessionContext } from './types/auth-user';
+import type { AuthMeResponse, AuthUser, SessionContext } from './types/auth-user';
 
 @Injectable()
 export class AuthService {
@@ -22,9 +25,30 @@ export class AuthService {
     private readonly sessions: Repository<Session>,
     @InjectRepository(UserRoleAssignment)
     private readonly roleAssignments: Repository<UserRoleAssignment>,
+    @InjectRepository(CustomerProfileEntity)
+    private readonly profiles: Repository<CustomerProfileEntity>,
+    @InjectRepository(Document)
+    private readonly documents: Repository<Document>,
     private readonly dataSource: DataSource,
     private readonly cookies: AuthCookieService,
   ) {}
+
+  /** Loads the customer profile + identity document attached to the `/auth/me` response. */
+  async loadCustomerProfile(
+    userId: string,
+  ): Promise<Pick<AuthMeResponse, 'profile' | 'identityDocument'>> {
+    const profile = await this.profiles.findOne({ where: { userId } });
+    const identityDocument = await this.documents.findOne({
+      where: { ownerUserId: userId, type: DocumentType.IDENTITY },
+    });
+
+    return {
+      profile: profile ? toCustomerProfile(profile) : null,
+      identityDocument: identityDocument
+        ? { docNumber: identityDocument.docNumber ?? null, fileUrl: identityDocument.fileUrl }
+        : null,
+    };
+  }
 
   async register(dto: RegisterDto): Promise<AuthUser> {
     const email = dto.email.trim().toLowerCase();
@@ -125,7 +149,7 @@ export class AuthService {
     };
   }
 
-  async resolveSession(token: string): Promise<AuthUser | null> {
+  async resolveSession(token: string): Promise<{ sessionId: string; user: AuthUser } | null> {
     const session = await this.sessions.findOne({
       where: { sessionTokenHash: this.cookies.hashToken(token) },
     });
@@ -141,7 +165,7 @@ export class AuthService {
 
     await this.sessions.update({ id: session.id }, { lastUsedAt: new Date() });
 
-    return this.toAuthUser(user, await this.loadRoles(user.id));
+    return { sessionId: session.id, user: this.toAuthUser(user, await this.loadRoles(user.id)) };
   }
 
   async revokeSession(token: string): Promise<void> {

@@ -1,5 +1,5 @@
+import { AppUser } from '@modules/customer/entities/app-user.entity';
 import { Facility } from '@modules/facilities/entities/facility.entity';
-import { AppUser } from '@modules/users/entities/app-user.entity';
 import {
   Column,
   CreateDateColumn,

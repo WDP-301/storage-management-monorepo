@@ -1,5 +1,5 @@
-import { AppUser } from '@modules/users/entities/app-user.entity';
-import { UserRoleAssignment } from '@modules/users/entities/user-role-assignment.entity';
+import { AppUser } from '@modules/customer/entities/app-user.entity';
+import { UserRoleAssignment } from '@modules/customer/entities/user-role-assignment.entity';
 import { UserRole, UserStatus } from '@storage/types';
 import { AdminUsersService } from './admin-users.service';
 

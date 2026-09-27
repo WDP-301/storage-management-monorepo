@@ -1,5 +1,5 @@
 import { InvoiceItem } from '@modules/billing/entities/invoice-item.entity';
-import { AppUser } from '@modules/users/entities/app-user.entity';
+import { AppUser } from '@modules/customer/entities/app-user.entity';
 import { DamageFeeStatus } from '@storage/types';
 import {
   Column,

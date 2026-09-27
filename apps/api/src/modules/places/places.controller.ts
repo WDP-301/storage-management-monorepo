@@ -1,9 +1,11 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { SessionGuard } from '@modules/auth/guards/session.guard';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AutocompleteQueryDto, NearbyQueryDto } from './dto/places-query.dto';
 import { PlacesService } from './places.service';
 
 @ApiTags('Places')
+@UseGuards(SessionGuard)
 @Controller('places')
 export class PlacesController {
   constructor(private readonly placesService: PlacesService) {}

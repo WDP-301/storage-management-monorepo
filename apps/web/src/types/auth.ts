@@ -33,6 +33,8 @@ export interface AuthContextType {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  activeRole?: UserRole | null;
+  switchRole?: (role: UserRole) => void;
   login: (credentials: LoginInput) => Promise<AuthUser>;
   register: (data: RegisterInput) => Promise<AuthUser>;
   logout: () => Promise<void>;

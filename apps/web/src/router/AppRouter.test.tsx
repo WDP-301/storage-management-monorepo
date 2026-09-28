@@ -56,7 +56,7 @@ describe('AppRouter Route Guards and 404', () => {
           <Route element={<PublicOnlyRoute />}>
             <Route path="/login" element={<div>Login Form</div>} />
           </Route>
-          <Route path="/dashboard" element={<div>Dashboard Home</div>} />
+          <Route path="/" element={<div>Dashboard Home</div>} />
         </Routes>
       </MemoryRouter>,
     );

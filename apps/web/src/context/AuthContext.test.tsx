@@ -128,4 +128,69 @@ describe('AuthContext', () => {
     expect(result.current.user).toBeNull();
     expect(result.current.isAuthenticated).toBe(false);
   });
+
+  it('switchRole switches activeRole if the role is assigned to the user', async () => {
+    const mockUser = {
+      id: 'usr-multi',
+      email: 'multi@example.com',
+      fullName: 'Multi Role User',
+      status: 'ACTIVE' as const,
+      roles: ['ADMIN' as const, 'CUSTOMER' as const],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    vi.mocked(AuthApi.me).mockResolvedValueOnce(mockUser);
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.activeRole).toBe('ADMIN');
+    });
+
+    act(() => {
+      result.current.switchRole?.('CUSTOMER');
+    });
+
+    expect(result.current.activeRole).toBe('CUSTOMER');
+
+    // Attempting to switch to unassigned role should have no effect
+    act(() => {
+      result.current.switchRole?.('FACILITY_STAFF' as any);
+    });
+
+    expect(result.current.activeRole).toBe('CUSTOMER');
+  });
+
+  it('refreshUser preserves the currently selected activeRole if still valid', async () => {
+    const mockUser = {
+      id: 'usr-multi',
+      email: 'multi@example.com',
+      fullName: 'Multi Role User',
+      status: 'ACTIVE' as const,
+      roles: ['ADMIN' as const, 'CUSTOMER' as const],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    vi.mocked(AuthApi.me).mockResolvedValue(mockUser);
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.activeRole).toBe('ADMIN');
+    });
+
+    act(() => {
+      result.current.switchRole?.('CUSTOMER');
+    });
+
+    expect(result.current.activeRole).toBe('CUSTOMER');
+
+    // Refresh user profile
+    await act(async () => {
+      await result.current.refreshUser();
+    });
+
+    // Should remain CUSTOMER instead of resetting to roles[0] (ADMIN)
+    expect(result.current.activeRole).toBe('CUSTOMER');
+  });
 });

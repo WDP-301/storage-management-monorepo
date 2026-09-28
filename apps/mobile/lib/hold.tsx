@@ -4,10 +4,16 @@ import type { HeldBooking, UnitOffer } from '../src/types/customer';
 
 const HOLD_DURATION_MS = 15 * 60 * 1000;
 
+/** Booking terms chosen on the browse screen; the API has no date-range availability yet. */
+type HoldOptions = {
+  startDate: string;
+  durationMonths: number;
+};
+
 type HoldContextValue = {
   heldBooking: HeldBooking | null;
   remaining: string;
-  holdUnits: (units: UnitOffer[]) => void;
+  holdUnits: (units: UnitOffer[], options: HoldOptions) => void;
   clearHold: () => void;
 };
 
@@ -32,14 +38,14 @@ export function HoldProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(timer);
   }, [heldBooking]);
 
-  const holdUnits = useCallback((units: UnitOffer[]) => {
+  const holdUnits = useCallback((units: UnitOffer[], options: HoldOptions) => {
     const createdAt = Date.now();
     setNow(createdAt);
     setHeldBooking({
       id: `BK-${String(createdAt).slice(-6)}`,
       units,
-      startDate: '28/09/2026',
-      durationMonths: 3,
+      startDate: options.startDate,
+      durationMonths: options.durationMonths,
       holdExpiresAt: createdAt + HOLD_DURATION_MS,
     });
   }, []);

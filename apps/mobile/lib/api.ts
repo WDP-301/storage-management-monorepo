@@ -26,15 +26,24 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/** Shared fetch wrapper: unwraps the API envelope and normalises errors. */
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
+  // Always fetch with our own controller so the timeout applies even when the caller passes a
+  // signal; the caller's signal is chained into it rather than replacing it.
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const abort = () => controller.abort();
+  const timeout = setTimeout(abort, REQUEST_TIMEOUT_MS);
+  const callerSignal = init?.signal;
+
+  if (callerSignal?.aborted) abort();
+  else callerSignal?.addEventListener('abort', abort);
+
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
       credentials: 'include',
-      signal: init?.signal ?? controller.signal,
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         ...init?.headers,
@@ -46,6 +55,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     );
   } finally {
     clearTimeout(timeout);
+    callerSignal?.removeEventListener('abort', abort);
   }
 
   const payload = (await response.json().catch(() => null)) as

@@ -1,3 +1,4 @@
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { Stack } from 'expo-router';
 import { HeroUINativeProvider } from 'heroui-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -11,9 +12,12 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <HeroUINativeProvider>
-          <SessionProvider>
-            <RootNavigator />
-          </SessionProvider>
+          {/* Sits above the navigator so sheets render over the tab bar, not inside a tab. */}
+          <BottomSheetModalProvider>
+            <SessionProvider>
+              <RootNavigator />
+            </SessionProvider>
+          </BottomSheetModalProvider>
         </HeroUINativeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

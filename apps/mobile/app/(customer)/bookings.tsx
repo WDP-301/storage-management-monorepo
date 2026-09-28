@@ -11,7 +11,7 @@ export default function BookingsRoute() {
       contentBottomPadding={32}
       heldBooking={heldBooking}
       remaining={remaining}
-      onBrowse={() => router.navigate('/(tabs)/browse')}
+      onBrowse={() => router.navigate('/(customer)/browse')}
     />
   );
 }

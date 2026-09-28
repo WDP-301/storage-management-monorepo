@@ -1,10 +1,12 @@
+import type { UserRole, UserStatus } from '@storage/types';
+
 export type AuthUser = {
   id: string;
   email: string;
   phone: string | null;
   fullName: string;
-  status: string;
-  roles: string[];
+  status: UserStatus;
+  roles: UserRole[];
   createdAt: string;
   updatedAt: string;
 };

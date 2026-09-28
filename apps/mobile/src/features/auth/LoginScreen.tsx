@@ -69,7 +69,7 @@ export function LoginScreen({ onAuthenticated }: { onAuthenticated: (user: AuthU
           </Text>
           <Text className="mt-2 max-w-sm text-base leading-6 text-muted">
             {mode === 'login'
-              ? 'Đăng nhập để tìm kho và quản lý booking của bạn.'
+              ? 'Đăng nhập để tiếp tục với tài khoản khách hàng hoặc nhân viên cơ sở.'
               : 'Tạo tài khoản khách hàng để bắt đầu đặt kho.'}
           </Text>
 

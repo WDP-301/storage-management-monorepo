@@ -1,8 +1,9 @@
 import { Redirect } from 'expo-router';
+import { AREA_HOME } from '../lib/app-area';
 import { useSession } from '../lib/session';
 
 export default function IndexRoute() {
-  const { user } = useSession();
+  const { area } = useSession();
 
-  return <Redirect href={user ? '/(tabs)/browse' : '/login'} />;
+  return <Redirect href={area ? AREA_HOME[area] : '/login'} />;
 }

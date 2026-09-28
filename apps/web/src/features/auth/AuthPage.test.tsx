@@ -132,4 +132,43 @@ describe('AuthPage Form Validation and Interaction', () => {
 
     expect(await screen.findByText('Email hoặc mật khẩu không chính xác.')).toBeTruthy();
   });
+
+  it('redirects to location.state.from after successful login when provided', async () => {
+    mockLogin.mockResolvedValueOnce({
+      id: 'usr-ops',
+      email: 'ops@example.com',
+      fullName: 'Ops Manager',
+      status: 'ACTIVE',
+      roles: ['OPERATIONS_MANAGER'],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: '/login',
+            state: { from: { pathname: '/operations', search: '?filter=urgent' } },
+          },
+        ]}
+      >
+        <Routes>
+          <Route path="/login" element={<AuthPage initialMode="login" />} />
+          <Route path="/operations" element={<div>Operations Target Screen</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const emailInput = screen.getByLabelText(/email/i);
+    const passwordInput = screen.getByPlaceholderText('Nhập mật khẩu của bạn');
+
+    fireEvent.change(emailInput, { target: { value: 'ops@example.com' } });
+    fireEvent.change(passwordInput, { target: { value: 'password123' } });
+
+    const submitBtn = screen.getByRole('button', { name: /đăng nhập vào hệ thống/i });
+    fireEvent.click(submitBtn);
+
+    expect(await screen.findByText('Operations Target Screen')).toBeTruthy();
+  });
 });

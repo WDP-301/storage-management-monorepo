@@ -20,6 +20,7 @@ import { FacilityManagerDashboard } from '../features/roles/FacilityManagerDashb
 import { FacilityStaffDashboard } from '../features/roles/FacilityStaffDashboard';
 import { OperationsDashboard } from '../features/roles/OperationsDashboard';
 import { RoleLandingPage } from '../features/roles/RoleLandingPage';
+import { UnassignedRolePage } from '../features/roles/UnassignedRolePage';
 import { AppShell } from '../layouts/AppShell';
 import { AuthLayout } from '../layouts/AuthLayout';
 import { RoleRoute } from './RoleRoute';
@@ -66,7 +67,7 @@ export const PublicOnlyRoute: React.FC = () => {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return <Outlet />;
@@ -122,9 +123,25 @@ export const AppRouter: React.FC = () => {
               <Route path="/customer" element={<CustomerDashboard />} />
             </Route>
 
-            {/* General inventory and warehouse management */}
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/browse" element={<Navigate to="/dashboard" replace />} />
+            {/* General inventory and warehouse management (Admin, Operations Manager, Facility Manager only) */}
+            <Route
+              element={
+                <RoleRoute
+                  allowedRoles={[
+                    UserRole.ADMIN,
+                    UserRole.OPERATIONS_MANAGER,
+                    UserRole.FACILITY_MANAGER,
+                  ]}
+                />
+              }
+            >
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/browse" element={<Navigate to="/dashboard" replace />} />
+            </Route>
+
+            {/* Unassigned role fallback view (accessible to any authenticated user) */}
+            <Route path="/unassigned-role" element={<UnassignedRolePage />} />
+
             <Route path="/" element={<RoleLandingPage />} />
           </Route>
         </Route>
@@ -140,7 +157,7 @@ export const AppRouter: React.FC = () => {
                   Trang bạn tìm kiếm không tồn tại.
                 </Text>
               </div>
-              <Link to="/dashboard">
+              <Link to="/">
                 <Button variant="primary">Về trang chủ</Button>
               </Link>
             </div>

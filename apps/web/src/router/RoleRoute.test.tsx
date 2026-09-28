@@ -112,4 +112,73 @@ describe('RoleRoute RBAC Protection', () => {
 
     expect(screen.getByText('Staff Target Home')).toBeTruthy();
   });
+
+  it('renders unassigned role warning when user has empty roles list', () => {
+    vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
+      user: {
+        id: 'usr-unassigned',
+        email: 'newuser@storage.vn',
+        fullName: 'New User',
+        status: 'ACTIVE',
+        roles: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      isAuthenticated: true,
+      isLoading: false,
+      login: vi.fn(),
+      register: vi.fn(),
+      logout: vi.fn(),
+      refreshUser: vi.fn(),
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <Routes>
+          <Route element={<RoleRoute allowedRoles={[UserRole.ADMIN]} />}>
+            <Route path="/dashboard" element={<div>Dashboard</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('Tài khoản chưa được phân quyền')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /xem trạng thái tài khoản/i })).toBeTruthy();
+  });
+
+  it('navigates to unassigned role path when clicking action button for unassigned user', () => {
+    vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
+      user: {
+        id: 'usr-unassigned',
+        email: 'newuser@storage.vn',
+        fullName: 'New User',
+        status: 'ACTIVE',
+        roles: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      isAuthenticated: true,
+      isLoading: false,
+      login: vi.fn(),
+      register: vi.fn(),
+      logout: vi.fn(),
+      refreshUser: vi.fn(),
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <Routes>
+          <Route element={<RoleRoute allowedRoles={[UserRole.ADMIN]} />}>
+            <Route path="/dashboard" element={<div>Dashboard</div>} />
+          </Route>
+          <Route path="/unassigned-role" element={<div>Unassigned Role Page Screen</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const actionBtn = screen.getByRole('button', { name: /xem trạng thái tài khoản/i });
+    fireEvent.click(actionBtn);
+
+    expect(screen.getByText('Unassigned Role Page Screen')).toBeTruthy();
+  });
 });

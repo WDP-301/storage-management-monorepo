@@ -11,7 +11,7 @@ interface RoleRouteProps {
 }
 
 export const RoleRoute: React.FC<RoleRouteProps> = ({ allowedRoles }) => {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, activeRole, isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -30,10 +30,11 @@ export const RoleRoute: React.FC<RoleRouteProps> = ({ allowedRoles }) => {
   const isAuthorized = hasAllowedRole(user.roles, allowedRoles);
 
   if (!isAuthorized) {
-    const userRole = user.roles[0];
+    const userRole = activeRole ?? user.roles?.[0];
     const userHome = getRoleDefaultPath(userRole);
     const userRoleTitle = getRoleTitle(userRole);
     const allowedTitles = allowedRoles.map(getRoleTitle).join(', ');
+    const hasNoRoles = !user.roles || user.roles.length === 0;
 
     return (
       <div className="min-h-[70vh] flex items-center justify-center p-6">
@@ -44,24 +45,37 @@ export const RoleRoute: React.FC<RoleRouteProps> = ({ allowedRoles }) => {
 
           <div className="grid gap-1.5 mb-4">
             <Text as="h3" variant="heading">
-              Quyền truy cập bị giới hạn
+              {hasNoRoles ? 'Tài khoản chưa được phân quyền' : 'Quyền truy cập bị giới hạn'}
             </Text>
             <Text variant="secondary">
-              Bạn đang đăng nhập với vai trò{' '}
-              <Text as="strong" bold>
-                {userRoleTitle}
-              </Text>
-              . Khu vực này chỉ dành cho vai trò:{' '}
-              <Text as="strong" bold>
-                {allowedTitles}
-              </Text>
-              .
+              {hasNoRoles ? (
+                <>
+                  Tài khoản của bạn hiện chưa được quản trị viên gán vai trò truy cập trong hệ
+                  thống. Khu vực này chỉ dành cho vai trò:{' '}
+                  <Text as="strong" bold>
+                    {allowedTitles}
+                  </Text>
+                  .
+                </>
+              ) : (
+                <>
+                  Bạn đang đăng nhập với vai trò{' '}
+                  <Text as="strong" bold>
+                    {userRoleTitle}
+                  </Text>
+                  . Khu vực này chỉ dành cho vai trò:{' '}
+                  <Text as="strong" bold>
+                    {allowedTitles}
+                  </Text>
+                  .
+                </>
+              )}
             </Text>
           </div>
 
           <div className="flex justify-center gap-3 pt-2">
             <Button variant="primary" onClick={() => navigate(userHome, { replace: true })}>
-              Về bảng điều khiển của tôi
+              {hasNoRoles ? 'Xem trạng thái tài khoản' : 'Về bảng điều khiển của tôi'}
             </Button>
           </div>
         </LayerCard>

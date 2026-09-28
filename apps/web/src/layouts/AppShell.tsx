@@ -22,7 +22,7 @@ import { useAuth } from '../context/AuthContext';
 import { getRoleBadgeVariant, getRoleDefaultPath, getRoleTitle } from '../lib/roles';
 
 export const AppShell: React.FC = () => {
-  const { user, logout, switchRole } = useAuth();
+  const { user, activeRole, logout, switchRole } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -32,7 +32,7 @@ export const AppShell: React.FC = () => {
     navigate('/login');
   };
 
-  const currentRole = user?.roles?.[0] || UserRole.CUSTOMER;
+  const currentRole = activeRole ?? user?.roles?.[0];
   const roleTitle = getRoleTitle(currentRole);
   const badgeVariant = getRoleBadgeVariant(currentRole);
 
@@ -42,8 +42,15 @@ export const AppShell: React.FC = () => {
     setMobileMenuOpen(false);
   };
 
+  const canAccessOverview = Boolean(
+    currentRole &&
+      (
+        [UserRole.ADMIN, UserRole.OPERATIONS_MANAGER, UserRole.FACILITY_MANAGER] as UserRole[]
+      ).includes(currentRole),
+  );
+
   // Navigation structure:
-  // 1. Overview ("Tổng quan & Hàng tồn") at the top
+  // 1. Overview ("Tổng quan & Hàng tồn") at the top (for ADMIN, OPS, FACILITY_MANAGER)
   // 2. Role-specific functional modules below it
   const overviewItem = {
     to: '/dashboard',
@@ -53,6 +60,7 @@ export const AppShell: React.FC = () => {
   };
 
   const getRoleNavItems = () => {
+    if (!currentRole) return [];
     if (currentRole === UserRole.ADMIN) {
       return [
         {
@@ -138,7 +146,7 @@ export const AppShell: React.FC = () => {
   };
 
   const roleNavItems = getRoleNavItems();
-  const allNavItems = [overviewItem, ...roleNavItems];
+  const allNavItems = canAccessOverview ? [overviewItem, ...roleNavItems] : roleNavItems;
   const currentNav = allNavItems.find(
     (item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`),
   );
@@ -205,50 +213,66 @@ export const AppShell: React.FC = () => {
 
           {/* Navigation Links */}
           <nav className="p-4 space-y-1.5" aria-label="Menu chính">
-            <div className="px-3 py-1.5 text-xs font-semibold text-kumo-subtle uppercase">
-              Khu vực chung
-            </div>
-            <NavLink
-              to={overviewItem.to}
-              onClick={() => setMobileMenuOpen(false)}
-              className={({ isActive }: { isActive: boolean }) =>
-                `flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium ${
-                  isActive
-                    ? 'bg-kumo-fill text-kumo-brand font-semibold ring ring-kumo-brand/20'
-                    : 'text-kumo-default hover:bg-kumo-tint'
-                }`
-              }
-            >
-              <div className="flex items-center gap-3">
-                {overviewItem.icon}
-                <span>{overviewItem.label}</span>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 text-kumo-subtle opacity-70" />
-            </NavLink>
-
-            <div className="pt-3 px-3 py-1.5 text-xs font-semibold text-kumo-subtle uppercase">
-              Chức năng theo vai trò
-            </div>
-            {roleNavItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={() => setMobileMenuOpen(false)}
-                className={({ isActive }: { isActive: boolean }) =>
-                  `flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium ${
-                    isActive
-                      ? 'bg-kumo-fill text-kumo-brand font-semibold ring ring-kumo-brand/20'
-                      : 'text-kumo-default hover:bg-kumo-tint'
-                  }`
-                }
-              >
-                <div className="flex items-center gap-3">
-                  {item.icon}
-                  <span>{item.label}</span>
+            {canAccessOverview && (
+              <>
+                <div className="px-3 py-1.5 text-xs font-semibold text-kumo-subtle uppercase">
+                  Khu vực chung
                 </div>
-                <ChevronRight className="w-3.5 h-3.5 text-kumo-subtle opacity-70" />
-              </NavLink>
-            ))}
+                <NavLink
+                  to={overviewItem.to}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={({ isActive }: { isActive: boolean }) =>
+                    `flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium ${
+                      isActive
+                        ? 'bg-kumo-fill text-kumo-brand font-semibold ring ring-kumo-brand/20'
+                        : 'text-kumo-default hover:bg-kumo-tint'
+                    }`
+                  }
+                >
+                  <div className="flex items-center gap-3">
+                    {overviewItem.icon}
+                    <span>{overviewItem.label}</span>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-kumo-subtle opacity-70" />
+                </NavLink>
+              </>
+            )}
+
+            {roleNavItems.length > 0 && (
+              <>
+                <div
+                  className={`${canAccessOverview ? 'pt-3' : ''} px-3 py-1.5 text-xs font-semibold text-kumo-subtle uppercase`}
+                >
+                  Chức năng theo vai trò
+                </div>
+                {roleNavItems.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={({ isActive }: { isActive: boolean }) =>
+                      `flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium ${
+                        isActive
+                          ? 'bg-kumo-fill text-kumo-brand font-semibold ring ring-kumo-brand/20'
+                          : 'text-kumo-default hover:bg-kumo-tint'
+                      }`
+                    }
+                  >
+                    <div className="flex items-center gap-3">
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-kumo-subtle opacity-70" />
+                  </NavLink>
+                ))}
+              </>
+            )}
+
+            {!canAccessOverview && roleNavItems.length === 0 && (
+              <div className="px-3 py-2 text-xs text-kumo-subtle italic">
+                Chưa có chức năng vai trò
+              </div>
+            )}
           </nav>
 
           {/* Multi-role Switcher (only for accounts with multiple assigned roles) */}

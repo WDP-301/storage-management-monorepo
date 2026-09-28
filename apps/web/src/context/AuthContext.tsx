@@ -113,7 +113,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const updated = await AuthApi.me();
       setUser(updated);
-      setActiveRole(updated.roles?.[0] || null);
+      setActiveRole((prev) =>
+        prev && updated.roles?.includes(prev) ? prev : updated.roles?.[0] || null,
+      );
       return updated;
     } catch {
       setUser(null);

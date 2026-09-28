@@ -95,10 +95,21 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
 
     setIsSubmitting(true);
     try {
+      const locationState = location.state as {
+        from?: { pathname?: string; search?: string } | string;
+      } | null;
+      const fromPath =
+        typeof locationState?.from === 'string'
+          ? locationState.from
+          : locationState?.from?.pathname
+            ? `${locationState.from.pathname}${locationState.from.search || ''}`
+            : undefined;
+      const isValidRedirect = fromPath && fromPath !== '/login' && fromPath !== '/register';
+
       if (mode === 'login') {
         const loggedUser = await login({ email: email.trim(), password });
-        const defaultPath = getRoleDefaultPath(loggedUser.roles?.[0]);
-        navigate(defaultPath, { replace: true });
+        const targetPath = isValidRedirect ? fromPath : getRoleDefaultPath(loggedUser.roles?.[0]);
+        navigate(targetPath, { replace: true });
       } else {
         const registeredUser = await register({
           email: email.trim(),
@@ -108,8 +119,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
         });
         setSuccessMessage('Đăng ký tài khoản thành công! Đang chuyển hướng...');
         redirectTimerRef.current = setTimeout(() => {
-          const defaultPath = getRoleDefaultPath(registeredUser.roles?.[0]);
-          navigate(defaultPath, { replace: true });
+          const targetPath = isValidRedirect
+            ? fromPath
+            : getRoleDefaultPath(registeredUser.roles?.[0]);
+          navigate(targetPath, { replace: true });
         }, 1000);
       }
     } catch (err: unknown) {

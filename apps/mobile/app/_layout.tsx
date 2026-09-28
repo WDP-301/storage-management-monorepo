@@ -2,7 +2,6 @@ import { Stack } from 'expo-router';
 import { HeroUINativeProvider } from 'heroui-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
-import { HoldProvider } from '../lib/hold';
 import { SessionProvider, useSession } from '../lib/session';
 import { SessionLoadingScreen } from '../src/features/auth/SessionLoadingScreen';
 import '../global.css';
@@ -13,9 +12,7 @@ export default function RootLayout() {
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <HeroUINativeProvider>
           <SessionProvider>
-            <HoldProvider>
-              <RootNavigator />
-            </HoldProvider>
+            <RootNavigator />
           </SessionProvider>
         </HeroUINativeProvider>
       </SafeAreaProvider>
@@ -23,8 +20,12 @@ export default function RootLayout() {
   );
 }
 
+/**
+ * Each route group is only reachable for the matching area, so deep links into another
+ * role's area redirect automatically. This hides UI only — the API enforces permissions.
+ */
 function RootNavigator() {
-  const { user, isCheckingSession } = useSession();
+  const { area, isCheckingSession } = useSession();
 
   if (isCheckingSession) {
     return <SessionLoadingScreen />;
@@ -33,11 +34,17 @@ function RootNavigator() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
-      <Stack.Protected guard={!user}>
+      <Stack.Protected guard={!area}>
         <Stack.Screen name="login" />
       </Stack.Protected>
-      <Stack.Protected guard={Boolean(user)}>
-        <Stack.Screen name="(tabs)" />
+      <Stack.Protected guard={area === 'customer'}>
+        <Stack.Screen name="(customer)" />
+      </Stack.Protected>
+      <Stack.Protected guard={area === 'staff'}>
+        <Stack.Screen name="(staff)" />
+      </Stack.Protected>
+      <Stack.Protected guard={area === 'unsupported'}>
+        <Stack.Screen name="unsupported" />
       </Stack.Protected>
     </Stack>
   );

@@ -2,9 +2,12 @@ import type { ReactNode } from 'react';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { AuthUser } from '../src/types/auth';
 import { AuthApi } from './api';
+import { type AppArea, resolveAppArea } from './app-area';
 
 type SessionContextValue = {
   user: AuthUser | null;
+  /** Area derived from the user's active roles; `null` while signed out. */
+  area: AppArea | null;
   isCheckingSession: boolean;
   isLoggingOut: boolean;
   authenticate: (user: AuthUser) => void;
@@ -34,6 +37,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const value = useMemo<SessionContextValue>(
     () => ({
       user,
+      area: user ? resolveAppArea(user.roles) : null,
       isCheckingSession,
       isLoggingOut,
       authenticate: setUser,

@@ -1,5 +1,6 @@
 import { Button, Card, Chip } from 'heroui-native';
 import { ScrollView, Text, View } from 'react-native';
+import { primaryRoleLabel } from '../../../lib/app-area';
 import type { AuthUser } from '../../types/auth';
 
 type Props = {
@@ -29,7 +30,7 @@ export function SettingsScreen({ user, isLoggingOut, onLogout }: Props) {
               <Text className="mt-0.5 text-sm text-muted">{user.email}</Text>
             </View>
             <Chip color="accent" size="sm" variant="soft">
-              <Chip.Label>Khách hàng</Chip.Label>
+              <Chip.Label>{primaryRoleLabel(user.roles)}</Chip.Label>
             </Chip>
           </View>
 

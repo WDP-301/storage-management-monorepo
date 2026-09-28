@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { HeldBooking, UnitOffer } from '../src/types/customer';
-import { useSession } from './session';
 
 const HOLD_DURATION_MS = 15 * 60 * 1000;
 
@@ -14,16 +13,12 @@ type HoldContextValue = {
 
 const HoldContext = createContext<HoldContextValue | null>(null);
 
+/** Mounted inside the customer area only, so signing out unmounts it and drops the hold. */
 export function HoldProvider({ children }: { children: ReactNode }) {
-  const { user, isCheckingSession } = useSession();
   const [heldBooking, setHeldBooking] = useState<HeldBooking | null>(null);
   const [now, setNow] = useState(Date.now());
 
   const clearHold = useCallback(() => setHeldBooking(null), []);
-
-  useEffect(() => {
-    if (!isCheckingSession && !user) clearHold();
-  }, [clearHold, isCheckingSession, user]);
 
   useEffect(() => {
     if (!heldBooking) return;

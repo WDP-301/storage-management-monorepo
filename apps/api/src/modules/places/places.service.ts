@@ -74,6 +74,16 @@ export class PlacesService {
     }
 
     const json = await res.json();
+    // Goong signals business errors via json.status, not HTTP status
+    // (e.g. REQUEST_DENIED on quota exceeded returns 200 with no predictions)
+    if (json?.status !== 'OK') {
+      throw new DomainException(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        `Goong autocomplete failed: ${json?.status ?? 'unknown'}`,
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+
     const predictions: any[] = json?.predictions ?? [];
 
     this.autocompleteCache.set(input, {
@@ -84,17 +94,15 @@ export class PlacesService {
     return predictions;
   }
 
-  // ─── Nearby facilities ─────────────────────────────────────────────────────
-
   async findNearby(placeId: string, radiusKm: number): Promise<NearbyResult> {
     const detail = await this.getPlaceDetail(placeId);
     const location: { lat: number; lng: number } = detail?.result?.geometry?.location;
 
     if (!location?.lat || !location?.lng) {
       throw new DomainException(
-        ErrorCode.SERVICE_UNAVAILABLE,
-        'Could not resolve place location from Goong',
-        HttpStatus.SERVICE_UNAVAILABLE,
+        ErrorCode.BAD_REQUEST,
+        'Place has no resolvable coordinates',
+        HttpStatus.BAD_REQUEST,
       );
     }
 
@@ -119,10 +127,8 @@ export class PlacesService {
     };
   }
 
-  // ─── Private helpers ───────────────────────────────────────────────────────
-
   private async getPlaceDetail(placeId: string): Promise<any> {
-    const url = `${GOONG_BASE_URL}/Place/Detail?api_key=${this.apiKey}&place_id=${encodeURIComponent(placeId)}`;
+    const url = `${GOONG_BASE_URL}/place/detail?api_key=${this.apiKey}&place_id=${encodeURIComponent(placeId)}`;
     let res: Response;
     try {
       res = await fetch(url);
@@ -142,7 +148,16 @@ export class PlacesService {
       );
     }
 
-    return res.json();
+    const json = await res.json();
+    if (json?.status !== 'OK') {
+      throw new DomainException(
+        ErrorCode.BAD_REQUEST,
+        'Invalid or expired place_id',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    return json;
   }
 
   /**

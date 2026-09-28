@@ -31,8 +31,8 @@ export const ENV_KEY = {
   GOONG_API_KEY: 'GOONG_API_KEY',
 } as const;
 
-/** Goong REST API base URL */
-export const GOONG_BASE_URL = 'https://rsapi.goong.io';
+/** Goong REST API v2 base URL */
+export const GOONG_BASE_URL = 'https://rsapi.goong.io/v2';
 
 /** Default location bias for Goong autocomplete — Hồ Chí Minh City center */
 export const GOONG_DEFAULT_LOCATION = '10.776889,106.700806';

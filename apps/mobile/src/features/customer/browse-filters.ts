@@ -31,8 +31,6 @@ export const PRICE_PRESETS: readonly { label: string; maxMonthlyPrice: number | 
   { label: '≤ 5 triệu', maxMonthlyPrice: 5_000_000 },
 ];
 
-export const DURATION_PRESETS: readonly number[] = [3, 6, 12];
-
 export const MAX_UNITS_PER_BOOKING = 4;
 
 export const DEFAULT_BROWSE_CRITERIA: BrowseCriteria = {
@@ -41,12 +39,11 @@ export const DEFAULT_BROWSE_CRITERIA: BrowseCriteria = {
   areaPreset: 'any',
   maxMonthlyPrice: null,
   requestedQuantity: 2,
-  durationMonths: 3,
 };
 
 /**
- * How many narrowing filters are active. Quantity and duration are excluded — they always hold a
- * value, so counting them would leave the badge permanently lit.
+ * How many narrowing filters are active. Quantity is excluded — it always holds a value, so
+ * counting it would leave the badge permanently lit.
  */
 export function countActiveFilters(criteria: BrowseCriteria): number {
   return [

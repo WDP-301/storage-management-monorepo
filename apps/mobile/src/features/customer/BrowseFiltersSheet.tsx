@@ -26,7 +26,6 @@ type Props = {
   wardOptions: readonly LocationOption[];
   areaCounts: ReadonlyMap<AreaPresetKey, number>;
   priceCounts: ReadonlyMap<number | null, number>;
-  startDateLabel: string;
   /** Units matching the current criteria, shown on the confirm button. */
   resultCount: number;
 };
@@ -46,7 +45,6 @@ export function BrowseFiltersSheet({
   wardOptions,
   areaCounts,
   priceCounts,
-  startDateLabel,
   resultCount,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -115,7 +113,6 @@ export function BrowseFiltersSheet({
           criteria={criteria}
           priceCounts={priceCounts}
           provinceOptions={provinceOptions}
-          startDateLabel={startDateLabel}
           wardOptions={wardOptions}
           onChange={onChange}
         />

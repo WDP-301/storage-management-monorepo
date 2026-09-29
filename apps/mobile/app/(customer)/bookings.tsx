@@ -12,6 +12,7 @@ export default function BookingsRoute() {
       heldBooking={heldBooking}
       remaining={remaining}
       onBrowse={() => router.navigate('/(customer)/browse')}
+      onSchedule={() => router.navigate('/(customer)/schedule')}
     />
   );
 }

@@ -36,6 +36,9 @@ export default function CustomerTabsLayout() {
           <RouterTabs.Screen name="browse" options={{ title: 'Browse units' }} />
           <RouterTabs.Screen name="bookings" options={{ title: 'Booking của tôi' }} />
           <RouterTabs.Screen name="settings" options={{ title: 'Cài đặt' }} />
+          {/* Pushed from a booking, not a tab: the custom tab bar renders three fixed buttons,
+              so this route stays out of it on its own. */}
+          <RouterTabs.Screen name="schedule" options={{ title: 'Đặt lịch thuê' }} />
         </RouterTabs>
       </SafeAreaView>
     </HoldProvider>
@@ -101,5 +104,7 @@ function CustomerTabBar({
 
 function toCustomerTab(routeName: string | undefined): CustomerTab {
   if (routeName === 'bookings' || routeName === 'settings') return routeName;
+  // Scheduling is reached from a booking, so it keeps that tab lit.
+  if (routeName === 'schedule') return 'bookings';
   return 'browse';
 }

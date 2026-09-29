@@ -79,10 +79,7 @@ export function BrowseFiltersBar({
           variant={activeCount > 0 ? 'primary' : 'secondary'}
           onPress={onOpenFilters}
         >
-          <Button.Label>
-            {activeCount > 0 ? `Bộ lọc · ${activeCount}` : 'Bộ lọc'} · {criteria.durationMonths}{' '}
-            tháng
-          </Button.Label>
+          <Button.Label>{activeCount > 0 ? `Bộ lọc · ${activeCount}` : 'Bộ lọc'}</Button.Label>
         </Button>
 
         {summary.length > 0 ? (

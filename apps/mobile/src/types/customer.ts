@@ -37,11 +37,11 @@ export type FacilityOffer = {
 export type AreaPresetKey = 'any' | 'small' | 'medium' | 'large';
 
 /**
- * Everything the browse filter card edits.
+ * Everything the browse filter sheet edits.
  *
- * Only `provinceCode`, `wardCode`, `areaPreset` and `maxMonthlyPrice` narrow the unit list.
- * `requestedQuantity` and `durationMonths` do not filter anything — the API has no notion of
- * availability over a date range — they carry into the hold and the price summary.
+ * All of it narrows the unit list except `requestedQuantity`, which decides how many units each
+ * facility card proposes. Rental dates live on the schedule screen instead: the API has no
+ * availability-over-time query, so they never belonged among the filters.
  */
 export type BrowseCriteria = {
   provinceCode: string | null;
@@ -49,12 +49,12 @@ export type BrowseCriteria = {
   areaPreset: AreaPresetKey;
   maxMonthlyPrice: number | null;
   requestedQuantity: number;
-  durationMonths: number;
 };
 
 export type HeldBooking = {
   id: string;
   units: UnitOffer[];
+  /** ISO day string; see `lib/rental-schedule.ts`. */
   startDate: string;
   durationMonths: number;
   holdExpiresAt: number;

@@ -5,7 +5,7 @@ import type { HeldBooking, UnitOffer } from '../src/types/customer';
 const HOLD_DURATION_MS = 15 * 60 * 1000;
 
 /** Booking terms chosen on the browse screen; the API has no date-range availability yet. */
-type HoldOptions = {
+export type HoldOptions = {
   startDate: string;
   durationMonths: number;
 };

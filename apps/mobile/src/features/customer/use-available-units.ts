@@ -37,7 +37,10 @@ export function useAvailableUnits() {
       try {
         const [unitsResult, provinces] = await Promise.all([
           BrowseUnitsApi.listAvailableUnits(controller.signal),
-          BrowseUnitsApi.listProvinces(controller.signal),
+          // Purely a code→name lookup: `buildAddress` falls back to the raw address line and the
+          // filter options fall back to raw codes, so losing it must not take the list down with
+          // it. Same policy as `use-wards`.
+          BrowseUnitsApi.listProvinces(controller.signal).catch((): ApiProvince[] => []),
         ]);
         // An aborted fetch surfaces as a connection ApiError, so bail before touching state.
         if (controller.signal.aborted) return;

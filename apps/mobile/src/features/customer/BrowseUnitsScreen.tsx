@@ -3,6 +3,7 @@ import { Button, Card } from 'heroui-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { formatDate, formatMoney } from '../../../lib/format-vi';
+import type { HoldOptions } from '../../../lib/hold';
 import type { BrowseMode, HeldBooking, UnitOffer } from '../../types/customer';
 import { ManualFacilityCard, RecommendedFacilityCard } from './BrowseFacilityCards';
 import { BrowseFiltersBar } from './BrowseFiltersBar';
@@ -14,13 +15,12 @@ import {
   countAreaPresetMatches,
   countPricePresetMatches,
   DEFAULT_BROWSE_CRITERIA,
+  pruneStaleLocationCodes,
 } from './browse-filters';
 import { buildProvinceOptions, buildWardOptions } from './location-options';
 import { sumUnitPrices } from './unit-offer-utils';
 import { useAvailableUnits } from './use-available-units';
 import { useWards } from './use-wards';
-
-export type HoldOptions = { startDate: string; durationMonths: number };
 
 type Props = {
   heldBooking: HeldBooking | null;
@@ -70,6 +70,13 @@ export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }:
   const hasData = facilities.length > 0;
   const isInitialLoading = isLoading && !hasData;
   const isRefreshing = isLoading && hasData;
+
+  // Location codes outlive the data they came from, so a reload can leave a filter active with no
+  // chip to switch it off. Re-running on every options change converges: once pruned, the codes
+  // are valid and this returns the criteria untouched.
+  useEffect(() => {
+    setCriteria((current) => pruneStaleLocationCodes(current, provinceOptions, wardOptions));
+  }, [provinceOptions, wardOptions]);
 
   // Drop selections that the current filters hide or that exceed the requested quantity.
   useEffect(() => {

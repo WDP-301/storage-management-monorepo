@@ -68,6 +68,34 @@ export function clearFilters(criteria: BrowseCriteria): BrowseCriteria {
   };
 }
 
+/**
+ * Drops location codes that the currently loaded data can no longer offer.
+ *
+ * Criteria hold codes while the chips are derived from the facilities in hand, so the two drift
+ * apart whenever the data reloads: a refetch can leave the selected ward with no stock, and a
+ * second province appearing collapses the implicit single-province context a ward was picked
+ * under. The stale code keeps filtering, the list empties, the badge stays lit, and no chip is
+ * left to undo it. Pruning here keeps the criteria answerable by the UI.
+ *
+ * Returns the same object when nothing is stale, so callers can drive this from an effect.
+ */
+export function pruneStaleLocationCodes(
+  criteria: BrowseCriteria,
+  provinceOptions: readonly LocationOption[],
+  wardOptions: readonly LocationOption[],
+): BrowseCriteria {
+  const hasProvince =
+    criteria.provinceCode === null ||
+    provinceOptions.some((option) => option.code === criteria.provinceCode);
+  const hasWard =
+    criteria.wardCode === null || wardOptions.some((option) => option.code === criteria.wardCode);
+
+  // A ward only means something inside its province, so a stale province clears both.
+  if (!hasProvince) return { ...criteria, provinceCode: null, wardCode: null };
+  if (!hasWard) return { ...criteria, wardCode: null };
+  return criteria;
+}
+
 /** Short labels of the active filters, for the summary line under the filter button. */
 export function describeActiveFilters(
   criteria: BrowseCriteria,

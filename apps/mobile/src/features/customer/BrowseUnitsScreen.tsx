@@ -1,382 +1,225 @@
-import { Button, Card, Chip } from 'heroui-native';
-import { useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
-import { facilityOffers, formatDistance, formatMoney } from '../../data/customer-mocks';
-import type { BrowseMode, FacilityOffer, HeldBooking, UnitOffer } from '../../types/customer';
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { Button, Card } from 'heroui-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import { formatDate, formatMoney } from '../../../lib/format-vi';
+import type { HoldOptions } from '../../../lib/hold';
+import type { BrowseMode, HeldBooking, UnitOffer } from '../../types/customer';
+import { ManualFacilityCard, RecommendedFacilityCard } from './BrowseFacilityCards';
+import { BrowseFiltersBar } from './BrowseFiltersBar';
+import { BrowseFiltersSheet } from './BrowseFiltersSheet';
+import { BrowseListHeader } from './BrowseListHeader';
+import { EmptyState, ErrorState, LoadingState } from './BrowseStates';
+import {
+  applyBrowseFilters,
+  countAreaPresetMatches,
+  countPricePresetMatches,
+  DEFAULT_BROWSE_CRITERIA,
+  pruneStaleLocationCodes,
+} from './browse-filters';
+import { buildProvinceOptions, buildWardOptions } from './location-options';
+import { sumUnitPrices } from './unit-offer-utils';
+import { useAvailableUnits } from './use-available-units';
+import { useWards } from './use-wards';
 
 type Props = {
   heldBooking: HeldBooking | null;
   contentBottomPadding: number;
-  onHold: (units: UnitOffer[]) => void;
+  onHold: (units: UnitOffer[], options: HoldOptions) => void;
 };
 
 export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }: Props) {
-  const [requestedQuantity, setRequestedQuantity] = useState(2);
+  const { facilities, provinces, hasMore, isLoading, error, refetch } = useAvailableUnits();
+  const [criteria, setCriteria] = useState(DEFAULT_BROWSE_CRITERIA);
   const [mode, setMode] = useState<BrowseMode>('recommended');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [waitlistedFacilityId, setWaitlistedFacilityId] = useState<string | null>(null);
+  const filtersSheetRef = useRef<BottomSheetModal>(null);
 
-  const facilities = Array.isArray(facilityOffers) ? facilityOffers : [];
-  const allUnits = facilities.flatMap((facility) => facility.units);
-  const selectedUnits = allUnits.filter((unit) => selectedIds.includes(unit.id));
-  const selectedFacilities = new Set(selectedUnits.map((unit) => unit.facilityId)).size;
+  const startDateLabel = useMemo(() => formatDate(new Date()), []);
 
-  const changeQuantity = (nextQuantity: number) => {
-    const quantity = Math.min(4, Math.max(1, nextQuantity));
-    setRequestedQuantity(quantity);
-    setSelectedIds((current) => current.slice(0, quantity));
-  };
+  const provinceOptions = useMemo(
+    () => buildProvinceOptions(facilities, provinces),
+    [facilities, provinces],
+  );
+
+  // With a single province the picker is hidden, but its wards still need to be filterable —
+  // which is the common case of one city holding every facility.
+  const effectiveProvinceCode =
+    criteria.provinceCode ?? (provinceOptions.length === 1 ? provinceOptions[0].code : null);
+
+  const wardNames = useWards(effectiveProvinceCode);
+  const wardOptions = useMemo(
+    () => buildWardOptions(facilities, effectiveProvinceCode, wardNames),
+    [facilities, effectiveProvinceCode, wardNames],
+  );
+  const visibleFacilities = useMemo(
+    () => applyBrowseFilters(facilities, criteria),
+    [facilities, criteria],
+  );
+  const areaCounts = useMemo(
+    () => countAreaPresetMatches(facilities, criteria),
+    [facilities, criteria],
+  );
+  const priceCounts = useMemo(
+    () => countPricePresetMatches(facilities, criteria),
+    [facilities, criteria],
+  );
+
+  // A refresh keeps the current list on screen; only a first load blanks it out.
+  const hasData = facilities.length > 0;
+  const isInitialLoading = isLoading && !hasData;
+  const isRefreshing = isLoading && hasData;
+
+  // Location codes outlive the data they came from, so a reload can leave a filter active with no
+  // chip to switch it off. Re-running on every options change converges: once pruned, the codes
+  // are valid and this returns the criteria untouched.
+  useEffect(() => {
+    setCriteria((current) => pruneStaleLocationCodes(current, provinceOptions, wardOptions));
+  }, [provinceOptions, wardOptions]);
+
+  // Drop selections that the current filters hide or that exceed the requested quantity.
+  useEffect(() => {
+    const visibleIds = new Set(
+      visibleFacilities.flatMap((facility) => facility.units.map((unit) => unit.id)),
+    );
+    setSelectedIds((current) => {
+      const next = current.filter((id) => visibleIds.has(id)).slice(0, criteria.requestedQuantity);
+      return next.length === current.length ? current : next;
+    });
+  }, [visibleFacilities, criteria.requestedQuantity]);
+
+  const selectedUnits = visibleFacilities
+    .flatMap((facility) => facility.units)
+    .filter((unit) => selectedIds.includes(unit.id));
+  const selectedFacilityCount = new Set(selectedUnits.map((unit) => unit.facilityId)).size;
 
   const toggleUnit = (unit: UnitOffer) => {
     setSelectedIds((current) => {
       if (current.includes(unit.id)) return current.filter((id) => id !== unit.id);
-      if (current.length >= requestedQuantity) return current;
+      if (current.length >= criteria.requestedQuantity) return current;
       return [...current, unit.id];
     });
   };
 
+  const holdOptions: HoldOptions = {
+    startDate: startDateLabel,
+    durationMonths: criteria.durationMonths,
+  };
+
+  const visibleUnitCount = visibleFacilities.reduce(
+    (total, facility) => total + facility.units.length,
+    0,
+  );
+
   return (
-    <ScrollView
-      contentContainerStyle={{ paddingBottom: contentBottomPadding }}
-      showsVerticalScrollIndicator={false}
-    >
-      <View className="px-4 pb-4 pt-5">
-        <Text className="text-2xl font-bold tracking-tight text-foreground">Tìm kho phù hợp</Text>
-        <Text className="mt-1 text-sm leading-5 text-muted">
-          Đặt nhiều kho trong một lượt, ưu tiên đủ kho tại cùng cơ sở.
-        </Text>
-      </View>
-
-      <Card className="mx-4 border border-border bg-surface">
-        <Card.Body className="gap-4">
-          <View className="flex-row gap-3">
-            <View className="flex-1">
-              <FilterValue label="Khu vực" value="TP. Thủ Đức" />
-            </View>
-            <View className="w-px bg-separator" />
-            <View className="w-20">
-              <FilterValue label="Bán kính" value="5 km" />
-            </View>
-          </View>
-          <View className="h-px bg-separator" />
-          <View className="flex-row gap-3">
-            <View className="flex-1">
-              <FilterValue label="Bắt đầu" value="28/09/2026" />
-            </View>
-            <View className="w-px bg-separator" />
-            <View className="flex-1">
-              <FilterValue label="Thời hạn" value="3 tháng" />
-            </View>
-          </View>
-          <View className="h-px bg-separator" />
-          <View className="flex-row gap-3">
-            <View className="flex-1">
-              <FilterValue label="Kích thước" value="3–5 m²" />
-            </View>
-            <View className="w-px bg-separator" />
-            <View className="flex-1">
-              <FilterValue label="Ngân sách mỗi kho" value="≤ 3 triệu/tháng" />
-            </View>
-          </View>
-          <View className="h-px bg-separator" />
-          <View className="flex-row items-center justify-between">
-            <View>
-              <Text className="text-xs font-medium text-muted">Số kho cần thuê</Text>
-              <Text className="mt-1 text-sm font-semibold text-foreground">
-                Ưu tiên các kho gần nhau
-              </Text>
-            </View>
-            <View className="flex-row items-center gap-2">
-              <Button
-                accessibilityLabel="Giảm số lượng kho"
-                isDisabled={requestedQuantity === 1}
-                isIconOnly
-                size="sm"
-                variant="secondary"
-                onPress={() => changeQuantity(requestedQuantity - 1)}
-              >
-                <Button.Label>−</Button.Label>
-              </Button>
-              <Text className="min-w-6 text-center text-base font-bold text-foreground">
-                {requestedQuantity}
-              </Text>
-              <Button
-                accessibilityLabel="Tăng số lượng kho"
-                isDisabled={requestedQuantity === 4}
-                isIconOnly
-                size="sm"
-                variant="secondary"
-                onPress={() => changeQuantity(requestedQuantity + 1)}
-              >
-                <Button.Label>+</Button.Label>
-              </Button>
-            </View>
-          </View>
-          <Button className="w-full" onPress={() => setSelectedIds([])}>
-            <Button.Label>Tìm kho trống</Button.Label>
-          </Button>
-        </Card.Body>
-      </Card>
-
-      <View className="mt-6 px-4">
-        <Text className="text-sm font-bold text-foreground">Cách chọn kho</Text>
-        <View className="mt-2 flex-row gap-2">
-          <Button
-            className="flex-1"
-            size="sm"
-            variant={mode === 'recommended' ? 'primary' : 'secondary'}
-            onPress={() => setMode('recommended')}
-          >
-            <Button.Label>Hệ thống đề xuất</Button.Label>
-          </Button>
-          <Button
-            className="flex-1"
-            size="sm"
-            variant={mode === 'manual' ? 'primary' : 'secondary'}
-            onPress={() => setMode('manual')}
-          >
-            <Button.Label>Tự chọn kho</Button.Label>
-          </Button>
-        </View>
-      </View>
-
-      <View className="mb-3 mt-6 flex-row items-center justify-between px-4">
-        <View>
-          <Text className="font-bold text-foreground">
-            {mode === 'recommended' ? 'Nhóm kho phù hợp' : 'Kho đang còn trống'}
-          </Text>
-          <Text className="mt-1 text-xs text-muted">
-            Sắp xếp theo khoảng cách từ vị trí đã chọn
+    <>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: contentBottomPadding }}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refetch} />}
+        showsVerticalScrollIndicator={false}
+      >
+        <View className="px-4 pb-4 pt-5">
+          <Text className="text-2xl font-bold tracking-tight text-foreground">Tìm kho phù hợp</Text>
+          <Text className="mt-1 text-sm leading-5 text-muted">
+            Đặt nhiều kho trong một lượt, ưu tiên đủ kho tại cùng cơ sở.
           </Text>
         </View>
-        <Chip color="accent" size="sm" variant="soft">
-          <Chip.Label>{facilities.length} cơ sở</Chip.Label>
-        </Chip>
-      </View>
 
-      <View className="gap-4 px-4">
-        {mode === 'recommended'
-          ? facilities.map((facility) => (
-              <RecommendedFacilityCard
-                key={facility.id}
-                facility={facility}
-                heldBooking={heldBooking}
-                requestedQuantity={requestedQuantity}
-                waitlisted={waitlistedFacilityId === facility.id}
-                onHold={onHold}
-                onWaitlist={() => setWaitlistedFacilityId(facility.id)}
-              />
-            ))
-          : facilities.map((facility) => (
-              <ManualFacilityCard
-                key={facility.id}
-                facility={facility}
-                heldBooking={heldBooking}
-                requestedQuantity={requestedQuantity}
-                selectedIds={selectedIds}
-                onToggle={toggleUnit}
-              />
-            ))}
-      </View>
+        <BrowseFiltersBar
+          criteria={criteria}
+          provinceOptions={provinceOptions}
+          wardOptions={wardOptions}
+          onChange={setCriteria}
+          onOpenFilters={() => filtersSheetRef.current?.present()}
+        />
 
-      {mode === 'manual' ? (
-        <Card className="mx-4 mt-4 border border-accent/30 bg-accent/5">
-          <Card.Body className="gap-3">
-            <View className="flex-row items-center justify-between">
-              <Text className="font-bold text-foreground">
-                Đã chọn {selectedUnits.length}/{requestedQuantity} kho
-              </Text>
-              <Text className="text-sm font-semibold text-accent">
-                {formatMoney(sumBy(selectedUnits, 'monthlyPrice'))}/tháng
-              </Text>
-            </View>
-            {selectedFacilities > 1 ? (
-              <Text className="text-xs leading-5 text-muted">
-                Các kho thuộc {selectedFacilities} cơ sở. Chọn cùng một cơ sở để thuận tiện hơn.
-              </Text>
-            ) : null}
-            <Button
-              isDisabled={selectedUnits.length !== requestedQuantity || Boolean(heldBooking)}
-              onPress={() => onHold(selectedUnits)}
-            >
-              <Button.Label>Giữ {requestedQuantity} kho đã chọn</Button.Label>
-            </Button>
-          </Card.Body>
-        </Card>
-      ) : null}
-    </ScrollView>
-  );
-}
+        {isInitialLoading ? <LoadingState /> : null}
+        {/* A failed refresh keeps the stale list below, so the error sits above it rather than
+          replacing everything the customer was already looking at. */}
+        {error ? <ErrorState message={error} onRetry={refetch} /> : null}
 
-function FilterValue({ label, value }: { label: string; value: string }) {
-  return (
-    <View className="min-h-11 justify-center">
-      <Text className="text-xs font-medium text-muted">{label}</Text>
-      <Text className="mt-1 text-sm font-semibold text-foreground">{value}</Text>
-    </View>
-  );
-}
+        {!isInitialLoading && !(error && !hasData) ? (
+          <>
+            <BrowseListHeader
+              facilityCount={visibleFacilities.length}
+              hasMore={hasMore}
+              mode={mode}
+              onModeChange={setMode}
+            />
 
-type FacilityCardProps = {
-  facility: FacilityOffer;
-  heldBooking: HeldBooking | null;
-  requestedQuantity: number;
-};
-
-function RecommendedFacilityCard({
-  facility,
-  heldBooking,
-  requestedQuantity,
-  waitlisted,
-  onHold,
-  onWaitlist,
-}: FacilityCardProps & {
-  waitlisted: boolean;
-  onHold: (units: UnitOffer[]) => void;
-  onWaitlist: () => void;
-}) {
-  const proposedUnits = facility.units.slice(0, requestedQuantity);
-  const isComplete = proposedUnits.length === requestedQuantity;
-
-  return (
-    <Card className="border border-border bg-surface">
-      <Card.Body className="gap-4">
-        <View className="flex-row items-start justify-between gap-3">
-          <View className="flex-1">
-            <Text className="text-lg font-bold text-foreground">{facility.name}</Text>
-            <Text className="mt-1 text-xs leading-5 text-muted">{facility.address}</Text>
-            <Text className="mt-1 text-xs font-semibold text-accent">
-              {formatDistance(facility.distanceKm)} từ vị trí của bạn
-            </Text>
-          </View>
-          <Chip color={isComplete ? 'success' : 'warning'} size="sm" variant="soft">
-            <Chip.Label>
-              {isComplete
-                ? `Đủ ${requestedQuantity}/${requestedQuantity} kho`
-                : `Còn ${proposedUnits.length} kho`}
-            </Chip.Label>
-          </Chip>
-        </View>
-
-        <View className="gap-2">
-          {proposedUnits.map((unit) => (
-            <UnitSummary key={unit.id} unit={unit} />
-          ))}
-        </View>
-
-        <View className="h-px bg-separator" />
-        <View className="flex-row justify-between gap-4">
-          <MoneySummary label="Tổng thuê/tháng" value={sumBy(proposedUnits, 'monthlyPrice')} />
-          <MoneySummary label="Cọc cần thanh toán" value={sumBy(proposedUnits, 'deposit')} />
-        </View>
-
-        {isComplete ? (
-          <Button isDisabled={Boolean(heldBooking)} onPress={() => onHold(proposedUnits)}>
-            <Button.Label>Giữ nhóm {requestedQuantity} kho · 15 phút</Button.Label>
-          </Button>
-        ) : (
-          <View className="gap-2">
-            <Text className="text-xs leading-5 text-muted">
-              Cơ sở này chưa đủ số lượng. Bạn có thể giảm số kho hoặc chờ khi đủ kho phù hợp.
-            </Text>
-            <Button variant="secondary" onPress={onWaitlist}>
-              <Button.Label>
-                {waitlisted ? 'Đã đăng ký danh sách chờ' : 'Tham gia danh sách chờ'}
-              </Button.Label>
-            </Button>
-          </View>
-        )}
-      </Card.Body>
-    </Card>
-  );
-}
-
-function ManualFacilityCard({
-  facility,
-  heldBooking,
-  requestedQuantity,
-  selectedIds,
-  onToggle,
-}: FacilityCardProps & {
-  selectedIds: string[];
-  onToggle: (unit: UnitOffer) => void;
-}) {
-  return (
-    <Card className="border border-border bg-surface">
-      <Card.Body className="gap-3">
-        <View className="flex-row items-start justify-between gap-3">
-          <View className="flex-1">
-            <Text className="font-bold text-foreground">{facility.name}</Text>
-            <Text className="mt-1 text-xs text-muted">{facility.address}</Text>
-          </View>
-          <Text className="text-xs font-semibold text-accent">
-            {formatDistance(facility.distanceKm)}
-          </Text>
-        </View>
-        {facility.units.map((unit) => {
-          const isSelected = selectedIds.includes(unit.id);
-          const selectionFull = selectedIds.length >= requestedQuantity && !isSelected;
-
-          return (
-            <View
-              key={unit.id}
-              className="flex-row items-center gap-3 rounded-xl bg-surface-secondary p-3"
-            >
-              <View className="flex-1">
-                <Text className="font-bold text-foreground">
-                  {unit.code} · {unit.size}
-                </Text>
-                <Text className="mt-1 text-xs text-muted">
-                  {unit.zone} · {unit.dimensions}
-                </Text>
-                <Text className="mt-1 text-sm font-semibold text-foreground">
-                  {formatMoney(unit.monthlyPrice)}/tháng
-                </Text>
+            {visibleFacilities.length === 0 ? (
+              <EmptyState isFilteredOut={facilities.length > 0} />
+            ) : (
+              <View className="gap-4 px-4">
+                {visibleFacilities.map((facility) =>
+                  mode === 'recommended' ? (
+                    <RecommendedFacilityCard
+                      key={facility.id}
+                      facility={facility}
+                      heldBooking={heldBooking}
+                      requestedQuantity={criteria.requestedQuantity}
+                      waitlisted={waitlistedFacilityId === facility.id}
+                      onHold={(units) => onHold(units, holdOptions)}
+                      onWaitlist={() => setWaitlistedFacilityId(facility.id)}
+                    />
+                  ) : (
+                    <ManualFacilityCard
+                      key={facility.id}
+                      facility={facility}
+                      heldBooking={heldBooking}
+                      requestedQuantity={criteria.requestedQuantity}
+                      selectedIds={selectedIds}
+                      onToggle={toggleUnit}
+                    />
+                  ),
+                )}
               </View>
-              <Button
-                isDisabled={selectionFull || Boolean(heldBooking)}
-                size="sm"
-                variant={isSelected ? 'primary' : 'secondary'}
-                onPress={() => onToggle(unit)}
-              >
-                <Button.Label>{isSelected ? 'Đã chọn' : 'Chọn'}</Button.Label>
-              </Button>
-            </View>
-          );
-        })}
-      </Card.Body>
-    </Card>
-  );
-}
+            )}
 
-function UnitSummary({ unit }: { unit: UnitOffer }) {
-  return (
-    <View className="flex-row items-center gap-3 rounded-xl bg-surface-secondary p-3">
-      <View className="size-11 items-center justify-center rounded-xl border border-border bg-surface">
-        <Text className="text-xs font-bold text-foreground">{unit.size}</Text>
-      </View>
-      <View className="flex-1">
-        <Text className="font-bold text-foreground">
-          {unit.code} · {unit.zone}
-        </Text>
-        <Text className="mt-0.5 text-xs text-muted">{unit.features.join(' · ')}</Text>
-      </View>
-      <Text className="text-sm font-semibold text-foreground">
-        {formatMoney(unit.monthlyPrice)}
-      </Text>
-    </View>
-  );
-}
+            {mode === 'manual' && visibleFacilities.length > 0 ? (
+              <Card className="mx-4 mt-4 border border-accent/30 bg-accent/5">
+                <Card.Body className="gap-3">
+                  <View className="flex-row items-center justify-between">
+                    <Text className="font-bold text-foreground">
+                      Đã chọn {selectedUnits.length}/{criteria.requestedQuantity} kho
+                    </Text>
+                    <Text className="text-sm font-semibold text-accent">
+                      {formatMoney(sumUnitPrices(selectedUnits, 'monthlyPrice'))}/tháng
+                    </Text>
+                  </View>
+                  {selectedFacilityCount > 1 ? (
+                    <Text className="text-xs leading-5 text-muted">
+                      Các kho thuộc {selectedFacilityCount} cơ sở. Chọn cùng một cơ sở để thuận tiện
+                      hơn.
+                    </Text>
+                  ) : null}
+                  <Button
+                    isDisabled={
+                      selectedUnits.length !== criteria.requestedQuantity || Boolean(heldBooking)
+                    }
+                    onPress={() => onHold(selectedUnits, holdOptions)}
+                  >
+                    <Button.Label>Giữ {criteria.requestedQuantity} kho đã chọn</Button.Label>
+                  </Button>
+                </Card.Body>
+              </Card>
+            ) : null}
+          </>
+        ) : null}
+      </ScrollView>
 
-function MoneySummary({ label, value }: { label: string; value: number }) {
-  return (
-    <View className="flex-1">
-      <Text className="text-xs text-muted">{label}</Text>
-      <Text className="mt-1 font-bold text-foreground">{formatMoney(value)}</Text>
-    </View>
+      <BrowseFiltersSheet
+        areaCounts={areaCounts}
+        criteria={criteria}
+        priceCounts={priceCounts}
+        provinceOptions={provinceOptions}
+        resultCount={visibleUnitCount}
+        sheetRef={filtersSheetRef}
+        startDateLabel={startDateLabel}
+        wardOptions={wardOptions}
+        onChange={setCriteria}
+      />
+    </>
   );
-}
-
-function sumBy(units: UnitOffer[], key: 'monthlyPrice' | 'deposit') {
-  return units.reduce((total, unit) => total + unit[key], 0);
 }

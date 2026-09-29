@@ -1,7 +1,8 @@
 import { Button, Card, Chip } from 'heroui-native';
 import { ScrollView, Text, View } from 'react-native';
-import { formatMoney } from '../../data/customer-mocks';
+import { formatMoney } from '../../../lib/format-vi';
 import type { HeldBooking, UnitOffer } from '../../types/customer';
+import { sumUnitPrices } from './unit-offer-utils';
 
 type Props = {
   heldBooking: HeldBooking | null;
@@ -86,8 +87,8 @@ export function MyBookingsScreen({
 }
 
 function HeldBookingCard({ booking, remaining }: { booking: HeldBooking; remaining: string }) {
-  const totalRent = sumBy(booking.units, 'monthlyPrice');
-  const totalDeposit = sumBy(booking.units, 'deposit');
+  const totalRent = sumUnitPrices(booking.units, 'monthlyPrice');
+  const totalDeposit = sumUnitPrices(booking.units, 'deposit');
   const facilityCount = new Set(booking.units.map((unit) => unit.facilityId)).size;
 
   return (
@@ -172,8 +173,4 @@ function BookingUnitRow({ unit }: { unit: UnitOffer }) {
       <Text className="mt-2 text-xs text-muted">Cọc: {formatMoney(unit.deposit)}</Text>
     </View>
   );
-}
-
-function sumBy(units: UnitOffer[], key: 'monthlyPrice' | 'deposit') {
-  return units.reduce((total, unit) => total + unit[key], 0);
 }

@@ -195,12 +195,6 @@ export const AssetType = {
 } as const;
 export type AssetType = (typeof AssetType)[keyof typeof AssetType];
 
-export const TicketType = {
-  SUPPORT: 'SUPPORT',
-  MAINTENANCE: 'MAINTENANCE',
-} as const;
-export type TicketType = (typeof TicketType)[keyof typeof TicketType];
-
 export const TicketPriority = {
   LOW: 'LOW',
   NORMAL: 'NORMAL',

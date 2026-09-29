@@ -1,7 +1,7 @@
 import { AppUser } from '@modules/customer/entities/app-user.entity';
 import { Facility } from '@modules/facilities/entities/facility.entity';
 import { StorageUnit } from '@modules/facilities/entities/storage-unit.entity';
-import { TicketPriority, TicketStatus, TicketType } from '@storage/types';
+import { TicketPriority, TicketStatus } from '@storage/types';
 import {
   Column,
   CreateDateColumn,
@@ -11,6 +11,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { TicketType } from './ticket-type.entity';
 
 @Entity('service_tickets')
 export class ServiceTicket {
@@ -20,8 +21,8 @@ export class ServiceTicket {
   @Column({ unique: true, length: 40, name: 'ticket_no' })
   ticketNo: string;
 
-  @Column({ type: 'varchar', length: 20 })
-  type: TicketType;
+  @Column({ type: 'uuid', name: 'type_id' })
+  typeId: string;
 
   @Column({ type: 'uuid', name: 'facility_id' })
   facilityId: string;
@@ -64,6 +65,10 @@ export class ServiceTicket {
 
   @Column({ type: 'timestamptz', nullable: true, name: 'resolved_at' })
   resolvedAt?: Date;
+
+  @ManyToOne(() => TicketType)
+  @JoinColumn({ name: 'type_id' })
+  type: TicketType;
 
   @ManyToOne(() => Facility)
   @JoinColumn({ name: 'facility_id' })

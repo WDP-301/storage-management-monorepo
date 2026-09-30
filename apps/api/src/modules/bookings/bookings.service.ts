@@ -9,7 +9,7 @@ import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { BookingStatus, HoldStatus, StorageUnitStatus } from '@storage/types';
 import Decimal from 'decimal.js';
-import { DataSource, DeepPartial, In, LessThan, Not, Repository } from 'typeorm';
+import { DataSource, DeepPartial, In, LessThan, Not, QueryFailedError, Repository } from 'typeorm';
 import { CreateBookingDto } from './dto/booking.dto';
 import { BookingItem } from './entities/booking-item.entity';
 import { IdempotencyKey, IdempotencyStatus } from './entities/idempotency-key.entity';
@@ -140,22 +140,39 @@ export class BookingsService implements OnApplicationBootstrap {
       this.logger.warn(
         `Idempotency key ${idempotencyKey} was stuck in PROCESSING for user ${user.id}. Re-claiming stale key.`,
       );
-      await this.deleteIdempotencyKey(idempotencyKey, user.id);
-      [idem] = await this.idempotencyRepo.query<IdemRow[]>(
-        `INSERT INTO idempotency_keys (key, user_id, status, request_hash, expires_at)
-         VALUES ($1, $2, $3, $4, now() + make_interval(hours => $5))
+
+      // Reclaim stale key atomically: only one request matching PROCESSING and stale will succeed
+      const updatedRows = await this.idempotencyRepo.query<IdemRow[]>(
+        `UPDATE idempotency_keys
+         SET created_at = now(),
+             request_hash = $1,
+             expires_at = now() + make_interval(hours => $2)
+         WHERE key = $3
+           AND user_id = $4
+           AND status = $5
+           AND created_at <= now() - interval '60 seconds'
          RETURNING *, true AS is_new_insert`,
-        [idempotencyKey, user.id, IdempotencyStatus.PROCESSING, requestHash, IDEMPOTENCY_TTL_HOURS],
+        [requestHash, IDEMPOTENCY_TTL_HOURS, idempotencyKey, user.id, IdempotencyStatus.PROCESSING],
       );
+
+      if (!updatedRows || updatedRows.length === 0) {
+        throw new DomainException(
+          ErrorCode.IDEMPOTENCY_KEY_CONFLICT,
+          'Request khác đang xử lý với cùng idempotency key, vui lòng thử lại sau',
+          HttpStatus.CONFLICT,
+        );
+      }
+      idem = updatedRows[0];
     }
 
     let isCommitted = false;
     try {
-      // ── 2. Pre-check — outside TX, no lock ─────────────────────────────────
+      // ── 2. Pre-check — outside TX, no lock (fast path) ─────────────────────
       const unitIds = dto.items.map((i) => i.storageUnitId);
-      const preCheckUnits = await this.dataSource
-        .getRepository(StorageUnit)
-        .find({ where: { id: In(unitIds) }, relations: ['unitType'] });
+      const preCheckUnits = await this.dataSource.getRepository(StorageUnit).find({
+        where: { id: In(unitIds) },
+        select: ['id', 'status'],
+      });
 
       if (preCheckUnits.length !== unitIds.length) {
         throw new DomainException(
@@ -226,27 +243,63 @@ export class BookingsService implements OnApplicationBootstrap {
               HttpStatus.NOT_FOUND,
             );
           }
-          const monthlyDec = new Decimal(unit.unitType.monthlyPrice ?? 0);
+          if (unit.unitType?.monthlyPrice == null) {
+            throw new DomainException(
+              ErrorCode.INTERNAL_ERROR,
+              `Storage unit ${item.storageUnitId} thiếu cấu hình monthlyPrice`,
+              HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+          }
+
+          const monthlyDec = new Decimal(unit.unitType.monthlyPrice);
           const depositMonthsDec = new Decimal(unit.unitType.defaultDepositMonths ?? 1);
 
           subtotalDec = subtotalDec.plus(monthlyDec.times(item.rentalMonths));
           depositTotalDec = depositTotalDec.plus(monthlyDec.times(depositMonthsDec));
         }
 
-        const subtotal = subtotalDec.toNumber();
-        const depositTotal = depositTotalDec.toNumber();
+        const subtotal = subtotalDec.toFixed(2);
+        const depositTotal = depositTotalDec.toFixed(2);
 
         // Create booking
         const booking = em.create(Booking, {
           bookingNo: generateBookingNo(),
           customerId: user.id,
           status: BookingStatus.HOLDING,
-          subtotal,
-          depositTotal,
+          subtotal: subtotal as unknown as number,
+          depositTotal: depositTotal as unknown as number,
         });
         await em.save(Booking, booking);
 
         const expiresAt = new Date(Date.now() + HOLD_MINUTES * 60 * 1000);
+
+        // Check if any unit currently has an active, unexpired hold
+        const activeUnexpiredHold = await em
+          .getRepository(UnitHold)
+          .createQueryBuilder('hold')
+          .where('hold.storageUnitId IN (:...unitIds)', { unitIds: sortedUnitIds })
+          .andWhere('hold.status = :status', { status: HoldStatus.ACTIVE })
+          .andWhere('hold.expiresAt > now()')
+          .getOne();
+
+        if (activeUnexpiredHold) {
+          throw new DomainException(
+            ErrorCode.UNIT_NOT_AVAILABLE,
+            'Một hoặc nhiều storage unit đang được giữ chỗ',
+            HttpStatus.CONFLICT,
+            { unavailableUnitIds: [activeUnexpiredHold.storageUnitId] },
+          );
+        }
+
+        // Expire any stale ACTIVE holds so they don't block insertion or violate UQ_active_unit_hold
+        await em
+          .createQueryBuilder()
+          .update(UnitHold)
+          .set({ status: HoldStatus.EXPIRED })
+          .where('storageUnitId IN (:...unitIds)', { unitIds: sortedUnitIds })
+          .andWhere('status = :status', { status: HoldStatus.ACTIVE })
+          .andWhere('expiresAt <= now()')
+          .execute();
 
         // Bulk insert booking items & unit holds
         const bookingItemsToSave: DeepPartial<BookingItem>[] = [];
@@ -254,17 +307,24 @@ export class BookingsService implements OnApplicationBootstrap {
 
         for (const item of dto.items) {
           const unit = unitMap.get(item.storageUnitId)!;
-          const monthlyDec = new Decimal(unit.unitType.monthlyPrice ?? 0);
+          if (unit.unitType?.monthlyPrice == null) {
+            throw new DomainException(
+              ErrorCode.INTERNAL_ERROR,
+              `Storage unit ${item.storageUnitId} thiếu cấu hình monthlyPrice`,
+              HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+          }
+          const monthlyDec = new Decimal(unit.unitType.monthlyPrice);
           const depositMonthsDec = new Decimal(unit.unitType.defaultDepositMonths ?? 1);
-          const depositSnapshot = monthlyDec.times(depositMonthsDec).toNumber();
+          const depositSnapshot = monthlyDec.times(depositMonthsDec).toFixed(2);
 
           bookingItemsToSave.push({
             bookingId: booking.id,
             storageUnitId: unit.id,
             requestedStartAt: new Date(item.requestedStartAt),
             rentalMonths: item.rentalMonths,
-            monthlyPriceSnapshot: monthlyDec.toNumber(),
-            depositSnapshot,
+            monthlyPriceSnapshot: monthlyDec.toFixed(2) as unknown as number,
+            depositSnapshot: depositSnapshot as unknown as number,
           });
 
           unitHoldsToSave.push({
@@ -276,7 +336,23 @@ export class BookingsService implements OnApplicationBootstrap {
         }
 
         await em.save(BookingItem, bookingItemsToSave);
-        await em.save(UnitHold, unitHoldsToSave);
+
+        try {
+          await em.save(UnitHold, unitHoldsToSave);
+        } catch (err: unknown) {
+          if (
+            err instanceof QueryFailedError &&
+            (err as { driverError?: { code?: string } }).driverError?.code === '23505'
+          ) {
+            throw new DomainException(
+              ErrorCode.UNIT_NOT_AVAILABLE,
+              'Một hoặc nhiều storage unit không còn available',
+              HttpStatus.CONFLICT,
+              { unavailableUnitIds: sortedUnitIds },
+            );
+          }
+          throw err;
+        }
 
         // Update units to HELD only if still AVAILABLE
         await em.update(
@@ -384,19 +460,24 @@ export class BookingsService implements OnApplicationBootstrap {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async releaseExpiredHolds(): Promise<void> {
-    const now = new Date();
+    const runner = this.dataSource.createQueryRunner();
+    await runner.connect();
 
     // Distributed single-run lock via PostgreSQL advisory lock
-    const [{ acquired }] = await this.dataSource.query<{ acquired: boolean }[]>(
+    const rows = (await runner.query(
       `SELECT pg_try_advisory_lock(hashtext('cron_release_expired_holds')) AS acquired`,
-    );
+    )) as Array<{ acquired: boolean }>;
+    const acquired = Boolean(rows?.[0]?.acquired);
 
     if (!acquired) {
       this.logger.debug(
         '[CronJob:releaseExpiredHolds] Another instance is currently executing releaseExpiredHolds. Skipping.',
       );
+      await runner.release();
       return;
     }
+
+    const now = new Date();
 
     try {
       this.logger.log(
@@ -474,9 +555,11 @@ export class BookingsService implements OnApplicationBootstrap {
         );
       }
     } finally {
-      await this.dataSource.query(
-        `SELECT pg_advisory_unlock(hashtext('cron_release_expired_holds'))`,
-      );
+      try {
+        await runner.query(`SELECT pg_advisory_unlock(hashtext('cron_release_expired_holds'))`);
+      } finally {
+        await runner.release();
+      }
     }
   }
 
@@ -485,6 +568,10 @@ export class BookingsService implements OnApplicationBootstrap {
   // ---------------------------------------------------------------------------
 
   private async deleteIdempotencyKey(key: string, userId: string): Promise<void> {
-    await this.idempotencyRepo.delete({ key, userId });
+    await this.idempotencyRepo.delete({
+      key,
+      userId,
+      status: IdempotencyStatus.PROCESSING,
+    });
   }
 }

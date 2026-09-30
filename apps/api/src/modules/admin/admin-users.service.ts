@@ -68,8 +68,8 @@ export class AdminUsersService {
     }
 
     const [rows, total] = await builder
-      .orderBy('"user"."created_at"', 'DESC')
-      .addOrderBy('"user"."id"', 'DESC')
+      .orderBy('user.createdAt', 'DESC')
+      .addOrderBy('user.id', 'DESC')
       .skip((page - 1) * limit)
       .take(limit)
       .getManyAndCount();

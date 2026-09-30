@@ -13,6 +13,7 @@ import { FacilitiesModule } from './modules/facilities/facilities.module';
 import { HealthModule } from './modules/health/health.module';
 import { LocationsModule } from './modules/locations/locations.module';
 import { PlacesModule } from './modules/places/places.module';
+import { ServiceTicketsModule } from './modules/service-tickets/service-tickets.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { ENV_KEY } from './shared/constants';
 import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
@@ -54,6 +55,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
     UploadModule,
     CustomerModule,
     PlacesModule,
+    ServiceTicketsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

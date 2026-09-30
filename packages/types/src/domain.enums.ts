@@ -58,6 +58,12 @@ export const ContractStatus = {
 } as const;
 export type ContractStatus = (typeof ContractStatus)[keyof typeof ContractStatus];
 
+export const ContractKind = {
+  INITIAL: 'INITIAL',
+  RENEWAL: 'RENEWAL',
+} as const;
+export type ContractKind = (typeof ContractKind)[keyof typeof ContractKind];
+
 export const ContractUnitStatus = {
   PENDING: 'PENDING',
   ACTIVE: 'ACTIVE',

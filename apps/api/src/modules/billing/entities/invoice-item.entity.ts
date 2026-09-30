@@ -1,4 +1,3 @@
-import { RentalPeriod } from '@modules/contracts/entities/rental-period.entity';
 import { StorageUnit } from '@modules/facilities/entities/storage-unit.entity';
 import { InvoiceItemType } from '@storage/types';
 import {
@@ -21,9 +20,6 @@ export class InvoiceItem {
 
   @Column({ type: 'uuid', nullable: true, name: 'storage_unit_id' })
   storageUnitId?: string;
-
-  @Column({ type: 'uuid', nullable: true, name: 'rental_period_id' })
-  rentalPeriodId?: string;
 
   @Column({ type: 'varchar', length: 25, name: 'item_type' })
   itemType: InvoiceItemType;
@@ -50,8 +46,4 @@ export class InvoiceItem {
   @ManyToOne(() => StorageUnit, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'storage_unit_id' })
   storageUnit?: StorageUnit;
-
-  @ManyToOne(() => RentalPeriod, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'rental_period_id' })
-  rentalPeriod?: RentalPeriod;
 }

@@ -1,4 +1,4 @@
-import { ContractUnit } from '@modules/contracts/entities/contract-unit.entity';
+import { Contract } from '@modules/contracts/entities/contract.entity';
 import { AppUser } from '@modules/customer/entities/app-user.entity';
 import { AccessEventType } from '@storage/types';
 import {
@@ -16,8 +16,8 @@ export class AccessEvent {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'uuid', name: 'contract_unit_id' })
-  contractUnitId: string;
+  @Column({ type: 'uuid', name: 'contract_id' })
+  contractId: string;
 
   @Column({ type: 'varchar', length: 20, name: 'event_type' })
   eventType: AccessEventType;
@@ -38,9 +38,9 @@ export class AccessEvent {
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @ManyToOne(() => ContractUnit)
-  @JoinColumn({ name: 'contract_unit_id' })
-  contractUnit: ContractUnit;
+  @ManyToOne(() => Contract)
+  @JoinColumn({ name: 'contract_id' })
+  contract: Contract;
 
   @ManyToOne(() => AppUser, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'verified_by' })

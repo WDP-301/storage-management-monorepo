@@ -1,4 +1,4 @@
-import { ContractUnit } from '@modules/contracts/entities/contract-unit.entity';
+import { Contract } from '@modules/contracts/entities/contract.entity';
 import { AppUser } from '@modules/customer/entities/app-user.entity';
 import { InspectionStatus, InspectionType } from '@storage/types';
 import {
@@ -15,8 +15,8 @@ export class Inspection {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'uuid', name: 'contract_unit_id' })
-  contractUnitId: string;
+  @Column({ type: 'uuid', name: 'contract_id' })
+  contractId: string;
 
   @Column({ type: 'varchar', length: 20 })
   type: InspectionType;
@@ -39,9 +39,9 @@ export class Inspection {
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @ManyToOne(() => ContractUnit)
-  @JoinColumn({ name: 'contract_unit_id' })
-  contractUnit: ContractUnit;
+  @ManyToOne(() => Contract)
+  @JoinColumn({ name: 'contract_id' })
+  contract: Contract;
 
   @ManyToOne(() => AppUser, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'inspected_by' })

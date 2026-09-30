@@ -1,6 +1,6 @@
 import { Contract } from '@modules/contracts/entities/contract.entity';
 import { AppUser } from '@modules/customer/entities/app-user.entity';
-import { InvoiceStatus } from '@storage/types';
+import { InvoiceStatus, RentalPeriodKind } from '@storage/types';
 import {
   Column,
   CreateDateColumn,
@@ -23,6 +23,24 @@ export class Invoice {
 
   @Column({ type: 'uuid', nullable: true, name: 'contract_id' })
   contractId?: string;
+
+  @Column({ type: 'int', default: 1, name: 'period_no' })
+  periodNo: number;
+
+  @Column({ type: 'varchar', length: 20, default: 'INITIAL' })
+  kind: RentalPeriodKind;
+
+  @Column({ type: 'timestamptz', nullable: true, name: 'start_at' })
+  startAt?: Date;
+
+  @Column({ type: 'timestamptz', nullable: true, name: 'end_at' })
+  endAt?: Date;
+
+  @Column({ type: 'int', default: 1 })
+  months: number;
+
+  @Column({ type: 'decimal', precision: 14, scale: 2, default: 0, name: 'monthly_price_snapshot' })
+  monthlyPriceSnapshot: number;
 
   @Column({ type: 'varchar', length: 20, default: InvoiceStatus.DRAFT })
   status: InvoiceStatus;

@@ -1,4 +1,4 @@
-import { ContractUnit } from '@modules/contracts/entities/contract-unit.entity';
+import { Contract } from '@modules/contracts/entities/contract.entity';
 import { DepositStatus } from '@storage/types';
 import {
   Column,
@@ -16,8 +16,8 @@ export class Deposit {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'uuid', unique: true, name: 'contract_unit_id' })
-  contractUnitId: string;
+  @Column({ type: 'uuid', unique: true, name: 'contract_id' })
+  contractId: string;
 
   @Column({ type: 'uuid', nullable: true, name: 'payment_id' })
   paymentId?: string;
@@ -37,9 +37,9 @@ export class Deposit {
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 
-  @ManyToOne(() => ContractUnit)
-  @JoinColumn({ name: 'contract_unit_id' })
-  contractUnit: ContractUnit;
+  @ManyToOne(() => Contract)
+  @JoinColumn({ name: 'contract_id' })
+  contract: Contract;
 
   @ManyToOne(() => Payment, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'payment_id' })

@@ -1,5 +1,4 @@
 import { AppUser } from '@modules/customer/entities/app-user.entity';
-import { Facility } from '@modules/facilities/entities/facility.entity';
 import { BookingStatus } from '@storage/types';
 import {
   Column,
@@ -7,9 +6,11 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { BookingItem } from './booking-item.entity';
 
 @Entity('bookings')
 export class Booking {
@@ -22,17 +23,8 @@ export class Booking {
   @Column({ type: 'uuid', name: 'customer_id' })
   customerId: string;
 
-  @Column({ type: 'uuid', nullable: true, name: 'preferred_facility_id' })
-  preferredFacilityId?: string;
-
   @Column({ type: 'varchar', length: 25, default: BookingStatus.DRAFT })
   status: BookingStatus;
-
-  @Column({ type: 'timestamptz', name: 'requested_start_at' })
-  requestedStartAt: Date;
-
-  @Column({ type: 'int', name: 'rental_months' })
-  rentalMonths: number;
 
   @Column({ type: 'char', length: 3, default: 'VND' })
   currency: string;
@@ -53,7 +45,9 @@ export class Booking {
   @JoinColumn({ name: 'customer_id' })
   customer: AppUser;
 
-  @ManyToOne(() => Facility, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'preferred_facility_id' })
-  preferredFacility?: Facility;
+  @OneToMany(
+    () => BookingItem,
+    (item) => item.booking,
+  )
+  items: BookingItem[];
 }

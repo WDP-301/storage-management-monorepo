@@ -6,10 +6,12 @@ import {
   RefreshCw,
   Shield,
   ShieldCheck,
+  SlidersHorizontal,
   UserCheck,
   Users,
 } from 'lucide-react';
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ROLE_CONFIGS } from '../../lib/roles';
 
@@ -155,7 +157,12 @@ export const AdminDashboard: React.FC = () => {
           </Text>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <Link to="/admin/settings">
+            <Button variant="secondary" icon={<SlidersHorizontal className="w-4 h-4" />}>
+              Cấu hình tham số
+            </Button>
+          </Link>
           <Badge variant="primary" appearance="dot">
             Phiên quản trị viên: {user?.email}
           </Badge>

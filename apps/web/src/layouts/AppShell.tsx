@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Shield,
   ShieldCheck,
+  SlidersHorizontal,
   User,
   X,
 } from 'lucide-react';
@@ -70,6 +71,12 @@ export const AppShell: React.FC = () => {
           badge: 'Admin',
         },
         {
+          to: '/admin/settings',
+          label: 'Cấu hình tham số',
+          icon: <SlidersHorizontal className="w-4 h-4 text-kumo-brand" />,
+          badge: 'Config',
+        },
+        {
           to: '/operations',
           label: 'Điều hành & Vận hành',
           icon: <LineChart className="w-4 h-4 text-kumo-brand" />,
@@ -103,6 +110,12 @@ export const AppShell: React.FC = () => {
           label: 'Điều hành & Vận hành',
           icon: <LineChart className="w-4 h-4 text-kumo-brand" />,
           badge: 'Ops',
+        },
+        {
+          to: '/admin/settings',
+          label: 'Cấu hình tham số',
+          icon: <SlidersHorizontal className="w-4 h-4 text-kumo-brand" />,
+          badge: 'Config',
         },
       ];
     }
@@ -147,9 +160,11 @@ export const AppShell: React.FC = () => {
 
   const roleNavItems = getRoleNavItems();
   const allNavItems = canAccessOverview ? [overviewItem, ...roleNavItems] : roleNavItems;
-  const currentNav = allNavItems.find(
-    (item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`),
-  );
+  const currentNav =
+    allNavItems.find((item) => location.pathname === item.to) ||
+    allNavItems
+      .filter((item) => location.pathname.startsWith(`${item.to}/`))
+      .sort((a, b) => b.to.length - a.to.length)[0];
   const pageTitle = currentNav ? currentNav.label : 'Hệ thống Quản lý Kho';
 
   return (
@@ -220,6 +235,7 @@ export const AppShell: React.FC = () => {
                 </div>
                 <NavLink
                   to={overviewItem.to}
+                  end
                   onClick={() => setMobileMenuOpen(false)}
                   className={({ isActive }: { isActive: boolean }) =>
                     `flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium ${
@@ -249,6 +265,7 @@ export const AppShell: React.FC = () => {
                   <NavLink
                     key={item.to}
                     to={item.to}
+                    end
                     onClick={() => setMobileMenuOpen(false)}
                     className={({ isActive }: { isActive: boolean }) =>
                       `flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium ${

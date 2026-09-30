@@ -12,9 +12,11 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/booking.dto';
 
@@ -25,7 +27,6 @@ export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
 
   @Post()
-  @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new booking and hold selected units for 15 minutes' })
   @ApiHeader({
     name: 'Idempotency-Key',
@@ -37,10 +38,11 @@ export class BookingsController {
   @ApiResponse({ status: 200, description: 'Idempotent response — booking already created' })
   @ApiResponse({ status: 409, description: 'Unit not available or key in PROCESSING state' })
   @ApiResponse({ status: 422, description: 'Same idempotency key reused with different payload' })
-  create(
+  async create(
     @Body() dto: CreateBookingDto,
     @CurrentUser() user: AuthUser,
     @Headers('Idempotency-Key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) res: Response,
   ) {
     if (!idempotencyKey) {
       throw new BadRequestException('Header Idempotency-Key là bắt buộc');
@@ -51,7 +53,9 @@ export class BookingsController {
       throw new BadRequestException('Idempotency-Key phải là UUID hợp lệ');
     }
 
-    return this.bookingsService.create(dto, user, idempotencyKey);
+    const { data, isRetry } = await this.bookingsService.create(dto, user, idempotencyKey);
+    res.status(isRetry ? HttpStatus.OK : HttpStatus.CREATED);
+    return data;
   }
 
   @Get('me')

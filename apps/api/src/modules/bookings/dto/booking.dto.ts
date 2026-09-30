@@ -8,8 +8,79 @@ import {
   IsUUID,
   Max,
   Min,
+  registerDecorator,
   ValidateNested,
+  ValidationArguments,
+  ValidationOptions,
 } from 'class-validator';
+
+/**
+ * Validates that requestedStartAt is from today onwards and at most 30 days in advance.
+ */
+export function IsValidBookingStartDate(validationOptions?: ValidationOptions) {
+  return (object: object, propertyName: string) => {
+    registerDecorator({
+      name: 'isValidBookingStartDate',
+      target: object.constructor,
+      propertyName,
+      options: validationOptions,
+      validator: {
+        validate(value: unknown) {
+          if (typeof value !== 'string') return false;
+          const date = new Date(value);
+          if (Number.isNaN(date.getTime())) return false;
+
+          const now = new Date();
+          // Beginning of today (local time)
+          const startOfToday = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+            0,
+            0,
+            0,
+            0,
+          );
+          // 30 days from today (inclusive to end of the 30th day)
+          const maxAdvanceDate = new Date(
+            startOfToday.getTime() + 30 * 24 * 60 * 60 * 1000 + (24 * 60 * 60 * 1000 - 1),
+          );
+
+          return date >= startOfToday && date <= maxAdvanceDate;
+        },
+        defaultMessage(args: ValidationArguments) {
+          return `${args.property} phải từ ngày hôm nay trở đi và tối đa trước 30 ngày`;
+        },
+      },
+    });
+  };
+}
+
+/**
+ * Validates that no duplicate storage units exist in the same booking request.
+ */
+export function IsUniqueStorageUnits(validationOptions?: ValidationOptions) {
+  return (object: object, propertyName: string) => {
+    registerDecorator({
+      name: 'isUniqueStorageUnits',
+      target: object.constructor,
+      propertyName,
+      options: validationOptions,
+      validator: {
+        validate(items: unknown) {
+          if (!Array.isArray(items)) return true;
+          const ids = items
+            .map((item) => (item as Record<string, unknown>)?.storageUnitId)
+            .filter((id): id is string => typeof id === 'string' && id.length > 0);
+          return new Set(ids).size === ids.length;
+        },
+        defaultMessage() {
+          return 'Không được chứa storage unit trùng lặp trong cùng một booking';
+        },
+      },
+    });
+  };
+}
 
 export class CreateBookingItemDto {
   @ApiProperty({
@@ -21,9 +92,10 @@ export class CreateBookingItemDto {
 
   @ApiProperty({
     example: '2026-10-01T00:00:00.000Z',
-    description: 'Requested rental start date for this unit',
+    description: 'Requested rental start date for this unit (from today up to 30 days in advance)',
   })
   @IsDateString()
+  @IsValidBookingStartDate()
   requestedStartAt: string;
 
   @ApiProperty({
@@ -45,6 +117,7 @@ export class CreateBookingDto {
   })
   @IsArray()
   @ArrayMinSize(1)
+  @IsUniqueStorageUnits()
   @ValidateNested({ each: true })
   @Type(() => CreateBookingItemDto)
   items: CreateBookingItemDto[];

@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { ContractUnit } from '@modules/contracts/entities/contract-unit.entity';
 import { AppUser } from '@modules/customer/entities/app-user.entity';
 import { UserRoleAssignment } from '@modules/customer/entities/user-role-assignment.entity';
 import { Facility } from '@modules/facilities/entities/facility.entity';
@@ -8,7 +9,14 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { TicketPriority, TicketStatus, UserRole, UserStatus } from '@storage/types';
+import {
+  ContractStatus,
+  ContractUnitStatus,
+  TicketPriority,
+  TicketStatus,
+  UserRole,
+  UserStatus,
+} from '@storage/types';
 import { IsNull, QueryFailedError, Repository } from 'typeorm';
 import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
@@ -27,6 +35,11 @@ import { toServiceTicketRecord } from './types/service-ticket';
 const PG_UNIQUE_VIOLATION = '23505';
 const MAX_TICKET_NO_ATTEMPTS = 3;
 const RESOLVED_STATUSES: readonly TicketStatus[] = [TicketStatus.RESOLVED, TicketStatus.CLOSED];
+const ASSIGNABLE_STATUSES: readonly TicketStatus[] = [
+  TicketStatus.OPEN,
+  TicketStatus.ASSIGNED,
+  TicketStatus.IN_PROGRESS,
+];
 
 @Injectable()
 export class ServiceTicketsService {
@@ -43,6 +56,8 @@ export class ServiceTicketsService {
     private readonly facilities: Repository<Facility>,
     @InjectRepository(StorageUnit)
     private readonly storageUnits: Repository<StorageUnit>,
+    @InjectRepository(ContractUnit)
+    private readonly contractUnits: Repository<ContractUnit>,
   ) {}
 
   /**
@@ -52,6 +67,7 @@ export class ServiceTicketsService {
    */
   async create(dto: CreateTicketDto, actor: AuthUser): Promise<ServiceTicketResponse> {
     await this.validateTicketReferences(dto);
+    await this.assertCustomerRents(actor.id, dto);
 
     const ticket = this.tickets.create({
       typeId: dto.typeId,
@@ -139,6 +155,14 @@ export class ServiceTicketsService {
     const ticket = await this.findTicketOrFail(id);
     await this.assertManagesFacility(actor, ticket.facilityId);
 
+    if (!ASSIGNABLE_STATUSES.includes(ticket.status)) {
+      throw new DomainException(
+        ErrorCode.CONFLICT,
+        `Ticket cannot be assigned while its status is ${ticket.status}`,
+        HttpStatus.CONFLICT,
+      );
+    }
+
     const assignee = await this.users.findOne({
       where: { id: dto.assignedTo, status: UserStatus.ACTIVE },
     });
@@ -206,7 +230,7 @@ export class ServiceTicketsService {
     }
 
     if (dto.resolution !== undefined) {
-      ticket.resolution = dto.resolution ?? undefined;
+      ticket.resolution = dto.resolution;
     }
     if (dto.attachments !== undefined) {
       ticket.attachments = dto.attachments;
@@ -229,6 +253,44 @@ export class ServiceTicketsService {
 
     const result = await this.tickets.delete({ id: ticket.id });
     return { deleted: (result.affected ?? 0) > 0, id: ticket.id };
+  }
+
+  /**
+   * Blocks ticket creation when the customer has no active contract covering the unit,
+   * or any unit of the facility when no storageUnitId is provided.
+   */
+  private async assertCustomerRents(
+    customerId: string,
+    dto: Pick<CreateTicketDto, 'facilityId' | 'storageUnitId'>,
+  ): Promise<void> {
+    const now = new Date();
+
+    const builder = this.contractUnits
+      .createQueryBuilder('cu')
+      .innerJoin('cu.contract', 'c')
+      .where('c.customerId = :customerId', { customerId })
+      .andWhere('c.status = :contractStatus', { contractStatus: ContractStatus.ACTIVE })
+      .andWhere('cu.status = :unitStatus', { unitStatus: ContractUnitStatus.ACTIVE })
+      .andWhere('cu.startAt <= :now', { now })
+      .andWhere('cu.endAt >= :now', { now });
+
+    if (dto.storageUnitId) {
+      builder.andWhere('cu.storageUnitId = :unitId', { unitId: dto.storageUnitId });
+    } else {
+      builder
+        .innerJoin('cu.storageUnit', 'su')
+        .andWhere('su.facilityId = :facilityId', { facilityId: dto.facilityId });
+    }
+
+    if (!(await builder.getExists())) {
+      throw new DomainException(
+        ErrorCode.FORBIDDEN,
+        dto.storageUnitId
+          ? 'You can only create tickets for units you are actively renting'
+          : 'You can only create tickets for facilities where you are actively renting',
+        HttpStatus.FORBIDDEN,
+      );
+    }
   }
 
   private async findTicketOrFail(id: string): Promise<ServiceTicket> {

@@ -74,6 +74,13 @@ const buildQueryBuilder = (rows: ServiceTicket[], total: number) => ({
   getManyAndCount: jest.fn().mockResolvedValue([rows, total]),
 });
 
+const buildRentCheckBuilder = (exists: boolean) => ({
+  innerJoin: jest.fn().mockReturnThis(),
+  where: jest.fn().mockReturnThis(),
+  andWhere: jest.fn().mockReturnThis(),
+  getExists: jest.fn().mockResolvedValue(exists),
+});
+
 describe('ServiceTicketsService', () => {
   let tickets: {
     createQueryBuilder: jest.Mock;
@@ -87,6 +94,7 @@ describe('ServiceTicketsService', () => {
   let users: { findOne: jest.Mock };
   let facilities: { findOne: jest.Mock };
   let storageUnits: { findOne: jest.Mock };
+  let contractUnits: { createQueryBuilder: jest.Mock };
   let service: ServiceTicketsService;
 
   beforeEach(() => {
@@ -105,6 +113,9 @@ describe('ServiceTicketsService', () => {
     users = { findOne: jest.fn().mockResolvedValue(null) };
     facilities = { findOne: jest.fn().mockResolvedValue(null) };
     storageUnits = { findOne: jest.fn().mockResolvedValue(null) };
+    contractUnits = {
+      createQueryBuilder: jest.fn(() => buildRentCheckBuilder(true)),
+    };
 
     service = new ServiceTicketsService(
       tickets as never,
@@ -113,6 +124,7 @@ describe('ServiceTicketsService', () => {
       users as never,
       facilities as never,
       storageUnits as never,
+      contractUnits as never,
     );
   });
 
@@ -207,6 +219,55 @@ describe('ServiceTicketsService', () => {
 
       expect(tickets.save).toHaveBeenCalledTimes(2);
       expect(result.ticket.ticket_no).toMatch(/^ST-\d{8}-[0-9A-F]{8}$/);
+    });
+
+    it('rejects a customer without an active contract on the unit', async () => {
+      facilities.findOne.mockResolvedValue({ id: 'facility-1' });
+      ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
+      storageUnits.findOne.mockResolvedValue({ id: 'unit-1', facilityId: 'facility-1' });
+      const builder = buildRentCheckBuilder(false);
+      contractUnits.createQueryBuilder.mockReturnValue(builder);
+
+      await expect(
+        service.create({ ...dto, storageUnitId: 'unit-1' }, buildActor()),
+      ).rejects.toMatchObject({ status: 403, response: { code: 'FORBIDDEN' } });
+
+      expect(builder.andWhere).toHaveBeenCalledWith('cu.storageUnitId = :unitId', {
+        unitId: 'unit-1',
+      });
+      expect(tickets.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a customer without an active contract in the facility', async () => {
+      facilities.findOne.mockResolvedValue({ id: 'facility-1' });
+      ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
+      const builder = buildRentCheckBuilder(false);
+      contractUnits.createQueryBuilder.mockReturnValue(builder);
+
+      await expect(service.create(dto, buildActor())).rejects.toMatchObject({
+        status: 403,
+        response: { code: 'FORBIDDEN' },
+      });
+
+      expect(builder.innerJoin).toHaveBeenCalledWith('cu.storageUnit', 'su');
+      expect(tickets.create).not.toHaveBeenCalled();
+    });
+
+    it('lets a customer with an active contract on the unit create a ticket', async () => {
+      facilities.findOne.mockResolvedValue({ id: 'facility-1' });
+      ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
+      storageUnits.findOne.mockResolvedValue({ id: 'unit-1', facilityId: 'facility-1' });
+      tickets.findOne.mockResolvedValue(
+        buildTicket({ customerId: 'customer-1', storageUnitId: 'unit-1' }),
+      );
+
+      const result = await service.create(
+        { ...dto, storageUnitId: 'unit-1' },
+        buildActor({ id: 'customer-1' }),
+      );
+
+      expect(tickets.create).toHaveBeenCalled();
+      expect(result.ticket.storage_unit_id).toBe('unit-1');
     });
   });
 
@@ -385,6 +446,36 @@ describe('ServiceTicketsService', () => {
       expect(tickets.save).not.toHaveBeenCalled();
     });
 
+    it.each([TicketStatus.RESOLVED, TicketStatus.CLOSED, TicketStatus.CANCELLED])(
+      'forbids assigning a ticket whose status is %s',
+      async (status) => {
+        tickets.findOne.mockResolvedValue(buildTicket({ facilityId: 'facility-1', status }));
+
+        await expect(service.assign('ticket-1', dto, manager)).rejects.toMatchObject({
+          status: 409,
+          response: { code: 'CONFLICT' },
+        });
+        expect(tickets.save).not.toHaveBeenCalled();
+      },
+    );
+
+    it('reassigns an ASSIGNED ticket to another staff member keeping its status', async () => {
+      tickets.findOne.mockResolvedValue(
+        buildTicket({
+          facilityId: 'facility-1',
+          assignedTo: 'staff-2',
+          status: TicketStatus.ASSIGNED,
+        }),
+      );
+
+      const result = await service.assign('ticket-1', dto, manager);
+
+      expect(tickets.save).toHaveBeenCalledWith(
+        expect.objectContaining({ assignedTo: 'staff-1', status: TicketStatus.ASSIGNED }),
+      );
+      expect(result.ticket.history.map((entry) => entry.action)).toEqual(['ASSIGNED']);
+    });
+
     it('rejects an unknown assignee', async () => {
       tickets.findOne.mockResolvedValue(buildTicket({ facilityId: 'facility-1' }));
       users.findOne.mockResolvedValue(null);
@@ -437,6 +528,17 @@ describe('ServiceTicketsService', () => {
       expect(result.ticket.history.map((entry) => entry.action)).toEqual(['STATUS_CHANGED']);
       expect(result.ticket.history[0].from).toBe(TicketStatus.ASSIGNED);
       expect(result.ticket.history[0].to).toBe(TicketStatus.RESOLVED);
+    });
+
+    it('clears the resolution when null is sent', async () => {
+      tickets.findOne.mockResolvedValue(
+        buildTicket({ assignedTo: 'staff-1', resolution: 'Old fix' }),
+      );
+
+      const result = await service.update('ticket-1', { resolution: null }, staff);
+
+      expect(tickets.save).toHaveBeenCalledWith(expect.objectContaining({ resolution: null }));
+      expect(result.ticket.resolution).toBeNull();
     });
 
     it('forbids a staff member from updating an unassigned ticket', async () => {

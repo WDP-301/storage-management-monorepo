@@ -1,4 +1,6 @@
 import { AuthModule } from '@modules/auth/auth.module';
+import { Contract } from '@modules/contracts/entities/contract.entity';
+import { ContractUnit } from '@modules/contracts/entities/contract-unit.entity';
 import { AppUser } from '@modules/customer/entities/app-user.entity';
 import { UserRoleAssignment } from '@modules/customer/entities/user-role-assignment.entity';
 import { Facility } from '@modules/facilities/entities/facility.entity';
@@ -24,6 +26,8 @@ import { ServiceTicketsService } from './service-tickets.service';
       AppUser,
       Facility,
       StorageUnit,
+      Contract,
+      ContractUnit,
     ]),
     AuthModule,
   ],

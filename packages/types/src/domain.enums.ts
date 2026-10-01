@@ -50,6 +50,12 @@ export const HoldStatus = {
 } as const;
 export type HoldStatus = (typeof HoldStatus)[keyof typeof HoldStatus];
 
+export const IdempotencyStatus = {
+  PROCESSING: 'PROCESSING',
+  DONE: 'DONE',
+} as const;
+export type IdempotencyStatus = (typeof IdempotencyStatus)[keyof typeof IdempotencyStatus];
+
 export const ContractStatus = {
   DRAFT: 'DRAFT',
   ACTIVE: 'ACTIVE',
@@ -57,6 +63,12 @@ export const ContractStatus = {
   CANCELLED: 'CANCELLED',
 } as const;
 export type ContractStatus = (typeof ContractStatus)[keyof typeof ContractStatus];
+
+export const ContractKind = {
+  INITIAL: 'INITIAL',
+  RENEWAL: 'RENEWAL',
+} as const;
+export type ContractKind = (typeof ContractKind)[keyof typeof ContractKind];
 
 export const ContractUnitStatus = {
   PENDING: 'PENDING',

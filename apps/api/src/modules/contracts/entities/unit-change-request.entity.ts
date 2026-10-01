@@ -10,15 +10,15 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { ContractUnit } from './contract-unit.entity';
+import { Contract } from './contract.entity';
 
 @Entity('unit_change_requests')
 export class UnitChangeRequest {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'uuid', name: 'contract_unit_id' })
-  contractUnitId: string;
+  @Column({ type: 'uuid', name: 'contract_id' })
+  contractId: string;
 
   @Column({ type: 'uuid', name: 'old_unit_id' })
   oldUnitId: string;
@@ -65,9 +65,9 @@ export class UnitChangeRequest {
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 
-  @ManyToOne(() => ContractUnit)
-  @JoinColumn({ name: 'contract_unit_id' })
-  contractUnit: ContractUnit;
+  @ManyToOne(() => Contract)
+  @JoinColumn({ name: 'contract_id' })
+  contract: Contract;
 
   @ManyToOne(() => StorageUnit)
   @JoinColumn({ name: 'old_unit_id' })

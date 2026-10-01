@@ -1,41 +1,124 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
   IsDateString,
   IsInt,
-  IsOptional,
   IsUUID,
   Max,
   Min,
+  registerDecorator,
+  ValidateNested,
+  ValidationArguments,
+  ValidationOptions,
 } from 'class-validator';
 
-export class CreateBookingDto {
+/**
+ * Validates that requestedStartAt is from today onwards and at most 30 days in advance.
+ */
+export function IsValidBookingStartDate(validationOptions?: ValidationOptions) {
+  return (object: object, propertyName: string) => {
+    registerDecorator({
+      name: 'isValidBookingStartDate',
+      target: object.constructor,
+      propertyName,
+      options: validationOptions,
+      validator: {
+        validate(value: unknown) {
+          if (typeof value !== 'string') return false;
+          const date = new Date(value);
+          if (Number.isNaN(date.getTime())) return false;
+
+          const now = new Date();
+          // Beginning of today (local time)
+          const startOfToday = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+            0,
+            0,
+            0,
+            0,
+          );
+          // 30 days from today (inclusive to end of the 30th day)
+          const maxAdvanceDate = new Date(
+            startOfToday.getTime() + 30 * 24 * 60 * 60 * 1000 + (24 * 60 * 60 * 1000 - 1),
+          );
+
+          return date >= startOfToday && date <= maxAdvanceDate;
+        },
+        defaultMessage(args: ValidationArguments) {
+          return `${args.property} phải từ ngày hôm nay trở đi và tối đa trước 30 ngày`;
+        },
+      },
+    });
+  };
+}
+
+/**
+ * Validates that no duplicate storage units exist in the same booking request.
+ */
+export function IsUniqueStorageUnits(validationOptions?: ValidationOptions) {
+  return (object: object, propertyName: string) => {
+    registerDecorator({
+      name: 'isUniqueStorageUnits',
+      target: object.constructor,
+      propertyName,
+      options: validationOptions,
+      validator: {
+        validate(items: unknown) {
+          if (!Array.isArray(items)) return true;
+          const ids = items
+            .map((item) => (item as Record<string, unknown>)?.storageUnitId)
+            .filter((id): id is string => typeof id === 'string' && id.length > 0);
+          return new Set(ids).size === ids.length;
+        },
+        defaultMessage() {
+          return 'Không được chứa storage unit trùng lặp trong cùng một booking';
+        },
+      },
+    });
+  };
+}
+
+export class CreateBookingItemDto {
   @ApiProperty({
-    type: [String],
-    example: ['uuid-unit-101', 'uuid-unit-102'],
-    description: 'List of storage unit IDs to book',
+    example: '018f673a-4001-7000-8000-000000000001',
+    description: 'Storage unit ID (UUIDv4/v7)',
   })
-  @IsArray()
-  @ArrayMinSize(1)
-  @IsUUID('all', { each: true }) // 'all' supports UUIDv4 and UUIDv7 (used by DB)
-  storageUnitIds: string[];
+  @IsUUID('all')
+  storageUnitId: string;
 
   @ApiProperty({
     example: '2026-10-01T00:00:00.000Z',
-    description: 'Requested rental start date',
+    description: 'Requested rental start date for this unit (from today up to 30 days in advance)',
   })
   @IsDateString()
+  @IsValidBookingStartDate()
   requestedStartAt: string;
 
-  @ApiProperty({ example: 3, description: 'Number of months to rent', minimum: 1, maximum: 60 })
+  @ApiProperty({
+    example: 3,
+    description: 'Number of months to rent for this unit',
+    minimum: 1,
+    maximum: 60,
+  })
   @IsInt()
   @Min(1)
   @Max(60)
   rentalMonths: number;
+}
 
-  @ApiPropertyOptional({ example: 'uuid-facility', description: 'Preferred facility ID' })
-  @IsUUID('all') // 'all' supports UUIDv4 and UUIDv7
-  @IsOptional()
-  preferredFacilityId?: string;
+export class CreateBookingDto {
+  @ApiProperty({
+    type: [CreateBookingItemDto],
+    description: 'List of storage units to book with individual schedules',
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsUniqueStorageUnits()
+  @ValidateNested({ each: true })
+  @Type(() => CreateBookingItemDto)
+  items: CreateBookingItemDto[];
 }

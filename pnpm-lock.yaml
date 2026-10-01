@@ -68,6 +68,9 @@ importers:
       class-validator:
         specifier: ^0.14.4
         version: 0.14.4
+      decimal.js:
+        specifier: ^10.6.0
+        version: 10.6.0
       helmet:
         specifier: ^8.3.0
         version: 8.3.0

@@ -22,6 +22,12 @@ export class BookingItem {
   @Column({ type: 'uuid', name: 'storage_unit_id' })
   storageUnitId: string;
 
+  @Column({ type: 'timestamptz', name: 'requested_start_at' })
+  requestedStartAt: Date;
+
+  @Column({ type: 'int', name: 'rental_months' })
+  rentalMonths: number;
+
   @Column({ type: 'decimal', precision: 14, scale: 2, name: 'monthly_price_snapshot' })
   monthlyPriceSnapshot: number;
 

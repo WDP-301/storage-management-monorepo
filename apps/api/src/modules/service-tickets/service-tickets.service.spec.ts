@@ -94,7 +94,7 @@ describe('ServiceTicketsService', () => {
   let users: { findOne: jest.Mock };
   let facilities: { findOne: jest.Mock };
   let storageUnits: { findOne: jest.Mock };
-  let contractUnits: { createQueryBuilder: jest.Mock };
+  let contracts: { createQueryBuilder: jest.Mock };
   let service: ServiceTicketsService;
 
   beforeEach(() => {
@@ -113,7 +113,7 @@ describe('ServiceTicketsService', () => {
     users = { findOne: jest.fn().mockResolvedValue(null) };
     facilities = { findOne: jest.fn().mockResolvedValue(null) };
     storageUnits = { findOne: jest.fn().mockResolvedValue(null) };
-    contractUnits = {
+    contracts = {
       createQueryBuilder: jest.fn(() => buildRentCheckBuilder(true)),
     };
 
@@ -124,7 +124,7 @@ describe('ServiceTicketsService', () => {
       users as never,
       facilities as never,
       storageUnits as never,
-      contractUnits as never,
+      contracts as never,
     );
   });
 
@@ -226,13 +226,13 @@ describe('ServiceTicketsService', () => {
       ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
       storageUnits.findOne.mockResolvedValue({ id: 'unit-1', facilityId: 'facility-1' });
       const builder = buildRentCheckBuilder(false);
-      contractUnits.createQueryBuilder.mockReturnValue(builder);
+      contracts.createQueryBuilder.mockReturnValue(builder);
 
       await expect(
         service.create({ ...dto, storageUnitId: 'unit-1' }, buildActor()),
       ).rejects.toMatchObject({ status: 403, response: { code: 'FORBIDDEN' } });
 
-      expect(builder.andWhere).toHaveBeenCalledWith('cu.storageUnitId = :unitId', {
+      expect(builder.andWhere).toHaveBeenCalledWith('bi.storageUnitId = :unitId', {
         unitId: 'unit-1',
       });
       expect(tickets.create).not.toHaveBeenCalled();
@@ -242,14 +242,14 @@ describe('ServiceTicketsService', () => {
       facilities.findOne.mockResolvedValue({ id: 'facility-1' });
       ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
       const builder = buildRentCheckBuilder(false);
-      contractUnits.createQueryBuilder.mockReturnValue(builder);
+      contracts.createQueryBuilder.mockReturnValue(builder);
 
       await expect(service.create(dto, buildActor())).rejects.toMatchObject({
         status: 403,
         response: { code: 'FORBIDDEN' },
       });
 
-      expect(builder.innerJoin).toHaveBeenCalledWith('cu.storageUnit', 'su');
+      expect(builder.innerJoin).toHaveBeenCalledWith('bi.storageUnit', 'su');
       expect(tickets.create).not.toHaveBeenCalled();
     });
 

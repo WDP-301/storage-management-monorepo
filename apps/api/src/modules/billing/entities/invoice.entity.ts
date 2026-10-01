@@ -27,7 +27,7 @@ export class Invoice {
   @Column({ type: 'int', default: 1, name: 'period_no' })
   periodNo: number;
 
-  @Column({ type: 'varchar', length: 20, default: 'INITIAL' })
+  @Column({ type: 'varchar', length: 20, default: RentalPeriodKind.INITIAL })
   kind: RentalPeriodKind;
 
   @Column({ type: 'timestamptz', nullable: true, name: 'start_at' })

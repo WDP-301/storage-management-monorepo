@@ -7,12 +7,12 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { BookingStatus, HoldStatus, StorageUnitStatus } from '@storage/types';
+import { BookingStatus, HoldStatus, IdempotencyStatus, StorageUnitStatus } from '@storage/types';
 import Decimal from 'decimal.js';
 import { DataSource, DeepPartial, In, LessThan, Not, QueryFailedError, Repository } from 'typeorm';
 import { CreateBookingDto } from './dto/booking.dto';
 import { BookingItem } from './entities/booking-item.entity';
-import { IdempotencyKey, IdempotencyStatus } from './entities/idempotency-key.entity';
+import { IdempotencyKey } from './entities/idempotency-key.entity';
 import { UnitHold } from './entities/unit-hold.entity';
 
 const HOLD_MINUTES = 15;
@@ -230,11 +230,11 @@ export class BookingsService implements OnApplicationBootstrap {
 
         const unitMap = new Map(units.map((u) => [u.id, u]));
 
-        // Calculate totals from individual item schedules & unit types using Decimal.js
+        // Resolve per-item pricing in a single pass & accumulate totals using Decimal.js
         let subtotalDec = new Decimal(0);
         let depositTotalDec = new Decimal(0);
 
-        for (const item of dto.items) {
+        const resolvedItems = dto.items.map((item) => {
           const unit = unitMap.get(item.storageUnitId);
           if (!unit) {
             throw new DomainException(
@@ -253,10 +253,20 @@ export class BookingsService implements OnApplicationBootstrap {
 
           const monthlyDec = new Decimal(unit.unitType.monthlyPrice);
           const depositMonthsDec = new Decimal(unit.unitType.defaultDepositMonths ?? 1);
+          const depositSnapshot = monthlyDec.times(depositMonthsDec).toFixed(2);
+          const monthlyPriceSnapshot = monthlyDec.toFixed(2);
 
           subtotalDec = subtotalDec.plus(monthlyDec.times(item.rentalMonths));
           depositTotalDec = depositTotalDec.plus(monthlyDec.times(depositMonthsDec));
-        }
+
+          return {
+            storageUnitId: unit.id,
+            requestedStartAt: new Date(item.requestedStartAt),
+            rentalMonths: item.rentalMonths,
+            monthlyPriceSnapshot: monthlyPriceSnapshot as unknown as number,
+            depositSnapshot: depositSnapshot as unknown as number,
+          };
+        });
 
         const subtotal = subtotalDec.toFixed(2);
         const depositTotal = depositTotalDec.toFixed(2);
@@ -301,39 +311,22 @@ export class BookingsService implements OnApplicationBootstrap {
           .andWhere('expiresAt <= now()')
           .execute();
 
-        // Bulk insert booking items & unit holds
-        const bookingItemsToSave: DeepPartial<BookingItem>[] = [];
-        const unitHoldsToSave: DeepPartial<UnitHold>[] = [];
+        // Bulk insert booking items & unit holds reusing resolved items
+        const bookingItemsToSave: DeepPartial<BookingItem>[] = resolvedItems.map((r) => ({
+          bookingId: booking.id,
+          storageUnitId: r.storageUnitId,
+          requestedStartAt: r.requestedStartAt,
+          rentalMonths: r.rentalMonths,
+          monthlyPriceSnapshot: r.monthlyPriceSnapshot,
+          depositSnapshot: r.depositSnapshot,
+        }));
 
-        for (const item of dto.items) {
-          const unit = unitMap.get(item.storageUnitId)!;
-          if (unit.unitType?.monthlyPrice == null) {
-            throw new DomainException(
-              ErrorCode.INTERNAL_ERROR,
-              `Storage unit ${item.storageUnitId} thiếu cấu hình monthlyPrice`,
-              HttpStatus.INTERNAL_SERVER_ERROR,
-            );
-          }
-          const monthlyDec = new Decimal(unit.unitType.monthlyPrice);
-          const depositMonthsDec = new Decimal(unit.unitType.defaultDepositMonths ?? 1);
-          const depositSnapshot = monthlyDec.times(depositMonthsDec).toFixed(2);
-
-          bookingItemsToSave.push({
-            bookingId: booking.id,
-            storageUnitId: unit.id,
-            requestedStartAt: new Date(item.requestedStartAt),
-            rentalMonths: item.rentalMonths,
-            monthlyPriceSnapshot: monthlyDec.toFixed(2) as unknown as number,
-            depositSnapshot: depositSnapshot as unknown as number,
-          });
-
-          unitHoldsToSave.push({
-            bookingId: booking.id,
-            storageUnitId: unit.id,
-            status: HoldStatus.ACTIVE,
-            expiresAt,
-          });
-        }
+        const unitHoldsToSave: DeepPartial<UnitHold>[] = resolvedItems.map((r) => ({
+          bookingId: booking.id,
+          storageUnitId: r.storageUnitId,
+          status: HoldStatus.ACTIVE,
+          expiresAt,
+        }));
 
         await em.save(BookingItem, bookingItemsToSave);
 

@@ -25,7 +25,7 @@ export class Contract {
   @Column({ type: 'uuid', name: 'customer_id' })
   customerId: string;
 
-  @Column({ type: 'varchar', length: 20, default: 'INITIAL' })
+  @Column({ type: 'varchar', length: 20, default: ContractKind.INITIAL })
   kind: ContractKind;
 
   @Column({ type: 'varchar', length: 25, default: ContractStatus.DRAFT })

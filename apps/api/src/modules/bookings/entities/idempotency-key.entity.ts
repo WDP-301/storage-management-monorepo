@@ -1,10 +1,5 @@
+import { IdempotencyStatus } from '@storage/types';
 import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
-
-export const IdempotencyStatus = {
-  PROCESSING: 'PROCESSING',
-  DONE: 'DONE',
-} as const;
-export type IdempotencyStatus = (typeof IdempotencyStatus)[keyof typeof IdempotencyStatus];
 
 @Entity('idempotency_keys')
 export class IdempotencyKey {

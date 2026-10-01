@@ -76,7 +76,7 @@ export function MyBookingsScreen({
               </View>
               <View>
                 <Text className="text-xs text-muted">Thời hạn</Text>
-                <Text className="mt-1 text-sm font-semibold text-foreground">3 tháng</Text>
+                <Text className="mt-1 text-sm font-semibold text-foreground">6 tháng</Text>
               </View>
             </View>
             <Button variant="secondary" onPress={() => undefined}>

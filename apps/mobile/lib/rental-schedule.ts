@@ -6,9 +6,15 @@
  * display happens at the edge, in `format-vi`.
  */
 
-export const DURATION_OPTIONS: readonly number[] = [3, 6, 12];
+/**
+ * Rental terms run in multiples of six months.
+ *
+ * The API does not enforce this yet — `bookings.rental_months` is only constrained to be positive
+ * — so these values are the whole of the rule for now.
+ */
+export const DURATION_OPTIONS: readonly number[] = [6, 12, 18];
 
-export const DEFAULT_DURATION_MONTHS = 3;
+export const DEFAULT_DURATION_MONTHS = 6;
 
 /** How far ahead the customer may schedule a handover. */
 export const SCHEDULABLE_DAYS = 30;

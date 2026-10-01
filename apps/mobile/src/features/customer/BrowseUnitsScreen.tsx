@@ -2,8 +2,7 @@ import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { Button, Card } from 'heroui-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
-import { formatDate, formatMoney } from '../../../lib/format-vi';
-import type { HoldOptions } from '../../../lib/hold';
+import { formatMoney } from '../../../lib/format-vi';
 import type { BrowseMode, HeldBooking, UnitOffer } from '../../types/customer';
 import { ManualFacilityCard, RecommendedFacilityCard } from './BrowseFacilityCards';
 import { BrowseFiltersBar } from './BrowseFiltersBar';
@@ -25,7 +24,7 @@ import { useWards } from './use-wards';
 type Props = {
   heldBooking: HeldBooking | null;
   contentBottomPadding: number;
-  onHold: (units: UnitOffer[], options: HoldOptions) => void;
+  onHold: (units: UnitOffer[]) => void;
 };
 
 export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }: Props) {
@@ -35,8 +34,6 @@ export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }:
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [waitlistedFacilityId, setWaitlistedFacilityId] = useState<string | null>(null);
   const filtersSheetRef = useRef<BottomSheetModal>(null);
-
-  const startDateLabel = useMemo(() => formatDate(new Date()), []);
 
   const provinceOptions = useMemo(
     () => buildProvinceOptions(facilities, provinces),
@@ -102,11 +99,6 @@ export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }:
     });
   };
 
-  const holdOptions: HoldOptions = {
-    startDate: startDateLabel,
-    durationMonths: criteria.durationMonths,
-  };
-
   const visibleUnitCount = visibleFacilities.reduce(
     (total, facility) => total + facility.units.length,
     0,
@@ -160,7 +152,7 @@ export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }:
                       heldBooking={heldBooking}
                       requestedQuantity={criteria.requestedQuantity}
                       waitlisted={waitlistedFacilityId === facility.id}
-                      onHold={(units) => onHold(units, holdOptions)}
+                      onHold={onHold}
                       onWaitlist={() => setWaitlistedFacilityId(facility.id)}
                     />
                   ) : (
@@ -198,7 +190,7 @@ export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }:
                     isDisabled={
                       selectedUnits.length !== criteria.requestedQuantity || Boolean(heldBooking)
                     }
-                    onPress={() => onHold(selectedUnits, holdOptions)}
+                    onPress={() => onHold(selectedUnits)}
                   >
                     <Button.Label>Giữ {criteria.requestedQuantity} kho đã chọn</Button.Label>
                   </Button>
@@ -216,7 +208,6 @@ export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }:
         provinceOptions={provinceOptions}
         resultCount={visibleUnitCount}
         sheetRef={filtersSheetRef}
-        startDateLabel={startDateLabel}
         wardOptions={wardOptions}
         onChange={setCriteria}
       />

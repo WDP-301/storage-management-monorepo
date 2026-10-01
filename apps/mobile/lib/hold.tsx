@@ -1,11 +1,17 @@
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { HeldBooking, UnitOffer } from '../src/types/customer';
+import { DEFAULT_DURATION_MONTHS, todayIso } from './rental-schedule';
 
 const HOLD_DURATION_MS = 15 * 60 * 1000;
 
-/** Booking terms chosen on the browse screen; the API has no date-range availability yet. */
-export type HoldOptions = {
+/**
+ * When the rental starts and how long it runs. Seeded with defaults when the units are held, then
+ * settled on the schedule screen — holding must stay a single tap, because the units are contested
+ * and the hold only lasts 15 minutes.
+ */
+export type RentalSchedule = {
+  /** ISO day string; see `rental-schedule.ts`. */
   startDate: string;
   durationMonths: number;
 };
@@ -13,7 +19,8 @@ export type HoldOptions = {
 type HoldContextValue = {
   heldBooking: HeldBooking | null;
   remaining: string;
-  holdUnits: (units: UnitOffer[], options: HoldOptions) => void;
+  holdUnits: (units: UnitOffer[]) => void;
+  setSchedule: (schedule: RentalSchedule) => void;
   clearHold: () => void;
 };
 
@@ -38,16 +45,20 @@ export function HoldProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(timer);
   }, [heldBooking]);
 
-  const holdUnits = useCallback((units: UnitOffer[], options: HoldOptions) => {
+  const holdUnits = useCallback((units: UnitOffer[]) => {
     const createdAt = Date.now();
     setNow(createdAt);
     setHeldBooking({
       id: `BK-${String(createdAt).slice(-6)}`,
       units,
-      startDate: options.startDate,
-      durationMonths: options.durationMonths,
+      startDate: todayIso(),
+      durationMonths: DEFAULT_DURATION_MONTHS,
       holdExpiresAt: createdAt + HOLD_DURATION_MS,
     });
+  }, []);
+
+  const setSchedule = useCallback((schedule: RentalSchedule) => {
+    setHeldBooking((current) => (current ? { ...current, ...schedule } : current));
   }, []);
 
   const remaining = useMemo(
@@ -56,8 +67,8 @@ export function HoldProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<HoldContextValue>(
-    () => ({ heldBooking, remaining, holdUnits, clearHold }),
-    [clearHold, heldBooking, holdUnits, remaining],
+    () => ({ heldBooking, remaining, holdUnits, setSchedule, clearHold }),
+    [clearHold, heldBooking, holdUnits, remaining, setSchedule],
   );
 
   return <HoldContext.Provider value={value}>{children}</HoldContext.Provider>;

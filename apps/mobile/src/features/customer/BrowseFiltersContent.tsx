@@ -1,6 +1,6 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import type { AreaPresetKey, BrowseCriteria } from '../../types/customer';
-import { AREA_PRESETS, DURATION_PRESETS, PRICE_PRESETS } from './browse-filters';
+import { AREA_PRESETS, PRICE_PRESETS } from './browse-filters';
 import { ChipButton, FilterRow, isNarrowingChipVisible, withCount } from './FilterChips';
 import type { LocationOption } from './location-options';
 
@@ -15,7 +15,6 @@ type Props = {
   areaCounts: ReadonlyMap<AreaPresetKey, number>;
   /** Units each budget bucket would yield, with the other filters applied. */
   priceCounts: ReadonlyMap<number | null, number>;
-  startDateLabel: string;
 };
 
 /**
@@ -32,7 +31,6 @@ export function BrowseFiltersContent({
   wardOptions,
   areaCounts,
   priceCounts,
-  startDateLabel,
 }: Props) {
   const update = (patch: Partial<BrowseCriteria>) => onChange({ ...criteria, ...patch });
 
@@ -134,33 +132,6 @@ export function BrowseFiltersContent({
           ))}
         </FilterRow>
       ) : null}
-
-      <View className="h-px bg-separator" />
-
-      {/* Kept visually apart from the filters above: these size up the booking and never narrow
-          the list, because the API has no availability-over-time query. */}
-      <View>
-        <Text className="text-sm font-bold text-foreground">Điều khoản thuê</Text>
-        <Text className="mt-1 text-xs leading-5 text-muted">
-          Không ảnh hưởng tới danh sách kho, chỉ dùng để tính tiền.
-        </Text>
-      </View>
-
-      <View className="flex-row items-center justify-between gap-3">
-        <Text className="text-xs font-medium text-muted">Ngày bắt đầu thuê</Text>
-        <Text className="text-sm font-semibold text-foreground">{startDateLabel}</Text>
-      </View>
-
-      <FilterRow label="Thời hạn thuê">
-        {DURATION_PRESETS.map((months) => (
-          <ChipButton
-            key={months}
-            isSelected={criteria.durationMonths === months}
-            label={`${months} tháng`}
-            onPress={() => update({ durationMonths: months })}
-          />
-        ))}
-      </FilterRow>
     </View>
   );
 }

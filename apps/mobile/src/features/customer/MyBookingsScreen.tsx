@@ -1,6 +1,7 @@
 import { Button, Card, Chip } from 'heroui-native';
 import { ScrollView, Text, View } from 'react-native';
-import { formatMoney } from '../../../lib/format-vi';
+import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
+import { rentalEndIso } from '../../../lib/rental-schedule';
 import type { HeldBooking, UnitOffer } from '../../types/customer';
 import { sumUnitPrices } from './unit-offer-utils';
 
@@ -9,6 +10,7 @@ type Props = {
   remaining: string;
   contentBottomPadding: number;
   onBrowse: () => void;
+  onSchedule: () => void;
 };
 
 export function MyBookingsScreen({
@@ -16,6 +18,7 @@ export function MyBookingsScreen({
   remaining,
   contentBottomPadding,
   onBrowse,
+  onSchedule,
 }: Props) {
   return (
     <ScrollView
@@ -32,7 +35,7 @@ export function MyBookingsScreen({
       <View className="gap-4 px-4">
         <Text className="text-sm font-bold text-foreground">Đang giữ</Text>
         {heldBooking ? (
-          <HeldBookingCard booking={heldBooking} remaining={remaining} />
+          <HeldBookingCard booking={heldBooking} remaining={remaining} onSchedule={onSchedule} />
         ) : (
           <View className="items-center rounded-2xl border border-dashed border-border px-5 py-10">
             <View className="size-12 items-center justify-center rounded-2xl bg-surface-secondary">
@@ -73,7 +76,7 @@ export function MyBookingsScreen({
               </View>
               <View>
                 <Text className="text-xs text-muted">Thời hạn</Text>
-                <Text className="mt-1 text-sm font-semibold text-foreground">3 tháng</Text>
+                <Text className="mt-1 text-sm font-semibold text-foreground">6 tháng</Text>
               </View>
             </View>
             <Button variant="secondary" onPress={() => undefined}>
@@ -86,10 +89,19 @@ export function MyBookingsScreen({
   );
 }
 
-function HeldBookingCard({ booking, remaining }: { booking: HeldBooking; remaining: string }) {
-  const totalRent = sumUnitPrices(booking.units, 'monthlyPrice');
+function HeldBookingCard({
+  booking,
+  remaining,
+  onSchedule,
+}: {
+  booking: HeldBooking;
+  remaining: string;
+  onSchedule: () => void;
+}) {
+  const monthlyRent = sumUnitPrices(booking.units, 'monthlyPrice');
   const totalDeposit = sumUnitPrices(booking.units, 'deposit');
   const facilityCount = new Set(booking.units.map((unit) => unit.facilityId)).size;
+  const endDate = rentalEndIso(booking.startDate, booking.durationMonths);
 
   return (
     <Card className="border border-accent/30 bg-accent/5">
@@ -125,27 +137,34 @@ function HeldBookingCard({ booking, remaining }: { booking: HeldBooking; remaini
         <View className="flex-row gap-3 rounded-xl bg-surface p-3">
           <View className="flex-1">
             <Text className="text-xs text-muted">Tổng thuê/tháng</Text>
-            <Text className="mt-1 font-bold text-foreground">{formatMoney(totalRent)}</Text>
+            <Text className="mt-1 font-bold text-foreground">{formatMoney(monthlyRent)}</Text>
           </View>
           <View className="flex-1">
-            <Text className="text-xs text-muted">Tổng cọc</Text>
-            <Text className="mt-1 font-bold text-foreground">{formatMoney(totalDeposit)}</Text>
+            <Text className="text-xs text-muted">Tiền thuê {booking.durationMonths} tháng</Text>
+            <Text className="mt-1 font-bold text-foreground">
+              {formatMoney(monthlyRent * booking.durationMonths)}
+            </Text>
           </View>
         </View>
 
         <View className="flex-row justify-between gap-3">
           <View>
             <Text className="text-xs text-muted">Ngày nhận</Text>
-            <Text className="mt-1 text-sm font-semibold text-foreground">{booking.startDate}</Text>
+            <Text className="mt-1 text-sm font-semibold text-foreground">
+              {formatIsoDate(booking.startDate)}
+            </Text>
           </View>
           <View>
-            <Text className="text-xs text-muted">Thời hạn</Text>
+            <Text className="text-xs text-muted">Thuê đến</Text>
             <Text className="mt-1 text-sm font-semibold text-foreground">
-              {booking.durationMonths} tháng
+              {formatIsoDate(endDate)}
             </Text>
           </View>
         </View>
 
+        <Button variant="secondary" onPress={onSchedule}>
+          <Button.Label>Đặt lịch thuê</Button.Label>
+        </Button>
         <Button onPress={() => undefined}>
           <Button.Label>Thanh toán cọc · {formatMoney(totalDeposit)}</Button.Label>
         </Button>

@@ -15,11 +15,12 @@ export const formatNumber = (value: number) =>
   new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(value);
 
 /**
- * Day-first date, e.g. `28/09/2026`. Built by hand rather than via `Intl.DateTimeFormat`, whose
- * availability varies across Hermes builds — the output is fixed-format anyway.
+ * Day-first date from the ISO day strings the rental schedule stores: `2026-09-28` → `28/09/2026`.
+ *
+ * A plain string rearrangement rather than `Intl.DateTimeFormat`, whose availability varies across
+ * Hermes builds — the output is fixed-format anyway.
  */
-export const formatDate = (value: Date) => {
-  const day = String(value.getDate()).padStart(2, '0');
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  return `${day}/${month}/${value.getFullYear()}`;
+export const formatIsoDate = (iso: string) => {
+  const [year, month, day] = iso.split('-');
+  return `${day}/${month}/${year}`;
 };

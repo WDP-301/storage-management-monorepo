@@ -88,6 +88,7 @@ export class ServiceTicketsService {
   /**
    * Lists only the tickets the authenticated user is allowed to see, enforced by an
    * OR-of-scopes WHERE clause (never by post-query filtering):
+   * - ADMIN → all tickets
    * - CUSTOMER → tickets they created
    * - FACILITY_MANAGER → tickets of facilities they manage
    * - FACILITY_STAFF → tickets assigned directly to them
@@ -98,6 +99,7 @@ export class ServiceTicketsService {
 
     const branches: string[] = [];
     const params: Record<string, unknown> = {};
+    const isAdmin = actor.roles.includes(UserRole.ADMIN);
 
     if (actor.roles.includes(UserRole.FACILITY_MANAGER)) {
       const managedFacilityIds = await this.loadManagedFacilityIds(actor.id);
@@ -115,13 +117,12 @@ export class ServiceTicketsService {
       params.customerId = actor.id;
     }
 
-    if (branches.length === 0) {
+    if (!isAdmin && branches.length === 0) {
       return { tickets: [], meta: { page, limit, total: 0, totalPages: 0 } };
     }
 
-    const [rows, total] = await this.tickets
+    const builder = this.tickets
       .createQueryBuilder('ticket')
-      .where(`(${branches.join(' OR ')})`, params)
       .leftJoinAndSelect('ticket.type', 'type')
       .leftJoinAndSelect('ticket.facility', 'facility')
       .leftJoinAndSelect('ticket.storageUnit', 'storageUnit')
@@ -130,8 +131,13 @@ export class ServiceTicketsService {
       .orderBy('ticket.createdAt', 'DESC')
       .addOrderBy('ticket.id', 'DESC')
       .skip((page - 1) * limit)
-      .take(limit)
-      .getManyAndCount();
+      .take(limit);
+
+    if (!isAdmin) {
+      builder.where(`(${branches.join(' OR ')})`, params);
+    }
+
+    const [rows, total] = await builder.getManyAndCount();
 
     return {
       tickets: rows.map(toServiceTicketRecord),
@@ -310,8 +316,11 @@ export class ServiceTicketsService {
     return ticket;
   }
 
-  /** Shared visibility rule for single-ticket access (CUSTOMER owner, MANAGER facility, STAFF assignee). */
+  /** Shared visibility rule for single-ticket access (ADMIN any, CUSTOMER owner, MANAGER facility, STAFF assignee). */
   private async assertCanAccess(ticket: ServiceTicket, actor: AuthUser): Promise<void> {
+    if (actor.roles.includes(UserRole.ADMIN)) {
+      return;
+    }
     if (actor.roles.includes(UserRole.CUSTOMER) && ticket.customerId === actor.id) {
       return;
     }

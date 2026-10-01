@@ -9,7 +9,6 @@ import {
   Delete,
   Get,
   Param,
-  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -21,6 +20,7 @@ import { UserRole } from '@storage/types';
 import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { ListTicketsQueryDto } from './dto/list-tickets-query.dto';
+import { TicketIdParamDto } from './dto/ticket-params.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { ServiceTicketsService } from './service-tickets.service';
 import type {
@@ -54,12 +54,12 @@ export class ServiceTicketsController {
   }
 
   @Get()
-  @Roles(UserRole.CUSTOMER, UserRole.FACILITY_MANAGER, UserRole.FACILITY_STAFF)
+  @Roles(UserRole.ADMIN, UserRole.CUSTOMER, UserRole.FACILITY_MANAGER, UserRole.FACILITY_STAFF)
   @ApiOperation({
     summary: 'List tickets visible to the authenticated user',
     description:
-      'CUSTOMER sees their own tickets; FACILITY_MANAGER sees tickets of their facilities; ' +
-      'FACILITY_STAFF sees only tickets assigned to them.',
+      'ADMIN sees all tickets; CUSTOMER sees their own tickets; FACILITY_MANAGER sees tickets of ' +
+      'their facilities; FACILITY_STAFF sees only tickets assigned to them.',
   })
   @ApiResponse({ status: 200, description: 'Paginated list of tickets' })
   list(
@@ -70,15 +70,15 @@ export class ServiceTicketsController {
   }
 
   @Get(':id')
-  @Roles(UserRole.CUSTOMER, UserRole.FACILITY_MANAGER, UserRole.FACILITY_STAFF)
+  @Roles(UserRole.ADMIN, UserRole.CUSTOMER, UserRole.FACILITY_MANAGER, UserRole.FACILITY_STAFF)
   @ApiOperation({ summary: 'Get a single ticket the authenticated user can access' })
   @ApiResponse({ status: 200, description: 'The ticket' })
   @ApiResponse({ status: 404, description: 'Ticket not found', type: ApiErrorResponseDto })
   getOne(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param() params: TicketIdParamDto,
     @CurrentUser() user: AuthUser,
   ): Promise<ServiceTicketResponse> {
-    return this.serviceTickets.getOne(id, user);
+    return this.serviceTickets.getOne(params.id, user);
   }
 
   @Patch(':id/assign')
@@ -88,11 +88,11 @@ export class ServiceTicketsController {
   @ApiResponse({ status: 400, description: 'Validation failed', type: ApiErrorResponseDto })
   @ApiResponse({ status: 404, description: 'Ticket not found', type: ApiErrorResponseDto })
   assign(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param() params: TicketIdParamDto,
     @Body() dto: AssignTicketDto,
     @CurrentUser() user: AuthUser,
   ): Promise<ServiceTicketResponse> {
-    return this.serviceTickets.assign(id, dto, user);
+    return this.serviceTickets.assign(params.id, dto, user);
   }
 
   @Patch(':id')
@@ -103,11 +103,11 @@ export class ServiceTicketsController {
   @ApiResponse({ status: 200, description: 'The updated ticket' })
   @ApiResponse({ status: 404, description: 'Ticket not found', type: ApiErrorResponseDto })
   update(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param() params: TicketIdParamDto,
     @Body() dto: UpdateTicketDto,
     @CurrentUser() user: AuthUser,
   ): Promise<ServiceTicketResponse> {
-    return this.serviceTickets.update(id, dto, user);
+    return this.serviceTickets.update(params.id, dto, user);
   }
 
   @Delete(':id')
@@ -116,9 +116,9 @@ export class ServiceTicketsController {
   @ApiResponse({ status: 200, description: 'Ticket deleted' })
   @ApiResponse({ status: 404, description: 'Ticket not found', type: ApiErrorResponseDto })
   remove(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param() params: TicketIdParamDto,
     @CurrentUser() user: AuthUser,
   ): Promise<ServiceTicketDeleteResponse> {
-    return this.serviceTickets.remove(id, user);
+    return this.serviceTickets.remove(params.id, user);
   }
 }

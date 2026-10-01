@@ -35,9 +35,10 @@ export class CreateTicketDto {
   @MaxLength(200)
   subject: string;
 
-  @ApiProperty({ example: 'The lock of my storage unit is not working.' })
+  @ApiProperty({ maxLength: 5000, example: 'The lock of my storage unit is not working.' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(5000)
   description: string;
 
   @ApiPropertyOptional({ type: [Object], default: [], description: 'Attached file references' })

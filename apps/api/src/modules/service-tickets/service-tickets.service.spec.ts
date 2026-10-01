@@ -325,6 +325,17 @@ describe('ServiceTicketsService', () => {
       expect(result.tickets).toEqual([]);
       expect(result.meta).toEqual({ page: 1, limit: 20, total: 0, totalPages: 0 });
     });
+
+    it('lets an admin list every ticket without scope filtering', async () => {
+      const builder = buildQueryBuilder([buildTicket()], 1);
+      tickets.createQueryBuilder.mockReturnValue(builder);
+
+      const result = await service.list({}, buildActor({ roles: [UserRole.ADMIN] }));
+
+      expect(builder.where).not.toHaveBeenCalled();
+      expect(roleAssignments.find).not.toHaveBeenCalled();
+      expect(result.meta).toEqual({ page: 1, limit: 20, total: 1, totalPages: 1 });
+    });
   });
 
   describe('getOne', () => {
@@ -402,6 +413,17 @@ describe('ServiceTicketsService', () => {
       );
 
       expect(result.ticket.facility_id).toBe('facility-1');
+    });
+
+    it('lets an admin view any ticket', async () => {
+      tickets.findOne.mockResolvedValue(
+        buildTicket({ customerId: 'customer-2', assignedTo: 'staff-2' }),
+      );
+
+      const result = await service.getOne('ticket-1', buildActor({ roles: [UserRole.ADMIN] }));
+
+      expect(result.ticket.id).toBe('ticket-1');
+      expect(roleAssignments.find).not.toHaveBeenCalled();
     });
   });
 

@@ -1,5 +1,5 @@
 import { Button, Card } from 'heroui-native';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import type { RentalSchedule } from '../../../lib/hold';
@@ -27,7 +27,10 @@ export function ScheduleRentalScreen({ booking, remaining, onConfirm }: Props) {
   const [startDate, setStartDate] = useState(booking.startDate);
   const [durationMonths, setDurationMonths] = useState(booking.durationMonths);
 
-  const dateOptions = useMemo(() => buildDateOptions(), []);
+  // Rebuilt every render rather than memoised: 30 small objects cost nothing, and a frozen list
+  // would still start at yesterday if the screen stayed mounted across midnight — which would
+  // mislabel "Hôm nay" and offer a past date, the very thing starting the strip at today prevents.
+  const dateOptions = buildDateOptions();
   const endDate = rentalEndIso(startDate, durationMonths);
 
   const monthlyRent = sumUnitPrices(booking.units, 'monthlyPrice');

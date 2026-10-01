@@ -10,7 +10,13 @@ export default function ScheduleRoute() {
   if (!heldBooking) return <Redirect href="/(customer)/bookings" />;
 
   return (
+    // Keyed by booking so a new hold mounts a fresh screen. The screen lives in a tab navigator
+    // and keeps its draft state once visited; without this it would carry the previous booking's
+    // unconfirmed date and duration over, and the draft would silently disagree with the booking
+    // card. Today a hold must be released before the next one starts, which already forces a
+    // remount — the key stops that from being the only thing holding the invariant up.
     <ScheduleRentalScreen
+      key={heldBooking.id}
       booking={heldBooking}
       remaining={remaining}
       onConfirm={(schedule) => {

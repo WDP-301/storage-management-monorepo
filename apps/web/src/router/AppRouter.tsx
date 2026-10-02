@@ -21,6 +21,7 @@ import { FacilityStaffDashboard } from '../features/roles/FacilityStaffDashboard
 import { OperationsDashboard } from '../features/roles/OperationsDashboard';
 import { RoleLandingPage } from '../features/roles/RoleLandingPage';
 import { UnassignedRolePage } from '../features/roles/UnassignedRolePage';
+import { SystemSettingsPage } from '../features/settings/SystemSettingsPage';
 import { AppShell } from '../layouts/AppShell';
 import { AuthLayout } from '../layouts/AuthLayout';
 import { RoleRoute } from './RoleRoute';
@@ -96,6 +97,7 @@ export const AppRouter: React.FC = () => {
             <Route
               element={<RoleRoute allowedRoles={[UserRole.ADMIN, UserRole.OPERATIONS_MANAGER]} />}
             >
+              <Route path="/admin/settings" element={<SystemSettingsPage />} />
               <Route path="/operations" element={<OperationsDashboard />} />
             </Route>
 

@@ -1,49 +1,63 @@
 import { Button, Card, Chip } from 'heroui-native';
-import { ScrollView, Text, View } from 'react-native';
-import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
+import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { formatArea, formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import { rentalEndIso } from '../../../lib/rental-schedule';
-import type { HeldBooking, UnitOffer } from '../../types/customer';
-import { sumUnitPrices } from './unit-offer-utils';
+import type { ApiBooking } from '../../types/booking-api';
 
 type Props = {
-  heldBooking: HeldBooking | null;
-  remaining: string;
+  bookings: ApiBooking[];
+  isLoading: boolean;
+  error: string | null;
   contentBottomPadding: number;
   onBrowse: () => void;
-  onSchedule: () => void;
+  onRefresh: () => void;
 };
 
 export function MyBookingsScreen({
-  heldBooking,
-  remaining,
+  bookings,
+  isLoading,
+  error,
   contentBottomPadding,
   onBrowse,
-  onSchedule,
+  onRefresh,
 }: Props) {
+  const active = bookings.filter(isActiveHold);
+  const others = bookings.filter((booking) => !isActiveHold(booking));
+
   return (
     <ScrollView
       contentContainerStyle={{ paddingBottom: contentBottomPadding }}
+      refreshControl={
+        <RefreshControl refreshing={isLoading && bookings.length > 0} onRefresh={onRefresh} />
+      }
       showsVerticalScrollIndicator={false}
     >
       <View className="px-4 pb-4 pt-5">
         <Text className="text-2xl font-bold tracking-tight text-foreground">Booking của tôi</Text>
         <Text className="mt-1 text-sm leading-5 text-muted">
-          Mỗi booking có thể bao gồm nhiều kho và nhiều khoản tiền riêng.
+          Theo dõi các kho đang giữ và những booking đã tạo.
         </Text>
       </View>
 
       <View className="gap-4 px-4">
+        {error ? (
+          <View className="rounded-xl border border-danger/30 bg-danger/5 p-3">
+            <Text className="text-sm text-danger">{error}</Text>
+            <Button className="mt-3" size="sm" variant="secondary" onPress={onRefresh}>
+              <Button.Label>Thử lại</Button.Label>
+            </Button>
+          </View>
+        ) : null}
+        {isLoading && bookings.length === 0 ? <ActivityIndicator /> : null}
+
         <Text className="text-sm font-bold text-foreground">Đang giữ</Text>
-        {heldBooking ? (
-          <HeldBookingCard booking={heldBooking} remaining={remaining} onSchedule={onSchedule} />
-        ) : (
+        {active.length > 0 ? (
+          active.map((booking) => <BookingCard key={booking.id} booking={booking} isHolding />)
+        ) : isLoading && bookings.length === 0 ? null : (
           <View className="items-center rounded-2xl border border-dashed border-border px-5 py-10">
-            <View className="size-12 items-center justify-center rounded-2xl bg-surface-secondary">
-              <Text className="text-xl font-black text-muted">0</Text>
-            </View>
-            <Text className="mt-4 font-semibold text-foreground">Chưa có booking đang giữ</Text>
+            <Text className="font-semibold text-foreground">Chưa có booking đang giữ</Text>
             <Text className="mt-1 text-center text-sm leading-5 text-muted">
-              Chọn một nhóm kho phù hợp và giữ toàn bộ trong 15 phút.
+              Chọn kho và lịch thuê để giữ chỗ trong 15 phút.
             </Text>
             <Button className="mt-5" variant="secondary" onPress={onBrowse}>
               <Button.Label>Tìm kho trống</Button.Label>
@@ -51,145 +65,138 @@ export function MyBookingsScreen({
           </View>
         )}
 
-        <Text className="mt-3 text-sm font-bold text-foreground">Sắp tới</Text>
-        <Card className="border border-border bg-surface">
-          <Card.Body className="gap-4">
-            <View className="flex-row items-start justify-between gap-3">
-              <View className="flex-1">
-                <Text className="font-bold text-foreground">BK-260923-018 · 2 kho</Text>
-                <Text className="mt-1 text-sm text-muted">Thủ Đức 01</Text>
-              </View>
-              <Chip color="success" size="sm" variant="soft">
-                <Chip.Label>Đã xác nhận</Chip.Label>
-              </Chip>
-            </View>
-            <View className="gap-2 rounded-xl bg-surface-secondary p-3">
-              <Text className="text-sm font-semibold text-foreground">A-108 · 3 m²</Text>
-              <Text className="text-sm font-semibold text-foreground">A-109 · 3 m²</Text>
-            </View>
-            <View className="flex-row justify-between gap-3">
-              <View>
-                <Text className="text-xs text-muted">Nhận kho</Text>
-                <Text className="mt-1 text-sm font-semibold text-foreground">
-                  28/09/2026 · 08:30
-                </Text>
-              </View>
-              <View>
-                <Text className="text-xs text-muted">Thời hạn</Text>
-                <Text className="mt-1 text-sm font-semibold text-foreground">6 tháng</Text>
-              </View>
-            </View>
-            <Button variant="secondary" onPress={() => undefined}>
-              <Button.Label>Xem QR nhận kho</Button.Label>
-            </Button>
-          </Card.Body>
-        </Card>
+        <Text className="mt-3 text-sm font-bold text-foreground">Các booking khác</Text>
+        {others.length > 0 ? (
+          others.map((booking) => (
+            <BookingCard key={booking.id} booking={booking} isHolding={false} />
+          ))
+        ) : isLoading && bookings.length === 0 ? null : (
+          <Text className="text-sm text-muted">Chưa có booking nào khác.</Text>
+        )}
       </View>
     </ScrollView>
   );
 }
 
-function HeldBookingCard({
-  booking,
-  remaining,
-  onSchedule,
-}: {
-  booking: HeldBooking;
-  remaining: string;
-  onSchedule: () => void;
-}) {
-  const monthlyRent = sumUnitPrices(booking.units, 'monthlyPrice');
-  const totalDeposit = sumUnitPrices(booking.units, 'deposit');
-  const facilityCount = new Set(booking.units.map((unit) => unit.facilityId)).size;
-  const endDate = rentalEndIso(booking.startDate, booking.durationMonths);
+function BookingCard({ booking, isHolding }: { booking: ApiBooking; isHolding: boolean }) {
+  const first = booking.items[0];
+  const firstDate = first?.requestedStartAt.slice(0, 10);
+  const sameSchedule = booking.items.every(
+    (item) =>
+      item.requestedStartAt.slice(0, 10) === firstDate && item.rentalMonths === first?.rentalMonths,
+  );
+  const status = isHolding ? 'Đang giữ' : statusLabel(booking.status);
 
   return (
-    <Card className="border border-accent/30 bg-accent/5">
+    <Card
+      className={
+        isHolding ? 'border border-accent/30 bg-accent/5' : 'border border-border bg-surface'
+      }
+    >
       <Card.Body className="gap-4">
         <View className="flex-row items-start justify-between gap-3">
           <View className="flex-1">
-            <Text className="text-lg font-bold text-foreground">
-              {booking.id} · {booking.units.length} kho
-            </Text>
-            <Text className="mt-1 text-sm text-muted">
-              {facilityCount === 1 ? booking.units[0]?.facility : `${facilityCount} cơ sở`}
-            </Text>
+            <Text className="text-lg font-bold text-foreground">{booking.bookingNo}</Text>
+            <Text className="mt-1 text-sm text-muted">{booking.items.length} kho</Text>
           </View>
-          <Chip color="accent" size="sm" variant="soft">
-            <Chip.Label>Giữ tạm</Chip.Label>
+          <Chip
+            color={isHolding ? 'accent' : booking.status === 'CONFIRMED' ? 'success' : 'default'}
+            size="sm"
+            variant="soft"
+          >
+            <Chip.Label>{status}</Chip.Label>
           </Chip>
         </View>
 
-        <View className="rounded-xl bg-accent/10 px-3 py-3">
-          <Text className="text-xs text-muted">Thanh toán cọc trước khi hết thời gian</Text>
-          <Text className="mt-1 font-mono text-xl font-bold text-accent">{remaining}</Text>
-          <Text className="mt-1 text-xs leading-5 text-muted">
-            Chỉ xác nhận khi tất cả {booking.units.length} kho còn hợp lệ.
-          </Text>
-        </View>
+        {isHolding && booking.expiresAt ? (
+          <View className="rounded-xl bg-accent/10 px-3 py-3">
+            <Text className="text-xs text-muted">Thời gian giữ còn lại</Text>
+            <Text className="mt-1 font-mono text-xl font-bold text-accent">
+              {formatRemaining(new Date(booking.expiresAt).getTime() - Date.now())}
+            </Text>
+          </View>
+        ) : null}
 
         <View className="gap-2">
-          {booking.units.map((unit) => (
-            <BookingUnitRow key={unit.id} unit={unit} />
+          {booking.items.map((item) => (
+            <View key={item.id} className="rounded-xl border border-border bg-surface p-3">
+              <Text className="font-bold text-foreground">
+                {item.storageUnit?.code ?? item.storageUnitId}
+                {item.storageUnit ? ` · ${formatArea(Number(item.storageUnit.areaM2))}` : ''}
+              </Text>
+              <Text className="mt-1 text-xs text-muted">
+                {formatMoney(Number(item.monthlyPriceSnapshot))}/tháng · Cọc{' '}
+                {formatMoney(Number(item.depositSnapshot))}
+              </Text>
+              {!sameSchedule ? (
+                <Text className="mt-1 text-xs text-muted">
+                  Nhận {formatIsoDate(item.requestedStartAt.slice(0, 10))} · {item.rentalMonths}{' '}
+                  tháng
+                </Text>
+              ) : null}
+            </View>
           ))}
         </View>
 
-        <View className="flex-row gap-3 rounded-xl bg-surface p-3">
-          <View className="flex-1">
-            <Text className="text-xs text-muted">Tổng thuê/tháng</Text>
-            <Text className="mt-1 font-bold text-foreground">{formatMoney(monthlyRent)}</Text>
+        {sameSchedule && firstDate && first ? (
+          <View className="flex-row justify-between gap-3">
+            <View>
+              <Text className="text-xs text-muted">Ngày nhận</Text>
+              <Text className="mt-1 text-sm font-semibold text-foreground">
+                {formatIsoDate(firstDate)}
+              </Text>
+            </View>
+            <View>
+              <Text className="text-xs text-muted">Thuê đến</Text>
+              <Text className="mt-1 text-sm font-semibold text-foreground">
+                {formatIsoDate(rentalEndIso(firstDate, first.rentalMonths))}
+              </Text>
+            </View>
           </View>
-          <View className="flex-1">
-            <Text className="text-xs text-muted">Tiền thuê {booking.durationMonths} tháng</Text>
-            <Text className="mt-1 font-bold text-foreground">
-              {formatMoney(monthlyRent * booking.durationMonths)}
-            </Text>
-          </View>
-        </View>
+        ) : null}
 
+        <View className="flex-row justify-between gap-3 border-t border-border pt-3">
+          <Text className="text-sm text-muted">Tổng tiền thuê</Text>
+          <Text className="text-sm font-bold text-foreground">
+            {formatMoney(Number(booking.subtotal))}
+          </Text>
+        </View>
         <View className="flex-row justify-between gap-3">
-          <View>
-            <Text className="text-xs text-muted">Ngày nhận</Text>
-            <Text className="mt-1 text-sm font-semibold text-foreground">
-              {formatIsoDate(booking.startDate)}
-            </Text>
-          </View>
-          <View>
-            <Text className="text-xs text-muted">Thuê đến</Text>
-            <Text className="mt-1 text-sm font-semibold text-foreground">
-              {formatIsoDate(endDate)}
-            </Text>
-          </View>
+          <Text className="text-sm text-muted">Tiền cọc</Text>
+          <Text className="text-sm font-bold text-foreground">
+            {formatMoney(Number(booking.depositTotal))}
+          </Text>
         </View>
-
-        <Button variant="secondary" onPress={onSchedule}>
-          <Button.Label>Đặt lịch thuê</Button.Label>
-        </Button>
-        <Button onPress={() => undefined}>
-          <Button.Label>Thanh toán cọc · {formatMoney(totalDeposit)}</Button.Label>
-        </Button>
       </Card.Body>
     </Card>
   );
 }
 
-function BookingUnitRow({ unit }: { unit: UnitOffer }) {
+function isActiveHold(booking: ApiBooking) {
   return (
-    <View className="rounded-xl border border-border bg-surface p-3">
-      <View className="flex-row justify-between gap-3">
-        <View className="flex-1">
-          <Text className="font-bold text-foreground">
-            {unit.code} · {unit.size}
-          </Text>
-          <Text className="mt-1 text-xs text-muted">
-            {unit.facility} · {unit.zone}
-          </Text>
-        </View>
-        <Text className="text-sm font-semibold text-foreground">
-          {formatMoney(unit.monthlyPrice)}/tháng
-        </Text>
-      </View>
-      <Text className="mt-2 text-xs text-muted">Cọc: {formatMoney(unit.deposit)}</Text>
-    </View>
+    booking.status === 'HOLDING' &&
+    booking.expiresAt !== null &&
+    new Date(booking.expiresAt).getTime() > Date.now()
   );
+}
+
+function statusLabel(status: ApiBooking['status']) {
+  switch (status) {
+    case 'HOLDING':
+    case 'EXPIRED':
+      return 'Hết hạn giữ';
+    case 'PENDING_DEPOSIT':
+      return 'Chờ thanh toán cọc';
+    case 'CONFIRMED':
+      return 'Đã xác nhận';
+    case 'CANCELLED':
+      return 'Đã hủy';
+    default:
+      return 'Nháp';
+  }
+}
+
+function formatRemaining(milliseconds: number) {
+  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  return `${String(Math.floor(totalSeconds / 60)).padStart(2, '0')}:${String(totalSeconds % 60).padStart(2, '0')}`;
 }

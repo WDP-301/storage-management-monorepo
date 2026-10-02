@@ -36,8 +36,7 @@ export default function CustomerTabsLayout() {
           <RouterTabs.Screen name="browse" options={{ title: 'Browse units' }} />
           <RouterTabs.Screen name="bookings" options={{ title: 'Booking của tôi' }} />
           <RouterTabs.Screen name="settings" options={{ title: 'Cài đặt' }} />
-          {/* Pushed from a booking, not a tab: the custom tab bar renders three fixed buttons,
-              so this route stays out of it on its own. */}
+          {/* Scheduling is reached after selecting units; the custom tab bar has three buttons. */}
           <RouterTabs.Screen name="schedule" options={{ title: 'Đặt lịch thuê' }} />
         </RouterTabs>
       </SafeAreaView>
@@ -52,7 +51,7 @@ function CustomerTabBar({
   activeTab: CustomerTab;
   onSelect: (tab: CustomerTab) => void;
 }) {
-  const { heldBooking, remaining, clearHold } = useHold();
+  const { heldBooking, remaining } = useHold();
   const [accentColor, mutedColor] = useThemeColor(['accent', 'muted']);
   const iconColor = (tab: CustomerTab) => (activeTab === tab ? accentColor : mutedColor);
 
@@ -63,13 +62,10 @@ function CustomerTabBar({
           <View className="flex-row items-center justify-between gap-3">
             <View className="flex-1">
               <Text className="text-xs text-muted">
-                Đang giữ {heldBooking.units.length} kho · {heldBooking.id}
+                Đang giữ {heldBooking.items.length} kho · {heldBooking.bookingNo}
               </Text>
               <Text className="mt-1 font-mono text-lg font-bold text-accent">{remaining}</Text>
             </View>
-            <Button size="sm" variant="tertiary" onPress={clearHold}>
-              <Button.Label>Hủy giữ</Button.Label>
-            </Button>
             <Button size="sm" onPress={() => onSelect('bookings')}>
               <Button.Label>Xem booking</Button.Label>
             </Button>
@@ -85,7 +81,7 @@ function CustomerTabBar({
           onPress={() => onSelect('browse')}
         />
         <BottomTabButton
-          badge={heldBooking?.units.length}
+          badge={heldBooking?.items.length}
           icon={<CalendarIcon color={iconColor('bookings')} />}
           isSelected={activeTab === 'bookings'}
           label="Booking của tôi"
@@ -104,7 +100,6 @@ function CustomerTabBar({
 
 function toCustomerTab(routeName: string | undefined): CustomerTab {
   if (routeName === 'bookings' || routeName === 'settings') return routeName;
-  // Scheduling is reached from a booking, so it keeps that tab lit.
-  if (routeName === 'schedule') return 'bookings';
+  if (routeName === 'schedule') return 'browse';
   return 'browse';
 }

@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { ContractUnit } from '@modules/contracts/entities/contract-unit.entity';
+import { Contract } from '@modules/contracts/entities/contract.entity';
 import { AppUser } from '@modules/customer/entities/app-user.entity';
 import { UserRoleAssignment } from '@modules/customer/entities/user-role-assignment.entity';
 import { Facility } from '@modules/facilities/entities/facility.entity';
@@ -9,14 +9,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import {
-  ContractStatus,
-  ContractUnitStatus,
-  TicketPriority,
-  TicketStatus,
-  UserRole,
-  UserStatus,
-} from '@storage/types';
+import { ContractStatus, TicketPriority, TicketStatus, UserRole, UserStatus } from '@storage/types';
 import { IsNull, QueryFailedError, Repository } from 'typeorm';
 import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
@@ -56,8 +49,8 @@ export class ServiceTicketsService {
     private readonly facilities: Repository<Facility>,
     @InjectRepository(StorageUnit)
     private readonly storageUnits: Repository<StorageUnit>,
-    @InjectRepository(ContractUnit)
-    private readonly contractUnits: Repository<ContractUnit>,
+    @InjectRepository(Contract)
+    private readonly contracts: Repository<Contract>,
   ) {}
 
   /**
@@ -271,20 +264,19 @@ export class ServiceTicketsService {
   ): Promise<void> {
     const now = new Date();
 
-    const builder = this.contractUnits
-      .createQueryBuilder('cu')
-      .innerJoin('cu.contract', 'c')
+    const builder = this.contracts
+      .createQueryBuilder('c')
+      .innerJoin('c.bookingItem', 'bi')
       .where('c.customerId = :customerId', { customerId })
       .andWhere('c.status = :contractStatus', { contractStatus: ContractStatus.ACTIVE })
-      .andWhere('cu.status = :unitStatus', { unitStatus: ContractUnitStatus.ACTIVE })
-      .andWhere('cu.startAt <= :now', { now })
-      .andWhere('cu.endAt >= :now', { now });
+      .andWhere('c.effectiveAt <= :now', { now })
+      .andWhere('(c.endedAt IS NULL OR c.endedAt >= :now)', { now });
 
     if (dto.storageUnitId) {
-      builder.andWhere('cu.storageUnitId = :unitId', { unitId: dto.storageUnitId });
+      builder.andWhere('bi.storageUnitId = :unitId', { unitId: dto.storageUnitId });
     } else {
       builder
-        .innerJoin('cu.storageUnit', 'su')
+        .innerJoin('bi.storageUnit', 'su')
         .andWhere('su.facilityId = :facilityId', { facilityId: dto.facilityId });
     }
 

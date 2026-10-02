@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -12,6 +13,7 @@ import { CustomerModule } from './modules/customer/customer.module';
 import { FacilitiesModule } from './modules/facilities/facilities.module';
 import { HealthModule } from './modules/health/health.module';
 import { LocationsModule } from './modules/locations/locations.module';
+import { PaymentsModule } from './modules/payments/payments.module';
 import { PlacesModule } from './modules/places/places.module';
 import { ServiceTicketsModule } from './modules/service-tickets/service-tickets.module';
 import { SettingsModule } from './modules/settings/settings.module';
@@ -26,6 +28,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
       envFilePath: ['.env.local', '.env'],
       validate: validateEnv,
     }),
+    EventEmitterModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
@@ -56,6 +59,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
     UploadModule,
     CustomerModule,
     PlacesModule,
+    PaymentsModule,
     ServiceTicketsModule,
     SettingsModule,
   ],

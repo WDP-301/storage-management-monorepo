@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { Booking } from '@modules/bookings/entities/booking.entity';
 import { StorageUnit } from '@modules/facilities/entities/storage-unit.entity';
+import { PAYMENT_EVENTS, PaymentReceivedEvent } from '@modules/payments/types/payment';
 import { HttpStatus, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
@@ -587,5 +589,45 @@ export class BookingsService implements OnApplicationBootstrap {
       userId,
       status: IdempotencyStatus.PROCESSING,
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Payment listener
+  // ---------------------------------------------------------------------------
+
+  @OnEvent(PAYMENT_EVENTS.RECEIVED, { async: true })
+  async handlePaymentReceived(event: PaymentReceivedEvent): Promise<void> {
+    if (!event.code) {
+      this.logger.log(`Payment sepayId=${event.sepayId} has no code, skipping booking match`);
+      return;
+    }
+
+    const booking = await this.bookingRepo.findOne({
+      where: { bookingNo: event.code },
+    });
+
+    if (!booking) {
+      this.logger.log(`No booking found for code="${event.code}" (sepayId=${event.sepayId})`);
+      return;
+    }
+
+    if (booking.status === BookingStatus.CONFIRMED) {
+      this.logger.log(`Booking ${booking.bookingNo} already confirmed, skipping`);
+      return;
+    }
+
+    const paidAmount = new Decimal(event.amount);
+    const depositRequired = new Decimal(booking.depositTotal);
+
+    if (paidAmount.gte(depositRequired)) {
+      await this.bookingRepo.update(booking.id, { status: BookingStatus.CONFIRMED });
+      this.logger.log(
+        `Booking ${booking.bookingNo} confirmed via payment sepayId=${event.sepayId} amount=${event.amount}`,
+      );
+    } else {
+      this.logger.warn(
+        `Payment sepayId=${event.sepayId} amount=${event.amount} < deposit ${booking.depositTotal} for booking ${booking.bookingNo}`,
+      );
+    }
   }
 }

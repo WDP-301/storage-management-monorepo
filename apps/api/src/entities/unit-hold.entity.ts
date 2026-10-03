@@ -1,4 +1,4 @@
-import { StorageUnit } from '@modules/facilities/entities/storage-unit.entity';
+import { StorageUnit } from '@entities/storage-unit.entity';
 import { HoldStatus } from '@storage/types';
 import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Booking } from './booking.entity';

@@ -1,7 +1,7 @@
-import { AppUser } from '@modules/customer/entities/app-user.entity';
-import { CustomerProfile } from '@modules/customer/entities/customer-profile.entity';
-import { UserRoleAssignment } from '@modules/customer/entities/user-role-assignment.entity';
-import { Document } from '@modules/misc/entities/document.entity';
+import { AppUser } from '@entities/app-user.entity';
+import { CustomerProfile } from '@entities/customer-profile.entity';
+import { Document } from '@entities/document.entity';
+import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { DocumentType, UserRole, UserStatus } from '@storage/types';
 import { AuthService } from './auth.service';
 import { hashPassword, verifyPassword } from './session.util';

@@ -1,3 +1,4 @@
+import { Facility } from '@entities/facility.entity';
 import { UserRole } from '@storage/types';
 import {
   Column,
@@ -7,7 +8,6 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Facility } from '../../facilities/entities/facility.entity';
 import { AppUser } from './app-user.entity';
 
 @Entity('user_role_assignments')

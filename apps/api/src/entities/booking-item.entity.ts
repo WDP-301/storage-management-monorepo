@@ -1,4 +1,4 @@
-import { StorageUnit } from '@modules/facilities/entities/storage-unit.entity';
+import { StorageUnit } from '@entities/storage-unit.entity';
 import {
   Column,
   CreateDateColumn,

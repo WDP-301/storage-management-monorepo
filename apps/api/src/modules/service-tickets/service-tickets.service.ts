@@ -1,10 +1,12 @@
 import { randomBytes } from 'node:crypto';
+import { AppUser } from '@entities/app-user.entity';
+import { Contract } from '@entities/contract.entity';
+import { Facility } from '@entities/facility.entity';
+import { ServiceTicket } from '@entities/service-ticket.entity';
+import { StorageUnit } from '@entities/storage-unit.entity';
+import { TicketType } from '@entities/ticket-type.entity';
+import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { Contract } from '@modules/contracts/entities/contract.entity';
-import { AppUser } from '@modules/customer/entities/app-user.entity';
-import { UserRoleAssignment } from '@modules/customer/entities/user-role-assignment.entity';
-import { Facility } from '@modules/facilities/entities/facility.entity';
-import { StorageUnit } from '@modules/facilities/entities/storage-unit.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
@@ -15,8 +17,6 @@ import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { DEFAULT_PAGE_SIZE, ListTicketsQueryDto } from './dto/list-tickets-query.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
-import { ServiceTicket } from './entities/service-ticket.entity';
-import { TicketType } from './entities/ticket-type.entity';
 import type {
   ServiceTicketDeleteResponse,
   ServiceTicketListResponse,

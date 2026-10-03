@@ -1,5 +1,5 @@
-import { Contract } from '@modules/contracts/entities/contract.entity';
-import { AppUser } from '@modules/customer/entities/app-user.entity';
+import { AppUser } from '@entities/app-user.entity';
+import { Contract } from '@entities/contract.entity';
 import { AssetType, HandoverDirection } from '@storage/types';
 import {
   Column,

@@ -1,3 +1,4 @@
+import { StorageUnit } from '@entities/storage-unit.entity';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { PaginationMetaDto } from '@shared/models/api-response';
 import { StorageUnitStatus } from '@storage/types';
@@ -16,7 +17,6 @@ import {
   Min,
   ValidateIf,
 } from 'class-validator';
-import { StorageUnit } from '../entities/storage-unit.entity';
 
 export class CreateStorageUnitDto {
   @ApiProperty({ example: 'uuid-of-facility' })

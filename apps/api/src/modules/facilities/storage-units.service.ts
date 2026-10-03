@@ -1,3 +1,4 @@
+import { StorageUnit } from '@entities/storage-unit.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
@@ -9,7 +10,6 @@ import {
   QueryStorageUnitsDto,
   UpdateStorageUnitDto,
 } from './dto/storage-unit.dto';
-import { StorageUnit } from './entities/storage-unit.entity';
 
 /** Postgres error codes */
 const PG_UNIQUE_VIOLATION = '23505';

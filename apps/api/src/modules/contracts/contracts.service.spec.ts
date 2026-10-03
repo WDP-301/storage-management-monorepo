@@ -1,10 +1,10 @@
-import { Booking } from '@modules/bookings/entities/booking.entity';
-import { BookingItem } from '@modules/bookings/entities/booking-item.entity';
-import { AppUser } from '@modules/customer/entities/app-user.entity';
+import { AppUser } from '@entities/app-user.entity';
+import { Booking } from '@entities/booking.entity';
+import { BookingItem } from '@entities/booking-item.entity';
+import { Contract } from '@entities/contract.entity';
 import { BookingStatus, ContractKind, ContractStatus } from '@storage/types';
 import { DataSource, IsNull, Repository } from 'typeorm';
 import { ContractsService } from './contracts.service';
-import { Contract } from './entities/contract.entity';
 
 describe('ContractsService', () => {
   const item = {

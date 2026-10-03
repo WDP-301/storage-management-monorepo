@@ -1,6 +1,6 @@
-import { AppUser } from '@modules/customer/entities/app-user.entity';
-import { Facility } from '@modules/facilities/entities/facility.entity';
-import { UnitType } from '@modules/facilities/entities/unit-type.entity';
+import { AppUser } from '@entities/app-user.entity';
+import { Facility } from '@entities/facility.entity';
+import { UnitType } from '@entities/unit-type.entity';
 import { WaitlistStatus } from '@storage/types';
 import {
   Column,

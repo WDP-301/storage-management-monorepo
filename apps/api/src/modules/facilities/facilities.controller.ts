@@ -1,3 +1,4 @@
+import { Facility } from '@entities/facility.entity';
 import { Roles } from '@modules/auth/decorators/roles.decorator';
 import { RolesGuard } from '@modules/auth/guards/roles.guard';
 import { SessionGuard } from '@modules/auth/guards/session.guard';
@@ -17,7 +18,6 @@ import {
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@storage/types';
 import { CreateFacilityDto, UpdateFacilityDto } from './dto/facility.dto';
-import { Facility } from './entities/facility.entity';
 import { FacilitiesService } from './facilities.service';
 
 @ApiTags('Facilities')

@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto';
+import { Booking } from '@entities/booking.entity';
+import { BookingItem } from '@entities/booking-item.entity';
+import { IdempotencyKey } from '@entities/idempotency-key.entity';
+import { StorageUnit } from '@entities/storage-unit.entity';
+import { UnitHold } from '@entities/unit-hold.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { Booking } from '@modules/bookings/entities/booking.entity';
-import { StorageUnit } from '@modules/facilities/entities/storage-unit.entity';
 import { PAYMENT_EVENTS, PaymentReceivedEvent } from '@modules/payments/types/payment';
 import { HttpStatus, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
@@ -14,9 +17,6 @@ import Decimal from 'decimal.js';
 import { DataSource, DeepPartial, In, LessThan, Not, QueryFailedError, Repository } from 'typeorm';
 import { extractBookingNos, generateBookingNo } from './booking-no.util';
 import { BookingResponseDto, CreateBookingDto } from './dto/booking.dto';
-import { BookingItem } from './entities/booking-item.entity';
-import { IdempotencyKey } from './entities/idempotency-key.entity';
-import { UnitHold } from './entities/unit-hold.entity';
 
 const HOLD_MINUTES = 15;
 const IDEMPOTENCY_TTL_HOURS = 24;

@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import type { PaginationMeta } from '@storage/types';
 
 export enum ErrorCode {
   VALIDATION_FAILED = 'VALIDATION_FAILED',
@@ -86,4 +87,18 @@ export class ApiErrorResponseDto implements ApiErrorResponse {
 
   @ApiProperty({ example: '/api/v1/auth/login' })
   path: string;
+}
+
+export class PaginationMetaDto implements PaginationMeta {
+  @ApiProperty({ example: 1 })
+  page: number;
+
+  @ApiProperty({ example: 20 })
+  limit: number;
+
+  @ApiProperty({ example: 42 })
+  total: number;
+
+  @ApiProperty({ example: 3 })
+  totalPages: number;
 }

@@ -20,6 +20,7 @@ import { UserRole } from '@storage/types';
 import {
   CreateStorageUnitDto,
   QueryStorageUnitsDto,
+  StorageUnitListResponseDto,
   UpdateStorageUnitDto,
 } from './dto/storage-unit.dto';
 import { StorageUnitsService } from './storage-units.service';
@@ -31,6 +32,7 @@ export class StorageUnitsController {
 
   @Get()
   @ApiOperation({ summary: 'Public: browse available storage units' })
+  @ApiResponse({ status: 200, type: StorageUnitListResponseDto })
   findAll(@Query() query: QueryStorageUnitsDto) {
     return this.storageUnitsService.findAll(query);
   }

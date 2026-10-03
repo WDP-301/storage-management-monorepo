@@ -7,6 +7,7 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ApiErrorResponseDto } from '@shared/models/api-response';
 import { CustomerService } from './customer.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ChangePasswordResponseDto, CustomerProfileResponseDto } from './dto/customer-response.dto';
 import { UpdateCustomerProfileDto } from './dto/update-customer-profile.dto';
 import type { ChangePasswordResponse, CustomerProfileResponse } from './types/customer-profile';
 
@@ -18,7 +19,11 @@ export class CustomerController {
 
   @Patch(':id/profile')
   @ApiOperation({ summary: 'Update a customer profile (self or admin)' })
-  @ApiResponse({ status: 200, description: 'The updated profile' })
+  @ApiResponse({
+    status: 200,
+    description: 'The updated profile',
+    type: CustomerProfileResponseDto,
+  })
   @ApiResponse({ status: 401, description: 'Not authenticated', type: ApiErrorResponseDto })
   @ApiResponse({
     status: 403,
@@ -41,7 +46,7 @@ export class CustomerController {
       'Changes the password of the currently authenticated customer (identity from session). ' +
       'All other active sessions of the user are revoked; the current session stays valid.',
   })
-  @ApiResponse({ status: 200, description: 'Password changed' })
+  @ApiResponse({ status: 200, description: 'Password changed', type: ChangePasswordResponseDto })
   @ApiResponse({ status: 400, description: 'Validation failed', type: ApiErrorResponseDto })
   @ApiResponse({ status: 401, description: 'Not authenticated', type: ApiErrorResponseDto })
   @ApiResponse({ status: 404, description: 'User not found', type: ApiErrorResponseDto })

@@ -4,6 +4,7 @@ import { ContractKind, ContractStatus } from '@storage/types';
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   JoinColumn,
   ManyToOne,
@@ -46,9 +47,6 @@ export class Contract {
   @Column({ type: 'decimal', precision: 14, scale: 2, default: 0, name: 'monthly_price_snapshot' })
   monthlyPriceSnapshot: number;
 
-  @Column({ type: 'decimal', precision: 14, scale: 2, default: 0, name: 'rent_total' })
-  rentTotal: number;
-
   @Column({ type: 'jsonb', default: () => "'{}'", name: 'terms_snapshot' })
   termsSnapshot: Record<string, any>;
 
@@ -60,6 +58,9 @@ export class Contract {
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
+
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true, select: false })
+  deletedAt?: Date;
 
   @ManyToOne(() => BookingItem, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'booking_item_id' })

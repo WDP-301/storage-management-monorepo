@@ -1,9 +1,16 @@
 import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiErrorResponseDto } from '@shared/models/api-response';
 import type { Request, Response } from 'express';
 import { AuthCookieService } from './auth.cookie';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
+import {
+  AuthMeResponseDto,
+  AuthUserResponseDto,
+  LoginResponseDto,
+  LogoutResponseDto,
+} from './dto/auth-response.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { SessionGuard } from './guards/session.guard';
@@ -26,7 +33,7 @@ export class AuthController {
 
   @Post('register')
   @ApiOperation({ summary: 'Register a customer account' })
-  @ApiResponse({ status: 201, description: 'Account created' })
+  @ApiResponse({ status: 201, description: 'Account created', type: AuthUserResponseDto })
   async register(@Body() dto: RegisterDto): Promise<AuthUserResponse> {
     const user = await this.authService.register(dto);
     return { user };
@@ -35,7 +42,12 @@ export class AuthController {
   @Post('login')
   @HttpCode(200)
   @ApiOperation({ summary: 'Authenticate with email and password' })
-  @ApiResponse({ status: 200, description: 'Authenticated and session cookie set' })
+  @ApiResponse({
+    status: 200,
+    description: 'Authenticated and session cookie set',
+    type: LoginResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Invalid credentials', type: ApiErrorResponseDto })
   async login(
     @Body() dto: LoginDto,
     @Req() request: Request,
@@ -51,7 +63,11 @@ export class AuthController {
   @Post('logout')
   @HttpCode(200)
   @ApiOperation({ summary: 'Revoke the current session and clear the cookie (idempotent)' })
-  @ApiResponse({ status: 200, description: 'Session revoked if present; cookie cleared' })
+  @ApiResponse({
+    status: 200,
+    description: 'Session revoked if present; cookie cleared',
+    type: LogoutResponseDto,
+  })
   async logout(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
@@ -68,7 +84,12 @@ export class AuthController {
   @Get('me')
   @UseGuards(SessionGuard)
   @ApiOperation({ summary: 'Get the currently authenticated user with their customer profile' })
-  @ApiResponse({ status: 200, description: 'Current user with roles and customer profile' })
+  @ApiResponse({
+    status: 200,
+    description: 'Current user with roles and customer profile',
+    type: AuthMeResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Not authenticated', type: ApiErrorResponseDto })
   async me(@CurrentUser() user: AuthUser): Promise<AuthMeResponse> {
     const { profile, identityDocument } = await this.authService.loadCustomerProfile(user.id);
     return { user, profile, identityDocument };

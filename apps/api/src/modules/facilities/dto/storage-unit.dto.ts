@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import { PaginationMetaDto } from '@shared/models/api-response';
 import { StorageUnitStatus } from '@storage/types';
 import { Type } from 'class-transformer';
 import {
@@ -15,6 +16,7 @@ import {
   Min,
   ValidateIf,
 } from 'class-validator';
+import { StorageUnit } from '../entities/storage-unit.entity';
 
 export class CreateStorageUnitDto {
   @ApiProperty({ example: 'uuid-of-facility' })
@@ -101,4 +103,12 @@ export class QueryStorageUnitsDto {
   @Min(1)
   @Max(100) // #4: prevent DoS via huge limit
   limit?: number = 20;
+}
+
+export class StorageUnitListResponseDto {
+  @ApiProperty({ type: [StorageUnit] })
+  units: StorageUnit[];
+
+  @ApiProperty({ type: PaginationMetaDto })
+  meta: PaginationMetaDto;
 }

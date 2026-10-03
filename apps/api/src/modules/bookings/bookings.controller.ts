@@ -16,9 +16,14 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiErrorResponseDto } from '@shared/models/api-response';
 import type { Response } from 'express';
 import { BookingsService } from './bookings.service';
-import { CreateBookingDto } from './dto/booking.dto';
+import {
+  BookingActionResponseDto,
+  CreateBookingDto,
+  CreateBookingResponseDto,
+} from './dto/booking.dto';
 
 @ApiTags('Bookings')
 @Controller('bookings')
@@ -34,10 +39,31 @@ export class BookingsController {
     required: true,
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
-  @ApiResponse({ status: 201, description: 'Booking created — units held for 15 min' })
-  @ApiResponse({ status: 200, description: 'Idempotent response — booking already created' })
-  @ApiResponse({ status: 409, description: 'Unit not available or key in PROCESSING state' })
-  @ApiResponse({ status: 422, description: 'Same idempotency key reused with different payload' })
+  @ApiResponse({
+    status: 201,
+    description: 'Booking created — units held for 15 min',
+    type: CreateBookingResponseDto,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Idempotent response — booking already created',
+    type: CreateBookingResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Missing or malformed Idempotency-Key header / validation failed',
+    type: ApiErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Unit not available or key in PROCESSING state',
+    type: ApiErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 422,
+    description: 'Same idempotency key reused with different payload',
+    type: ApiErrorResponseDto,
+  })
   async create(
     @Body() dto: CreateBookingDto,
     @CurrentUser() user: AuthUser,
@@ -67,6 +93,7 @@ export class BookingsController {
   @Post(':id/confirm')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Confirm booking after deposit payment' })
+  @ApiResponse({ status: 200, type: BookingActionResponseDto })
   confirm(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.bookingsService.confirm(id, user);
   }
@@ -74,6 +101,7 @@ export class BookingsController {
   @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancel booking and release held units' })
+  @ApiResponse({ status: 200, type: BookingActionResponseDto })
   cancel(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.bookingsService.cancel(id, user);
   }

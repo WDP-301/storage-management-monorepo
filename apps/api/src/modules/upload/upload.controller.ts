@@ -25,6 +25,12 @@ import { ErrorCode } from '@shared/models/api-response';
 import { Response } from 'express';
 import { DownloadFileQueryDto, FileKeyParamDto } from './dto/download-file.dto';
 import { GetPresignedUrlDto } from './dto/upload.dto';
+import {
+  DeleteFileResponseDto,
+  DownloadUrlResponseDto,
+  PresignedUploadUrlResponseDto,
+  UploadResultDto,
+} from './dto/upload-response.dto';
 import { UploadService } from './upload.service';
 
 @ApiTags('Uploads (S3)')
@@ -34,7 +40,11 @@ export class UploadController {
 
   @Post('presigned-url')
   @ApiOperation({ summary: 'Generate S3 presigned PUT URL for client-side direct upload' })
-  @ApiResponse({ status: 201, description: 'Presigned upload URL with expiry' })
+  @ApiResponse({
+    status: 201,
+    description: 'Presigned upload URL with expiry',
+    type: PresignedUploadUrlResponseDto,
+  })
   async getPresignedUrl(@Body() dto: GetPresignedUrlDto) {
     return this.uploadService.generatePresignedUploadUrl(dto.fileName, dto.mimeType, dto.folder);
   }
@@ -42,6 +52,7 @@ export class UploadController {
   @Get('download-url')
   @ApiOperation({ summary: 'Generate S3 presigned GET URL for secure download' })
   @ApiQuery({ name: 'fileKey', example: 'uploads/sample.png' })
+  @ApiResponse({ status: 200, type: DownloadUrlResponseDto })
   async getDownloadUrl(@Query() query: DownloadFileQueryDto) {
     const downloadUrl = await this.uploadService.generatePresignedDownloadUrl(query.fileKey);
     return { downloadUrl };
@@ -61,6 +72,7 @@ export class UploadController {
       },
     },
   })
+  @ApiResponse({ status: 201, type: UploadResultDto })
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 15 * 1024 * 1024 } }))
   async uploadDirect(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
@@ -82,6 +94,10 @@ export class UploadController {
   @Get('stream/*')
   @RawResponse()
   @ApiOperation({ summary: 'Stream file directly from S3 storage (binary, not enveloped)' })
+  @ApiResponse({
+    status: 200,
+    content: { 'application/octet-stream': { schema: { type: 'string', format: 'binary' } } },
+  })
   async streamFile(@Param('0') fileKey: string, @Res() res: Response) {
     const { stream, contentType } = await this.uploadService.getFileStream(fileKey);
     res.setHeader('Content-Type', contentType);
@@ -90,6 +106,7 @@ export class UploadController {
 
   @Delete(':key')
   @ApiOperation({ summary: 'Delete file from S3' })
+  @ApiResponse({ status: 200, type: DeleteFileResponseDto })
   async deleteFile(@Param() params: FileKeyParamDto) {
     return this.uploadService.deleteFile(params.key);
   }

@@ -1,4 +1,4 @@
-import { AppUser } from '@modules/customer/entities/app-user.entity';
+import { AppUser } from '@entities/app-user.entity';
 import { BookingStatus } from '@storage/types';
 import {
   Column,

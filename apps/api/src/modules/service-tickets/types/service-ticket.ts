@@ -1,5 +1,5 @@
+import type { ServiceTicket } from '@entities/service-ticket.entity';
 import type { PaginationMeta, TicketPriority, TicketStatus } from '@storage/types';
-import type { ServiceTicket } from '../entities/service-ticket.entity';
 
 export interface TicketTypeInfo {
   id: string;

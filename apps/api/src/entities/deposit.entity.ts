@@ -1,4 +1,4 @@
-import { Contract } from '@modules/contracts/entities/contract.entity';
+import { Contract } from '@entities/contract.entity';
 import { DepositStatus } from '@storage/types';
 import {
   Column,

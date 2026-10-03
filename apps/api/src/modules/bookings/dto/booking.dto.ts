@@ -1,3 +1,4 @@
+import { Booking } from '@entities/booking.entity';
 import { ApiProperty } from '@nestjs/swagger';
 import { BookingStatus } from '@storage/types';
 import { Type } from 'class-transformer';
@@ -14,7 +15,6 @@ import {
   ValidationArguments,
   ValidationOptions,
 } from 'class-validator';
-import { Booking } from '../entities/booking.entity';
 
 /**
  * Validates that requestedStartAt is from today onwards and at most 30 days in advance.

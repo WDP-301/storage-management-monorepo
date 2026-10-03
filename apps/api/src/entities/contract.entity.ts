@@ -1,5 +1,5 @@
-import { BookingItem } from '@modules/bookings/entities/booking-item.entity';
-import { AppUser } from '@modules/customer/entities/app-user.entity';
+import { AppUser } from '@entities/app-user.entity';
+import { BookingItem } from '@entities/booking-item.entity';
 import { ContractKind, ContractStatus } from '@storage/types';
 import {
   Column,

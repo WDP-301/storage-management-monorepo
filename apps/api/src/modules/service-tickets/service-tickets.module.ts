@@ -1,14 +1,14 @@
+import { AppUser } from '@entities/app-user.entity';
+import { BookingItem } from '@entities/booking-item.entity';
+import { Contract } from '@entities/contract.entity';
+import { Facility } from '@entities/facility.entity';
+import { ServiceTicket } from '@entities/service-ticket.entity';
+import { StorageUnit } from '@entities/storage-unit.entity';
+import { TicketType } from '@entities/ticket-type.entity';
+import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { AuthModule } from '@modules/auth/auth.module';
-import { BookingItem } from '@modules/bookings/entities/booking-item.entity';
-import { Contract } from '@modules/contracts/entities/contract.entity';
-import { AppUser } from '@modules/customer/entities/app-user.entity';
-import { UserRoleAssignment } from '@modules/customer/entities/user-role-assignment.entity';
-import { Facility } from '@modules/facilities/entities/facility.entity';
-import { StorageUnit } from '@modules/facilities/entities/storage-unit.entity';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ServiceTicket } from './entities/service-ticket.entity';
-import { TicketType } from './entities/ticket-type.entity';
 import { ServiceTicketsController } from './service-tickets.controller';
 import { ServiceTicketsService } from './service-tickets.service';
 

@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { Booking } from '@modules/bookings/entities/booking.entity';
-import { BookingItem } from '@modules/bookings/entities/booking-item.entity';
-import { AppUser } from '@modules/customer/entities/app-user.entity';
+import { AppUser } from '@entities/app-user.entity';
+import { Booking } from '@entities/booking.entity';
+import { BookingItem } from '@entities/booking-item.entity';
+import { Contract } from '@entities/contract.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
@@ -10,7 +11,6 @@ import { BookingStatus, ContractKind, ContractStatus } from '@storage/types';
 import Decimal from 'decimal.js';
 import { DataSource, IsNull, Repository } from 'typeorm';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
-import { Contract } from './entities/contract.entity';
 
 const CONTRACT_CREATION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 

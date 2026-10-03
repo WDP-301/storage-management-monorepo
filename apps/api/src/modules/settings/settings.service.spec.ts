@@ -1,6 +1,6 @@
+import type { SystemSetting } from '@entities/system-setting.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { UserRole, UserStatus } from '@storage/types';
-import type { SystemSetting } from './entities/system-setting.entity';
 import { SETTINGS_REGISTRY } from './settings.registry';
 import { SettingsService } from './settings.service';
 

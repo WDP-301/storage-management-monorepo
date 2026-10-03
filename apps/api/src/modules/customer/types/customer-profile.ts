@@ -1,5 +1,5 @@
+import type { CustomerProfile as CustomerProfileEntity } from '@entities/customer-profile.entity';
 import type { UserStatus } from '@storage/types';
-import type { CustomerProfile as CustomerProfileEntity } from '../entities/customer-profile.entity';
 
 /** The `customer_profiles` table row, exposed with its raw column names. */
 export interface CustomerProfile {

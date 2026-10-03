@@ -1,4 +1,5 @@
-import { AppUser } from '@modules/customer/entities/app-user.entity';
+import { AppUser } from '@entities/app-user.entity';
+import type { SettingValueType } from '@modules/settings/settings.registry';
 import {
   Column,
   CreateDateColumn,
@@ -8,7 +9,6 @@ import {
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import type { SettingValueType } from '../settings.registry';
 
 @Entity('system_settings')
 export class SystemSetting {

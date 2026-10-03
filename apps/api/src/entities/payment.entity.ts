@@ -1,5 +1,5 @@
-import { Booking } from '@modules/bookings/entities/booking.entity';
-import { AppUser } from '@modules/customer/entities/app-user.entity';
+import { AppUser } from '@entities/app-user.entity';
+import { Booking } from '@entities/booking.entity';
 import { PaymentMethod, PaymentStatus, PaymentType } from '@storage/types';
 import {
   Column,

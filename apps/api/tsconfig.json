@@ -5,7 +5,8 @@
     "outDir": "./dist",
     "paths": {
       "@shared/*": ["src/shared/*"],
-      "@modules/*": ["src/modules/*"]
+      "@modules/*": ["src/modules/*"],
+      "@entities/*": ["src/entities/*"]
     }
   },
   "include": ["src/**/*"]

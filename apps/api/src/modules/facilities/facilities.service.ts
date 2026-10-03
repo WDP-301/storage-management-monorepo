@@ -1,10 +1,10 @@
+import { Facility } from '@entities/facility.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { IsNull, QueryFailedError, Repository } from 'typeorm';
 import { CreateFacilityDto, UpdateFacilityDto } from './dto/facility.dto';
-import { Facility } from './entities/facility.entity';
 
 const PG_UNIQUE_VIOLATION = '23505';
 

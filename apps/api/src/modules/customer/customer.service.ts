@@ -1,6 +1,9 @@
+import { AppUser } from '@entities/app-user.entity';
+import { CustomerProfile as CustomerProfileEntity } from '@entities/customer-profile.entity';
+import { Document } from '@entities/document.entity';
+import { Session } from '@entities/session.entity';
 import { hashPassword, verifyPassword } from '@modules/auth/session.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { Document } from '@modules/misc/entities/document.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
@@ -9,9 +12,6 @@ import { DocumentType, UserRole } from '@storage/types';
 import { DataSource, EntityManager, IsNull, Not, QueryFailedError, Repository } from 'typeorm';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { IdentityDocumentDto, UpdateCustomerProfileDto } from './dto/update-customer-profile.dto';
-import { AppUser } from './entities/app-user.entity';
-import { CustomerProfile as CustomerProfileEntity } from './entities/customer-profile.entity';
-import { Session } from './entities/session.entity';
 import type {
   ChangePasswordResponse,
   CustomerAccount,

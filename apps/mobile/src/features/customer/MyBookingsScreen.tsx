@@ -1,11 +1,20 @@
 import { Button, Card, Chip } from 'heroui-native';
 import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
+import {
+  countHeldUnits,
+  formatRemaining,
+  holdDeadline,
+  isActiveHold,
+  selectActiveHolds,
+} from '../../../lib/booking-hold-state';
 import { formatArea, formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import { rentalEndIso } from '../../../lib/rental-schedule';
 import type { ApiBooking } from '../../types/booking-api';
 
 type Props = {
   bookings: ApiBooking[];
+  /** Shared clock from the hold provider, so this list and the countdown bar never disagree. */
+  now: number;
   isLoading: boolean;
   error: string | null;
   contentBottomPadding: number;
@@ -15,14 +24,15 @@ type Props = {
 
 export function MyBookingsScreen({
   bookings,
+  now,
   isLoading,
   error,
   contentBottomPadding,
   onBrowse,
   onRefresh,
 }: Props) {
-  const active = bookings.filter(isActiveHold);
-  const others = bookings.filter((booking) => !isActiveHold(booking));
+  const active = selectActiveHolds(bookings, now);
+  const others = bookings.filter((booking) => !isActiveHold(booking, now));
 
   return (
     <ScrollView
@@ -50,9 +60,14 @@ export function MyBookingsScreen({
         ) : null}
         {isLoading && bookings.length === 0 ? <ActivityIndicator /> : null}
 
-        <Text className="text-sm font-bold text-foreground">Đang giữ</Text>
+        <Text className="text-sm font-bold text-foreground">
+          Đang giữ
+          {active.length > 0 ? ` · ${countHeldUnits(active)} kho` : ''}
+        </Text>
         {active.length > 0 ? (
-          active.map((booking) => <BookingCard key={booking.id} booking={booking} isHolding />)
+          active.map((booking) => (
+            <BookingCard key={booking.id} booking={booking} now={now} isHolding />
+          ))
         ) : isLoading && bookings.length === 0 ? null : (
           <View className="items-center rounded-2xl border border-dashed border-border px-5 py-10">
             <Text className="font-semibold text-foreground">Chưa có booking đang giữ</Text>
@@ -68,7 +83,7 @@ export function MyBookingsScreen({
         <Text className="mt-3 text-sm font-bold text-foreground">Các booking khác</Text>
         {others.length > 0 ? (
           others.map((booking) => (
-            <BookingCard key={booking.id} booking={booking} isHolding={false} />
+            <BookingCard key={booking.id} booking={booking} now={now} isHolding={false} />
           ))
         ) : isLoading && bookings.length === 0 ? null : (
           <Text className="text-sm text-muted">Chưa có booking nào khác.</Text>
@@ -78,7 +93,15 @@ export function MyBookingsScreen({
   );
 }
 
-function BookingCard({ booking, isHolding }: { booking: ApiBooking; isHolding: boolean }) {
+function BookingCard({
+  booking,
+  now,
+  isHolding,
+}: {
+  booking: ApiBooking;
+  now: number;
+  isHolding: boolean;
+}) {
   const first = booking.items[0];
   const firstDate = first?.requestedStartAt.slice(0, 10);
   const sameSchedule = booking.items.every(
@@ -112,7 +135,7 @@ function BookingCard({ booking, isHolding }: { booking: ApiBooking; isHolding: b
           <View className="rounded-xl bg-accent/10 px-3 py-3">
             <Text className="text-xs text-muted">Thời gian giữ còn lại</Text>
             <Text className="mt-1 font-mono text-xl font-bold text-accent">
-              {formatRemaining(new Date(booking.expiresAt).getTime() - Date.now())}
+              {formatRemaining(holdDeadline(booking) - now)}
             </Text>
           </View>
         ) : null}
@@ -172,14 +195,6 @@ function BookingCard({ booking, isHolding }: { booking: ApiBooking; isHolding: b
   );
 }
 
-function isActiveHold(booking: ApiBooking) {
-  return (
-    booking.status === 'HOLDING' &&
-    booking.expiresAt !== null &&
-    new Date(booking.expiresAt).getTime() > Date.now()
-  );
-}
-
 function statusLabel(status: ApiBooking['status']) {
   switch (status) {
     case 'HOLDING':
@@ -194,9 +209,4 @@ function statusLabel(status: ApiBooking['status']) {
     default:
       return 'Nháp';
   }
-}
-
-function formatRemaining(milliseconds: number) {
-  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
-  return `${String(Math.floor(totalSeconds / 60)).padStart(2, '0')}:${String(totalSeconds % 60).padStart(2, '0')}`;
 }

@@ -5,7 +5,7 @@ import { MyBookingsScreen } from '../../src/features/customer/MyBookingsScreen';
 
 export default function BookingsRoute() {
   const router = useRouter();
-  const { bookings, isLoading, error, refreshBookings } = useHold();
+  const { bookings, now, isLoading, error, refreshBookings } = useHold();
 
   useFocusEffect(
     useCallback(() => {
@@ -17,6 +17,7 @@ export default function BookingsRoute() {
     <MyBookingsScreen
       contentBottomPadding={32}
       bookings={bookings}
+      now={now}
       isLoading={isLoading}
       error={error}
       onBrowse={() => router.navigate('/(customer)/browse')}

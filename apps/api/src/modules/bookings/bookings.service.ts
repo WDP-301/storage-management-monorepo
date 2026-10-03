@@ -397,23 +397,12 @@ export class BookingsService implements OnApplicationBootstrap {
   // Read
   // ---------------------------------------------------------------------------
 
-  async findByCustomer(
-    userId: string,
-  ): Promise<Array<Omit<Booking, 'holds'> & { expiresAt: Date | null }>> {
-    const bookings = await this.bookingRepo.find({
+  async findByCustomer(userId: string): Promise<Booking[]> {
+    return this.bookingRepo.find({
       where: { customerId: userId },
-      relations: ['items', 'items.storageUnit', 'holds'],
+      relations: ['items', 'items.storageUnit'],
       order: { createdAt: 'DESC' },
     });
-    return bookings.map(({ holds, ...booking }) => ({
-      ...booking,
-      expiresAt: holds
-        .filter((hold) => hold.status === HoldStatus.ACTIVE)
-        .reduce<Date | null>(
-          (latest, hold) => (!latest || hold.expiresAt > latest ? hold.expiresAt : latest),
-          null,
-        ),
-    }));
   }
 
   // ---------------------------------------------------------------------------

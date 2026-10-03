@@ -21,6 +21,7 @@ import type { Response } from 'express';
 import { BookingsService } from './bookings.service';
 import {
   BookingActionResponseDto,
+  BookingResponseDto,
   CreateBookingDto,
   CreateBookingResponseDto,
 } from './dto/booking.dto';
@@ -86,6 +87,7 @@ export class BookingsController {
 
   @Get('me')
   @ApiOperation({ summary: 'Get my bookings' })
+  @ApiResponse({ status: 200, type: [BookingResponseDto] })
   getMyBookings(@CurrentUser() user: AuthUser) {
     return this.bookingsService.findByCustomer(user.id);
   }

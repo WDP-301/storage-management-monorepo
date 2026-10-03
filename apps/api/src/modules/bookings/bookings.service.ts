@@ -12,6 +12,7 @@ import { ErrorCode } from '@shared/models/api-response';
 import { BookingStatus, HoldStatus, IdempotencyStatus, StorageUnitStatus } from '@storage/types';
 import Decimal from 'decimal.js';
 import { DataSource, DeepPartial, In, LessThan, Not, QueryFailedError, Repository } from 'typeorm';
+import { extractBookingNos, generateBookingNo } from './booking-no.util';
 import { BookingResponseDto, CreateBookingDto } from './dto/booking.dto';
 import { BookingItem } from './entities/booking-item.entity';
 import { IdempotencyKey } from './entities/idempotency-key.entity';
@@ -19,15 +20,6 @@ import { UnitHold } from './entities/unit-hold.entity';
 
 const HOLD_MINUTES = 15;
 const IDEMPOTENCY_TTL_HOURS = 24;
-
-/** Generate a booking number: BK-<timestamp-ms>-<4 random hex chars> */
-function generateBookingNo(): string {
-  const rand = Math.floor(Math.random() * 0xffff)
-    .toString(16)
-    .toUpperCase()
-    .padStart(4, '0');
-  return `BK-${Date.now()}-${rand}`;
-}
 
 /** Recursively serializes an object with sorted keys (Canonical JSON). */
 function canonicalStringify(val: unknown): string {
@@ -597,22 +589,45 @@ export class BookingsService implements OnApplicationBootstrap {
 
   @OnEvent(PAYMENT_EVENTS.RECEIVED, { async: true })
   async handlePaymentReceived(event: PaymentReceivedEvent): Promise<void> {
-    if (!event.code) {
-      this.logger.log(`Payment sepayId=${event.sepayId} has no code, skipping booking match`);
+    // Customers put their booking number in the transfer content; SePay `code` is not used.
+    const candidates = extractBookingNos(event.content);
+
+    if (candidates.length === 0) {
+      this.logger.log(
+        `Payment sepayId=${event.sepayId} has no booking number in content="${event.content}", skipping`,
+      );
       return;
     }
 
-    const booking = await this.bookingRepo.findOne({
-      where: { bookingNo: event.code },
+    const bookings = await this.bookingRepo.find({
+      where: { bookingNo: In(candidates) },
     });
 
-    if (!booking) {
-      this.logger.log(`No booking found for code="${event.code}" (sepayId=${event.sepayId})`);
+    if (bookings.length === 0) {
+      this.logger.log(
+        `No booking found for candidates=[${candidates.join(', ')}] (sepayId=${event.sepayId})`,
+      );
       return;
     }
 
-    if (booking.status === BookingStatus.CONFIRMED) {
-      this.logger.log(`Booking ${booking.bookingNo} already confirmed, skipping`);
+    // One transfer must map to exactly one booking; otherwise leave it for manual reconciliation.
+    if (bookings.length > 1) {
+      this.logger.warn(
+        `Payment sepayId=${event.sepayId} matches multiple bookings [${bookings.map((b) => b.bookingNo).join(', ')}], skipping`,
+      );
+      return;
+    }
+
+    const booking = bookings[0];
+
+    const awaitingDepositStatuses: BookingStatus[] = [
+      BookingStatus.HOLDING,
+      BookingStatus.PENDING_DEPOSIT,
+    ];
+    if (!awaitingDepositStatuses.includes(booking.status)) {
+      this.logger.warn(
+        `Booking ${booking.bookingNo} status=${booking.status}, not awaiting deposit, skipping`,
+      );
       return;
     }
 

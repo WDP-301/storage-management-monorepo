@@ -38,6 +38,12 @@ export class SepayHmacGuard implements CanActivate {
       throw new UnauthorizedException('Missing timestamp');
     }
 
+    const ts = Number(timestamp);
+    if (!Number.isFinite(ts) || Math.abs(Math.floor(Date.now() / 1000) - ts) > 300) {
+      this.logger.warn('Stale or invalid X-SePay-Timestamp');
+      throw new UnauthorizedException('Request expired');
+    }
+
     const rawBody = request.rawBody;
     if (!rawBody) {
       this.logger.error('rawBody not available — ensure rawBody: true in NestFactory.create()');
@@ -46,8 +52,7 @@ export class SepayHmacGuard implements CanActivate {
 
     // SePay ký: HMAC-SHA256(secret, timestamp + "." + rawBody)
     const signingPayload = `${timestamp}.${rawBody.toString('utf8')}`;
-    const expectedSignature =
-      'sha256=' + createHmac('sha256', secretKey).update(signingPayload).digest('hex');
+    const expectedSignature = `sha256=${createHmac('sha256', secretKey).update(signingPayload).digest('hex')}`;
 
     try {
       const receivedBuf = Buffer.from(signatureHeader, 'utf8');

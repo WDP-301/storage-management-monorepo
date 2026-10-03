@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, HttpStatus, Logger, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RawResponse } from '@shared/decorators/raw-response.decorator';
 import { SepayWebhookDto } from './dto/sepay-webhook.dto';
@@ -8,8 +8,6 @@ import { PaymentsService } from './payments.service';
 @ApiTags('Payments')
 @Controller('payments')
 export class PaymentsController {
-  private readonly logger = new Logger(PaymentsController.name);
-
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @Post('webhook/sepay')
@@ -18,10 +16,7 @@ export class PaymentsController {
   @RawResponse()
   @ApiOperation({ summary: 'SePay webhook receiver (HMAC-SHA256 verified)' })
   async receiveWebhook(@Body() dto: SepayWebhookDto): Promise<{ success: boolean }> {
-    void this.paymentsService.handleSepayWebhook(dto).catch((err) => {
-      this.logger.error(`Error handling sepay webhook id=${dto.id}`, err);
-    });
-
+    await this.paymentsService.handleSepayWebhook(dto);
     return { success: true };
   }
 }

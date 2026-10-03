@@ -10,7 +10,7 @@ import { ErrorCode } from '@shared/models/api-response';
 import { BookingStatus, HoldStatus, IdempotencyStatus, StorageUnitStatus } from '@storage/types';
 import Decimal from 'decimal.js';
 import { DataSource, DeepPartial, In, LessThan, Not, QueryFailedError, Repository } from 'typeorm';
-import { CreateBookingDto } from './dto/booking.dto';
+import { BookingResponseDto, CreateBookingDto } from './dto/booking.dto';
 import { BookingItem } from './entities/booking-item.entity';
 import { IdempotencyKey } from './entities/idempotency-key.entity';
 import { UnitHold } from './entities/unit-hold.entity';
@@ -397,12 +397,33 @@ export class BookingsService implements OnApplicationBootstrap {
   // Read
   // ---------------------------------------------------------------------------
 
-  async findByCustomer(userId: string): Promise<Booking[]> {
-    return this.bookingRepo.find({
+  async findByCustomer(userId: string): Promise<BookingResponseDto[]> {
+    const bookings = await this.bookingRepo.find({
       where: { customerId: userId },
       relations: ['items', 'items.storageUnit'],
       order: { createdAt: 'DESC' },
     });
+    if (bookings.length === 0) return [];
+
+    // Thời điểm hết hạn nằm trên unit_holds — lấy MAX expiresAt của các hold còn ACTIVE
+    const activeHolds = await this.dataSource.getRepository(UnitHold).find({
+      where: {
+        bookingId: In(bookings.map((b) => b.id)),
+        status: HoldStatus.ACTIVE,
+      },
+      select: ['bookingId', 'expiresAt'],
+    });
+    const expiresByBooking = new Map<string, Date>();
+    for (const hold of activeHolds) {
+      const current = expiresByBooking.get(hold.bookingId);
+      if (!current || hold.expiresAt > current) {
+        expiresByBooking.set(hold.bookingId, hold.expiresAt);
+      }
+    }
+
+    return bookings.map(
+      (b) => ({ ...b, holdExpiresAt: expiresByBooking.get(b.id) ?? null }) as BookingResponseDto,
+    );
   }
 
   // ---------------------------------------------------------------------------

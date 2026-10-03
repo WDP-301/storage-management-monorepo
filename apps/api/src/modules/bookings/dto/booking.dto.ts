@@ -14,6 +14,7 @@ import {
   ValidationArguments,
   ValidationOptions,
 } from 'class-validator';
+import { Booking } from '../entities/booking.entity';
 
 /**
  * Validates that requestedStartAt is from today onwards and at most 30 days in advance.
@@ -161,6 +162,18 @@ export class CreateBookingResponseDto {
 
   @ApiProperty({ type: [BookingItemResponseDto] })
   items: BookingItemResponseDto[];
+}
+
+/** Booking kèm thời điểm hết hạn giữ chỗ — dùng cho GET /bookings/me. */
+export class BookingResponseDto extends Booking {
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description:
+      'Thời điểm hold hết hạn (MAX expires_at của active holds) — null nếu không còn hold active',
+  })
+  holdExpiresAt: Date | null;
 }
 
 /** Response của confirm/cancel booking (hiện là stub, trả message). */

@@ -21,6 +21,11 @@ import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { ListTicketsQueryDto } from './dto/list-tickets-query.dto';
 import { TicketIdParamDto } from './dto/ticket-params.dto';
+import {
+  ServiceTicketDeleteResponseDto,
+  ServiceTicketListResponseDto,
+  ServiceTicketResponseDto,
+} from './dto/ticket-response.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { ServiceTicketsService } from './service-tickets.service';
 import type {
@@ -44,7 +49,7 @@ export class ServiceTicketsController {
   @Post()
   @Roles(UserRole.CUSTOMER)
   @ApiOperation({ summary: 'Create a service ticket for a facility' })
-  @ApiResponse({ status: 201, description: 'The created ticket' })
+  @ApiResponse({ status: 201, description: 'The created ticket', type: ServiceTicketResponseDto })
   @ApiResponse({ status: 400, description: 'Validation failed', type: ApiErrorResponseDto })
   create(
     @Body() dto: CreateTicketDto,
@@ -61,7 +66,11 @@ export class ServiceTicketsController {
       'ADMIN sees all tickets; CUSTOMER sees their own tickets; FACILITY_MANAGER sees tickets of ' +
       'their facilities; FACILITY_STAFF sees only tickets assigned to them.',
   })
-  @ApiResponse({ status: 200, description: 'Paginated list of tickets' })
+  @ApiResponse({
+    status: 200,
+    description: 'Paginated list of tickets',
+    type: ServiceTicketListResponseDto,
+  })
   list(
     @Query() query: ListTicketsQueryDto,
     @CurrentUser() user: AuthUser,
@@ -72,7 +81,7 @@ export class ServiceTicketsController {
   @Get(':id')
   @Roles(UserRole.ADMIN, UserRole.CUSTOMER, UserRole.FACILITY_MANAGER, UserRole.FACILITY_STAFF)
   @ApiOperation({ summary: 'Get a single ticket the authenticated user can access' })
-  @ApiResponse({ status: 200, description: 'The ticket' })
+  @ApiResponse({ status: 200, description: 'The ticket', type: ServiceTicketResponseDto })
   @ApiResponse({ status: 404, description: 'Ticket not found', type: ApiErrorResponseDto })
   getOne(
     @Param() params: TicketIdParamDto,
@@ -84,7 +93,11 @@ export class ServiceTicketsController {
   @Patch(':id/assign')
   @Roles(UserRole.FACILITY_MANAGER)
   @ApiOperation({ summary: 'Assign a facility staff member to a ticket' })
-  @ApiResponse({ status: 200, description: 'The ticket with the new assignee' })
+  @ApiResponse({
+    status: 200,
+    description: 'The ticket with the new assignee',
+    type: ServiceTicketResponseDto,
+  })
   @ApiResponse({ status: 400, description: 'Validation failed', type: ApiErrorResponseDto })
   @ApiResponse({ status: 404, description: 'Ticket not found', type: ApiErrorResponseDto })
   assign(
@@ -100,7 +113,7 @@ export class ServiceTicketsController {
   @ApiOperation({
     summary: 'Update processing fields of a ticket assigned to the authenticated staff member',
   })
-  @ApiResponse({ status: 200, description: 'The updated ticket' })
+  @ApiResponse({ status: 200, description: 'The updated ticket', type: ServiceTicketResponseDto })
   @ApiResponse({ status: 404, description: 'Ticket not found', type: ApiErrorResponseDto })
   update(
     @Param() params: TicketIdParamDto,
@@ -113,7 +126,7 @@ export class ServiceTicketsController {
   @Delete(':id')
   @Roles(UserRole.ADMIN, UserRole.FACILITY_MANAGER)
   @ApiOperation({ summary: 'Delete a service ticket (ADMIN, FACILITY_MANAGER)' })
-  @ApiResponse({ status: 200, description: 'Ticket deleted' })
+  @ApiResponse({ status: 200, description: 'Ticket deleted', type: ServiceTicketDeleteResponseDto })
   @ApiResponse({ status: 404, description: 'Ticket not found', type: ApiErrorResponseDto })
   remove(
     @Param() params: TicketIdParamDto,

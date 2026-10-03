@@ -17,6 +17,7 @@ import {
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@storage/types';
 import { CreateFacilityDto, UpdateFacilityDto } from './dto/facility.dto';
+import { Facility } from './entities/facility.entity';
 import { FacilitiesService } from './facilities.service';
 
 @ApiTags('Facilities')
@@ -41,7 +42,7 @@ export class FacilitiesController {
   @UseGuards(SessionGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: '[Admin] Create a new facility' })
-  @ApiResponse({ status: 201, description: 'Facility created' })
+  @ApiResponse({ status: 201, description: 'Facility created', type: Facility })
   create(@Body() dto: CreateFacilityDto) {
     return this.facilitiesService.create(dto);
   }

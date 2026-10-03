@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { BookingStatus } from '@storage/types';
 import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
@@ -121,4 +122,48 @@ export class CreateBookingDto {
   @ValidateNested({ each: true })
   @Type(() => CreateBookingItemDto)
   items: CreateBookingItemDto[];
+}
+
+export class BookingItemResponseDto {
+  @ApiProperty({ example: '018f673a-4001-7000-8000-000000000001' })
+  storageUnitId: string;
+
+  @ApiProperty({ example: '2026-10-01T00:00:00.000Z' })
+  requestedStartAt: string;
+
+  @ApiProperty({ example: 3 })
+  rentalMonths: number;
+}
+
+/** Body nằm trong `data` của success envelope — xem API_CONTRACT.md. */
+export class CreateBookingResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  id: string;
+
+  @ApiProperty({ example: 'BK-1759478400000-A1B2' })
+  bookingNo: string;
+
+  @ApiProperty({ enum: BookingStatus, example: BookingStatus.HOLDING })
+  status: BookingStatus;
+
+  @ApiProperty({ example: 3000000 })
+  subtotal: number;
+
+  @ApiProperty({ example: 1000000 })
+  depositTotal: number;
+
+  @ApiProperty({
+    format: 'date-time',
+    description: 'Thời điểm hết hạn giữ chỗ (15 phút kể từ lúc tạo booking)',
+  })
+  expiresAt: Date;
+
+  @ApiProperty({ type: [BookingItemResponseDto] })
+  items: BookingItemResponseDto[];
+}
+
+/** Response của confirm/cancel booking (hiện là stub, trả message). */
+export class BookingActionResponseDto {
+  @ApiProperty({ example: 'Booking confirm — not yet implemented' })
+  message: string;
 }

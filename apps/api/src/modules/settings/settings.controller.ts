@@ -7,6 +7,7 @@ import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ApiErrorResponseDto } from '@shared/models/api-response';
 import { UserRole } from '@storage/types';
+import { SystemSettingsResponseDto } from './dto/settings-response.dto';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 import { SettingsService } from './settings.service';
 import type { SystemSettingsResponse, UpdateSettingsResponse } from './types/settings';
@@ -26,14 +27,22 @@ export class SettingsController {
 
   @Get()
   @ApiOperation({ summary: 'List all system settings with their current values' })
-  @ApiResponse({ status: 200, description: 'All system settings' })
+  @ApiResponse({
+    status: 200,
+    description: 'All system settings',
+    type: SystemSettingsResponseDto,
+  })
   list(): Promise<SystemSettingsResponse> {
     return this.settings.getAll();
   }
 
   @Patch()
   @ApiOperation({ summary: 'Update one or more system settings' })
-  @ApiResponse({ status: 200, description: 'The updated settings' })
+  @ApiResponse({
+    status: 200,
+    description: 'The updated settings',
+    type: SystemSettingsResponseDto,
+  })
   @ApiResponse({
     status: 400,
     description: 'Invalid setting key or value',

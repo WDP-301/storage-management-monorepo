@@ -5,7 +5,7 @@ import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DomainException } from '@shared/exceptions/domain.exception';
+import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { BookingStatus, ContractKind, ContractStatus } from '@storage/types';
 import Decimal from 'decimal.js';
@@ -27,14 +27,14 @@ export class ContractsService {
         where: { id: dto.bookingItemId },
         lock: { mode: 'pessimistic_write' },
       });
-      if (!item) this.notFound('Booking item', dto.bookingItemId);
+      if (!item) notFound('Booking item', dto.bookingItemId);
 
       // Keep the booking confirmed until the contract is committed.
       const booking = await manager.findOne(Booking, {
         where: { id: item.bookingId },
         lock: { mode: 'pessimistic_write' },
       });
-      if (!booking) this.notFound('Booking', item.bookingId);
+      if (!booking) notFound('Booking', item.bookingId);
       if (booking.status !== BookingStatus.CONFIRMED) {
         throw new DomainException(
           ErrorCode.BOOKING_NOT_CONFIRMED,
@@ -63,7 +63,7 @@ export class ContractsService {
       }
 
       const customer = await manager.findOne(AppUser, { where: { id: booking.customerId } });
-      if (!customer) this.notFound('Customer', booking.customerId);
+      if (!customer) notFound('Customer', booking.customerId);
 
       const effectiveAt = dto.effectiveAt ? new Date(dto.effectiveAt) : item.requestedStartAt;
       const endedAt = dto.endedAt ? new Date(dto.endedAt) : undefined;
@@ -102,7 +102,7 @@ export class ContractsService {
 
   async findById(id: string): Promise<Contract> {
     const contract = await this.contracts.findOne({ where: { id, deletedAt: IsNull() } });
-    if (!contract) this.notFound('Contract', id);
+    if (!contract) notFound('Contract', id);
     return contract;
   }
 
@@ -121,14 +121,14 @@ export class ContractsService {
     const changes = { ...fields, ...dates };
     if (Object.keys(changes).length > 0) {
       const result = await this.contracts.update({ id, deletedAt: IsNull() }, changes);
-      if (!result.affected) this.notFound('Contract', id);
+      if (!result.affected) notFound('Contract', id);
     }
     return this.findById(id);
   }
 
   async softDelete(id: string): Promise<void> {
     const result = await this.contracts.softDelete({ id, deletedAt: IsNull() });
-    if (!result.affected) this.notFound('Contract', id);
+    if (!result.affected) notFound('Contract', id);
   }
 
   private validateDates(effectiveAt: Date, endedAt?: Date): void {
@@ -139,13 +139,5 @@ export class ContractsService {
         HttpStatus.BAD_REQUEST,
       );
     }
-  }
-
-  private notFound(resource: string, id: string): never {
-    throw new DomainException(
-      ErrorCode.RESOURCE_NOT_FOUND,
-      `${resource} ${id} not found`,
-      HttpStatus.NOT_FOUND,
-    );
   }
 }

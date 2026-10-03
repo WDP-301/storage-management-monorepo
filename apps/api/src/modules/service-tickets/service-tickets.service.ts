@@ -6,13 +6,15 @@ import { ServiceTicket } from '@entities/service-ticket.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { TicketType } from '@entities/ticket-type.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
+import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DomainException } from '@shared/exceptions/domain.exception';
-import { ErrorCode } from '@shared/models/api-response';
+import { DomainException, notFound } from '@shared/exceptions/domain.exception';
+import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
+import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import { ContractStatus, TicketPriority, TicketStatus, UserRole, UserStatus } from '@storage/types';
-import { IsNull, QueryFailedError, Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { DEFAULT_PAGE_SIZE, ListTicketsQueryDto } from './dto/list-tickets-query.dto';
@@ -25,7 +27,6 @@ import type {
 } from './types/service-ticket';
 import { toServiceTicketRecord } from './types/service-ticket';
 
-const PG_UNIQUE_VIOLATION = '23505';
 const MAX_TICKET_NO_ATTEMPTS = 3;
 const RESOLVED_STATUSES: readonly TicketStatus[] = [TicketStatus.RESOLVED, TicketStatus.CLOSED];
 const ASSIGNABLE_STATUSES: readonly TicketStatus[] = [
@@ -111,7 +112,7 @@ export class ServiceTicketsService {
     }
 
     if (!isAdmin && branches.length === 0) {
-      return { tickets: [], meta: { page, limit, total: 0, totalPages: 0 } };
+      return { tickets: [], meta: buildPaginationMeta(page, limit, 0) };
     }
 
     const builder = this.tickets
@@ -134,7 +135,7 @@ export class ServiceTicketsService {
 
     return {
       tickets: rows.map(toServiceTicketRecord),
-      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
@@ -176,7 +177,7 @@ export class ServiceTicketsService {
         facilityId: ticket.facilityId,
       },
     });
-    if (!staffAssignment || !this.isAssignmentActive(staffAssignment)) {
+    if (!staffAssignment || !isAssignmentActive(staffAssignment)) {
       throw this.fieldValidationError(
         'assignedTo',
         'notFacilityStaff',
@@ -297,13 +298,7 @@ export class ServiceTicketsService {
       relations: { type: true, facility: true, storageUnit: true, customer: true, assignee: true },
     });
 
-    if (!ticket) {
-      throw new DomainException(
-        ErrorCode.RESOURCE_NOT_FOUND,
-        'Ticket not found',
-        HttpStatus.NOT_FOUND,
-      );
-    }
+    if (!ticket) notFound('Ticket');
 
     return ticket;
   }
@@ -352,16 +347,8 @@ export class ServiceTicketsService {
     });
 
     return assignments
-      .filter((assignment) => assignment.facilityId && this.isAssignmentActive(assignment))
+      .filter((assignment) => assignment.facilityId && isAssignmentActive(assignment))
       .map((assignment) => assignment.facilityId as string);
-  }
-
-  private isAssignmentActive(assignment: UserRoleAssignment): boolean {
-    const now = Date.now();
-    return (
-      assignment.startsAt.getTime() <= now &&
-      (!assignment.endsAt || assignment.endsAt.getTime() > now)
-    );
   }
 
   private async validateTicketReferences(dto: CreateTicketDto): Promise<void> {
@@ -433,13 +420,4 @@ export class ServiceTicketsService {
       { fields: [{ field, code, message }] },
     );
   }
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  if (!(error instanceof QueryFailedError)) {
-    return false;
-  }
-
-  const driverError = (error as QueryFailedError & { driverError?: { code?: string } }).driverError;
-  return driverError?.code === PG_UNIQUE_VIOLATION;
 }

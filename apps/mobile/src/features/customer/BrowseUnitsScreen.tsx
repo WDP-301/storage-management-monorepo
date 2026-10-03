@@ -3,7 +3,7 @@ import { Button, Card } from 'heroui-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { formatMoney } from '../../../lib/format-vi';
-import type { BrowseMode, HeldBooking, UnitOffer } from '../../types/customer';
+import type { BrowseMode, UnitOffer } from '../../types/customer';
 import { ManualFacilityCard, RecommendedFacilityCard } from './BrowseFacilityCards';
 import { BrowseFiltersBar } from './BrowseFiltersBar';
 import { BrowseFiltersSheet } from './BrowseFiltersSheet';
@@ -22,12 +22,12 @@ import { useAvailableUnits } from './use-available-units';
 import { useWards } from './use-wards';
 
 type Props = {
-  heldBooking: HeldBooking | null;
+  hasHolding: boolean;
   contentBottomPadding: number;
   onHold: (units: UnitOffer[]) => void;
 };
 
-export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }: Props) {
+export function BrowseUnitsScreen({ hasHolding, contentBottomPadding, onHold }: Props) {
   const { facilities, provinces, hasMore, isLoading, error, refetch } = useAvailableUnits();
   const [criteria, setCriteria] = useState(DEFAULT_BROWSE_CRITERIA);
   const [mode, setMode] = useState<BrowseMode>('recommended');
@@ -149,7 +149,7 @@ export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }:
                     <RecommendedFacilityCard
                       key={facility.id}
                       facility={facility}
-                      heldBooking={heldBooking}
+                      hasHolding={hasHolding}
                       requestedQuantity={criteria.requestedQuantity}
                       waitlisted={waitlistedFacilityId === facility.id}
                       onHold={onHold}
@@ -159,7 +159,7 @@ export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }:
                     <ManualFacilityCard
                       key={facility.id}
                       facility={facility}
-                      heldBooking={heldBooking}
+                      hasHolding={hasHolding}
                       requestedQuantity={criteria.requestedQuantity}
                       selectedIds={selectedIds}
                       onToggle={toggleUnit}
@@ -187,12 +187,10 @@ export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }:
                     </Text>
                   ) : null}
                   <Button
-                    isDisabled={
-                      selectedUnits.length !== criteria.requestedQuantity || Boolean(heldBooking)
-                    }
+                    isDisabled={selectedUnits.length !== criteria.requestedQuantity || hasHolding}
                     onPress={() => onHold(selectedUnits)}
                   >
-                    <Button.Label>Giữ {criteria.requestedQuantity} kho đã chọn</Button.Label>
+                    <Button.Label>Chọn {criteria.requestedQuantity} kho đã chọn</Button.Label>
                   </Button>
                 </Card.Body>
               </Card>

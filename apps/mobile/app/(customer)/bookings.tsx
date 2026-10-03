@@ -1,18 +1,26 @@
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback } from 'react';
 import { useHold } from '../../lib/hold';
 import { MyBookingsScreen } from '../../src/features/customer/MyBookingsScreen';
 
 export default function BookingsRoute() {
   const router = useRouter();
-  const { heldBooking, remaining } = useHold();
+  const { bookings, isLoading, error, refreshBookings } = useHold();
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshBookings().catch(() => undefined);
+    }, [refreshBookings]),
+  );
 
   return (
     <MyBookingsScreen
       contentBottomPadding={32}
-      heldBooking={heldBooking}
-      remaining={remaining}
+      bookings={bookings}
+      isLoading={isLoading}
+      error={error}
       onBrowse={() => router.navigate('/(customer)/browse')}
-      onSchedule={() => router.navigate('/(customer)/schedule')}
+      onRefresh={() => void refreshBookings().catch(() => undefined)}
     />
   );
 }

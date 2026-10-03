@@ -26,7 +26,11 @@ export class UnitHold {
   @Column({ type: 'timestamptz', nullable: true, name: 'released_at' })
   releasedAt?: Date;
 
-  @ManyToOne(() => Booking, { onDelete: 'CASCADE' })
+  @ManyToOne(
+    () => Booking,
+    (booking) => booking.holds,
+    { onDelete: 'CASCADE' },
+  )
   @JoinColumn({ name: 'booking_id' })
   booking: Booking;
 

@@ -59,7 +59,7 @@ export class Contract {
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 
-  @DeleteDateColumn({ name: 'delete_at', type: 'timestamptz', nullable: true, select: false })
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true, select: false })
   deletedAt?: Date;
 
   @ManyToOne(() => BookingItem, { onDelete: 'CASCADE' })

@@ -146,11 +146,12 @@ export class CreateBookingResponseDto {
   @ApiProperty({ enum: BookingStatus, example: BookingStatus.HOLDING })
   status: BookingStatus;
 
-  @ApiProperty({ example: 3000000 })
-  subtotal: number;
+  /** Cột decimal → TypeORM trả string ("3000000.00"), không phải number. */
+  @ApiProperty({ example: '3000000.00' })
+  subtotal: string;
 
-  @ApiProperty({ example: 1000000 })
-  depositTotal: number;
+  @ApiProperty({ example: '1000000.00' })
+  depositTotal: string;
 
   @ApiProperty({
     format: 'date-time',

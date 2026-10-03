@@ -50,6 +50,11 @@ export class BookingsController {
     type: CreateBookingResponseDto,
   })
   @ApiResponse({
+    status: 400,
+    description: 'Missing or malformed Idempotency-Key header / validation failed',
+    type: ApiErrorResponseDto,
+  })
+  @ApiResponse({
     status: 409,
     description: 'Unit not available or key in PROCESSING state',
     type: ApiErrorResponseDto,

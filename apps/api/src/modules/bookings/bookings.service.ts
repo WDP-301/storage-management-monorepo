@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { Booking } from '@modules/bookings/entities/booking.entity';
 import { StorageUnit } from '@modules/facilities/entities/storage-unit.entity';
+import { PAYMENT_EVENTS, PaymentReceivedEvent } from '@modules/payments/types/payment';
 import { HttpStatus, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
@@ -10,6 +12,7 @@ import { ErrorCode } from '@shared/models/api-response';
 import { BookingStatus, HoldStatus, IdempotencyStatus, StorageUnitStatus } from '@storage/types';
 import Decimal from 'decimal.js';
 import { DataSource, DeepPartial, In, LessThan, Not, QueryFailedError, Repository } from 'typeorm';
+import { extractBookingNos, generateBookingNo } from './booking-no.util';
 import { BookingResponseDto, CreateBookingDto } from './dto/booking.dto';
 import { BookingItem } from './entities/booking-item.entity';
 import { IdempotencyKey } from './entities/idempotency-key.entity';
@@ -17,15 +20,6 @@ import { UnitHold } from './entities/unit-hold.entity';
 
 const HOLD_MINUTES = 15;
 const IDEMPOTENCY_TTL_HOURS = 24;
-
-/** Generate a booking number: BK-<timestamp-ms>-<4 random hex chars> */
-function generateBookingNo(): string {
-  const rand = Math.floor(Math.random() * 0xffff)
-    .toString(16)
-    .toUpperCase()
-    .padStart(4, '0');
-  return `BK-${Date.now()}-${rand}`;
-}
 
 /** Recursively serializes an object with sorted keys (Canonical JSON). */
 function canonicalStringify(val: unknown): string {
@@ -587,5 +581,68 @@ export class BookingsService implements OnApplicationBootstrap {
       userId,
       status: IdempotencyStatus.PROCESSING,
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Payment listener
+  // ---------------------------------------------------------------------------
+
+  @OnEvent(PAYMENT_EVENTS.RECEIVED, { async: true })
+  async handlePaymentReceived(event: PaymentReceivedEvent): Promise<void> {
+    // Customers put their booking number in the transfer content; SePay `code` is not used.
+    const candidates = extractBookingNos(event.content);
+
+    if (candidates.length === 0) {
+      this.logger.log(
+        `Payment sepayId=${event.sepayId} has no booking number in content="${event.content}", skipping`,
+      );
+      return;
+    }
+
+    const bookings = await this.bookingRepo.find({
+      where: { bookingNo: In(candidates) },
+    });
+
+    if (bookings.length === 0) {
+      this.logger.log(
+        `No booking found for candidates=[${candidates.join(', ')}] (sepayId=${event.sepayId})`,
+      );
+      return;
+    }
+
+    // One transfer must map to exactly one booking; otherwise leave it for manual reconciliation.
+    if (bookings.length > 1) {
+      this.logger.warn(
+        `Payment sepayId=${event.sepayId} matches multiple bookings [${bookings.map((b) => b.bookingNo).join(', ')}], skipping`,
+      );
+      return;
+    }
+
+    const booking = bookings[0];
+
+    const awaitingDepositStatuses: BookingStatus[] = [
+      BookingStatus.HOLDING,
+      BookingStatus.PENDING_DEPOSIT,
+    ];
+    if (!awaitingDepositStatuses.includes(booking.status)) {
+      this.logger.warn(
+        `Booking ${booking.bookingNo} status=${booking.status}, not awaiting deposit, skipping`,
+      );
+      return;
+    }
+
+    const paidAmount = new Decimal(event.amount);
+    const depositRequired = new Decimal(booking.depositTotal);
+
+    if (paidAmount.gte(depositRequired)) {
+      await this.bookingRepo.update(booking.id, { status: BookingStatus.CONFIRMED });
+      this.logger.log(
+        `Booking ${booking.bookingNo} confirmed via payment sepayId=${event.sepayId} amount=${event.amount}`,
+      );
+    } else {
+      this.logger.warn(
+        `Payment sepayId=${event.sepayId} amount=${event.amount} < deposit ${booking.depositTotal} for booking ${booking.bookingNo}`,
+      );
+    }
   }
 }

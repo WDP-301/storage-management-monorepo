@@ -29,6 +29,9 @@ export const ENV_KEY = {
 
   // Goong Maps API
   GOONG_API_KEY: 'GOONG_API_KEY',
+
+  // SePay webhook
+  SEPAY_WEBHOOK_SECRET: 'SEPAY_WEBHOOK_SECRET',
 } as const;
 
 /** Goong REST API v2 base URL */

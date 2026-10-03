@@ -1,4 +1,5 @@
 export * from './domain.enums';
+export * from './settings';
 
 export interface ApiResponse<T = any> {
   success: boolean;

@@ -12,9 +12,10 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
+import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import { BookingStatus, HoldStatus, IdempotencyStatus, StorageUnitStatus } from '@storage/types';
 import Decimal from 'decimal.js';
-import { DataSource, DeepPartial, In, LessThan, Not, QueryFailedError, Repository } from 'typeorm';
+import { DataSource, DeepPartial, In, LessThan, Not, Repository } from 'typeorm';
 import { extractBookingNos, generateBookingNo } from './booking-no.util';
 import { BookingResponseDto, CreateBookingDto } from './dto/booking.dto';
 
@@ -327,10 +328,7 @@ export class BookingsService implements OnApplicationBootstrap {
         try {
           await em.save(UnitHold, unitHoldsToSave);
         } catch (err: unknown) {
-          if (
-            err instanceof QueryFailedError &&
-            (err as { driverError?: { code?: string } }).driverError?.code === '23505'
-          ) {
+          if (isUniqueViolation(err)) {
             throw new DomainException(
               ErrorCode.UNIT_NOT_AVAILABLE,
               'Một hoặc nhiều storage unit không còn available',

@@ -13,6 +13,7 @@ import { DataSource, Repository } from 'typeorm';
 import { AuthCookieService } from './auth.cookie';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { isAssignmentActive } from './role-assignment.util';
 import { hashPassword, verifyPassword } from './session.util';
 import type { AuthMeResponse, AuthUser, SessionContext } from './types/auth-user';
 
@@ -180,11 +181,7 @@ export class AuthService {
     const now = Date.now();
 
     return assignments
-      .filter(
-        (assignment) =>
-          assignment.startsAt.getTime() <= now &&
-          (!assignment.endsAt || assignment.endsAt.getTime() > now),
-      )
+      .filter((assignment) => isAssignmentActive(assignment, now))
       .map((assignment) => assignment.role);
   }
 

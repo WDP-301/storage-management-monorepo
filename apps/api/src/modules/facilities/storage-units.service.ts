@@ -1,10 +1,11 @@
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DomainException } from '@shared/exceptions/domain.exception';
-import { ErrorCode } from '@shared/models/api-response';
+import { DomainException, notFound } from '@shared/exceptions/domain.exception';
+import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
+import { PG_UNIQUE_VIOLATION, pgErrorCode } from '@shared/utils/pg-error.util';
 import { StorageUnitStatus } from '@storage/types';
-import { IsNull, QueryFailedError, Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import {
   CreateStorageUnitDto,
   QueryStorageUnitsDto,
@@ -12,34 +13,31 @@ import {
 } from './dto/storage-unit.dto';
 
 /** Postgres error codes */
-const PG_UNIQUE_VIOLATION = '23505';
 const PG_FK_VIOLATION = '23503';
 const PG_CHECK_VIOLATION = '23514';
 
 function handleDbError(err: unknown): never {
-  if (err instanceof QueryFailedError) {
-    const pg = (err as any).driverError as { code?: string; detail?: string };
-    if (pg?.code === PG_UNIQUE_VIOLATION) {
-      throw new DomainException(
-        ErrorCode.VALIDATION_FAILED,
-        'Unit code already exists in this facility',
-        HttpStatus.CONFLICT,
-      );
-    }
-    if (pg?.code === PG_FK_VIOLATION) {
-      throw new DomainException(
-        ErrorCode.BAD_REQUEST,
-        'facilityId or unitTypeId does not exist',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-    if (pg?.code === PG_CHECK_VIOLATION) {
-      throw new DomainException(
-        ErrorCode.VALIDATION_FAILED,
-        'posX and posY must both be provided or both be omitted',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
+  const code = pgErrorCode(err);
+  if (code === PG_UNIQUE_VIOLATION) {
+    throw new DomainException(
+      ErrorCode.VALIDATION_FAILED,
+      'Unit code already exists in this facility',
+      HttpStatus.CONFLICT,
+    );
+  }
+  if (code === PG_FK_VIOLATION) {
+    throw new DomainException(
+      ErrorCode.BAD_REQUEST,
+      'facilityId or unitTypeId does not exist',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+  if (code === PG_CHECK_VIOLATION) {
+    throw new DomainException(
+      ErrorCode.VALIDATION_FAILED,
+      'posX and posY must both be provided or both be omitted',
+      HttpStatus.BAD_REQUEST,
+    );
   }
   throw err;
 }
@@ -79,7 +77,7 @@ export class StorageUnitsService {
 
     return {
       units: data, // named key to avoid double-nesting after HttpResponseInterceptor wraps in { data: ... }
-      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
@@ -89,13 +87,7 @@ export class StorageUnitsService {
       relations: ['unitType', 'facility'],
     });
 
-    if (!unit) {
-      throw new DomainException(
-        ErrorCode.RESOURCE_NOT_FOUND,
-        `StorageUnit ${id} not found`,
-        HttpStatus.NOT_FOUND,
-      );
-    }
+    if (!unit) notFound('StorageUnit', id);
 
     return unit;
   }

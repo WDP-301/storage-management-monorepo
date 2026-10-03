@@ -91,6 +91,11 @@ export class ApiErrorResponseDto implements ApiErrorResponse {
   path: string;
 }
 
+/** Builds the shared `{ page, limit, total, totalPages }` meta block for paginated list responses. */
+export function buildPaginationMeta(page: number, limit: number, total: number): PaginationMeta {
+  return { page, limit, total, totalPages: Math.ceil(total / limit) };
+}
+
 export class PaginationMetaDto implements PaginationMeta {
   @ApiProperty({ example: 1 })
   page: number;

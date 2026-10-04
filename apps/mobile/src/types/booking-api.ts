@@ -40,3 +40,9 @@ export type ApiBooking = {
   expiresAt: string | null;
   items: ApiBookingItem[];
 };
+
+/** GET /bookings/me uses holdExpiresAt; older responses used expiresAt. */
+export type BookingListItemResponse = Omit<ApiBooking, 'expiresAt'> & {
+  holdExpiresAt?: string | null;
+  expiresAt?: string | null;
+};

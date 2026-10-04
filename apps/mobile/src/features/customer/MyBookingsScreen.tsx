@@ -1,5 +1,6 @@
 import { Button, Card, Chip } from 'heroui-native';
 import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { holdState } from '../../../lib/booking-hold-state';
 import { formatArea, formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import { rentalEndIso } from '../../../lib/rental-schedule';
 import type { ApiBooking } from '../../types/booking-api';
@@ -85,7 +86,8 @@ function BookingCard({ booking, isHolding }: { booking: ApiBooking; isHolding: b
     (item) =>
       item.requestedStartAt.slice(0, 10) === firstDate && item.rentalMonths === first?.rentalMonths,
   );
-  const status = isHolding ? 'Đang giữ' : statusLabel(booking.status);
+  const state = holdState(booking, Date.now());
+  const status = state === 'expired' ? 'Hết hạn giữ' : statusLabel(booking.status);
 
   return (
     <Card
@@ -107,6 +109,12 @@ function BookingCard({ booking, isHolding }: { booking: ApiBooking; isHolding: b
             <Chip.Label>{status}</Chip.Label>
           </Chip>
         </View>
+
+        {state === 'unknown' ? (
+          <Text className="text-xs leading-5 text-muted">
+            Chưa có thông tin thời hạn giữ của booking này. Kéo xuống để cập nhật.
+          </Text>
+        ) : null}
 
         {isHolding && booking.expiresAt ? (
           <View className="rounded-xl bg-accent/10 px-3 py-3">
@@ -173,16 +181,13 @@ function BookingCard({ booking, isHolding }: { booking: ApiBooking; isHolding: b
 }
 
 function isActiveHold(booking: ApiBooking) {
-  return (
-    booking.status === 'HOLDING' &&
-    booking.expiresAt !== null &&
-    new Date(booking.expiresAt).getTime() > Date.now()
-  );
+  return holdState(booking, Date.now()) === 'active';
 }
 
 function statusLabel(status: ApiBooking['status']) {
   switch (status) {
     case 'HOLDING':
+      return 'Đang giữ';
     case 'EXPIRED':
       return 'Hết hạn giữ';
     case 'PENDING_DEPOSIT':

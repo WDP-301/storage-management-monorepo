@@ -10,7 +10,7 @@ import {
 } from 'react';
 import type { ApiBooking, BookingItemInput, CreatedBooking } from '../src/types/booking-api';
 import type { UnitOffer } from '../src/types/customer';
-import { ApiError } from './api';
+import { holdState } from './booking-hold-state';
 import { BookingsApi } from './bookings-api';
 
 export type RentalSchedule = {
@@ -41,7 +41,7 @@ export function HoldProvider({ children }: { children: ReactNode }) {
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
-  const retry = useRef<{ body: string; key: string } | null>(null);
+  const selectionKey = useRef<string | null>(null);
   const refreshedExpiry = useRef<string | null>(null);
   const submitting = useRef(false);
   const requestSequence = useRef(0);
@@ -52,13 +52,14 @@ export function HoldProvider({ children }: { children: ReactNode }) {
     try {
       const result = await BookingsApi.listMine();
       if (sequence === requestSequence.current) {
+        setNow(Date.now());
         setBookings(result);
         setError(null);
       }
     } catch (cause) {
       if (sequence === requestSequence.current) {
         setError(
-          cause instanceof ApiError ? cause.message : 'Không tải được booking. Vui lòng thử lại.',
+          cause instanceof Error ? cause.message : 'Không tải được booking. Vui lòng thử lại.',
         );
         throw cause;
       }
@@ -71,24 +72,17 @@ export function HoldProvider({ children }: { children: ReactNode }) {
     void refreshBookings().catch(() => undefined);
   }, [refreshBookings]);
 
+  const heldBooking = bookings.find((booking) => holdState(booking, now) === 'active') ?? null;
+  const hasActiveHold = heldBooking !== null;
+
   useEffect(() => {
+    if (!hasActiveHold) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, []);
-
-  const heldBooking =
-    bookings.find(
-      (booking) =>
-        booking.status === 'HOLDING' &&
-        booking.expiresAt !== null &&
-        new Date(booking.expiresAt).getTime() > now,
-    ) ?? null;
+  }, [hasActiveHold]);
 
   const expiredHolding = bookings.find(
-    (booking) =>
-      booking.status === 'HOLDING' &&
-      booking.expiresAt !== null &&
-      new Date(booking.expiresAt).getTime() <= now,
+    (booking) => booking.status === 'HOLDING' && holdState(booking, now) === 'expired',
   );
   useEffect(() => {
     if (!expiredHolding?.expiresAt || refreshedExpiry.current === expiredHolding.expiresAt) return;
@@ -97,33 +91,32 @@ export function HoldProvider({ children }: { children: ReactNode }) {
   }, [expiredHolding?.expiresAt, refreshBookings]);
 
   const selectUnits = useCallback((units: UnitOffer[]) => {
+    if (submitting.current) return;
+    selectionKey.current = BookingsApi.newIdempotencyKey();
     setSelectedUnits(units);
-    retry.current = null;
   }, []);
   const clearSelection = useCallback(() => {
     setSelectedUnits(null);
-    retry.current = null;
+    selectionKey.current = null;
   }, []);
 
   const createBooking = useCallback(
     async (schedule: RentalSchedule) => {
-      if (!selectedUnits?.length || submitting.current) return false;
+      if (!selectedUnits?.length || !selectionKey.current || submitting.current) return false;
       const items: BookingItemInput[] = selectedUnits.map((unit) => ({
         storageUnitId: unit.id,
         // Noon UTC keeps the selected calendar day stable for the API's date validation.
         requestedStartAt: `${schedule.startDate}T12:00:00.000Z`,
         rentalMonths: schedule.durationMonths,
       }));
-      const body = JSON.stringify(items);
-      if (retry.current?.body !== body) {
-        retry.current = { body, key: BookingsApi.newIdempotencyKey() };
-      }
-
       submitting.current = true;
       setIsCreating(true);
       try {
-        const created = await BookingsApi.create(items, retry.current.key);
+        // A lost response may still represent a committed booking. Keep the selection's key
+        // even if the schedule changes, so retries cannot accidentally create a new request.
+        const created = await BookingsApi.create(items, selectionKey.current);
         requestSequence.current += 1;
+        setNow(Date.now());
         setBookings((current) => [
           toBooking(created, selectedUnits),
           ...current.filter((b) => b.id !== created.id),

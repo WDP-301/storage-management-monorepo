@@ -1,4 +1,4 @@
-import { Button, Card, Chip } from 'heroui-native';
+import { Button, Card } from 'heroui-native';
 import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
 import {
   countHeldUnits,
@@ -119,16 +119,17 @@ function BookingCard({
       <Card.Body className="gap-4">
         <View className="flex-row items-start justify-between gap-3">
           <View className="flex-1">
-            <Text className="text-lg font-bold text-foreground">{booking.bookingNo}</Text>
+            {/* Booking numbers are long and have no spaces to break on, so they would squeeze the
+              status chip until its label wrapped out of sight. */}
+            <Text className="text-lg font-bold text-foreground" numberOfLines={1}>
+              {booking.bookingNo}
+            </Text>
             <Text className="mt-1 text-sm text-muted">{booking.items.length} kho</Text>
           </View>
-          <Chip
-            color={isHolding ? 'accent' : booking.status === 'CONFIRMED' ? 'success' : 'default'}
-            size="sm"
-            variant="soft"
-          >
-            <Chip.Label>{status}</Chip.Label>
-          </Chip>
+          <StatusChip
+            label={status}
+            tone={isHolding ? 'accent' : booking.status === 'CONFIRMED' ? 'success' : 'neutral'}
+          />
         </View>
 
         {isHolding && booking.expiresAt ? (
@@ -192,6 +193,38 @@ function BookingCard({
         </View>
       </Card.Body>
     </Card>
+  );
+}
+
+/** Full class strings, since uniwind resolves them statically and cannot see composed names. */
+const STATUS_TONES = {
+  accent: {
+    box: 'shrink-0 rounded-full bg-accent/10 px-3 py-1',
+    label: 'text-xs font-semibold text-accent',
+  },
+  success: {
+    box: 'shrink-0 rounded-full bg-success/10 px-3 py-1',
+    label: 'text-xs font-semibold text-success-foreground',
+  },
+  neutral: {
+    box: 'shrink-0 rounded-full bg-surface-secondary px-3 py-1',
+    label: 'text-xs font-semibold text-muted',
+  },
+} as const;
+
+/**
+ * Replaces heroui-native's Chip here: the Chip caps its own width, so the long booking number
+ * beside it squeezed "Đang giữ" onto a second line the chip was too short to show — only "Đang"
+ * survived. This pill hugs its label and never wraps.
+ */
+function StatusChip({ label, tone }: { label: string; tone: keyof typeof STATUS_TONES }) {
+  const tokens = STATUS_TONES[tone];
+  return (
+    <View className={tokens.box}>
+      <Text className={tokens.label} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
   );
 }
 

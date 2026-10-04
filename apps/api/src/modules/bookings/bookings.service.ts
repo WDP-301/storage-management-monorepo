@@ -18,12 +18,19 @@ import { ErrorCode } from '@shared/models/api-response';
 import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import { BookingStatus, HoldStatus, IdempotencyStatus, StorageUnitStatus } from '@storage/types';
 import Decimal from 'decimal.js';
-import { DataSource, DeepPartial, In, LessThan, Not, Repository } from 'typeorm';
+import { DataSource, DeepPartial, In, LessThan, MoreThan, Not, Repository } from 'typeorm';
 import { extractBookingNos, generateBookingNo } from './booking-no.util';
 import { BookingResponseDto, CreateBookingDto } from './dto/booking.dto';
 
 const HOLD_MINUTES = 15;
 const IDEMPOTENCY_TTL_HOURS = 24;
+const STATUSES_AWAITING_DEPOSIT: BookingStatus[] = [
+  BookingStatus.HOLDING,
+  BookingStatus.PENDING_DEPOSIT,
+];
+
+/** Rolls the confirm transaction back when the transfer arrived after the holds expired. */
+class LatePaymentError extends Error {}
 
 /** Recursively serializes an object with sorted keys (Canonical JSON). */
 function canonicalStringify(val: unknown): string {
@@ -594,14 +601,17 @@ export class BookingsService implements OnApplicationBootstrap {
 
   /**
    * Shapes a booking for API responses: payment QR only while the booking still awaits its
-   * deposit (HOLDING/PENDING_DEPOSIT), null afterwards so clients can stop polling.
+   * deposit and a live hold backs it, null afterwards so clients can stop polling.
    */
   private toBookingResponse(b: Booking, holdExpiresAt: Date | null): BookingResponseDto {
-    const awaitingDeposit: BookingStatus[] = [BookingStatus.HOLDING, BookingStatus.PENDING_DEPOSIT];
+    const stillPayable =
+      STATUSES_AWAITING_DEPOSIT.includes(b.status) &&
+      holdExpiresAt !== null &&
+      holdExpiresAt > new Date();
     return {
       ...b,
       holdExpiresAt,
-      paymentQrUrl: awaitingDeposit.includes(b.status)
+      paymentQrUrl: stillPayable
         ? this.buildPaymentQrUrl(b.bookingNo, String(b.depositTotal))
         : null,
     } as BookingResponseDto;
@@ -675,11 +685,7 @@ export class BookingsService implements OnApplicationBootstrap {
 
     const booking = bookings[0];
 
-    const awaitingDepositStatuses: BookingStatus[] = [
-      BookingStatus.HOLDING,
-      BookingStatus.PENDING_DEPOSIT,
-    ];
-    if (!awaitingDepositStatuses.includes(booking.status)) {
+    if (!STATUSES_AWAITING_DEPOSIT.includes(booking.status)) {
       this.logger.warn(
         `Booking ${booking.bookingNo} status=${booking.status}, not awaiting deposit, skipping`,
       );
@@ -689,15 +695,55 @@ export class BookingsService implements OnApplicationBootstrap {
     const paidAmount = new Decimal(event.amount);
     const depositRequired = new Decimal(booking.depositTotal);
 
-    if (paidAmount.gte(depositRequired)) {
-      await this.bookingRepo.update(booking.id, { status: BookingStatus.CONFIRMED });
-      this.logger.log(
-        `Booking ${booking.bookingNo} confirmed via payment sepayId=${event.sepayId} amount=${event.amount}`,
-      );
-    } else {
+    if (paidAmount.lt(depositRequired)) {
       this.logger.warn(
         `Payment sepayId=${event.sepayId} amount=${event.amount} < deposit ${booking.depositTotal} for booking ${booking.bookingNo}`,
       );
+      return;
+    }
+
+    const now = new Date();
+    let outcome: 'confirmed' | 'late' | 'status-changed';
+    try {
+      outcome = await this.dataSource.transaction(async (em) => {
+        // Atomic guard — a concurrent webhook delivery may have confirmed already.
+        const statusUpdate = await em.update(
+          Booking,
+          { id: booking.id, status: In(STATUSES_AWAITING_DEPOSIT) },
+          { status: BookingStatus.CONFIRMED },
+        );
+        if (!statusUpdate.affected) return 'status-changed' as const;
+
+        // Mark still-valid holds CONVERTED so the expiry sweep leaves the units held.
+        await em.update(
+          UnitHold,
+          { bookingId: booking.id, status: HoldStatus.ACTIVE, expiresAt: MoreThan(now) },
+          { status: HoldStatus.CONVERTED },
+        );
+
+        // A leftover ACTIVE hold is expired but not yet swept — the transfer arrived too
+        // late. Roll back so the booking can expire and the payment is reconciled manually.
+        const leftoverHolds = await em.count(UnitHold, {
+          where: { bookingId: booking.id, status: HoldStatus.ACTIVE },
+        });
+        if (leftoverHolds > 0) throw new LatePaymentError();
+        return 'confirmed' as const;
+      });
+    } catch (err) {
+      if (!(err instanceof LatePaymentError)) throw err;
+      outcome = 'late';
+    }
+
+    if (outcome === 'confirmed') {
+      this.logger.log(
+        `Booking ${booking.bookingNo} confirmed via payment sepayId=${event.sepayId} amount=${event.amount}`,
+      );
+    } else if (outcome === 'late') {
+      this.logger.warn(
+        `Payment sepayId=${event.sepayId} for booking ${booking.bookingNo} arrived after holds expired — manual reconciliation needed`,
+      );
+    } else {
+      this.logger.warn(`Booking ${booking.bookingNo} status changed concurrently, skipping`);
     }
   }
 }

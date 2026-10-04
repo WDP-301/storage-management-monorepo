@@ -193,8 +193,8 @@ export class BookingResponseDto extends Booking {
   paymentQrUrl: string | null;
 }
 
-/** Response của confirm/cancel booking (hiện là stub, trả message). */
+/** Response của cancel booking (hiện là stub, trả message). */
 export class BookingActionResponseDto {
-  @ApiProperty({ example: 'Booking confirm — not yet implemented' })
+  @ApiProperty({ example: 'Booking cancel — not yet implemented' })
   message: string;
 }

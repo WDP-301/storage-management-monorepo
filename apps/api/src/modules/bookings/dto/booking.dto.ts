@@ -155,6 +155,15 @@ export class CreateBookingResponseDto {
   depositTotal: string;
 
   @ApiProperty({
+    nullable: true,
+    example:
+      'https://img.vietqr.io/image/MB-0123456789-compact2.png?amount=1000000&addInfo=BK-1759478400000-A1B2&accountName=CONG+TY',
+    description:
+      'URL ảnh VietQR để thanh toán tiền cọc — app mobile render trực tiếp. Null khi API chưa cấu hình tài khoản ngân hàng.',
+  })
+  paymentQrUrl: string | null;
+
+  @ApiProperty({
     format: 'date-time',
     description: 'Thời điểm hết hạn giữ chỗ (15 phút kể từ lúc tạo booking)',
   })
@@ -174,6 +183,14 @@ export class BookingResponseDto extends Booking {
       'Thời điểm hold hết hạn (MAX expires_at của active holds) — null nếu không còn hold active',
   })
   holdExpiresAt: Date | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'URL ảnh VietQR để thanh toán tiền cọc — chỉ có khi booking đang chờ cọc (HOLDING/PENDING_DEPOSIT), null với các status khác.',
+  })
+  paymentQrUrl: string | null;
 }
 
 /** Response của confirm/cancel booking (hiện là stub, trả message). */

@@ -6,10 +6,13 @@ import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { PAYMENT_EVENTS, PaymentReceivedEvent } from '@modules/payments/types/payment';
+import { buildVietQrUrl } from '@modules/payments/vietqr.util';
 import { HttpStatus, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ENV_KEY } from '@shared/constants';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { isUniqueViolation } from '@shared/utils/pg-error.util';
@@ -60,6 +63,7 @@ export class BookingsService implements OnApplicationBootstrap {
     @InjectRepository(IdempotencyKey)
     private readonly idempotencyRepo: Repository<IdempotencyKey>,
     private readonly dataSource: DataSource,
+    private readonly configService: ConfigService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -68,6 +72,9 @@ export class BookingsService implements OnApplicationBootstrap {
 
   /** Release any holds that expired while the server was down. */
   async onApplicationBootstrap(): Promise<void> {
+    if (!this.paymentQrConfigured()) {
+      this.logger.warn('SEPAY_BANK_ID/SEPAY_ACCOUNT_NO/SEPAY_ACCOUNT_NAME not set — no payment QR');
+    }
     await this.releaseExpiredHolds();
   }
 
@@ -353,6 +360,7 @@ export class BookingsService implements OnApplicationBootstrap {
           status: booking.status,
           subtotal: booking.subtotal,
           depositTotal: booking.depositTotal,
+          paymentQrUrl: this.buildPaymentQrUrl(booking.bookingNo, depositTotal),
           expiresAt,
           items: dto.items.map((item) => ({
             storageUnitId: item.storageUnitId,
@@ -413,17 +421,14 @@ export class BookingsService implements OnApplicationBootstrap {
       }
     }
 
-    return bookings.map(
-      (b) => ({ ...b, holdExpiresAt: expiresByBooking.get(b.id) ?? null }) as BookingResponseDto,
-    );
+    return bookings.map((b) => this.toBookingResponse(b, expiresByBooking.get(b.id) ?? null));
   }
 
-  // ---------------------------------------------------------------------------
-  // Confirm / Cancel
-  // ---------------------------------------------------------------------------
-
-  async confirm(id: string, user: AuthUser): Promise<{ message: string }> {
-    const booking = await this.bookingRepo.findOne({ where: { id } });
+  async findById(id: string, user: AuthUser): Promise<BookingResponseDto> {
+    const booking = await this.bookingRepo.findOne({
+      where: { id },
+      relations: ['items', 'items.storageUnit'],
+    });
     if (!booking) {
       throw new DomainException(
         ErrorCode.RESOURCE_NOT_FOUND,
@@ -434,12 +439,26 @@ export class BookingsService implements OnApplicationBootstrap {
     if (booking.customerId !== user.id) {
       throw new DomainException(
         ErrorCode.FORBIDDEN,
-        'Bạn không có quyền thao tác trên booking này',
+        'Bạn không có quyền xem booking này',
         HttpStatus.FORBIDDEN,
       );
     }
-    return { message: 'Booking confirm — not yet implemented' };
+
+    const activeHolds = await this.dataSource.getRepository(UnitHold).find({
+      where: { bookingId: booking.id, status: HoldStatus.ACTIVE },
+      select: ['expiresAt'],
+    });
+    const holdExpiresAt = activeHolds.reduce<Date | null>(
+      (max, h) => (!max || h.expiresAt > max ? h.expiresAt : max),
+      null,
+    );
+
+    return this.toBookingResponse(booking, holdExpiresAt);
   }
+
+  // ---------------------------------------------------------------------------
+  // Cancel
+  // ---------------------------------------------------------------------------
 
   async cancel(id: string, user: AuthUser): Promise<{ message: string }> {
     const booking = await this.bookingRepo.findOne({ where: { id } });
@@ -572,6 +591,44 @@ export class BookingsService implements OnApplicationBootstrap {
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
+
+  /**
+   * Shapes a booking for API responses: payment QR only while the booking still awaits its
+   * deposit (HOLDING/PENDING_DEPOSIT), null afterwards so clients can stop polling.
+   */
+  private toBookingResponse(b: Booking, holdExpiresAt: Date | null): BookingResponseDto {
+    const awaitingDeposit: BookingStatus[] = [BookingStatus.HOLDING, BookingStatus.PENDING_DEPOSIT];
+    return {
+      ...b,
+      holdExpiresAt,
+      paymentQrUrl: awaitingDeposit.includes(b.status)
+        ? this.buildPaymentQrUrl(b.bookingNo, String(b.depositTotal))
+        : null,
+    } as BookingResponseDto;
+  }
+
+  /**
+   * Deposit QR (VietQR) for the mobile app to render — `addInfo` carries the booking number so
+   * the SePay webhook can match the transfer. Null when the bank account env is not configured.
+   */
+  private buildPaymentQrUrl(bookingNo: string, depositTotal: string): string | null {
+    if (!this.paymentQrConfigured()) return null;
+    return buildVietQrUrl({
+      bankId: this.configService.get<string>(ENV_KEY.SEPAY_BANK_ID) as string,
+      accountNo: this.configService.get<string>(ENV_KEY.SEPAY_ACCOUNT_NO) as string,
+      accountName: this.configService.get<string>(ENV_KEY.SEPAY_ACCOUNT_NAME) as string,
+      amount: new Decimal(depositTotal).toFixed(0),
+      addInfo: bookingNo,
+    });
+  }
+
+  private paymentQrConfigured(): boolean {
+    return Boolean(
+      this.configService.get<string>(ENV_KEY.SEPAY_BANK_ID) &&
+        this.configService.get<string>(ENV_KEY.SEPAY_ACCOUNT_NO) &&
+        this.configService.get<string>(ENV_KEY.SEPAY_ACCOUNT_NAME),
+    );
+  }
 
   private async deleteIdempotencyKey(key: string, userId: string): Promise<void> {
     await this.idempotencyRepo.delete({

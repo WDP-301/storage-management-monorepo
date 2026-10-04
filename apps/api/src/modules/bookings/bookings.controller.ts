@@ -92,12 +92,23 @@ export class BookingsController {
     return this.bookingsService.findByCustomer(user.id);
   }
 
-  @Post(':id/confirm')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Confirm booking after deposit payment' })
-  @ApiResponse({ status: 200, type: BookingActionResponseDto })
-  confirm(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
-    return this.bookingsService.confirm(id, user);
+  @Get(':id')
+  @ApiOperation({
+    summary: 'Get one booking by ID — poll this while awaiting deposit payment',
+  })
+  @ApiResponse({ status: 200, type: BookingResponseDto })
+  @ApiResponse({
+    status: 403,
+    description: 'Not the booking owner',
+    type: ApiErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Booking not found',
+    type: ApiErrorResponseDto,
+  })
+  getById(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.bookingsService.findById(id, user);
   }
 
   @Post(':id/cancel')

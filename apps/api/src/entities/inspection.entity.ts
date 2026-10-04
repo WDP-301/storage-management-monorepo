@@ -33,8 +33,14 @@ export class Inspection {
   @Column({ type: 'jsonb', default: () => "'[]'" })
   evidence: any[];
 
+  @Column({ type: 'jsonb', default: () => "'[]'" })
+  damages: any[];
+
   @Column({ type: 'timestamptz', nullable: true, name: 'inspected_at' })
   inspectedAt?: Date;
+
+  @Column({ type: 'timestamptz', nullable: true, name: 'finalized_at' })
+  finalizedAt?: Date;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

@@ -2,9 +2,11 @@ import { createHash } from 'node:crypto';
 import { Booking } from '@entities/booking.entity';
 import { BookingItem } from '@entities/booking-item.entity';
 import { IdempotencyKey } from '@entities/idempotency-key.entity';
+import { Payment } from '@entities/payment.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { generatePaymentNo } from '@modules/payments/payment-no.util';
 import { PAYMENT_EVENTS, PaymentReceivedEvent } from '@modules/payments/types/payment';
 import { buildVietQrUrl } from '@modules/payments/vietqr.util';
 import { HttpStatus, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
@@ -16,7 +18,15 @@ import { ENV_KEY } from '@shared/constants';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { isUniqueViolation } from '@shared/utils/pg-error.util';
-import { BookingStatus, HoldStatus, IdempotencyStatus, StorageUnitStatus } from '@storage/types';
+import {
+  BookingStatus,
+  HoldStatus,
+  IdempotencyStatus,
+  PaymentMethod,
+  PaymentStatus,
+  PaymentType,
+  StorageUnitStatus,
+} from '@storage/types';
 import Decimal from 'decimal.js';
 import { DataSource, DeepPartial, In, LessThan, MoreThan, Not, Repository } from 'typeorm';
 import { extractBookingNos, generateBookingNo } from './booking-no.util';
@@ -692,12 +702,43 @@ export class BookingsService implements OnApplicationBootstrap {
       return;
     }
 
+    const paymentRepo = this.dataSource.getRepository(Payment);
+    const providerRef = String(event.sepayId);
+
+    // The bank-side transfer already happened; webhook redelivery must not double-record it.
+    if (await paymentRepo.exists({ where: { providerRef } })) {
+      this.logger.log(`Payment sepayId=${event.sepayId} already recorded, skipping`);
+      return;
+    }
+
     const paidAmount = new Decimal(event.amount);
     const depositRequired = new Decimal(booking.depositTotal);
 
-    if (paidAmount.lt(depositRequired)) {
+    // Earlier partial transfers count toward the deposit so a top-up can complete it.
+    const priorPaid = new Decimal(
+      (await paymentRepo.sum('amount', {
+        bookingId: booking.id,
+        status: PaymentStatus.SUCCEEDED,
+      })) ?? 0,
+    );
+
+    const payment = {
+      paymentNo: generatePaymentNo(),
+      bookingId: booking.id,
+      customerId: booking.customerId,
+      type: PaymentType.DEPOSIT,
+      method: PaymentMethod.BANK_TRANSFER,
+      status: PaymentStatus.SUCCEEDED,
+      amount: event.amount,
+      providerRef,
+      paidAt: new Date(event.transactionDate),
+    };
+
+    if (paidAmount.plus(priorPaid).lt(depositRequired)) {
+      // The money is still real — keep the receipt; the booking stays pending until covered.
+      await paymentRepo.save(payment);
       this.logger.warn(
-        `Payment sepayId=${event.sepayId} amount=${event.amount} < deposit ${booking.depositTotal} for booking ${booking.bookingNo}`,
+        `Payment sepayId=${event.sepayId} amount=${event.amount} (received ${paidAmount.plus(priorPaid)}) < deposit ${booking.depositTotal} for booking ${booking.bookingNo} — recorded, awaiting the remainder`,
       );
       return;
     }
@@ -727,6 +768,9 @@ export class BookingsService implements OnApplicationBootstrap {
           where: { bookingId: booking.id, status: HoldStatus.ACTIVE },
         });
         if (leftoverHolds > 0) throw new LatePaymentError();
+
+        // Receipt for the transfer that covered the deposit.
+        await em.save(Payment, payment);
         return 'confirmed' as const;
       });
     } catch (err) {
@@ -739,6 +783,9 @@ export class BookingsService implements OnApplicationBootstrap {
         `Booking ${booking.bookingNo} confirmed via payment sepayId=${event.sepayId} amount=${event.amount}`,
       );
     } else if (outcome === 'late') {
+      // The transfer still reached the bank — keep its receipt so reconciliation sees the money
+      // even though the rolled-back transaction could not attach it to a confirmed booking.
+      await paymentRepo.save(payment);
       this.logger.warn(
         `Payment sepayId=${event.sepayId} for booking ${booking.bookingNo} arrived after holds expired — manual reconciliation needed`,
       );

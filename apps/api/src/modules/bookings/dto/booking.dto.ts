@@ -188,7 +188,7 @@ export class BookingResponseDto extends Booking {
     type: String,
     nullable: true,
     description:
-      'URL ảnh VietQR để thanh toán tiền cọc — chỉ có khi booking đang chờ cọc (HOLDING/PENDING_DEPOSIT), null với các status khác.',
+      'URL ảnh VietQR để thanh toán tiền cọc — chỉ có khi booking đang chờ cọc (HOLDING/PENDING_DEPOSIT) và hold còn hạn; null sau khi confirm hoặc hold hết hạn.',
   })
   paymentQrUrl: string | null;
 }

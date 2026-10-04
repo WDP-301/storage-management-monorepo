@@ -6,21 +6,31 @@ import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { PAYMENT_EVENTS, PaymentReceivedEvent } from '@modules/payments/types/payment';
+import { buildVietQrUrl } from '@modules/payments/vietqr.util';
 import { HttpStatus, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ENV_KEY } from '@shared/constants';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import { BookingStatus, HoldStatus, IdempotencyStatus, StorageUnitStatus } from '@storage/types';
 import Decimal from 'decimal.js';
-import { DataSource, DeepPartial, In, LessThan, Not, Repository } from 'typeorm';
+import { DataSource, DeepPartial, In, LessThan, MoreThan, Not, Repository } from 'typeorm';
 import { extractBookingNos, generateBookingNo } from './booking-no.util';
 import { BookingResponseDto, CreateBookingDto } from './dto/booking.dto';
 
 const HOLD_MINUTES = 15;
 const IDEMPOTENCY_TTL_HOURS = 24;
+const STATUSES_AWAITING_DEPOSIT: BookingStatus[] = [
+  BookingStatus.HOLDING,
+  BookingStatus.PENDING_DEPOSIT,
+];
+
+/** Rolls the confirm transaction back when the transfer arrived after the holds expired. */
+class LatePaymentError extends Error {}
 
 /** Recursively serializes an object with sorted keys (Canonical JSON). */
 function canonicalStringify(val: unknown): string {
@@ -60,6 +70,7 @@ export class BookingsService implements OnApplicationBootstrap {
     @InjectRepository(IdempotencyKey)
     private readonly idempotencyRepo: Repository<IdempotencyKey>,
     private readonly dataSource: DataSource,
+    private readonly configService: ConfigService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -68,6 +79,9 @@ export class BookingsService implements OnApplicationBootstrap {
 
   /** Release any holds that expired while the server was down. */
   async onApplicationBootstrap(): Promise<void> {
+    if (!this.paymentQrConfigured()) {
+      this.logger.warn('SEPAY_BANK_ID/SEPAY_ACCOUNT_NO/SEPAY_ACCOUNT_NAME not set — no payment QR');
+    }
     await this.releaseExpiredHolds();
   }
 
@@ -353,6 +367,7 @@ export class BookingsService implements OnApplicationBootstrap {
           status: booking.status,
           subtotal: booking.subtotal,
           depositTotal: booking.depositTotal,
+          paymentQrUrl: this.buildPaymentQrUrl(booking.bookingNo, depositTotal),
           expiresAt,
           items: dto.items.map((item) => ({
             storageUnitId: item.storageUnitId,
@@ -413,17 +428,14 @@ export class BookingsService implements OnApplicationBootstrap {
       }
     }
 
-    return bookings.map(
-      (b) => ({ ...b, holdExpiresAt: expiresByBooking.get(b.id) ?? null }) as BookingResponseDto,
-    );
+    return bookings.map((b) => this.toBookingResponse(b, expiresByBooking.get(b.id) ?? null));
   }
 
-  // ---------------------------------------------------------------------------
-  // Confirm / Cancel
-  // ---------------------------------------------------------------------------
-
-  async confirm(id: string, user: AuthUser): Promise<{ message: string }> {
-    const booking = await this.bookingRepo.findOne({ where: { id } });
+  async findById(id: string, user: AuthUser): Promise<BookingResponseDto> {
+    const booking = await this.bookingRepo.findOne({
+      where: { id },
+      relations: ['items', 'items.storageUnit'],
+    });
     if (!booking) {
       throw new DomainException(
         ErrorCode.RESOURCE_NOT_FOUND,
@@ -434,12 +446,26 @@ export class BookingsService implements OnApplicationBootstrap {
     if (booking.customerId !== user.id) {
       throw new DomainException(
         ErrorCode.FORBIDDEN,
-        'Bạn không có quyền thao tác trên booking này',
+        'Bạn không có quyền xem booking này',
         HttpStatus.FORBIDDEN,
       );
     }
-    return { message: 'Booking confirm — not yet implemented' };
+
+    const activeHolds = await this.dataSource.getRepository(UnitHold).find({
+      where: { bookingId: booking.id, status: HoldStatus.ACTIVE },
+      select: ['expiresAt'],
+    });
+    const holdExpiresAt = activeHolds.reduce<Date | null>(
+      (max, h) => (!max || h.expiresAt > max ? h.expiresAt : max),
+      null,
+    );
+
+    return this.toBookingResponse(booking, holdExpiresAt);
   }
+
+  // ---------------------------------------------------------------------------
+  // Cancel
+  // ---------------------------------------------------------------------------
 
   async cancel(id: string, user: AuthUser): Promise<{ message: string }> {
     const booking = await this.bookingRepo.findOne({ where: { id } });
@@ -573,6 +599,47 @@ export class BookingsService implements OnApplicationBootstrap {
   // Helpers
   // ---------------------------------------------------------------------------
 
+  /**
+   * Shapes a booking for API responses: payment QR only while the booking still awaits its
+   * deposit and a live hold backs it, null afterwards so clients can stop polling.
+   */
+  private toBookingResponse(b: Booking, holdExpiresAt: Date | null): BookingResponseDto {
+    const stillPayable =
+      STATUSES_AWAITING_DEPOSIT.includes(b.status) &&
+      holdExpiresAt !== null &&
+      holdExpiresAt > new Date();
+    return {
+      ...b,
+      holdExpiresAt,
+      paymentQrUrl: stillPayable
+        ? this.buildPaymentQrUrl(b.bookingNo, String(b.depositTotal))
+        : null,
+    } as BookingResponseDto;
+  }
+
+  /**
+   * Deposit QR (VietQR) for the mobile app to render — `addInfo` carries the booking number so
+   * the SePay webhook can match the transfer. Null when the bank account env is not configured.
+   */
+  private buildPaymentQrUrl(bookingNo: string, depositTotal: string): string | null {
+    if (!this.paymentQrConfigured()) return null;
+    return buildVietQrUrl({
+      bankId: this.configService.get<string>(ENV_KEY.SEPAY_BANK_ID) as string,
+      accountNo: this.configService.get<string>(ENV_KEY.SEPAY_ACCOUNT_NO) as string,
+      accountName: this.configService.get<string>(ENV_KEY.SEPAY_ACCOUNT_NAME) as string,
+      amount: new Decimal(depositTotal).toFixed(0),
+      addInfo: bookingNo,
+    });
+  }
+
+  private paymentQrConfigured(): boolean {
+    return Boolean(
+      this.configService.get<string>(ENV_KEY.SEPAY_BANK_ID) &&
+        this.configService.get<string>(ENV_KEY.SEPAY_ACCOUNT_NO) &&
+        this.configService.get<string>(ENV_KEY.SEPAY_ACCOUNT_NAME),
+    );
+  }
+
   private async deleteIdempotencyKey(key: string, userId: string): Promise<void> {
     await this.idempotencyRepo.delete({
       key,
@@ -618,11 +685,7 @@ export class BookingsService implements OnApplicationBootstrap {
 
     const booking = bookings[0];
 
-    const awaitingDepositStatuses: BookingStatus[] = [
-      BookingStatus.HOLDING,
-      BookingStatus.PENDING_DEPOSIT,
-    ];
-    if (!awaitingDepositStatuses.includes(booking.status)) {
+    if (!STATUSES_AWAITING_DEPOSIT.includes(booking.status)) {
       this.logger.warn(
         `Booking ${booking.bookingNo} status=${booking.status}, not awaiting deposit, skipping`,
       );
@@ -632,15 +695,55 @@ export class BookingsService implements OnApplicationBootstrap {
     const paidAmount = new Decimal(event.amount);
     const depositRequired = new Decimal(booking.depositTotal);
 
-    if (paidAmount.gte(depositRequired)) {
-      await this.bookingRepo.update(booking.id, { status: BookingStatus.CONFIRMED });
-      this.logger.log(
-        `Booking ${booking.bookingNo} confirmed via payment sepayId=${event.sepayId} amount=${event.amount}`,
-      );
-    } else {
+    if (paidAmount.lt(depositRequired)) {
       this.logger.warn(
         `Payment sepayId=${event.sepayId} amount=${event.amount} < deposit ${booking.depositTotal} for booking ${booking.bookingNo}`,
       );
+      return;
+    }
+
+    const now = new Date();
+    let outcome: 'confirmed' | 'late' | 'status-changed';
+    try {
+      outcome = await this.dataSource.transaction(async (em) => {
+        // Atomic guard — a concurrent webhook delivery may have confirmed already.
+        const statusUpdate = await em.update(
+          Booking,
+          { id: booking.id, status: In(STATUSES_AWAITING_DEPOSIT) },
+          { status: BookingStatus.CONFIRMED },
+        );
+        if (!statusUpdate.affected) return 'status-changed' as const;
+
+        // Mark still-valid holds CONVERTED so the expiry sweep leaves the units held.
+        await em.update(
+          UnitHold,
+          { bookingId: booking.id, status: HoldStatus.ACTIVE, expiresAt: MoreThan(now) },
+          { status: HoldStatus.CONVERTED },
+        );
+
+        // A leftover ACTIVE hold is expired but not yet swept — the transfer arrived too
+        // late. Roll back so the booking can expire and the payment is reconciled manually.
+        const leftoverHolds = await em.count(UnitHold, {
+          where: { bookingId: booking.id, status: HoldStatus.ACTIVE },
+        });
+        if (leftoverHolds > 0) throw new LatePaymentError();
+        return 'confirmed' as const;
+      });
+    } catch (err) {
+      if (!(err instanceof LatePaymentError)) throw err;
+      outcome = 'late';
+    }
+
+    if (outcome === 'confirmed') {
+      this.logger.log(
+        `Booking ${booking.bookingNo} confirmed via payment sepayId=${event.sepayId} amount=${event.amount}`,
+      );
+    } else if (outcome === 'late') {
+      this.logger.warn(
+        `Payment sepayId=${event.sepayId} for booking ${booking.bookingNo} arrived after holds expired — manual reconciliation needed`,
+      );
+    } else {
+      this.logger.warn(`Booking ${booking.bookingNo} status changed concurrently, skipping`);
     }
   }
 }

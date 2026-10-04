@@ -32,6 +32,10 @@ export const ENV_KEY = {
 
   // SePay webhook
   SEPAY_WEBHOOK_SECRET: 'SEPAY_WEBHOOK_SECRET',
+  // Bank account shown on the payment QR (the same account SePay monitors)
+  SEPAY_BANK_ID: 'SEPAY_BANK_ID',
+  SEPAY_ACCOUNT_NO: 'SEPAY_ACCOUNT_NO',
+  SEPAY_ACCOUNT_NAME: 'SEPAY_ACCOUNT_NAME',
 } as const;
 
 /** Goong REST API v2 base URL */

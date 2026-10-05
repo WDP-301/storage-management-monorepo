@@ -4,6 +4,9 @@ import {
   IStorageLocation,
   PresignedUploadUrlResponse,
   StorageDashboardSummary,
+  SystemSettingRecord,
+  SystemSettingsResponse,
+  UpdateSettingsResponse,
   UploadedFileResponse,
 } from '@storage/types';
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
@@ -177,5 +180,28 @@ export const StorageApi = {
       params: { fileKey },
     });
     return res.data.data.downloadUrl;
+  },
+};
+
+/**
+ * System Settings API Service
+ */
+export const SettingsApi = {
+  /**
+   * Fetch all system settings from the server.
+   */
+  getAll: async (): Promise<SystemSettingRecord[]> => {
+    const res = await apiClient.get<ApiResponse<SystemSettingsResponse>>('/admin/settings');
+    return res.data.data.settings;
+  },
+
+  /**
+   * Update one or more system settings.
+   */
+  update: async (values: Record<string, unknown>): Promise<SystemSettingRecord[]> => {
+    const res = await apiClient.patch<ApiResponse<UpdateSettingsResponse>>('/admin/settings', {
+      values,
+    });
+    return res.data.data.settings;
   },
 };

@@ -1,26 +1,10 @@
 import { Badge, Button, Text } from '@cloudflare/kumo';
 import { UserRole } from '@storage/types';
-import {
-  Boxes,
-  Building2,
-  ChevronRight,
-  ClipboardCheck,
-  LayoutDashboard,
-  LineChart,
-  LogOut,
-  Menu,
-  Package,
-  RefreshCw,
-  Shield,
-  ShieldCheck,
-  SlidersHorizontal,
-  User,
-  X,
-} from 'lucide-react';
+import { Boxes, LogOut, Menu, RefreshCw, ShieldCheck, User, X } from 'lucide-react';
 import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getRoleBadgeVariant, getRoleDefaultPath, getRoleTitle } from '../lib/roles';
+import { getRoleDefaultPath, getRoleTitle } from '../lib/roles';
 
 export const AppShell: React.FC = () => {
   const { user, activeRole, logout, switchRole } = useAuth();
@@ -35,7 +19,23 @@ export const AppShell: React.FC = () => {
 
   const currentRole = activeRole ?? user?.roles?.[0];
   const roleTitle = getRoleTitle(currentRole);
-  const badgeVariant = getRoleBadgeVariant(currentRole);
+
+  const getRoleBadgeClass = (role?: UserRole | null) => {
+    switch (role) {
+      case UserRole.ADMIN:
+        return 'bg-purple-50 text-purple-700 border border-purple-200/80 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800';
+      case UserRole.OPERATIONS_MANAGER:
+        return 'bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800';
+      case UserRole.FACILITY_MANAGER:
+        return 'bg-teal-50 text-teal-800 border border-teal-200/80 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-800';
+      case UserRole.FACILITY_STAFF:
+        return 'bg-amber-50 text-amber-800 border border-amber-200/80 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800';
+      case UserRole.CUSTOMER:
+        return 'bg-emerald-50 text-emerald-800 border border-emerald-200/80 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800';
+      default:
+        return 'bg-kumo-fill text-kumo-subtle';
+    }
+  };
 
   const handleSwitchRole = (newRole: UserRole) => {
     switchRole?.(newRole);
@@ -56,7 +56,6 @@ export const AppShell: React.FC = () => {
   const overviewItem = {
     to: '/dashboard',
     label: 'Tổng quan & Hàng tồn',
-    icon: <LayoutDashboard className="w-4 h-4 text-kumo-brand" />,
     badge: 'Chung',
   };
 
@@ -67,37 +66,31 @@ export const AppShell: React.FC = () => {
         {
           to: '/admin',
           label: 'Quản trị hệ thống',
-          icon: <Shield className="w-4 h-4 text-kumo-brand" />,
           badge: 'Admin',
         },
         {
           to: '/admin/settings',
           label: 'Cấu hình tham số',
-          icon: <SlidersHorizontal className="w-4 h-4 text-kumo-brand" />,
           badge: 'Config',
         },
         {
           to: '/operations',
           label: 'Điều hành & Vận hành',
-          icon: <LineChart className="w-4 h-4 text-kumo-brand" />,
           badge: 'Ops',
         },
         {
           to: '/facility-manager',
           label: 'Quản lý cơ sở kho',
-          icon: <Building2 className="w-4 h-4 text-kumo-brand" />,
           badge: 'Manager',
         },
         {
           to: '/facility-staff',
           label: 'Ca trực & Kiểm tra',
-          icon: <ClipboardCheck className="w-4 h-4 text-kumo-brand" />,
           badge: 'Staff',
         },
         {
           to: '/customer',
           label: 'Kho lưu trữ khách hàng',
-          icon: <Package className="w-4 h-4 text-kumo-brand" />,
           badge: 'Customer',
         },
       ];
@@ -108,13 +101,11 @@ export const AppShell: React.FC = () => {
         {
           to: '/operations',
           label: 'Điều hành & Vận hành',
-          icon: <LineChart className="w-4 h-4 text-kumo-brand" />,
           badge: 'Ops',
         },
         {
           to: '/admin/settings',
           label: 'Cấu hình tham số',
-          icon: <SlidersHorizontal className="w-4 h-4 text-kumo-brand" />,
           badge: 'Config',
         },
       ];
@@ -125,13 +116,11 @@ export const AppShell: React.FC = () => {
         {
           to: '/facility-manager',
           label: 'Quản lý cơ sở kho',
-          icon: <Building2 className="w-4 h-4 text-kumo-brand" />,
           badge: 'Manager',
         },
         {
           to: '/facility-staff',
           label: 'Ca trực & Kiểm tra',
-          icon: <ClipboardCheck className="w-4 h-4 text-kumo-brand" />,
           badge: 'Staff',
         },
       ];
@@ -142,7 +131,6 @@ export const AppShell: React.FC = () => {
         {
           to: '/facility-staff',
           label: 'Ca trực & Kiểm tra',
-          icon: <ClipboardCheck className="w-4 h-4 text-kumo-brand" />,
           badge: 'Staff',
         },
       ];
@@ -152,7 +140,6 @@ export const AppShell: React.FC = () => {
       {
         to: '/customer',
         label: 'Kho lưu trữ của tôi',
-        icon: <Package className="w-4 h-4 text-kumo-brand" />,
         badge: 'Customer',
       },
     ];
@@ -216,7 +203,10 @@ export const AppShell: React.FC = () => {
                     Storage Hub
                   </Text>
                 </span>
-                <Badge variant={badgeVariant} className="text-[10px]">
+                <Badge
+                  variant="neutral"
+                  className={`text-[10px] font-medium border-none ${getRoleBadgeClass(currentRole)}`}
+                >
                   {roleTitle}
                 </Badge>
               </div>
@@ -230,36 +220,36 @@ export const AppShell: React.FC = () => {
           <nav className="p-4 space-y-1.5" aria-label="Menu chính">
             {canAccessOverview && (
               <>
-                <div className="px-3 py-1.5 text-xs font-semibold text-kumo-subtle uppercase">
-                  Khu vực chung
+                <div className="px-3 py-1.5 flex items-center">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800">
+                    <span className=" h-1.5 rounded-full shrink-0" />
+                    Khu vực chung
+                  </span>
                 </div>
                 <NavLink
                   to={overviewItem.to}
                   end
                   onClick={() => setMobileMenuOpen(false)}
                   className={({ isActive }: { isActive: boolean }) =>
-                    `flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium ${
+                    `block px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                       isActive
-                        ? 'bg-kumo-fill text-kumo-brand font-semibold ring ring-kumo-brand/20'
-                        : 'text-kumo-default hover:bg-kumo-tint'
+                        ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 font-semibold ring ring-blue-300/40'
+                        : 'text-kumo-subtle hover:text-kumo-default hover:bg-kumo-tint'
                     }`
                   }
                 >
-                  <div className="flex items-center gap-3">
-                    {overviewItem.icon}
-                    <span>{overviewItem.label}</span>
-                  </div>
-                  <ChevronRight className="w-3.5 h-3.5 text-kumo-subtle opacity-70" />
+                  {overviewItem.label}
                 </NavLink>
               </>
             )}
 
             {roleNavItems.length > 0 && (
               <>
-                <div
-                  className={`${canAccessOverview ? 'pt-3' : ''} px-3 py-1.5 text-xs font-semibold text-kumo-subtle uppercase`}
-                >
-                  Chức năng theo vai trò
+                <div className={`${canAccessOverview ? 'pt-4' : ''} px-3 py-1.5 flex items-center`}>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800">
+                    <span className="h-1.5 rounded-full shrink-0" />
+                    Chức năng theo vai trò
+                  </span>
                 </div>
                 {roleNavItems.map((item) => (
                   <NavLink
@@ -268,18 +258,14 @@ export const AppShell: React.FC = () => {
                     end
                     onClick={() => setMobileMenuOpen(false)}
                     className={({ isActive }: { isActive: boolean }) =>
-                      `flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium ${
+                      `block px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                         isActive
                           ? 'bg-kumo-fill text-kumo-brand font-semibold ring ring-kumo-brand/20'
-                          : 'text-kumo-default hover:bg-kumo-tint'
+                          : 'text-kumo-subtle hover:text-kumo-default hover:bg-kumo-tint'
                       }`
                     }
                   >
-                    <div className="flex items-center gap-3">
-                      {item.icon}
-                      <span>{item.label}</span>
-                    </div>
-                    <ChevronRight className="w-3.5 h-3.5 text-kumo-subtle opacity-70" />
+                    {item.label}
                   </NavLink>
                 ))}
               </>
@@ -333,7 +319,10 @@ export const AppShell: React.FC = () => {
                 </p>
               </div>
             </div>
-            <Badge variant={badgeVariant} className="shrink-0 text-[10px]">
+            <Badge
+              variant="neutral"
+              className={`shrink-0 text-[10px] font-medium border-none ${getRoleBadgeClass(currentRole)}`}
+            >
               {roleTitle}
             </Badge>
           </div>

@@ -159,13 +159,15 @@ describe('BookingsService.handlePaymentReceived', () => {
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('already recorded'));
   });
 
-  it('does not double-confirm when a concurrent delivery already moved the status', async () => {
+  it('does not double-confirm but still records the losing transfer', async () => {
     bookingRepo.find.mockResolvedValue([buildBooking()]);
     em.update.mockResolvedValue({ affected: 0 }); // the atomic status guard loses the race
 
     await service.handlePaymentReceived(buildEvent());
 
     expect(em.update).toHaveBeenCalledTimes(1);
+    expect(em.save).not.toHaveBeenCalled(); // rolled back before its own insert
+    expect(paymentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ providerRef: '42' }));
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('status changed concurrently'));
   });
 });

@@ -782,15 +782,17 @@ export class BookingsService implements OnApplicationBootstrap {
       this.logger.log(
         `Booking ${booking.bookingNo} confirmed via payment sepayId=${event.sepayId} amount=${event.amount}`,
       );
-    } else if (outcome === 'late') {
-      // The transfer still reached the bank — keep its receipt so reconciliation sees the money
-      // even though the rolled-back transaction could not attach it to a confirmed booking.
-      await paymentRepo.save(payment);
-      this.logger.warn(
-        `Payment sepayId=${event.sepayId} for booking ${booking.bookingNo} arrived after holds expired — manual reconciliation needed`,
-      );
     } else {
-      this.logger.warn(`Booking ${booking.bookingNo} status changed concurrently, skipping`);
+      // The transaction did not confirm, but the transfer still reached the bank —
+      // keep its receipt so reconciliation sees the money either way.
+      await paymentRepo.save(payment);
+      if (outcome === 'late') {
+        this.logger.warn(
+          `Payment sepayId=${event.sepayId} for booking ${booking.bookingNo} arrived after holds expired — manual reconciliation needed`,
+        );
+      } else {
+        this.logger.warn(`Booking ${booking.bookingNo} status changed concurrently, skipping`);
+      }
     }
   }
 }

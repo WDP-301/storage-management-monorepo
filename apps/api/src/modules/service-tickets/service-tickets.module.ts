@@ -2,6 +2,7 @@ import { AppUser } from '@entities/app-user.entity';
 import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
 import { Facility } from '@entities/facility.entity';
+import { IdempotencyKey } from '@entities/idempotency-key.entity';
 import { ServiceTicket } from '@entities/service-ticket.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { TicketType } from '@entities/ticket-type.entity';
@@ -28,6 +29,7 @@ import { ServiceTicketsService } from './service-tickets.service';
       StorageUnit,
       Contract,
       BookingItem,
+      IdempotencyKey,
     ]),
     AuthModule,
   ],

@@ -17,6 +17,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { ENV_KEY } from '@shared/constants';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
+import { canonicalStringify } from '@shared/utils/canonical-json.util';
 import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import {
   BookingStatus,
@@ -42,22 +43,6 @@ const STATUSES_AWAITING_DEPOSIT: BookingStatus[] = [
 /** Rolls the confirm transaction back when the transfer arrived after the holds expired. */
 class LatePaymentError extends Error {}
 
-/** Recursively serializes an object with sorted keys (Canonical JSON). */
-function canonicalStringify(val: unknown): string {
-  if (val === null || typeof val !== 'object') {
-    return JSON.stringify(val);
-  }
-  if (Array.isArray(val)) {
-    return `[${val.map((item) => (item === undefined ? 'null' : canonicalStringify(item))).join(',')}]`;
-  }
-  const obj = val as Record<string, unknown>;
-  const sortedKeys = Object.keys(obj)
-    .filter((key) => obj[key] !== undefined)
-    .sort();
-  const pairs = sortedKeys.map((key) => `${JSON.stringify(key)}:${canonicalStringify(obj[key])}`);
-  return `{${pairs.join(',')}}`;
-}
-
 /** SHA-256 hex of a deterministic canonical JSON representation of the request body. */
 function hashBody(body: Record<string, unknown>): string {
   const normalized = { ...body };
@@ -66,8 +51,7 @@ function hashBody(body: Record<string, unknown>): string {
       String(a?.storageUnitId ?? '').localeCompare(String(b?.storageUnitId ?? '')),
     );
   }
-  const stable = canonicalStringify(normalized);
-  return createHash('sha256').update(stable).digest('hex');
+  return createHash('sha256').update(canonicalStringify(normalized)).digest('hex');
 }
 
 @Injectable()

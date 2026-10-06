@@ -5,6 +5,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -12,6 +13,9 @@ import {
 import { Invoice } from './invoice.entity';
 
 @Entity('payments')
+// Partial unique index (provider_ref IS NOT NULL) — created by migration;
+// metadata kept sync-off so schema sync never manages the WHERE clause.
+@Index('UQ_payments_provider_ref', { synchronize: false })
 export class Payment {
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString } from 'class-validator';
 
 /**
  * DTO map 1-1 với body SePay gửi đến webhook.
@@ -34,6 +34,7 @@ export class SepayWebhookDto {
   code: string | null;
 
   @IsNumber()
+  @IsPositive()
   transferAmount: number;
 
   @IsString()

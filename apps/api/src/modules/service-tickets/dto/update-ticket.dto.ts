@@ -1,17 +1,26 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { TicketStatus } from '@storage/types';
+import { TicketPriority, TicketStatus } from '@storage/types';
 import { IsArray, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 
 /**
  * Fields an assigned FACILITY_STAFF member may update while processing a ticket.
  * Ownership fields (customer_id, facility_id, assigned_to, ticket_no, …) are not
  * accepted here; the update target and the acting user are resolved server-side.
+ * CANCELLED is rejected here — it belongs to the cancel endpoint, which carries
+ * the owner/manager authorization. Status only moves forward
+ * (OPEN → ASSIGNED → IN_PROGRESS → RESOLVED); CLOSED stays settable as its own
+ * end state (dropped or resolved informally); RESOLVED already ends the ticket.
  */
 export class UpdateTicketDto {
   @ApiPropertyOptional({ enum: TicketStatus })
   @IsOptional()
   @IsEnum(TicketStatus)
   status?: TicketStatus;
+
+  @ApiPropertyOptional({ enum: TicketPriority })
+  @IsOptional()
+  @IsEnum(TicketPriority)
+  priority?: TicketPriority;
 
   @ApiPropertyOptional({
     type: String,

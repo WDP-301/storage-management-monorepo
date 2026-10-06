@@ -1,11 +1,10 @@
 import { SystemSetting } from '@entities/system-setting.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { HttpStatus, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { Repository } from 'typeorm';
-import { SETTINGS_REGISTRY, validateSettingValue } from './settings.registry';
+import { In, Repository } from 'typeorm';
 import {
   type SystemSettingsResponse,
   toSystemSettingRecord,
@@ -16,37 +15,13 @@ import {
 const CACHE_TTL_MS = 60_000;
 
 @Injectable()
-export class SettingsService implements OnApplicationBootstrap {
-  private readonly logger = new Logger(SettingsService.name);
+export class SettingsService {
   private readonly cache = new Map<string, { value: unknown; loadedAt: number }>();
 
   constructor(
     @InjectRepository(SystemSetting)
     private readonly settingsRepo: Repository<SystemSetting>,
   ) {}
-
-  /** Inserts every registry key missing from the DB so defaults always exist. */
-  async onApplicationBootstrap(): Promise<void> {
-    const params: unknown[] = [];
-    const placeholders = Object.entries(SETTINGS_REGISTRY).map(([key, def], index) => {
-      const base = index * 5;
-      params.push(key, JSON.stringify(def.default), def.type, def.group, def.description ?? null);
-      return `($${base + 1}, $${base + 2}::jsonb, $${base + 3}, $${base + 4}, $${base + 5})`;
-    });
-
-    // Atomic and idempotent: concurrent instance boots cannot double-insert the same key.
-    const inserted = (await this.settingsRepo.query(
-      `INSERT INTO system_settings (key, value, value_type, "group", description)
-       VALUES ${placeholders.join(', ')}
-       ON CONFLICT (key) DO NOTHING
-       RETURNING key`,
-      params,
-    )) as Array<{ key: string }>;
-
-    if (inserted.length > 0) {
-      this.logger.log(`Seeded ${inserted.length} missing system setting(s).`);
-    }
-  }
 
   /** Reads a setting value, served from a short-TTL in-memory cache. */
   async get(key: string): Promise<unknown> {
@@ -56,8 +31,7 @@ export class SettingsService implements OnApplicationBootstrap {
     }
 
     const row = await this.settingsRepo.findOne({ where: { key } });
-    const value = row?.value ?? SETTINGS_REGISTRY[key]?.default;
-    if (value === undefined) {
+    if (!row) {
       throw new DomainException(
         ErrorCode.INTERNAL_ERROR,
         `System setting '${key}' is not defined`,
@@ -65,8 +39,8 @@ export class SettingsService implements OnApplicationBootstrap {
       );
     }
 
-    this.cache.set(key, { value, loadedAt: Date.now() });
-    return value;
+    this.cache.set(key, { value: row.value, loadedAt: Date.now() });
+    return row.value;
   }
 
   private async getNumber(key: string): Promise<number> {
@@ -117,13 +91,13 @@ export class SettingsService implements OnApplicationBootstrap {
     return this.getNumber('deposit.default_months');
   }
 
-  /** Lists every setting merged with its registry metadata (label, default, min/max). */
+  /** Lists every setting with its stored metadata (label, bounds, default). */
   async getAll(): Promise<SystemSettingsResponse> {
     const rows = await this.settingsRepo.find({ order: { group: 'ASC', key: 'ASC' } });
     return { settings: rows.map(toSystemSettingRecord) };
   }
 
-  /** Validates and applies a partial update of one or more settings. */
+  /** Validates each value against the row's stored type/bounds and applies a partial update. */
   async update(values: Record<string, unknown>, admin: AuthUser): Promise<UpdateSettingsResponse> {
     const entries = Object.entries(values);
     if (entries.length === 0) {
@@ -143,8 +117,13 @@ export class SettingsService implements OnApplicationBootstrap {
       );
     }
 
+    const keys = entries.map(([key]) => key);
+    const rows = await this.settingsRepo.find({ where: { key: In(keys) } });
+    const byKey = new Map(rows.map((row) => [row.key, row]));
+
     const fieldErrors = entries.flatMap(([key, value]) => {
-      const error = validateSettingValue(key, value);
+      const row = byKey.get(key);
+      const error = row ? validateSettingValue(row, value) : 'Unknown setting key';
       return error ? [{ field: key, code: 'invalidValue', message: error }] : [];
     });
     if (fieldErrors.length > 0) {
@@ -156,25 +135,82 @@ export class SettingsService implements OnApplicationBootstrap {
       );
     }
 
-    await this.settingsRepo.save(
+    // Only value and updated_by change — metadata columns belong to migrations, not admin edits.
+    await Promise.all(
       entries.map(([key, value]) =>
-        this.settingsRepo.create({
-          key,
-          value,
-          valueType: SETTINGS_REGISTRY[key].type,
-          group: SETTINGS_REGISTRY[key].group,
-          updatedBy: admin.id,
-        }),
+        this.settingsRepo.update({ key }, { value, updatedBy: admin.id }),
       ),
     );
     for (const [key] of entries) {
       this.cache.delete(key);
     }
 
-    const rows = await this.settingsRepo.find({
-      where: entries.map(([key]) => ({ key })),
+    const updated = await this.settingsRepo.find({
+      where: { key: In(keys) },
       order: { group: 'ASC', key: 'ASC' },
     });
-    return { settings: rows.map(toSystemSettingRecord) };
+    return { settings: updated.map(toSystemSettingRecord) };
   }
+}
+
+/**
+ * Validates a candidate value against the row's declared type and bounds.
+ * Returns an error message, or `null` when the value is valid.
+ */
+function validateSettingValue(row: SystemSetting, value: unknown): string | null {
+  const { min, max } = row;
+
+  switch (row.valueType) {
+    case 'int':
+      if (typeof value !== 'number' || !Number.isInteger(value)) {
+        return 'Value must be an integer';
+      }
+      break;
+    case 'float':
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return 'Value must be a number';
+      }
+      break;
+    case 'string':
+      if (typeof value !== 'string') {
+        return 'Value must be a string';
+      }
+      break;
+    case 'boolean':
+      if (typeof value !== 'boolean') {
+        return 'Value must be a boolean';
+      }
+      break;
+    case 'duration_minutes':
+      if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+        return 'Value must be a positive integer number of minutes';
+      }
+      break;
+    case 'int_list':
+      if (
+        !Array.isArray(value) ||
+        !value.every((v) => typeof v === 'number' && Number.isInteger(v))
+      ) {
+        return 'Value must be an array of integers';
+      }
+      if (min != null && value.some((v) => v < min)) {
+        return `Each item must be >= ${min}`;
+      }
+      if (max != null && value.some((v) => v > max)) {
+        return `Each item must be <= ${max}`;
+      }
+      break;
+  }
+
+  if (row.valueType !== 'string' && row.valueType !== 'boolean' && row.valueType !== 'int_list') {
+    const numeric = value as number;
+    if (min != null && numeric < min) {
+      return `Value must be >= ${min}`;
+    }
+    if (max != null && numeric > max) {
+      return `Value must be <= ${max}`;
+    }
+  }
+
+  return null;
 }

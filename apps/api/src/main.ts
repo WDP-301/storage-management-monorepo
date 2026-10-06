@@ -11,6 +11,10 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
+
+  // Trust the first proxy hop (Render/Cloudflare) so req.ip is the real client IP —
+  // ThrottlerGuard and session context depend on it.
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
   const logger = new Logger('Bootstrap');
   const configService = app.get(ConfigService);
 

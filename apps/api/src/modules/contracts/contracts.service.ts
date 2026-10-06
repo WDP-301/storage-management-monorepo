@@ -7,6 +7,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
+import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import { BookingStatus, ContractKind, ContractStatus } from '@storage/types';
 import Decimal from 'decimal.js';
 import { DataSource, IsNull, Repository } from 'typeorm';
@@ -92,7 +93,20 @@ export class ContractsService {
           phone: customer.phone ?? null,
         },
       });
-      return manager.save(Contract, contract);
+      try {
+        return await manager.save(Contract, contract);
+      } catch (err) {
+        // UQ_contract_initial_item — a second INITIAL contract raced past the item lock.
+        if (isUniqueViolation(err)) {
+          throw new DomainException(
+            ErrorCode.CONFLICT,
+            'An initial contract already exists for this booking item',
+            HttpStatus.CONFLICT,
+            { bookingItemId: item.id },
+          );
+        }
+        throw err;
+      }
     });
   }
 
@@ -108,6 +122,30 @@ export class ContractsService {
 
   async update(id: string, dto: UpdateContractDto): Promise<Contract> {
     const contract = await this.findById(id);
+
+    // signedAt seals the commercial terms — only lifecycle fields (status, endedAt)
+    // may change afterwards. There is no SIGNED status; the timestamp is the marker.
+    if (contract.signedAt) {
+      const sealed = (
+        [
+          'kind',
+          'signedAt',
+          'effectiveAt',
+          'termsSnapshot',
+          'months',
+          'monthlyPriceSnapshot',
+        ] as const
+      ).filter((field) => dto[field] !== undefined);
+      if (sealed.length > 0) {
+        throw new DomainException(
+          ErrorCode.CONFLICT,
+          `Contract is signed — these fields can no longer change: ${sealed.join(', ')}`,
+          HttpStatus.CONFLICT,
+          { contractId: id, sealedFields: sealed },
+        );
+      }
+    }
+
     const { effectiveAt, signedAt, endedAt, ...fields } = dto;
     const dates = {
       ...(effectiveAt !== undefined ? { effectiveAt: new Date(effectiveAt) } : {}),

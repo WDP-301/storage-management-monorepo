@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { SettingValueType } from '../settings.registry';
+import type { SettingValueType } from '@storage/types';
 import type { SystemSettingRecord, SystemSettingsResponse } from '../types/settings';
 
 const VALUE_TYPES: SettingValueType[] = [

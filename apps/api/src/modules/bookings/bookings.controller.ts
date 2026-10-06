@@ -116,6 +116,16 @@ export class BookingsController {
   @ApiOperation({ summary: 'Cancel booking and release held units' })
   @ApiResponse({ status: 200, type: BookingActionResponseDto })
   @ApiResponse({
+    status: 403,
+    description: 'Not the booking owner',
+    type: ApiErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Booking not found',
+    type: ApiErrorResponseDto,
+  })
+  @ApiResponse({
     status: 409,
     description: 'Booking is not in a cancellable status',
     type: ApiErrorResponseDto,

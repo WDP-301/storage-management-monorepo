@@ -1,6 +1,6 @@
 import { Facility } from '@entities/facility.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
-import { isAssignmentActive } from '@modules/auth/role-assignment.util';
+import { activeFacilityIds } from '@modules/auth/role-assignment.util';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
@@ -50,13 +50,7 @@ export class FacilitiesService {
       },
     });
 
-    const facilityIds = [
-      ...new Set(
-        assignments
-          .filter((assignment) => assignment.facilityId && isAssignmentActive(assignment))
-          .map((assignment) => assignment.facilityId as string),
-      ),
-    ];
+    const facilityIds = activeFacilityIds(assignments);
 
     if (facilityIds.length === 0) {
       return [];

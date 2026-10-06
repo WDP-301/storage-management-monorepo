@@ -147,6 +147,8 @@ export class ChangeRequestsService {
     }
 
     // One open request per contract at a time.
+    // ponytail: check-then-insert — concurrent POSTs can both open a request;
+    // upgrade path = partial unique index on contract_id over OPEN_STATUSES.
     const openCount = await this.requests
       .createQueryBuilder('r')
       .where('r.contract_id = :contractId', { contractId: contract.id })
@@ -218,8 +220,8 @@ export class ChangeRequestsService {
           actor.id,
         ),
       ];
-      const saved = await this.requests.save(request);
-      return { request: toChangeRequestRecord(await this.findOrFail(saved.id)) };
+      await this.requests.save(request);
+      return { request: toChangeRequestRecord(request) };
     }
 
     if (!request.newUnitId) {
@@ -305,7 +307,7 @@ export class ChangeRequestsService {
       await manager.save(request);
     });
 
-    return { request: toChangeRequestRecord(await this.findOrFail(id)) };
+    return { request: toChangeRequestRecord(request) };
   }
 
   private async findOrFail(id: string): Promise<UnitChangeRequest> {

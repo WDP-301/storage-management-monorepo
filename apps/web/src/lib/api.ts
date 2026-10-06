@@ -1,11 +1,15 @@
 import {
   ApiResponse,
+  ChangeRequestStatus,
   IStorageItem,
   IStorageLocation,
   PresignedUploadUrlResponse,
   StorageDashboardSummary,
+  StorageUnitStatus,
   SystemSettingRecord,
   SystemSettingsResponse,
+  TicketPriority,
+  TicketStatus,
   UpdateSettingsResponse,
   UploadedFileResponse,
 } from '@storage/types';
@@ -200,27 +204,13 @@ export interface ManagedUnit {
   code: string;
   zone?: string | null;
   areaM2: string;
-  status:
-    | 'AVAILABLE'
-    | 'HELD'
-    | 'BOOKED'
-    | 'RENTED'
-    | 'PENDING_INSPECTION'
-    | 'MAINTENANCE'
-    | 'INACTIVE';
+  status: StorageUnitStatus;
   unitType: { id: string; code: string; name: string; monthlyPrice: string };
 }
 
 export interface UnitChangeRequestRecord {
   id: string;
-  status:
-    | 'REQUESTED'
-    | 'PROPOSED'
-    | 'APPROVED'
-    | 'TRANSITIONING'
-    | 'COMPLETED'
-    | 'REJECTED'
-    | 'CANCELLED';
+  status: ChangeRequestStatus;
   reason: string;
   rent_difference: number;
   decision_note: string | null;
@@ -235,8 +225,8 @@ export interface ServiceTicketRecord {
   id: string;
   ticket_no: string;
   subject: string;
-  status: 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED' | 'CANCELLED';
-  priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+  status: TicketStatus;
+  priority: TicketPriority;
   created_at: string;
   facility: { id: string; code: string } | null;
   customer: { id: string; full_name: string } | null;
@@ -255,10 +245,10 @@ export const FacilitiesApi = {
 };
 
 export const UnitsApi = {
-  managed: async (facilityId: string, status?: string) => {
+  managed: async (facilityId: string) => {
     const res = await apiClient.get<ApiResponse<{ units: ManagedUnit[] } & Paged>>(
       '/storage-units/managed',
-      { params: { facilityId, status } },
+      { params: { facilityId } },
     );
     return res.data.data;
   },
@@ -272,10 +262,10 @@ export const UnitsApi = {
 };
 
 export const ChangeRequestsApi = {
-  list: async (status?: string) => {
+  list: async () => {
     const res = await apiClient.get<ApiResponse<{ requests: UnitChangeRequestRecord[] } & Paged>>(
       '/unit-change-requests',
-      { params: { status, limit: 50 } },
+      { params: { limit: 50 } },
     );
     return res.data.data;
   },

@@ -1,5 +1,5 @@
 import { UserRole } from '@storage/types';
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { FacilitiesApi, type FacilityRecord } from '../lib/api';
 import { useAuth } from './AuthContext';
 
@@ -42,10 +42,10 @@ export const FacilityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       .finally(() => setIsLoading(false));
   }, [user, isFacilityScoped]);
 
-  const selectFacility = (id: string) => {
+  const selectFacility = useCallback((id: string) => {
     setSelectedFacilityId(id);
     localStorage.setItem(STORAGE_KEY, id);
-  };
+  }, []);
 
   const value = useMemo<FacilityContextValue>(
     () => ({
@@ -54,7 +54,7 @@ export const FacilityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       selectFacility,
       isLoading,
     }),
-    [facilities, selectedFacilityId, isLoading],
+    [facilities, selectedFacilityId, isLoading, selectFacility],
   );
 
   return <FacilityContext.Provider value={value}>{children}</FacilityContext.Provider>;

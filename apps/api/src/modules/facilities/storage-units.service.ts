@@ -132,22 +132,6 @@ export class StorageUnitsService {
       StorageUnitStatus.AVAILABLE,
       StorageUnitStatus.MAINTENANCE,
     ];
-    if (!TOGGLEABLE.includes(dto.status)) {
-      throw new DomainException(
-        ErrorCode.VALIDATION_FAILED,
-        'Validation failed',
-        HttpStatus.BAD_REQUEST,
-        {
-          fields: [
-            {
-              field: 'status',
-              code: 'notAllowed',
-              message: 'status can only be AVAILABLE or MAINTENANCE',
-            },
-          ],
-        },
-      );
-    }
     if (!TOGGLEABLE.includes(unit.status)) {
       throw new DomainException(
         ErrorCode.CONFLICT,

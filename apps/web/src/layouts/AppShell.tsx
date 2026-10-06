@@ -21,10 +21,6 @@ export const AppShell: React.FC = () => {
 
   const currentRole = activeRole ?? user?.roles?.[0];
   const roleTitle = getRoleTitle(currentRole);
-  const isFacilityScoped = Boolean(
-    currentRole &&
-      ([UserRole.FACILITY_MANAGER, UserRole.FACILITY_STAFF] as UserRole[]).includes(currentRole),
-  );
 
   const getRoleBadgeClass = (role?: UserRole | null) => {
     switch (role) {
@@ -351,7 +347,7 @@ export const AppShell: React.FC = () => {
         <header className="h-16 px-6 bg-kumo-base border-b border-kumo-line sticky top-0 z-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Text as="h2">{pageTitle}</Text>
-            {isFacilityScoped && facilities.length > 0 && (
+            {facilities.length > 0 && (
               <div className="flex items-center gap-2 pl-3 border-l border-kumo-line">
                 <Building2 className="w-4 h-4 text-kumo-brand" />
                 <select

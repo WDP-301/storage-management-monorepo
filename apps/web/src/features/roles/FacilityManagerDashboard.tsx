@@ -79,6 +79,8 @@ export const FacilityManagerDashboard: React.FC = () => {
       ChangeRequestsApi.list(),
       TicketsApi.list(),
     ]);
+    // ponytail: requests/tickets fetch limit=50 then filter client-side — silent
+    // truncation past 50 open items; upgrade path = facilityId param on those list APIs.
     setUnits(unitsData.units);
     setRequests(requestsData.requests.filter((r) => r.facility_id === facilityId));
     setTickets(ticketsData.tickets.filter((t) => t.facility?.id === facilityId));

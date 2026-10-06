@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ChangeRequestStatus } from '@storage/types';
 import { Type } from 'class-transformer';
 import {
+  IsEnum,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -61,6 +62,7 @@ export class ListChangeRequestsQueryDto {
   limit?: number = 20;
 
   @ApiPropertyOptional({ enum: ChangeRequestStatus })
+  @IsEnum(ChangeRequestStatus)
   @IsOptional()
   status?: ChangeRequestStatus;
 }

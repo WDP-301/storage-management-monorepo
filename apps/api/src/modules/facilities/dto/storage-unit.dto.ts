@@ -5,6 +5,7 @@ import { StorageUnitStatus } from '@storage/types';
 import { Type } from 'class-transformer';
 import {
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -142,6 +143,6 @@ export class ManagedUnitsQueryDto {
 /** Facility managers may only toggle operational status, not rewrite inventory. */
 export class UpdateUnitStatusDto {
   @ApiProperty({ enum: [StorageUnitStatus.AVAILABLE, StorageUnitStatus.MAINTENANCE] })
-  @IsEnum(StorageUnitStatus)
+  @IsIn([StorageUnitStatus.AVAILABLE, StorageUnitStatus.MAINTENANCE])
   status: StorageUnitStatus;
 }

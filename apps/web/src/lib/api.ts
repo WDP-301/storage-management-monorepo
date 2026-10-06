@@ -8,6 +8,14 @@ import {
 } from '@storage/types';
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { AuthUser, LoginInput, LoginResponse, RegisterInput } from '../types/auth';
+import type {
+  AssignTicketDto,
+  ListTicketsQuery,
+  ServiceTicketDeleteResponse,
+  ServiceTicketListResponse,
+  ServiceTicketRecord,
+  ServiceTicketResponse,
+} from '../types/service-tickets';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
 
@@ -177,5 +185,58 @@ export const StorageApi = {
       params: { fileKey },
     });
     return res.data.data.downloadUrl;
+  },
+};
+
+/**
+ * Service Tickets API Service
+ */
+export const TicketsApi = {
+  /**
+   * List tickets visible to user with pagination and optional filters
+   */
+  getAll: async (params?: ListTicketsQuery): Promise<ServiceTicketListResponse> => {
+    const res = await apiClient.get<
+      ApiResponse<ServiceTicketListResponse> | ServiceTicketListResponse
+    >('/service-tickets', {
+      params,
+    });
+    const body = res.data && 'data' in res.data ? res.data.data : res.data;
+    return body;
+  },
+
+  /**
+   * Get a single ticket by ID
+   */
+  getOne: async (id: string): Promise<ServiceTicketRecord> => {
+    const res = await apiClient.get<ApiResponse<ServiceTicketResponse> | ServiceTicketResponse>(
+      `/service-tickets/${id}`,
+    );
+    const body = res.data && 'data' in res.data ? res.data.data : res.data;
+    return body.ticket;
+  },
+
+  /**
+   * Assign a facility staff member to a ticket (Facility Manager & Admin)
+   */
+  assign: async (id: string, assignedTo: string): Promise<ServiceTicketRecord> => {
+    const payload: AssignTicketDto = { assignedTo };
+    const res = await apiClient.patch<ApiResponse<ServiceTicketResponse> | ServiceTicketResponse>(
+      `/service-tickets/${id}/assign`,
+      payload,
+    );
+    const body = res.data && 'data' in res.data ? res.data.data : res.data;
+    return body.ticket;
+  },
+
+  /**
+   * Delete a service ticket (Facility Manager & Admin)
+   */
+  remove: async (id: string): Promise<ServiceTicketDeleteResponse> => {
+    const res = await apiClient.delete<
+      ApiResponse<ServiceTicketDeleteResponse> | ServiceTicketDeleteResponse
+    >(`/service-tickets/${id}`);
+    const body = res.data && 'data' in res.data ? res.data.data : res.data;
+    return body;
   },
 };

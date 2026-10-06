@@ -6,6 +6,7 @@ import {
   ChevronRight,
   ClipboardCheck,
   LayoutDashboard,
+  LifeBuoy,
   LineChart,
   LogOut,
   Menu,
@@ -89,6 +90,12 @@ export const AppShell: React.FC = () => {
           badge: 'Manager',
         },
         {
+          to: '/facility-manager/tickets',
+          label: 'Sự cố & Ticket dịch vụ',
+          icon: <LifeBuoy className="w-4 h-4 text-kumo-brand" />,
+          badge: 'Tickets',
+        },
+        {
           to: '/facility-staff',
           label: 'Ca trực & Kiểm tra',
           icon: <ClipboardCheck className="w-4 h-4 text-kumo-brand" />,
@@ -127,6 +134,12 @@ export const AppShell: React.FC = () => {
           label: 'Quản lý cơ sở kho',
           icon: <Building2 className="w-4 h-4 text-kumo-brand" />,
           badge: 'Manager',
+        },
+        {
+          to: '/facility-manager/tickets',
+          label: 'Sự cố & Ticket dịch vụ',
+          icon: <LifeBuoy className="w-4 h-4 text-kumo-brand" />,
+          badge: 'Tickets',
         },
         {
           to: '/facility-staff',

@@ -1,6 +1,7 @@
 import { Badge, Button, LayerCard, Table, Text } from '@cloudflare/kumo';
-import { AlertCircle, Building2, CheckCircle, Layers, Wrench } from 'lucide-react';
+import { AlertCircle, Building2, CheckCircle, Layers, LifeBuoy, Wrench } from 'lucide-react';
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 interface UnitRecord {
@@ -95,6 +96,7 @@ const INITIAL_REQUESTS: ChangeRequest[] = [
 ];
 
 export const FacilityManagerDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [units, setUnits] = useState<UnitRecord[]>(INITIAL_UNITS);
   const [requests, setRequests] = useState<ChangeRequest[]>(INITIAL_REQUESTS);
@@ -158,7 +160,14 @@ export const FacilityManagerDashboard: React.FC = () => {
           </Text>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            icon={<LifeBuoy className="w-4 h-4 text-kumo-brand" />}
+            onClick={() => navigate('/facility-manager/tickets')}
+          >
+            Vé sự cố & Phân công
+          </Button>
           <Badge variant="primary" appearance="dot">
             Quản lý trực: {user?.fullName}
           </Badge>
@@ -218,6 +227,33 @@ export const FacilityManagerDashboard: React.FC = () => {
           </div>
         </LayerCard>
       </div>
+
+      {/* Service Tickets Quick Access Banner */}
+      <LayerCard className="p-4 ring ring-kumo-line bg-gradient-to-r from-kumo-brand/5 to-transparent flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-lg bg-kumo-brand/10 text-kumo-brand flex items-center justify-center shrink-0">
+            <LifeBuoy className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <Text as="h4">Phiếu sự cố & Yêu cầu kỹ thuật cơ sở</Text>
+              <Badge variant="warning">Cần phân công</Badge>
+            </div>
+            <Text variant="secondary">
+              Theo dõi sự cố khách hàng gửi, chỉ định nhân viên kỹ thuật trực tiếp xử lý và kiểm
+              soát chất lượng cơ sở.
+            </Text>
+          </div>
+        </div>
+        <Button
+          variant="primary"
+          icon={<LifeBuoy className="w-4 h-4" />}
+          onClick={() => navigate('/facility-manager/tickets')}
+          className="shrink-0"
+        >
+          Xem danh sách & Gán ca
+        </Button>
+      </LayerCard>
 
       {/* Customer Change Requests Approval Queue */}
       <div className="space-y-3">

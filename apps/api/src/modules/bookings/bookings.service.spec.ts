@@ -18,6 +18,7 @@ import {
   PaymentType,
   StorageUnitStatus,
 } from '@storage/types';
+import { In } from 'typeorm';
 import { BookingsService } from './bookings.service';
 
 const BOOKING_NO = 'BK-1790760804609-6618';
@@ -184,9 +185,15 @@ describe('BookingsService.cancel', () => {
   let bookingRepo: { findOne: jest.Mock };
   let em: {
     findOne: jest.Mock;
-    find: jest.Mock;
     update: jest.Mock;
     getRepository: jest.Mock;
+  };
+  let unitHoldQb: {
+    update: jest.Mock;
+    set: jest.Mock;
+    where: jest.Mock;
+    returning: jest.Mock;
+    execute: jest.Mock;
   };
   let paymentRepo: { sum: jest.Mock };
   let dataSource: { transaction: jest.Mock; getRepository: jest.Mock };
@@ -198,11 +205,19 @@ describe('BookingsService.cancel', () => {
   beforeEach(() => {
     bookingRepo = { findOne: jest.fn() };
     paymentRepo = { sum: jest.fn().mockResolvedValue(null) };
+    unitHoldQb = {
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      returning: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({ raw: [] }),
+    };
     em = {
       findOne: jest.fn(),
-      find: jest.fn().mockResolvedValue([]),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
-      getRepository: jest.fn(() => paymentRepo),
+      getRepository: jest.fn((entity: unknown) =>
+        entity === Payment ? paymentRepo : { createQueryBuilder: () => unitHoldQb },
+      ),
     };
     dataSource = {
       transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)),
@@ -222,7 +237,9 @@ describe('BookingsService.cancel', () => {
   it('cancels a holding booking — releases holds and frees the units', async () => {
     bookingRepo.findOne.mockResolvedValue(buildBooking());
     em.findOne.mockResolvedValue(buildBooking());
-    em.find.mockResolvedValue([{ storageUnitId: 'unit-1' }, { storageUnitId: 'unit-2' }]);
+    unitHoldQb.execute.mockResolvedValue({
+      raw: [{ storage_unit_id: 'unit-1' }, { storage_unit_id: 'unit-2' }],
+    });
 
     const res = await service.cancel('booking-1', user);
 
@@ -233,16 +250,14 @@ describe('BookingsService.cancel', () => {
       { id: 'booking-1' },
       { status: BookingStatus.CANCELLED },
     );
+    expect(unitHoldQb.set).toHaveBeenCalledWith({
+      status: HoldStatus.RELEASED,
+      releasedAt: expect.any(Date),
+    });
     expect(em.update).toHaveBeenNthCalledWith(
       2,
-      UnitHold,
-      { bookingId: 'booking-1', status: HoldStatus.ACTIVE },
-      { status: HoldStatus.RELEASED, releasedAt: expect.any(Date) },
-    );
-    expect(em.update).toHaveBeenNthCalledWith(
-      3,
       StorageUnit,
-      expect.objectContaining({ status: StorageUnitStatus.HELD }),
+      { id: In(['unit-1', 'unit-2']), status: StorageUnitStatus.HELD },
       { status: StorageUnitStatus.AVAILABLE },
     );
     expect(warnSpy).not.toHaveBeenCalled();

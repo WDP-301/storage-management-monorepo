@@ -433,18 +433,27 @@ export class BookingsService implements OnApplicationBootstrap {
       const now = new Date();
       await em.update(Booking, { id: locked.id }, { status: BookingStatus.CANCELLED });
 
-      const activeHolds = await em.find(UnitHold, {
-        where: { bookingId: locked.id, status: HoldStatus.ACTIVE },
-      });
-      if (activeHolds.length > 0) {
-        await em.update(
-          UnitHold,
-          { bookingId: locked.id, status: HoldStatus.ACTIVE },
-          { status: HoldStatus.RELEASED, releasedAt: now },
-        );
+      // Free only units whose holds this tx actually released — a stale SELECT list could
+      // free a unit re-held by a new booking after the expiry sweep raced us mid-flight.
+      const released = await em
+        .getRepository(UnitHold)
+        .createQueryBuilder()
+        .update()
+        .set({ status: HoldStatus.RELEASED, releasedAt: now })
+        .where('booking_id = :bookingId AND status = :status', {
+          bookingId: locked.id,
+          status: HoldStatus.ACTIVE,
+        })
+        .returning('storage_unit_id')
+        .execute();
+
+      const freedUnitIds = (released.raw as Array<{ storage_unit_id: string }>).map(
+        (r) => r.storage_unit_id,
+      );
+      if (freedUnitIds.length > 0) {
         await em.update(
           StorageUnit,
-          { id: In(activeHolds.map((h) => h.storageUnitId)), status: StorageUnitStatus.HELD },
+          { id: In(freedUnitIds), status: StorageUnitStatus.HELD },
           { status: StorageUnitStatus.AVAILABLE },
         );
       }

@@ -50,12 +50,3 @@ export type BrowseCriteria = {
   maxMonthlyPrice: number | null;
   requestedQuantity: number;
 };
-
-export type HeldBooking = {
-  id: string;
-  units: UnitOffer[];
-  /** ISO day string; see `lib/rental-schedule.ts`. */
-  startDate: string;
-  durationMonths: number;
-  holdExpiresAt: number;
-};

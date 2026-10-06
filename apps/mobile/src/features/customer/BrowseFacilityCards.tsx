@@ -1,19 +1,19 @@
 import { Button, Card, Chip } from 'heroui-native';
 import { Text, View } from 'react-native';
 import { formatMoney } from '../../../lib/format-vi';
-import type { FacilityOffer, HeldBooking, UnitOffer } from '../../types/customer';
+import type { FacilityOffer, UnitOffer } from '../../types/customer';
 import { sumUnitPrices } from './unit-offer-utils';
 
 type FacilityCardProps = {
   facility: FacilityOffer;
-  heldBooking: HeldBooking | null;
+  hasHolding: boolean;
   requestedQuantity: number;
 };
 
-/** Proposes the cheapest N units of one facility as a single group to hold. */
+/** Proposes the cheapest N units of one facility as a single group to book. */
 export function RecommendedFacilityCard({
   facility,
-  heldBooking,
+  hasHolding,
   requestedQuantity,
   waitlisted,
   onHold,
@@ -62,8 +62,8 @@ export function RecommendedFacilityCard({
         </View>
 
         {isComplete ? (
-          <Button isDisabled={Boolean(heldBooking)} onPress={() => onHold(proposedUnits)}>
-            <Button.Label>Giữ nhóm {requestedQuantity} kho · 15 phút</Button.Label>
+          <Button isDisabled={hasHolding} onPress={() => onHold(proposedUnits)}>
+            <Button.Label>Chọn nhóm {requestedQuantity} kho</Button.Label>
           </Button>
         ) : (
           <View className="gap-2">
@@ -85,7 +85,7 @@ export function RecommendedFacilityCard({
 /** Lists every available unit of a facility so the customer picks them one by one. */
 export function ManualFacilityCard({
   facility,
-  heldBooking,
+  hasHolding,
   requestedQuantity,
   selectedIds,
   onToggle,
@@ -123,7 +123,7 @@ export function ManualFacilityCard({
                 </Text>
               </View>
               <Button
-                isDisabled={selectionFull || Boolean(heldBooking)}
+                isDisabled={selectionFull || hasHolding}
                 size="sm"
                 variant={isSelected ? 'primary' : 'secondary'}
                 onPress={() => onToggle(unit)}

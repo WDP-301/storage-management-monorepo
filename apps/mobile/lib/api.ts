@@ -26,14 +26,23 @@ export class ApiError extends Error {
   }
 }
 
-/** Shared fetch wrapper: unwraps the API envelope and normalises errors. */
-export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/**
+ * Shared fetch wrapper: unwraps the API envelope and normalises errors.
+ *
+ * `timeoutMs` exists for the few writes that take a row lock server-side — aborting those early
+ * does not undo them, it just leaves the app unsure whether they happened.
+ */
+export async function request<T>(
+  path: string,
+  init?: RequestInit & { timeoutMs?: number },
+): Promise<T> {
   let response: Response;
+  const { timeoutMs = REQUEST_TIMEOUT_MS, ...requestInit } = init ?? {};
   // Always fetch with our own controller so the timeout applies even when the caller passes a
   // signal; the caller's signal is chained into it rather than replacing it.
   const controller = new AbortController();
   const abort = () => controller.abort();
-  const timeout = setTimeout(abort, REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(abort, timeoutMs);
   const callerSignal = init?.signal;
 
   if (callerSignal?.aborted) abort();
@@ -41,7 +50,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
-      ...init,
+      ...requestInit,
       credentials: 'include',
       signal: controller.signal,
       headers: {

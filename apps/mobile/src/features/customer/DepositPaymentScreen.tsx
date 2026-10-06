@@ -1,10 +1,28 @@
+import {
+  BottomSheetBackdrop,
+  type BottomSheetBackdropProps,
+  BottomSheetFlatList,
+  BottomSheetModal,
+  BottomSheetTextInput,
+} from '@gorhom/bottom-sheet';
 import { BookingStatus } from '@storage/types';
 import * as Clipboard from 'expo-clipboard';
 import { Button, Card, useThemeColor } from 'heroui-native';
-import { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, Text, View } from 'react-native';
+import { type RefObject, useCallback, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError } from '../../../lib/api';
-import type { DepositStage } from '../../../lib/booking-payment-state';
+import { type DepositStage } from '../../../lib/booking-payment-state';
 import { formatIsoDateTime, formatMoney } from '../../../lib/format-vi';
 import {
   type SaveImageOutcome,
@@ -20,6 +38,83 @@ const QR_ASPECT_RATIO = 0.84;
 
 /** Sits on the filled `bg-success` disc; mirrors `--color-accent-foreground` in global.css. */
 const CHECK_MARK_COLOR = 'hsl(0 0% 100%)';
+
+/** A banking app entry from VietQR's deeplink registry. */
+type BankApp = {
+  appId: string;
+  appLogo: string;
+  appName: string;
+  bankName: string;
+  /** `https://dl.vietqr.io/pay?app=...` — VietQR's router redirects to the app's own scheme. */
+  deeplink: string;
+};
+
+let bankAppsRequest: Promise<BankApp[]> | null = null;
+
+/**
+ * Each banking app's own deeplink URI (`scheme://path`), extracted from what
+ * `dl.vietqr.io/pay?app=<id>` 301-redirects to (`intent://#Intent;scheme=…;package=…;end`).
+ * Opening these hits the app directly with no browser in between — that page is VietQR's only
+ * maintained registry, so this table is a snapshot of it. ponytail: stale-bank ceiling — if a
+ * bank changes its scheme the link falls back to the app's `deeplink` field (dl.vietqr.io,
+ * which does route through a browser) rather than failing hard; refresh this table then.
+ */
+const BANK_APP_SCHEMES: Record<string, string> = {
+  icb: 'vietinbankipay://',
+  bidv: 'bidv.smartbanking.partner://payment',
+  ocb: 'newomni-app://',
+  acb: 'acbone://',
+  mb: 'mbbank://',
+  vcb: 'vietcombankmobile://',
+  tcb: 'tcb://applink',
+  vpb: 'vpbankneo://',
+  'vib-2': 'myvib2://myvib2.com.vn/data',
+  shb: 'shbmobile://',
+  lpb: 'lv24h://',
+  seab: 'seamobile://app',
+  scb: 'scbmobilebanking://',
+  vietbank: 'vietbankmobilebanking://',
+  cake: 'cake.vn://',
+  hdb: 'hdbankmobile://',
+  vba: 'agribankmobile://',
+  tpb: 'hydro://onboarding',
+  timo: 'plus://',
+  vib: 'myvib://vib.com.vn/data',
+  shbvn: 'shinhanglbvnbank://',
+  nab: 'deeplinkapp://nab/softotp',
+  abb: 'abbankmobile://',
+  eib: 'eximbankmobile://',
+  coopbank: 'coopbankmobile://',
+  pvcb: 'pvcombankapp://',
+  wvn: 'wvbs://',
+  klb: 'ksbank://ksbank.co',
+  bvb: 'baovietmobile://',
+  vab: 'vabmobilebanking://',
+  'tpb-pay': 'qpaymobile://',
+  ncb: 'ncbizimobile://',
+  'acb-biz': 'abaapp://',
+  oceanbank: 'oceanbankmobilebanking://',
+  pbvn: 'publicbankmobile://',
+  sgicb: 'Sgbmobile://',
+  cimb: 'cimb://',
+};
+
+/**
+ * VietQR's public registry of banking-app deeplinks (~40 apps, logo + name included). Cached for
+ * the session — the list changes about as often as banks rebrand, and a failed fetch resets the
+ * cache so the next attempt retries instead of pinning the error.
+ */
+function fetchBankApps(): Promise<BankApp[]> {
+  const os = Platform.OS === 'ios' ? 'ios' : 'android';
+  bankAppsRequest ??= fetch(`https://api.vietqr.io/v2/${os}-app-deeplinks`)
+    .then((res) => res.json())
+    .then((data) => (data.apps ?? []) as BankApp[])
+    .catch((error) => {
+      bankAppsRequest = null;
+      throw error;
+    });
+  return bankAppsRequest;
+}
 
 type Props = {
   booking: ApiBooking | null;
@@ -232,6 +327,7 @@ function AwaitingTransfer({
   const deposit = formatMoney(Number(booking.depositTotal));
   // Bound once so the save callback keeps the narrowed non-null type the JSX guard established.
   const qrUrl = booking.paymentQrUrl;
+  const bankSheetRef = useRef<BottomSheetModal>(null);
 
   return (
     <>
@@ -254,6 +350,13 @@ function AwaitingTransfer({
                 isCompact
                 onSave={() => saveRemoteImage(qrUrl, booking.bookingNo)}
               />
+              {/* The QR sits on the same device that pays, so the app shortens the only part it
+                can: a picker of banking apps (VietQR's registry) that opens the chosen app's own
+                deeplink scheme directly. The saved-QR path stays as the fallback for apps not in
+                the registry. */}
+              <Button size="sm" variant="secondary" onPress={() => bankSheetRef.current?.present()}>
+                <Button.Label>Mở app ngân hàng</Button.Label>
+              </Button>
             </>
           ) : null}
         </View>
@@ -298,7 +401,124 @@ function AwaitingTransfer({
       </Text>
 
       <CancelBookingButton onCancel={onCancel} />
+
+      <BankAppsSheet sheetRef={bankSheetRef} />
     </>
+  );
+}
+
+/**
+ * Bank-app picker fed by VietQR's public registry (names + logos), but opening the app's own
+ * scheme URI — `dl.vietqr.io` only exists to resolve that same scheme, so skipping it removes
+ * the browser hop entirely.
+ */
+function BankAppsSheet({ sheetRef }: { sheetRef: RefObject<BottomSheetModal | null> }) {
+  const insets = useSafeAreaInsets();
+  const [surfaceColor, mutedColor] = useThemeColor(['surface', 'muted']);
+  const [apps, setApps] = useState<BankApp[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [query, setQuery] = useState('');
+
+  // Folding diacritics lets "tech" hit "Techcombank" and "ngoai" hit "Ngoại Thương".
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd');
+  const filtered = apps?.filter((app) =>
+    norm(`${app.appName} ${app.bankName}`).includes(norm(query)),
+  );
+
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        appearsOnIndex={0}
+        disappearsOnIndex={-1}
+        pressBehavior="close"
+      />
+    ),
+    [],
+  );
+
+  const openBank = (app: BankApp) => {
+    sheetRef.current?.dismiss();
+    Linking.openURL(BANK_APP_SCHEMES[app.appId] ?? app.deeplink).catch(() =>
+      Alert.alert('Chưa mở được', `Hãy cài ${app.appName} rồi thử lại.`),
+    );
+  };
+
+  return (
+    <BottomSheetModal
+      ref={sheetRef}
+      backdropComponent={renderBackdrop}
+      backgroundStyle={{ backgroundColor: surfaceColor }}
+      enableDynamicSizing={false}
+      enablePanDownToClose
+      handleIndicatorStyle={{ backgroundColor: mutedColor }}
+      snapPoints={['70%']}
+      onChange={(index) => {
+        // The registry is only fetched once the customer actually asks for it.
+        if (index >= 0 && !apps && !loadFailed) {
+          fetchBankApps()
+            .then(setApps)
+            .catch(() => setLoadFailed(true));
+        }
+      }}
+    >
+      <View className="mb-2 px-4">
+        <Text className="text-lg font-bold text-foreground">Chọn app ngân hàng</Text>
+      </View>
+      {loadFailed ? (
+        <View className="items-center gap-3 px-4 py-8">
+          <Text className="text-sm text-muted">Không tải được danh sách ngân hàng.</Text>
+          <Button
+            size="sm"
+            variant="secondary"
+            onPress={() => {
+              setLoadFailed(false);
+              fetchBankApps()
+                .then(setApps)
+                .catch(() => setLoadFailed(true));
+            }}
+          >
+            <Button.Label>Thử lại</Button.Label>
+          </Button>
+        </View>
+      ) : apps === null ? (
+        <ActivityIndicator className="my-8" />
+      ) : (
+        <>
+          <BottomSheetTextInput
+            className="mx-4 mb-2 rounded-lg border border-border bg-surface-secondary px-3 py-2 text-sm text-foreground"
+            placeholder="Tìm ngân hàng..."
+            placeholderTextColor={mutedColor}
+            value={query}
+            onChangeText={setQuery}
+          />
+          <BottomSheetFlatList
+            data={filtered}
+            keyExtractor={(item: BankApp) => item.appId}
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) }}
+            renderItem={({ item }: { item: BankApp }) => (
+              <Pressable
+                className="flex-row items-center gap-3 px-4 py-3"
+                onPress={() => openBank(item)}
+              >
+                <Image source={{ uri: item.appLogo }} className="h-9 w-9 rounded-lg" />
+                <View className="flex-1">
+                  <Text className="text-sm font-semibold text-foreground">{item.appName}</Text>
+                  <Text className="text-xs text-muted" numberOfLines={1}>
+                    {item.bankName}
+                  </Text>
+                </View>
+              </Pressable>
+            )}
+          />
+        </>
+      )}
+    </BottomSheetModal>
   );
 }
 

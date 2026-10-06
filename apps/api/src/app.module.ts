@@ -9,6 +9,7 @@ import { validateEnv } from './config/env.validation';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
+import { ChangeRequestsModule } from './modules/change-requests/change-requests.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { FacilitiesModule } from './modules/facilities/facilities.module';
@@ -55,6 +56,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
     AdminModule,
     FacilitiesModule,
     BookingsModule,
+    ChangeRequestsModule,
     ContractsModule,
     HealthModule,
     LocationsModule,

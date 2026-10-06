@@ -3,29 +3,31 @@ import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import type { RentalSchedule } from '../../../lib/hold';
-import { buildDateOptions, DURATION_OPTIONS, rentalEndIso } from '../../../lib/rental-schedule';
-import type { HeldBooking } from '../../types/customer';
+import {
+  buildDateOptions,
+  DEFAULT_DURATION_MONTHS,
+  DURATION_OPTIONS,
+  rentalEndIso,
+  todayIso,
+} from '../../../lib/rental-schedule';
+import type { UnitOffer } from '../../types/customer';
 import { ChipButton, FilterRow } from './FilterChips';
 import { RentalDateStrip } from './RentalDateStrip';
 import { sumUnitPrices } from './unit-offer-utils';
 
 type Props = {
-  booking: HeldBooking;
-  /** Hold countdown, so the customer sees the clock without leaving this screen. */
-  remaining: string;
+  units: UnitOffer[];
+  isCreating: boolean;
+  error: string | null;
   onConfirm: (schedule: RentalSchedule) => void;
 };
 
 /**
- * Settles when the rental starts and how long it runs, between holding the units and paying the
- * deposit.
- *
- * Edits are staged locally and only written back on confirm — unlike the browse filters, this
- * screen changes a booking the customer already owns, so backing out must leave it untouched.
+ * Chooses the rental terms before the API creates a booking and starts its 15-minute hold.
  */
-export function ScheduleRentalScreen({ booking, remaining, onConfirm }: Props) {
-  const [startDate, setStartDate] = useState(booking.startDate);
-  const [durationMonths, setDurationMonths] = useState(booking.durationMonths);
+export function ScheduleRentalScreen({ units, isCreating, error, onConfirm }: Props) {
+  const [startDate, setStartDate] = useState(todayIso);
+  const [durationMonths, setDurationMonths] = useState(DEFAULT_DURATION_MONTHS);
 
   // Rebuilt every render rather than memoised: 30 small objects cost nothing, and a frozen list
   // would still start at yesterday if the screen stayed mounted across midnight — which would
@@ -33,29 +35,29 @@ export function ScheduleRentalScreen({ booking, remaining, onConfirm }: Props) {
   const dateOptions = buildDateOptions();
   const endDate = rentalEndIso(startDate, durationMonths);
 
-  const monthlyRent = sumUnitPrices(booking.units, 'monthlyPrice');
-  const deposit = sumUnitPrices(booking.units, 'deposit');
+  const monthlyRent = sumUnitPrices(units, 'monthlyPrice');
+  const deposit = sumUnitPrices(units, 'deposit');
   const totalRent = monthlyRent * durationMonths;
 
-  const facilityName = booking.units[0]?.facility ?? '';
-  const facilityCount = new Set(booking.units.map((unit) => unit.facilityId)).size;
+  const facilityName = units[0]?.facility ?? '';
+  const facilityCount = new Set(units.map((unit) => unit.facilityId)).size;
 
   return (
     <ScrollView contentContainerClassName="pb-8 pt-5" showsVerticalScrollIndicator={false}>
       <View className="px-4">
         <Text className="text-2xl font-bold tracking-tight text-foreground">Đặt lịch thuê kho</Text>
         <Text className="mt-1 text-sm leading-5 text-muted">
-          {booking.units.length} kho tại{' '}
-          {facilityCount === 1 ? facilityName : `${facilityCount} cơ sở`}
+          {units.length} kho tại {facilityCount === 1 ? facilityName : `${facilityCount} cơ sở`}
         </Text>
       </View>
 
       <Card className="mx-4 mt-4 border border-accent/30 bg-accent/5">
-        <Card.Body className="flex-row items-center justify-between gap-3">
-          <Text className="flex-1 text-xs leading-5 text-muted">
-            Kho đang được giữ. Hoàn tất trước khi hết giờ.
+        <Card.Body>
+          {/* No hold duration named here: it is an admin setting the app cannot read, so any
+            number would go stale the moment it changes. */}
+          <Text className="text-xs leading-5 text-muted">
+            Chọn lịch rồi xác nhận để giữ kho. Giá và tình trạng kho sẽ được kiểm tra lại khi gửi.
           </Text>
-          <Text className="font-mono text-lg font-bold text-accent">{remaining}</Text>
         </Card.Body>
       </Card>
 
@@ -84,9 +86,9 @@ export function ScheduleRentalScreen({ booking, remaining, onConfirm }: Props) {
       </View>
 
       <View className="mt-6 px-4">
-        <Text className="text-sm font-bold text-foreground">Kho đã giữ</Text>
+        <Text className="text-sm font-bold text-foreground">Kho đã chọn</Text>
         <View className="mt-3 gap-2">
-          {booking.units.map((unit) => (
+          {units.map((unit) => (
             <View
               key={unit.id}
               className="flex-row items-center justify-between gap-3 rounded-xl border border-border bg-surface p-3"
@@ -125,8 +127,9 @@ export function ScheduleRentalScreen({ booking, remaining, onConfirm }: Props) {
       </Card>
 
       <View className="mt-6 px-4">
-        <Button onPress={() => onConfirm({ startDate, durationMonths })}>
-          <Button.Label>Xác nhận lịch thuê</Button.Label>
+        {error ? <Text className="mb-3 text-sm text-danger">{error}</Text> : null}
+        <Button isDisabled={isCreating} onPress={() => onConfirm({ startDate, durationMonths })}>
+          <Button.Label>{isCreating ? 'Đang giữ kho...' : 'Xác nhận và giữ kho'}</Button.Label>
         </Button>
       </View>
     </ScrollView>

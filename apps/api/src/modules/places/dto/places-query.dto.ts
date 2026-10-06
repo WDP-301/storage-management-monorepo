@@ -1,6 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsLatitude,
+  IsLongitude,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class AutocompleteQueryDto {
   @ApiProperty({ example: 'Vinhome Grand Park', description: 'Search input' })
@@ -10,10 +19,32 @@ export class AutocompleteQueryDto {
 }
 
 export class NearbyQueryDto {
-  @ApiProperty({ example: 'some-goong-place-id', description: 'Goong place_id from autocomplete' })
+  @ApiPropertyOptional({
+    example: 'some-goong-place-id',
+    description: 'Goong place_id from autocomplete. Omit when lat/lng are provided.',
+  })
   @IsString()
   @IsNotEmpty()
-  place_id: string;
+  @IsOptional()
+  place_id?: string;
+
+  @ApiPropertyOptional({
+    example: 10.7769,
+    description: 'Latitude of search center (e.g. user GPS). Must be sent together with lng.',
+  })
+  @IsLatitude()
+  @IsOptional()
+  @Type(() => Number)
+  lat?: number;
+
+  @ApiPropertyOptional({
+    example: 106.7009,
+    description: 'Longitude of search center (e.g. user GPS). Must be sent together with lat.',
+  })
+  @IsLongitude()
+  @IsOptional()
+  @Type(() => Number)
+  lng?: number;
 
   @ApiPropertyOptional({
     example: 5,

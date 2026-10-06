@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { ENV_KEY, GOONG_BASE_URL, GOONG_DEFAULT_LOCATION } from '@shared/constants';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
+import { NearbyQueryDto } from './dto/places-query.dto';
 
 export interface NearbyFacility extends Facility {
   distanceKm: number;
@@ -94,17 +95,8 @@ export class PlacesService {
     return predictions;
   }
 
-  async findNearby(placeId: string, radiusKm: number): Promise<NearbyResult> {
-    const detail = await this.getPlaceDetail(placeId);
-    const location: { lat: number; lng: number } = detail?.result?.geometry?.location;
-
-    if (!location?.lat || !location?.lng) {
-      throw new DomainException(
-        ErrorCode.BAD_REQUEST,
-        'Place has no resolvable coordinates',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
+  async findNearby(query: NearbyQueryDto): Promise<NearbyResult> {
+    const location = await this.resolveCenter(query);
 
     const allFacilities = await this.facilitiesService.findAll();
 
@@ -118,13 +110,38 @@ export class PlacesService {
           Number(f.longitude),
         ),
       }))
-      .filter((f) => f.distanceKm <= radiusKm)
+      .filter((f) => f.distanceKm <= query.radius)
       .sort((a, b) => a.distanceKm - b.distanceKm);
 
     return {
       center: location,
       facilities: nearby,
     };
+  }
+
+  private async resolveCenter(query: NearbyQueryDto): Promise<{ lat: number; lng: number }> {
+    if (query.lat !== undefined && query.lng !== undefined) {
+      return { lat: query.lat, lng: query.lng };
+    }
+    if (!query.place_id) {
+      throw new DomainException(
+        ErrorCode.BAD_REQUEST,
+        'Provide either place_id or both lat and lng',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const detail = await this.getPlaceDetail(query.place_id);
+    const location: { lat: number; lng: number } = detail?.result?.geometry?.location;
+
+    if (!location?.lat || !location?.lng) {
+      throw new DomainException(
+        ErrorCode.BAD_REQUEST,
+        'Place has no resolvable coordinates',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    return location;
   }
 
   private async getPlaceDetail(placeId: string): Promise<any> {

@@ -1,27 +1,34 @@
 import { Redirect, useRouter } from 'expo-router';
+import { useState } from 'react';
 import { useHold } from '../../lib/hold';
 import { ScheduleRentalScreen } from '../../src/features/customer/ScheduleRentalScreen';
 
 export default function ScheduleRoute() {
   const router = useRouter();
-  const { heldBooking, remaining, setSchedule } = useHold();
+  const { selectedUnits, heldBooking, createBooking, isCreating } = useHold();
+  const [error, setError] = useState<string | null>(null);
 
-  // The hold expires on its own, and the screen has nothing to schedule without one.
-  if (!heldBooking) return <Redirect href="/(customer)/bookings" />;
+  if (!selectedUnits) {
+    return <Redirect href={heldBooking ? '/(customer)/bookings' : '/(customer)/browse'} />;
+  }
 
   return (
-    // Keyed by booking so a new hold mounts a fresh screen. The screen lives in a tab navigator
-    // and keeps its draft state once visited; without this it would carry the previous booking's
-    // unconfirmed date and duration over, and the draft would silently disagree with the booking
-    // card. Today a hold must be released before the next one starts, which already forces a
-    // remount — the key stops that from being the only thing holding the invariant up.
     <ScheduleRentalScreen
-      key={heldBooking.id}
-      booking={heldBooking}
-      remaining={remaining}
-      onConfirm={(schedule) => {
-        setSchedule(schedule);
-        router.navigate('/(customer)/bookings');
+      key={selectedUnits.map((unit) => unit.id).join(',')}
+      units={selectedUnits}
+      isCreating={isCreating}
+      error={error}
+      onConfirm={async (schedule) => {
+        setError(null);
+        try {
+          // Straight to the deposit: the hold is already ticking, so the transfer is the next step.
+          const booking = await createBooking(schedule);
+          if (booking) router.navigate(`/(customer)/payment?id=${booking.id}`);
+        } catch (cause) {
+          setError(
+            cause instanceof Error ? cause.message : 'Không giữ được kho. Vui lòng thử lại.',
+          );
+        }
       }}
     />
   );

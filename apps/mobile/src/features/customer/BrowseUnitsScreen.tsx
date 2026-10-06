@@ -3,7 +3,7 @@ import { Button, Card } from 'heroui-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { formatMoney } from '../../../lib/format-vi';
-import type { BrowseMode, HeldBooking, UnitOffer } from '../../types/customer';
+import type { BrowseMode, UnitOffer } from '../../types/customer';
 import { ManualFacilityCard, RecommendedFacilityCard } from './BrowseFacilityCards';
 import { BrowseFiltersBar } from './BrowseFiltersBar';
 import { BrowseFiltersSheet } from './BrowseFiltersSheet';
@@ -22,18 +22,20 @@ import { useAvailableUnits } from './use-available-units';
 import { useWards } from './use-wards';
 
 type Props = {
-  heldBooking: HeldBooking | null;
+  hasHolding: boolean;
   contentBottomPadding: number;
   onHold: (units: UnitOffer[]) => void;
 };
 
-export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }: Props) {
+export function BrowseUnitsScreen({ hasHolding, contentBottomPadding, onHold }: Props) {
   const { facilities, provinces, hasMore, isLoading, error, refetch } = useAvailableUnits();
   const [criteria, setCriteria] = useState(DEFAULT_BROWSE_CRITERIA);
   const [mode, setMode] = useState<BrowseMode>('recommended');
+  const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [waitlistedFacilityId, setWaitlistedFacilityId] = useState<string | null>(null);
   const filtersSheetRef = useRef<BottomSheetModal>(null);
+  const scrollRef = useRef<ScrollView>(null);
 
   const provinceOptions = useMemo(
     () => buildProvinceOptions(facilities, provinces),
@@ -103,10 +105,39 @@ export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }:
     (total, facility) => total + facility.units.length,
     0,
   );
+  const pageSize = mode === 'recommended' ? 5 : 10;
+  const resultCount = mode === 'recommended' ? visibleFacilities.length : visibleUnitCount;
+  const pageCount = Math.max(1, Math.ceil(resultCount / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pagedFacilities = useMemo(() => {
+    if (mode === 'recommended') {
+      return visibleFacilities.slice(pageStart, pageStart + pageSize);
+    }
+    // Page individual units, retaining their facility headers and the full selection elsewhere.
+    let offset = 0;
+    return visibleFacilities.flatMap((facility) => {
+      const start = Math.max(0, pageStart - offset);
+      const end = Math.min(facility.units.length, pageStart + pageSize - offset);
+      offset += facility.units.length;
+      return end > start ? [{ ...facility, units: facility.units.slice(start, end) }] : [];
+    });
+  }, [mode, pageStart, pageSize, visibleFacilities]);
+
+  const changeCriteria = (next: typeof criteria) => {
+    setCriteria(next);
+    setPage(1);
+  };
+  const changePage = (next: number) => {
+    setPage(Math.max(1, Math.min(next, pageCount)));
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  };
 
   return (
-    <>
+    <View className="flex-1">
       <ScrollView
+        ref={scrollRef}
+        className="flex-1"
         contentContainerStyle={{ paddingBottom: contentBottomPadding }}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refetch} />}
         showsVerticalScrollIndicator={false}
@@ -122,7 +153,7 @@ export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }:
           criteria={criteria}
           provinceOptions={provinceOptions}
           wardOptions={wardOptions}
-          onChange={setCriteria}
+          onChange={changeCriteria}
           onOpenFilters={() => filtersSheetRef.current?.present()}
         />
 
@@ -137,19 +168,22 @@ export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }:
               facilityCount={visibleFacilities.length}
               hasMore={hasMore}
               mode={mode}
-              onModeChange={setMode}
+              onModeChange={(next) => {
+                setMode(next);
+                setPage(1);
+              }}
             />
 
             {visibleFacilities.length === 0 ? (
               <EmptyState isFilteredOut={facilities.length > 0} />
             ) : (
               <View className="gap-4 px-4">
-                {visibleFacilities.map((facility) =>
+                {pagedFacilities.map((facility) =>
                   mode === 'recommended' ? (
                     <RecommendedFacilityCard
                       key={facility.id}
                       facility={facility}
-                      heldBooking={heldBooking}
+                      hasHolding={hasHolding}
                       requestedQuantity={criteria.requestedQuantity}
                       waitlisted={waitlistedFacilityId === facility.id}
                       onHold={onHold}
@@ -159,7 +193,7 @@ export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }:
                     <ManualFacilityCard
                       key={facility.id}
                       facility={facility}
-                      heldBooking={heldBooking}
+                      hasHolding={hasHolding}
                       requestedQuantity={criteria.requestedQuantity}
                       selectedIds={selectedIds}
                       onToggle={toggleUnit}
@@ -168,38 +202,70 @@ export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }:
                 )}
               </View>
             )}
-
-            {mode === 'manual' && visibleFacilities.length > 0 ? (
-              <Card className="mx-4 mt-4 border border-accent/30 bg-accent/5">
-                <Card.Body className="gap-3">
-                  <View className="flex-row items-center justify-between">
-                    <Text className="font-bold text-foreground">
-                      Đã chọn {selectedUnits.length}/{criteria.requestedQuantity} kho
+            {resultCount > 0 ? (
+              <View className="gap-3 px-4 pt-5">
+                <Text className="text-center text-xs text-muted">
+                  Hiển thị {pageStart + 1}–{Math.min(pageStart + pageSize, resultCount)} /{' '}
+                  {resultCount} {mode === 'recommended' ? 'nhóm cơ sở' : 'kho'}
+                </Text>
+                {pageCount > 1 ? (
+                  <View className="flex-row items-center justify-between gap-3">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      isDisabled={currentPage === 1}
+                      onPress={() => changePage(currentPage - 1)}
+                    >
+                      <Button.Label>Trang trước</Button.Label>
+                    </Button>
+                    <Text className="text-sm font-semibold text-foreground">
+                      {currentPage} / {pageCount}
                     </Text>
-                    <Text className="text-sm font-semibold text-accent">
-                      {formatMoney(sumUnitPrices(selectedUnits, 'monthlyPrice'))}/tháng
-                    </Text>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      isDisabled={currentPage === pageCount}
+                      onPress={() => changePage(currentPage + 1)}
+                    >
+                      <Button.Label>Trang sau</Button.Label>
+                    </Button>
                   </View>
-                  {selectedFacilityCount > 1 ? (
-                    <Text className="text-xs leading-5 text-muted">
-                      Các kho thuộc {selectedFacilityCount} cơ sở. Chọn cùng một cơ sở để thuận tiện
-                      hơn.
-                    </Text>
-                  ) : null}
-                  <Button
-                    isDisabled={
-                      selectedUnits.length !== criteria.requestedQuantity || Boolean(heldBooking)
-                    }
-                    onPress={() => onHold(selectedUnits)}
-                  >
-                    <Button.Label>Giữ {criteria.requestedQuantity} kho đã chọn</Button.Label>
-                  </Button>
-                </Card.Body>
-              </Card>
+                ) : null}
+              </View>
             ) : null}
           </>
         ) : null}
       </ScrollView>
+
+      {mode === 'manual' && selectedUnits.length > 0 && !isInitialLoading ? (
+        <View className="shrink-0 border-t border-border bg-background px-4 py-3">
+          <Card className="border border-accent/30 bg-accent/5">
+            <Card.Body className="gap-3">
+              <View className="flex-row items-center justify-between">
+                <Text className="font-bold text-foreground">
+                  Đã chọn {selectedUnits.length}/{criteria.requestedQuantity} kho
+                </Text>
+                <Text className="text-sm font-semibold text-accent">
+                  {formatMoney(sumUnitPrices(selectedUnits, 'monthlyPrice'))}/tháng
+                </Text>
+              </View>
+              {selectedFacilityCount > 1 ? (
+                <Text className="text-xs leading-5 text-muted">
+                  Các kho thuộc {selectedFacilityCount} cơ sở. Chọn cùng một cơ sở để thuận tiện
+                  hơn.
+                </Text>
+              ) : null}
+
+              <Button
+                isDisabled={selectedUnits.length !== criteria.requestedQuantity || hasHolding}
+                onPress={() => onHold(selectedUnits)}
+              >
+                <Button.Label>Chọn {criteria.requestedQuantity} kho đã chọn</Button.Label>
+              </Button>
+            </Card.Body>
+          </Card>
+        </View>
+      ) : null}
 
       <BrowseFiltersSheet
         areaCounts={areaCounts}
@@ -209,8 +275,8 @@ export function BrowseUnitsScreen({ heldBooking, contentBottomPadding, onHold }:
         resultCount={visibleUnitCount}
         sheetRef={filtersSheetRef}
         wardOptions={wardOptions}
-        onChange={setCriteria}
+        onChange={changeCriteria}
       />
-    </>
+    </View>
   );
 }

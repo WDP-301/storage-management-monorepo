@@ -24,3 +24,17 @@ export const formatIsoDate = (iso: string) => {
   const [year, month, day] = iso.split('-');
   return `${day}/${month}/${year}`;
 };
+
+/**
+ * Timestamp in the device's own timezone: `2026-10-06T03:24:00.000Z` → `10:24 · 06/10/2026`.
+ *
+ * Unlike `formatIsoDate` this cannot be a string rearrangement — the API sends UTC and a receipt
+ * has to show the clock the customer was looking at. `Date` getters do the conversion without
+ * `Intl.DateTimeFormat`, whose availability varies across Hermes builds.
+ */
+export const formatIsoDateTime = (iso: string) => {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return '';
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${pad(at.getHours())}:${pad(at.getMinutes())} · ${pad(at.getDate())}/${pad(at.getMonth() + 1)}/${at.getFullYear()}`;
+};

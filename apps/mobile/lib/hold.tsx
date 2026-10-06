@@ -1,74 +1,228 @@
 import type { ReactNode } from 'react';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import type { HeldBooking, UnitOffer } from '../src/types/customer';
-import { DEFAULT_DURATION_MONTHS, todayIso } from './rental-schedule';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import type { ApiBooking, BookingItemInput, CreatedBooking } from '../src/types/booking-api';
+import type { UnitOffer } from '../src/types/customer';
+import {
+  countHeldUnits,
+  earliestLapsedDeadline,
+  formatRemaining,
+  holdDeadline,
+  selectActiveHolds,
+} from './booking-hold-state';
+import { BookingsApi } from './bookings-api';
 
-const HOLD_DURATION_MS = 15 * 60 * 1000;
-
-/**
- * When the rental starts and how long it runs. Seeded with defaults when the units are held, then
- * settled on the schedule screen — holding must stay a single tap, because the units are contested
- * and the hold only lasts 15 minutes.
- */
 export type RentalSchedule = {
-  /** ISO day string; see `rental-schedule.ts`. */
   startDate: string;
   durationMonths: number;
 };
 
 type HoldContextValue = {
-  heldBooking: HeldBooking | null;
+  selectedUnits: UnitOffer[] | null;
+  bookings: ApiBooking[];
+  /** Every booking still holding units, soonest deadline first. */
+  activeHolds: ApiBooking[];
+  /** The hold about to expire — `activeHolds[0]`, kept for screens that only need one. */
+  heldBooking: ApiBooking | null;
+  /** Units held across all active bookings, which is what the customer actually has reserved. */
+  heldUnitCount: number;
   remaining: string;
-  holdUnits: (units: UnitOffer[]) => void;
-  setSchedule: (schedule: RentalSchedule) => void;
-  clearHold: () => void;
+  /** Shared clock so every consumer classifies holds against the same instant. */
+  now: number;
+  isLoading: boolean;
+  isCreating: boolean;
+  error: string | null;
+  selectUnits: (units: UnitOffer[]) => void;
+  clearSelection: () => void;
+  /** Resolves to the created booking so the caller can send the customer straight to its deposit. */
+  createBooking: (schedule: RentalSchedule) => Promise<ApiBooking | null>;
+  refreshBookings: () => Promise<void>;
+  /** Merges one freshly fetched booking into the list — how deposit polling publishes its result. */
+  applyBooking: (booking: ApiBooking) => void;
+  /** Releases the held units. Rejects with the API's message when the booking cannot be cancelled. */
+  cancelBooking: (bookingId: string) => Promise<void>;
 };
 
 const HoldContext = createContext<HoldContextValue | null>(null);
 
-/** Mounted inside the customer area only, so signing out unmounts it and drops the hold. */
 export function HoldProvider({ children }: { children: ReactNode }) {
-  const [heldBooking, setHeldBooking] = useState<HeldBooking | null>(null);
+  const [selectedUnits, setSelectedUnits] = useState<UnitOffer[] | null>(null);
+  const [bookings, setBookings] = useState<ApiBooking[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
+  const selectionKey = useRef<string | null>(null);
+  const refreshedExpiry = useRef<string | null>(null);
+  const submitting = useRef(false);
+  const requestSequence = useRef(0);
 
-  const clearHold = useCallback(() => setHeldBooking(null), []);
+  const refreshBookings = useCallback(async () => {
+    const sequence = ++requestSequence.current;
+    setIsLoading(true);
+    try {
+      const result = await BookingsApi.listMine();
+      if (sequence === requestSequence.current) {
+        setBookings(result);
+        // The ticker pauses while nothing is held, so `now` can be stale by the time fresh holds
+        // arrive. Resyncing here keeps the first rendered countdown accurate.
+        setNow(Date.now());
+        setError(null);
+      }
+    } catch (cause) {
+      if (sequence === requestSequence.current) {
+        setError(
+          cause instanceof Error ? cause.message : 'Không tải được booking. Vui lòng thử lại.',
+        );
+        throw cause;
+      }
+    } finally {
+      if (sequence === requestSequence.current) setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (!heldBooking) return;
+    void refreshBookings().catch(() => undefined);
+  }, [refreshBookings]);
 
-    const timer = setInterval(() => {
-      const nextNow = Date.now();
-      setNow(nextNow);
-      setHeldBooking((current) => (current && current.holdExpiresAt <= nextNow ? null : current));
-    }, 1000);
+  const activeHolds = useMemo(() => selectActiveHolds(bookings, now), [bookings, now]);
+  // Soonest deadline first, so the bar counts down the hold that is actually at risk.
+  const heldBooking = activeHolds[0] ?? null;
+  const heldUnitCount = countHeldUnits(activeHolds);
 
+  // Ticking only matters while something is held; the last tick that empties `activeHolds` also
+  // tears the interval down.
+  const hasActiveHold = activeHolds.length > 0;
+  useEffect(() => {
+    if (!hasActiveHold) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [heldBooking]);
+  }, [hasActiveHold]);
 
-  const holdUnits = useCallback((units: UnitOffer[]) => {
-    const createdAt = Date.now();
-    setNow(createdAt);
-    setHeldBooking({
-      id: `BK-${String(createdAt).slice(-6)}`,
-      units,
-      startDate: todayIso(),
-      durationMonths: DEFAULT_DURATION_MONTHS,
-      holdExpiresAt: createdAt + HOLD_DURATION_MS,
+  const lapsedDeadline = earliestLapsedDeadline(bookings, now);
+  useEffect(() => {
+    if (!lapsedDeadline || refreshedExpiry.current === lapsedDeadline) return;
+    refreshedExpiry.current = lapsedDeadline;
+    void refreshBookings().catch(() => undefined);
+  }, [lapsedDeadline, refreshBookings]);
+
+  const selectUnits = useCallback((units: UnitOffer[]) => {
+    if (submitting.current) return;
+    selectionKey.current = BookingsApi.newIdempotencyKey();
+    setSelectedUnits(units);
+  }, []);
+  const clearSelection = useCallback(() => {
+    setSelectedUnits(null);
+    selectionKey.current = null;
+  }, []);
+
+  const createBooking = useCallback(
+    async (schedule: RentalSchedule) => {
+      if (!selectedUnits?.length || !selectionKey.current || submitting.current) return null;
+      const items: BookingItemInput[] = selectedUnits.map((unit) => ({
+        storageUnitId: unit.id,
+        // Noon UTC keeps the selected calendar day stable for the API's date validation.
+        requestedStartAt: `${schedule.startDate}T12:00:00.000Z`,
+        rentalMonths: schedule.durationMonths,
+      }));
+      submitting.current = true;
+      setIsCreating(true);
+      try {
+        // A lost response may still represent a committed booking. Keep the selection's key
+        // even if the schedule changes, so retries cannot accidentally create a new request.
+        const created = await BookingsApi.create(items, selectionKey.current);
+        const booking = toBooking(created, selectedUnits);
+        requestSequence.current += 1;
+        setBookings((current) => [booking, ...current.filter((b) => b.id !== created.id)]);
+        setNow(Date.now());
+        clearSelection();
+        void refreshBookings().catch(() => undefined);
+        return booking;
+      } finally {
+        submitting.current = false;
+        setIsCreating(false);
+      }
+    },
+    [clearSelection, refreshBookings, selectedUnits],
+  );
+
+  const applyBooking = useCallback((booking: ApiBooking) => {
+    setBookings((current) => {
+      const index = current.findIndex((b) => b.id === booking.id);
+      if (index === -1) return [booking, ...current];
+      const next = [...current];
+      next[index] = booking;
+      return next;
     });
+    // Same reason as in refreshBookings: a paused ticker leaves `now` stale, and the deposit
+    // countdown would render against the wrong instant on the first frame after a poll.
+    setNow(Date.now());
   }, []);
 
-  const setSchedule = useCallback((schedule: RentalSchedule) => {
-    setHeldBooking((current) => (current ? { ...current, ...schedule } : current));
-  }, []);
+  const cancelBooking = useCallback(
+    async (bookingId: string) => {
+      try {
+        await BookingsApi.cancel(bookingId);
+      } finally {
+        // Refresh even when the call rejected. A request that times out or loses its response on
+        // the way back may still have cancelled the booking server-side, and showing the customer
+        // a hold that no longer exists is worse than the failed request itself. Cancelling also
+        // frees units, so the whole list is stale, not just this row.
+        await refreshBookings().catch(() => undefined);
+      }
+    },
+    [refreshBookings],
+  );
 
   const remaining = useMemo(
-    () => formatRemaining((heldBooking?.holdExpiresAt ?? now) - now),
+    () => formatRemaining((heldBooking ? holdDeadline(heldBooking) : now) - now),
     [heldBooking, now],
   );
 
   const value = useMemo<HoldContextValue>(
-    () => ({ heldBooking, remaining, holdUnits, setSchedule, clearHold }),
-    [clearHold, heldBooking, holdUnits, remaining, setSchedule],
+    () => ({
+      selectedUnits,
+      bookings,
+      activeHolds,
+      heldBooking,
+      heldUnitCount,
+      remaining,
+      now,
+      isLoading,
+      isCreating,
+      error,
+      selectUnits,
+      clearSelection,
+      createBooking,
+      refreshBookings,
+      applyBooking,
+      cancelBooking,
+    }),
+    [
+      selectedUnits,
+      bookings,
+      activeHolds,
+      heldBooking,
+      heldUnitCount,
+      remaining,
+      now,
+      isLoading,
+      isCreating,
+      error,
+      selectUnits,
+      clearSelection,
+      createBooking,
+      refreshBookings,
+      applyBooking,
+      cancelBooking,
+    ],
   );
 
   return <HoldContext.Provider value={value}>{children}</HoldContext.Provider>;
@@ -80,10 +234,30 @@ export function useHold() {
   return context;
 }
 
-function formatRemaining(milliseconds: number) {
-  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+function toBooking(created: CreatedBooking, units: UnitOffer[]): ApiBooking {
+  // A booking this fresh has never been updated, so both stamps are "now". The deposit receipt
+  // only reads `updatedAt` once the server has confirmed the booking and sent its own copy back.
+  const now = new Date().toISOString();
+  return {
+    ...created,
+    currency: 'VND',
+    createdAt: now,
+    updatedAt: now,
+    items: created.items.map((item, index) => {
+      const unit = units.find((candidate) => candidate.id === item.storageUnitId) ?? units[index];
+      return {
+        ...item,
+        id: `${created.id}-${item.storageUnitId}`,
+        monthlyPriceSnapshot: String(unit?.monthlyPrice ?? 0),
+        depositSnapshot: String(unit?.deposit ?? 0),
+        storageUnit: {
+          id: item.storageUnitId,
+          code: unit?.code ?? item.storageUnitId,
+          zone: unit?.zone ?? null,
+          areaM2: String(unit?.areaM2 ?? 0),
+          facilityId: unit?.facilityId ?? '',
+        },
+      };
+    }),
+  };
 }

@@ -1,7 +1,9 @@
 import { Facility } from '@entities/facility.entity';
+import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
 import { Roles } from '@modules/auth/decorators/roles.decorator';
 import { RolesGuard } from '@modules/auth/guards/roles.guard';
 import { SessionGuard } from '@modules/auth/guards/session.guard';
+import type { AuthUser } from '@modules/auth/types/auth-user';
 import {
   Body,
   Controller,
@@ -29,6 +31,14 @@ export class FacilitiesController {
   @ApiOperation({ summary: 'List all active facilities' })
   findAll() {
     return this.facilitiesService.findAll();
+  }
+
+  @Get('mine')
+  @UseGuards(SessionGuard, RolesGuard)
+  @Roles(UserRole.FACILITY_MANAGER, UserRole.FACILITY_STAFF)
+  @ApiOperation({ summary: 'List facilities the current user is assigned to' })
+  findMine(@CurrentUser() user: AuthUser) {
+    return this.facilitiesService.findAssigned(user.id);
   }
 
   @Get(':id')

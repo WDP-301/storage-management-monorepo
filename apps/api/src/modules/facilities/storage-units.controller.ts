@@ -1,6 +1,8 @@
+import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
 import { Roles } from '@modules/auth/decorators/roles.decorator';
 import { RolesGuard } from '@modules/auth/guards/roles.guard';
 import { SessionGuard } from '@modules/auth/guards/session.guard';
+import type { AuthUser } from '@modules/auth/types/auth-user';
 import {
   Body,
   Controller,
@@ -19,9 +21,11 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@storage/types';
 import {
   CreateStorageUnitDto,
+  ManagedUnitsQueryDto,
   QueryStorageUnitsDto,
   StorageUnitListResponseDto,
   UpdateStorageUnitDto,
+  UpdateUnitStatusDto,
 } from './dto/storage-unit.dto';
 import { StorageUnitsService } from './storage-units.service';
 
@@ -35,6 +39,34 @@ export class StorageUnitsController {
   @ApiResponse({ status: 200, type: StorageUnitListResponseDto })
   findAll(@Query() query: QueryStorageUnitsDto) {
     return this.storageUnitsService.findAll(query);
+  }
+
+  @Get('managed')
+  @UseGuards(SessionGuard, RolesGuard)
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.OPERATIONS_MANAGER,
+    UserRole.FACILITY_MANAGER,
+    UserRole.FACILITY_STAFF,
+  )
+  @ApiOperation({
+    summary: 'Unit inventory of a facility the caller is assigned to (all statuses)',
+  })
+  @ApiResponse({ status: 200, type: StorageUnitListResponseDto })
+  findManaged(@Query() query: ManagedUnitsQueryDto, @CurrentUser() user: AuthUser) {
+    return this.storageUnitsService.findManaged(query, user);
+  }
+
+  @Patch(':id/status')
+  @UseGuards(SessionGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER, UserRole.FACILITY_MANAGER)
+  @ApiOperation({ summary: 'Toggle a unit between AVAILABLE and MAINTENANCE' })
+  updateStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateUnitStatusDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.storageUnitsService.updateStatus(id, dto, user);
   }
 
   @Get(':id')

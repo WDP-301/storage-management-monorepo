@@ -8,13 +8,19 @@ import {
   StorageUnitStatus,
   SystemSettingRecord,
   SystemSettingsResponse,
-  TicketPriority,
-  TicketStatus,
   UpdateSettingsResponse,
   UploadedFileResponse,
 } from '@storage/types';
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { AuthUser, LoginInput, LoginResponse, RegisterInput } from '../types/auth';
+import type {
+  AssignTicketDto,
+  ListTicketsQuery,
+  ServiceTicketDeleteResponse,
+  ServiceTicketListResponse,
+  ServiceTicketRecord,
+  ServiceTicketResponse,
+} from '../types/service-tickets';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
 
@@ -74,7 +80,9 @@ apiClient.interceptors.response.use(
       errorMessage = error.message;
     }
 
-    return Promise.reject(new Error(errorMessage));
+    const err = new Error(errorMessage) as Error & { status?: number };
+    err.status = status;
+    return Promise.reject(err);
   },
 );
 
@@ -221,17 +229,7 @@ export interface UnitChangeRequestRecord {
   new_unit: { id: string; code: string } | null;
 }
 
-export interface ServiceTicketRecord {
-  id: string;
-  ticket_no: string;
-  subject: string;
-  status: TicketStatus;
-  priority: TicketPriority;
-  created_at: string;
-  facility: { id: string; code: string } | null;
-  customer: { id: string; full_name: string } | null;
-  assignee: { id: string; full_name: string } | null;
-}
+export type { ServiceTicketRecord };
 
 interface Paged {
   meta: { total: number; page: number; limit: number; totalPages: number };
@@ -279,13 +277,61 @@ export const ChangeRequestsApi = {
   },
 };
 
+/**
+ * Service Tickets API Service
+ */
 export const TicketsApi = {
-  list: async (limit = 50) => {
-    const res = await apiClient.get<ApiResponse<{ tickets: ServiceTicketRecord[] } & Paged>>(
-      '/service-tickets',
-      { params: { limit } },
+  /**
+   * List tickets visible to user with pagination and optional filters
+   */
+  getAll: async (params?: ListTicketsQuery): Promise<ServiceTicketListResponse> => {
+    const res = await apiClient.get<
+      ApiResponse<ServiceTicketListResponse> | ServiceTicketListResponse
+    >('/service-tickets', {
+      params,
+    });
+    const body = res.data && 'data' in res.data ? res.data.data : res.data;
+    return body;
+  },
+
+  /**
+   * List the most recent tickets (dashboard summary)
+   */
+  list: (limit = 50) => TicketsApi.getAll({ limit }),
+
+  /**
+   * Get a single ticket by ID
+   */
+  getOne: async (id: string): Promise<ServiceTicketRecord> => {
+    const res = await apiClient.get<ApiResponse<ServiceTicketResponse> | ServiceTicketResponse>(
+      `/service-tickets/${id}`,
     );
-    return res.data.data;
+    const body = res.data && 'data' in res.data ? res.data.data : res.data;
+    return body.ticket;
+  },
+
+  /**
+   * Assign a facility staff member to a ticket (Facility Manager & Admin)
+   */
+  assign: async (id: string, assignedTo: string): Promise<ServiceTicketRecord> => {
+    const payload: AssignTicketDto = { assignedTo };
+    const res = await apiClient.patch<ApiResponse<ServiceTicketResponse> | ServiceTicketResponse>(
+      `/service-tickets/${id}/assign`,
+      payload,
+    );
+    const body = res.data && 'data' in res.data ? res.data.data : res.data;
+    return body.ticket;
+  },
+
+  /**
+   * Delete a service ticket (Facility Manager & Admin)
+   */
+  remove: async (id: string): Promise<ServiceTicketDeleteResponse> => {
+    const res = await apiClient.delete<
+      ApiResponse<ServiceTicketDeleteResponse> | ServiceTicketDeleteResponse
+    >(`/service-tickets/${id}`);
+    const body = res.data && 'data' in res.data ? res.data.data : res.data;
+    return body;
   },
 };
 

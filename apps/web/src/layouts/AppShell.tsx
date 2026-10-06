@@ -86,6 +86,11 @@ export const AppShell: React.FC = () => {
           badge: 'Manager',
         },
         {
+          to: '/facility-manager/tickets',
+          label: 'Sự cố & Ticket dịch vụ',
+          badge: 'Tickets',
+        },
+        {
           to: '/facility-staff',
           label: 'Ca trực & Kiểm tra',
           badge: 'Staff',
@@ -119,6 +124,11 @@ export const AppShell: React.FC = () => {
           to: '/facility-manager',
           label: 'Quản lý cơ sở kho',
           badge: 'Manager',
+        },
+        {
+          to: '/facility-manager/tickets',
+          label: 'Sự cố & Ticket dịch vụ',
+          badge: 'Tickets',
         },
         {
           to: '/facility-staff',

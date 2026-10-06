@@ -22,6 +22,7 @@ import { OperationsDashboard } from '../features/roles/OperationsDashboard';
 import { RoleLandingPage } from '../features/roles/RoleLandingPage';
 import { UnassignedRolePage } from '../features/roles/UnassignedRolePage';
 import { SystemSettingsPage } from '../features/settings/SystemSettingsPage';
+import { ManagerTicketsPage } from '../features/tickets/ManagerTicketsPage';
 import { AppShell } from '../layouts/AppShell';
 import { AuthLayout } from '../layouts/AuthLayout';
 import { RoleRoute } from './RoleRoute';
@@ -105,6 +106,7 @@ export const AppRouter: React.FC = () => {
               element={<RoleRoute allowedRoles={[UserRole.ADMIN, UserRole.FACILITY_MANAGER]} />}
             >
               <Route path="/facility-manager" element={<FacilityManagerDashboard />} />
+              <Route path="/facility-manager/tickets" element={<ManagerTicketsPage />} />
             </Route>
 
             <Route

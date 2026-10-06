@@ -185,6 +185,121 @@ export const StorageApi = {
 };
 
 /**
+ * Facility / unit / ticket portal services (facility-scoped roles)
+ */
+export interface FacilityRecord {
+  id: string;
+  code: string;
+  name: string;
+  addressLine: string;
+  status: string;
+}
+
+export interface ManagedUnit {
+  id: string;
+  code: string;
+  zone?: string | null;
+  areaM2: string;
+  status:
+    | 'AVAILABLE'
+    | 'HELD'
+    | 'BOOKED'
+    | 'RENTED'
+    | 'PENDING_INSPECTION'
+    | 'MAINTENANCE'
+    | 'INACTIVE';
+  unitType: { id: string; code: string; name: string; monthlyPrice: string };
+}
+
+export interface UnitChangeRequestRecord {
+  id: string;
+  status:
+    | 'REQUESTED'
+    | 'PROPOSED'
+    | 'APPROVED'
+    | 'TRANSITIONING'
+    | 'COMPLETED'
+    | 'REJECTED'
+    | 'CANCELLED';
+  reason: string;
+  rent_difference: number;
+  decision_note: string | null;
+  facility_id: string | null;
+  created_at: string;
+  requester: { id: string; full_name: string; email: string } | null;
+  old_unit: { id: string; code: string } | null;
+  new_unit: { id: string; code: string } | null;
+}
+
+export interface ServiceTicketRecord {
+  id: string;
+  ticket_no: string;
+  subject: string;
+  status: 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED' | 'CANCELLED';
+  priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+  created_at: string;
+  facility: { id: string; code: string } | null;
+  customer: { id: string; full_name: string } | null;
+  assignee: { id: string; full_name: string } | null;
+}
+
+interface Paged {
+  meta: { total: number; page: number; limit: number; totalPages: number };
+}
+
+export const FacilitiesApi = {
+  mine: async (): Promise<FacilityRecord[]> => {
+    const res = await apiClient.get<ApiResponse<FacilityRecord[]>>('/facilities/mine');
+    return res.data.data;
+  },
+};
+
+export const UnitsApi = {
+  managed: async (facilityId: string, status?: string) => {
+    const res = await apiClient.get<ApiResponse<{ units: ManagedUnit[] } & Paged>>(
+      '/storage-units/managed',
+      { params: { facilityId, status } },
+    );
+    return res.data.data;
+  },
+
+  updateStatus: async (id: string, status: 'AVAILABLE' | 'MAINTENANCE') => {
+    const res = await apiClient.patch<ApiResponse<ManagedUnit>>(`/storage-units/${id}/status`, {
+      status,
+    });
+    return res.data.data;
+  },
+};
+
+export const ChangeRequestsApi = {
+  list: async (status?: string) => {
+    const res = await apiClient.get<ApiResponse<{ requests: UnitChangeRequestRecord[] } & Paged>>(
+      '/unit-change-requests',
+      { params: { status, limit: 50 } },
+    );
+    return res.data.data;
+  },
+
+  decide: async (id: string, decision: 'APPROVED' | 'REJECTED', decisionNote?: string) => {
+    const res = await apiClient.patch<ApiResponse<{ request: UnitChangeRequestRecord }>>(
+      `/unit-change-requests/${id}/decide`,
+      { decision, decisionNote },
+    );
+    return res.data.data;
+  },
+};
+
+export const TicketsApi = {
+  list: async (limit = 50) => {
+    const res = await apiClient.get<ApiResponse<{ tickets: ServiceTicketRecord[] } & Paged>>(
+      '/service-tickets',
+      { params: { limit } },
+    );
+    return res.data.data;
+  },
+};
+
+/**
  * System Settings API Service
  */
 export const SettingsApi = {

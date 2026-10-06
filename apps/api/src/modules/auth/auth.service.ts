@@ -1,9 +1,9 @@
-import { AppUser } from '@modules/customer/entities/app-user.entity';
-import { CustomerProfile as CustomerProfileEntity } from '@modules/customer/entities/customer-profile.entity';
-import { Session } from '@modules/customer/entities/session.entity';
-import { UserRoleAssignment } from '@modules/customer/entities/user-role-assignment.entity';
+import { AppUser } from '@entities/app-user.entity';
+import { CustomerProfile as CustomerProfileEntity } from '@entities/customer-profile.entity';
+import { Document } from '@entities/document.entity';
+import { Session } from '@entities/session.entity';
+import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { toCustomerProfile } from '@modules/customer/types/customer-profile';
-import { Document } from '@modules/misc/entities/document.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
@@ -13,6 +13,7 @@ import { DataSource, Repository } from 'typeorm';
 import { AuthCookieService } from './auth.cookie';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { isAssignmentActive } from './role-assignment.util';
 import { hashPassword, verifyPassword } from './session.util';
 import type { AuthMeResponse, AuthUser, SessionContext } from './types/auth-user';
 
@@ -180,11 +181,7 @@ export class AuthService {
     const now = Date.now();
 
     return assignments
-      .filter(
-        (assignment) =>
-          assignment.startsAt.getTime() <= now &&
-          (!assignment.endsAt || assignment.endsAt.getTime() > now),
-      )
+      .filter((assignment) => isAssignmentActive(assignment, now))
       .map((assignment) => assignment.role);
   }
 

@@ -1,11 +1,12 @@
-import { AppUser } from '@modules/customer/entities/app-user.entity';
-import { Session } from '@modules/customer/entities/session.entity';
-import { UserRoleAssignment } from '@modules/customer/entities/user-role-assignment.entity';
-import { Facility } from '@modules/facilities/entities/facility.entity';
+import { AppUser } from '@entities/app-user.entity';
+import { Facility } from '@entities/facility.entity';
+import { Session } from '@entities/session.entity';
+import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DomainException } from '@shared/exceptions/domain.exception';
-import { ErrorCode } from '@shared/models/api-response';
+import { DomainException, notFound } from '@shared/exceptions/domain.exception';
+import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
+import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import { UserRole, UserStatus } from '@storage/types';
 import { In, IsNull, Repository } from 'typeorm';
 import { AssignRoleDto } from './dto/assign-role.dto';
@@ -78,7 +79,7 @@ export class AdminUsersService {
 
     return {
       users: rows.map((user) => this.toAdminUser(user, assignments.get(user.id) ?? [])),
-      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
@@ -165,12 +166,7 @@ export class AdminUsersService {
         }),
       );
     } catch (error: unknown) {
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { code: string }).code === '23505'
-      ) {
+      if (isUniqueViolation(error)) {
         throw new DomainException(
           ErrorCode.ROLE_ALREADY_ASSIGNED,
           'Role is already assigned to this user',
@@ -194,15 +190,7 @@ export class AdminUsersService {
 
   private async findUserOrFail(id: string): Promise<AppUser> {
     const user = await this.users.findOne({ where: { id } });
-
-    if (!user) {
-      throw new DomainException(
-        ErrorCode.RESOURCE_NOT_FOUND,
-        'User not found',
-        HttpStatus.NOT_FOUND,
-      );
-    }
-
+    if (!user) notFound('User');
     return user;
   }
 

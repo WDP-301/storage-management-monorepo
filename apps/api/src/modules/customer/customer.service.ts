@@ -1,17 +1,18 @@
+import { AppUser } from '@entities/app-user.entity';
+import { CustomerProfile as CustomerProfileEntity } from '@entities/customer-profile.entity';
+import { Document } from '@entities/document.entity';
+import { Session } from '@entities/session.entity';
 import { hashPassword, verifyPassword } from '@modules/auth/session.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { Document } from '@modules/misc/entities/document.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DomainException } from '@shared/exceptions/domain.exception';
+import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
+import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import { DocumentType, UserRole } from '@storage/types';
-import { DataSource, EntityManager, IsNull, Not, QueryFailedError, Repository } from 'typeorm';
+import { DataSource, EntityManager, IsNull, Not, Repository } from 'typeorm';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { IdentityDocumentDto, UpdateCustomerProfileDto } from './dto/update-customer-profile.dto';
-import { AppUser } from './entities/app-user.entity';
-import { CustomerProfile as CustomerProfileEntity } from './entities/customer-profile.entity';
-import { Session } from './entities/session.entity';
 import type {
   ChangePasswordResponse,
   CustomerAccount,
@@ -20,7 +21,6 @@ import type {
 import { toCustomerProfile } from './types/customer-profile';
 
 const IDENTITY_DOCUMENT_NAME = 'Identity document';
-const PG_UNIQUE_VIOLATION = '23505';
 
 /** Trims an incoming code and treats an empty string as "clear" (null). */
 const normalizeCode = (value: string | undefined): string | null | undefined =>
@@ -95,13 +95,7 @@ export class CustomerService {
       .where('user.id = :id', { id: actor.id })
       .getOne();
 
-    if (!user) {
-      throw new DomainException(
-        ErrorCode.RESOURCE_NOT_FOUND,
-        'User not found',
-        HttpStatus.NOT_FOUND,
-      );
-    }
+    if (!user) notFound('User');
 
     const currentPasswordMatches = user.passwordHash
       ? await verifyPassword(dto.currentPassword, user.passwordHash)
@@ -337,23 +331,8 @@ export class CustomerService {
   private async findUserOrFail(id: string): Promise<AppUser> {
     const user = await this.users.findOne({ where: { id } });
 
-    if (!user) {
-      throw new DomainException(
-        ErrorCode.RESOURCE_NOT_FOUND,
-        'User not found',
-        HttpStatus.NOT_FOUND,
-      );
-    }
+    if (!user) notFound('User');
 
     return user;
   }
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  if (!(error instanceof QueryFailedError)) {
-    return false;
-  }
-
-  const driverError = (error as QueryFailedError & { driverError?: { code?: string } }).driverError;
-  return driverError?.code === PG_UNIQUE_VIOLATION;
 }

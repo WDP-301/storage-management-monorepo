@@ -1,11 +1,11 @@
+import { AppUser } from '@entities/app-user.entity';
+import { CustomerProfile } from '@entities/customer-profile.entity';
+import { Document } from '@entities/document.entity';
 import { hashPassword, verifyPassword } from '@modules/auth/session.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { Document } from '@modules/misc/entities/document.entity';
 import { DocumentType, UserRole, UserStatus } from '@storage/types';
 import { IsNull, Not, QueryFailedError } from 'typeorm';
 import { CustomerService } from './customer.service';
-import { AppUser } from './entities/app-user.entity';
-import { CustomerProfile } from './entities/customer-profile.entity';
 
 const buildUser = (overrides: Partial<AppUser> = {}): AppUser =>
   ({

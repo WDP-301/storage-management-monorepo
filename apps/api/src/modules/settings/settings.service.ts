@@ -1,10 +1,10 @@
+import { SystemSetting } from '@entities/system-setting.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { HttpStatus, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { Repository } from 'typeorm';
-import { SystemSetting } from './entities/system-setting.entity';
 import { SETTINGS_REGISTRY, validateSettingValue } from './settings.registry';
 import {
   type SystemSettingsResponse,

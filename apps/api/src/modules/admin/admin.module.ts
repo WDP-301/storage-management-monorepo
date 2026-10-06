@@ -1,8 +1,8 @@
+import { AppUser } from '@entities/app-user.entity';
+import { Facility } from '@entities/facility.entity';
+import { Session } from '@entities/session.entity';
+import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { AuthModule } from '@modules/auth/auth.module';
-import { AppUser } from '@modules/customer/entities/app-user.entity';
-import { Session } from '@modules/customer/entities/session.entity';
-import { UserRoleAssignment } from '@modules/customer/entities/user-role-assignment.entity';
-import { Facility } from '@modules/facilities/entities/facility.entity';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdminUsersController } from './admin-users.controller';

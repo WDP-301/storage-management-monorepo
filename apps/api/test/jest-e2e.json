@@ -8,7 +8,8 @@
   "moduleNameMapper": {
     "^@storage/types$": "<rootDir>/../../packages/types/src/index.ts",
     "^@shared/(.*)$": "<rootDir>/src/shared/$1",
-    "^@modules/(.*)$": "<rootDir>/src/modules/$1"
+    "^@modules/(.*)$": "<rootDir>/src/modules/$1",
+    "^@entities/(.*)$": "<rootDir>/src/entities/$1"
   },
   "testEnvironment": "node"
 }

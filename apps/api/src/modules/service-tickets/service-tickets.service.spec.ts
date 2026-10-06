@@ -1,5 +1,5 @@
+import { ServiceTicket } from '@entities/service-ticket.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { ServiceTicket } from '@modules/service-tickets/entities/service-ticket.entity';
 import { TicketPriority, TicketStatus, UserRole, UserStatus } from '@storage/types';
 import { QueryFailedError } from 'typeorm';
 import { ServiceTicketsService } from './service-tickets.service';

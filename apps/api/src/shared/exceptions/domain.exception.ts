@@ -17,3 +17,12 @@ export class DomainException extends HttpException {
     super({ code, message, ...(details ? { details } : {}) }, status);
   }
 }
+
+/** Throws RESOURCE_NOT_FOUND (404) — `${resource} ${id} not found`, or `${resource} not found` without an id. */
+export function notFound(resource: string, id?: string): never {
+  throw new DomainException(
+    ErrorCode.RESOURCE_NOT_FOUND,
+    id === undefined ? `${resource} not found` : `${resource} ${id} not found`,
+    HttpStatus.NOT_FOUND,
+  );
+}

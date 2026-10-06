@@ -1,9 +1,9 @@
+import { Facility } from '@entities/facility.entity';
+import { StorageUnit } from '@entities/storage-unit.entity';
+import { UnitType } from '@entities/unit-type.entity';
 import { AuthModule } from '@modules/auth/auth.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Facility } from './entities/facility.entity';
-import { StorageUnit } from './entities/storage-unit.entity';
-import { UnitType } from './entities/unit-type.entity';
 import { FacilitiesController } from './facilities.controller';
 import { FacilitiesService } from './facilities.service';
 import { StorageUnitsController } from './storage-units.controller';

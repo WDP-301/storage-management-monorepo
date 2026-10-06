@@ -1,23 +1,19 @@
+import { UnitType } from '@entities/unit-type.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DomainException } from '@shared/exceptions/domain.exception';
+import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { IsNull, QueryFailedError, Repository } from 'typeorm';
+import { isUniqueViolation } from '@shared/utils/pg-error.util';
+import { IsNull, Repository } from 'typeorm';
 import { CreateUnitTypeDto, UpdateUnitTypeDto } from './dto/unit-type.dto';
-import { UnitType } from './entities/unit-type.entity';
-
-const PG_UNIQUE_VIOLATION = '23505';
 
 function handleDbError(err: unknown): never {
-  if (err instanceof QueryFailedError) {
-    const pg = (err as any).driverError as { code?: string };
-    if (pg?.code === PG_UNIQUE_VIOLATION) {
-      throw new DomainException(
-        ErrorCode.VALIDATION_FAILED,
-        'Unit type code already exists',
-        HttpStatus.CONFLICT,
-      );
-    }
+  if (isUniqueViolation(err)) {
+    throw new DomainException(
+      ErrorCode.VALIDATION_FAILED,
+      'Unit type code already exists',
+      HttpStatus.CONFLICT,
+    );
   }
   throw err;
 }
@@ -41,13 +37,7 @@ export class UnitTypesService {
       where: { id, deletedAt: IsNull() },
     });
 
-    if (!unitType) {
-      throw new DomainException(
-        ErrorCode.RESOURCE_NOT_FOUND,
-        `UnitType ${id} not found`,
-        HttpStatus.NOT_FOUND,
-      );
-    }
+    if (!unitType) notFound('UnitType', id);
 
     return unitType;
   }

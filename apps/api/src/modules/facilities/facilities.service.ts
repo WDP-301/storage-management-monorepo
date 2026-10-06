@@ -1,23 +1,19 @@
+import { Facility } from '@entities/facility.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DomainException } from '@shared/exceptions/domain.exception';
+import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { IsNull, QueryFailedError, Repository } from 'typeorm';
+import { isUniqueViolation } from '@shared/utils/pg-error.util';
+import { IsNull, Repository } from 'typeorm';
 import { CreateFacilityDto, UpdateFacilityDto } from './dto/facility.dto';
-import { Facility } from './entities/facility.entity';
-
-const PG_UNIQUE_VIOLATION = '23505';
 
 function handleDbError(err: unknown): never {
-  if (err instanceof QueryFailedError) {
-    const pg = (err as any).driverError as { code?: string };
-    if (pg?.code === PG_UNIQUE_VIOLATION) {
-      throw new DomainException(
-        ErrorCode.VALIDATION_FAILED,
-        'Facility code already exists',
-        HttpStatus.CONFLICT,
-      );
-    }
+  if (isUniqueViolation(err)) {
+    throw new DomainException(
+      ErrorCode.VALIDATION_FAILED,
+      'Facility code already exists',
+      HttpStatus.CONFLICT,
+    );
   }
   throw err;
 }
@@ -41,13 +37,7 @@ export class FacilitiesService {
       where: { id, deletedAt: IsNull() },
     });
 
-    if (!facility) {
-      throw new DomainException(
-        ErrorCode.RESOURCE_NOT_FOUND,
-        `Facility ${id} not found`,
-        HttpStatus.NOT_FOUND,
-      );
-    }
+    if (!facility) notFound('Facility', id);
 
     return facility;
   }

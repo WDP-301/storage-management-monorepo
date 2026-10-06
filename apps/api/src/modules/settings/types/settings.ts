@@ -1,4 +1,4 @@
-import type { SystemSetting } from '../entities/system-setting.entity';
+import type { SystemSetting } from '@entities/system-setting.entity';
 import { SETTINGS_REGISTRY, type SettingValueType } from '../settings.registry';
 
 export interface SystemSettingRecord {

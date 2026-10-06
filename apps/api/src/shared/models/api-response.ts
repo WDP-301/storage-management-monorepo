@@ -18,6 +18,8 @@ export enum ErrorCode {
   SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE',
   INTERNAL_ERROR = 'INTERNAL_ERROR',
   UNIT_NOT_AVAILABLE = 'UNIT_NOT_AVAILABLE',
+  BOOKING_NOT_CONFIRMED = 'BOOKING_NOT_CONFIRMED',
+  BOOKING_ITEM_CONTRACT_WINDOW_EXPIRED = 'BOOKING_ITEM_CONTRACT_WINDOW_EXPIRED',
   IDEMPOTENCY_KEY_CONFLICT = 'IDEMPOTENCY_KEY_CONFLICT',
   IDEMPOTENCY_PAYLOAD_MISMATCH = 'IDEMPOTENCY_PAYLOAD_MISMATCH',
 }
@@ -87,6 +89,11 @@ export class ApiErrorResponseDto implements ApiErrorResponse {
 
   @ApiProperty({ example: '/api/v1/auth/login' })
   path: string;
+}
+
+/** Builds the shared `{ page, limit, total, totalPages }` meta block for paginated list responses. */
+export function buildPaginationMeta(page: number, limit: number, total: number): PaginationMeta {
+  return { page, limit, total, totalPages: Math.ceil(total / limit) };
 }
 
 export class PaginationMetaDto implements PaginationMeta {

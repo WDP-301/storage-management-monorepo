@@ -1,4 +1,4 @@
-import { Facility } from '@modules/facilities/entities/facility.entity';
+import { Facility } from '@entities/facility.entity';
 import { FacilitiesService } from '@modules/facilities/facilities.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';

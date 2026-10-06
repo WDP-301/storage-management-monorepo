@@ -1,13 +1,13 @@
+import { AppUser } from '@entities/app-user.entity';
+import { Contract } from '@entities/contract.entity';
+import { CustomerProfile } from '@entities/customer-profile.entity';
+import { Document } from '@entities/document.entity';
+import { Session } from '@entities/session.entity';
 import { AuthModule } from '@modules/auth/auth.module';
-import { Contract } from '@modules/contracts/entities/contract.entity';
-import { Document } from '@modules/misc/entities/document.entity';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CustomerController } from './customer.controller';
 import { CustomerService } from './customer.service';
-import { AppUser } from './entities/app-user.entity';
-import { CustomerProfile } from './entities/customer-profile.entity';
-import { Session } from './entities/session.entity';
 
 @Module({
   imports: [

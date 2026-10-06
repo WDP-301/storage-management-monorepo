@@ -1,6 +1,14 @@
 import { ServiceTicket } from '@entities/service-ticket.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { TicketPriority, TicketStatus, UserRole, UserStatus } from '@storage/types';
+import { hashBody } from '@shared/utils/canonical-json.util';
+import {
+  ContractStatus,
+  IdempotencyStatus,
+  TicketPriority,
+  TicketStatus,
+  UserRole,
+  UserStatus,
+} from '@storage/types';
 import { QueryFailedError } from 'typeorm';
 import { ServiceTicketsService } from './service-tickets.service';
 
@@ -66,6 +74,7 @@ const buildStaffAssignment = (facilityId: string) => ({
 
 const buildQueryBuilder = (rows: ServiceTicket[], total: number) => ({
   where: jest.fn().mockReturnThis(),
+  andWhere: jest.fn().mockReturnThis(),
   leftJoinAndSelect: jest.fn().mockReturnThis(),
   orderBy: jest.fn().mockReturnThis(),
   addOrderBy: jest.fn().mockReturnThis(),
@@ -95,6 +104,9 @@ describe('ServiceTicketsService', () => {
   let facilities: { findOne: jest.Mock };
   let storageUnits: { findOne: jest.Mock };
   let contracts: { createQueryBuilder: jest.Mock };
+  let idempotencyKeys: { query: jest.Mock; delete: jest.Mock };
+  let em: { save: jest.Mock; findOneOrFail: jest.Mock; update: jest.Mock };
+  let dataSource: { transaction: jest.Mock };
   let service: ServiceTicketsService;
 
   beforeEach(() => {
@@ -116,6 +128,16 @@ describe('ServiceTicketsService', () => {
     contracts = {
       createQueryBuilder: jest.fn(() => buildRentCheckBuilder(true)),
     };
+    idempotencyKeys = {
+      query: jest.fn().mockResolvedValue([{ is_new_insert: true }]),
+      delete: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
+    em = {
+      save: jest.fn((value) => Promise.resolve(value)),
+      findOneOrFail: jest.fn().mockResolvedValue(buildTicket()),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
+    dataSource = { transaction: jest.fn((cb: (manager: typeof em) => unknown) => cb(em)) };
 
     service = new ServiceTicketsService(
       tickets as never,
@@ -125,6 +147,8 @@ describe('ServiceTicketsService', () => {
       facilities as never,
       storageUnits as never,
       contracts as never,
+      idempotencyKeys as never,
+      dataSource as never,
     );
   });
 
@@ -140,9 +164,9 @@ describe('ServiceTicketsService', () => {
       facilities.findOne.mockResolvedValue({ id: 'facility-1' });
       ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
       const fullTicket = buildTicket({ customerId: 'customer-1' });
-      tickets.findOne.mockResolvedValue(fullTicket);
+      em.findOneOrFail.mockResolvedValue(fullTicket);
 
-      const result = await service.create(dto, buildActor({ id: 'customer-1' }));
+      const result = await service.create(dto, buildActor({ id: 'customer-1' }), 'key-1');
 
       expect(tickets.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -156,16 +180,117 @@ describe('ServiceTicketsService', () => {
       expect(tickets.create).toHaveBeenCalledWith(
         expect.not.objectContaining({ assignedTo: expect.anything() }),
       );
-      expect(tickets.save).toHaveBeenCalled();
-      expect(result.ticket.ticket_no).toMatch(/^ST-\d{8}-[0-9A-F]{8}$/);
-      expect(result.ticket.customer_id).toBe('customer-1');
-      expect(result.ticket.assigned_to).toBeNull();
+      expect(em.save).toHaveBeenCalled();
+      expect(result.isRetry).toBe(false);
+      expect(result.data.ticket.ticket_no).toMatch(/^ST-\d{8}-[0-9A-F]{8}$/);
+      expect(result.data.ticket.customer_id).toBe('customer-1');
+      expect(result.data.ticket.assigned_to).toBeNull();
+    });
+
+    it('marks the idempotency key DONE with the created ticket inside the transaction', async () => {
+      facilities.findOne.mockResolvedValue({ id: 'facility-1' });
+      ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
+
+      await service.create(dto, buildActor({ id: 'customer-1' }), 'key-1');
+
+      expect(em.update).toHaveBeenCalledWith(
+        expect.anything(),
+        { key: 'key-1', userId: 'customer-1' },
+        expect.objectContaining({ status: IdempotencyStatus.DONE }),
+      );
+    });
+
+    it('returns the cached response on a retry with the same key and payload', async () => {
+      const cached = { ticket: buildTicket({ customerId: 'customer-1' }) };
+      idempotencyKeys.query.mockResolvedValue([
+        {
+          is_new_insert: false,
+          request_hash: hashBody(dto),
+          status: IdempotencyStatus.DONE,
+          response_body: cached,
+        },
+      ]);
+
+      const result = await service.create(dto, buildActor({ id: 'customer-1' }), 'key-1');
+
+      expect(result.isRetry).toBe(true);
+      expect(result.data).toEqual(cached);
+      expect(tickets.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a retry that reuses the key with a different payload', async () => {
+      idempotencyKeys.query.mockResolvedValue([
+        {
+          is_new_insert: false,
+          request_hash: 'stale-hash',
+          status: IdempotencyStatus.DONE,
+        },
+      ]);
+
+      await expect(
+        service.create(dto, buildActor({ id: 'customer-1' }), 'key-1'),
+      ).rejects.toMatchObject({
+        status: 422,
+        response: { code: 'IDEMPOTENCY_PAYLOAD_MISMATCH' },
+      });
+      expect(tickets.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects while another request holds the key in PROCESSING', async () => {
+      idempotencyKeys.query.mockResolvedValue([
+        {
+          is_new_insert: false,
+          request_hash: hashBody(dto),
+          status: IdempotencyStatus.PROCESSING,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+
+      await expect(
+        service.create(dto, buildActor({ id: 'customer-1' }), 'key-1'),
+      ).rejects.toMatchObject({ status: 409, response: { code: 'IDEMPOTENCY_KEY_CONFLICT' } });
+      expect(tickets.create).not.toHaveBeenCalled();
+    });
+
+    it('reclaims a stale PROCESSING key and creates the ticket', async () => {
+      facilities.findOne.mockResolvedValue({ id: 'facility-1' });
+      ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
+      idempotencyKeys.query
+        .mockResolvedValueOnce([
+          {
+            is_new_insert: false,
+            request_hash: hashBody(dto),
+            status: IdempotencyStatus.PROCESSING,
+            created_at: new Date(Date.now() - 120_000).toISOString(),
+          },
+        ])
+        .mockResolvedValueOnce([{ is_new_insert: true }]);
+
+      const result = await service.create(dto, buildActor({ id: 'customer-1' }), 'key-1');
+
+      expect(idempotencyKeys.query).toHaveBeenCalledTimes(2);
+      expect(result.isRetry).toBe(false);
+      expect(em.save).toHaveBeenCalled();
+    });
+
+    it('releases the claimed key when validation fails', async () => {
+      facilities.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.create(dto, buildActor({ id: 'customer-1' }), 'key-1'),
+      ).rejects.toMatchObject({ status: 400 });
+
+      expect(idempotencyKeys.delete).toHaveBeenCalledWith({
+        key: 'key-1',
+        userId: 'customer-1',
+        status: IdempotencyStatus.PROCESSING,
+      });
     });
 
     it('rejects an unknown facility', async () => {
       facilities.findOne.mockResolvedValue(null);
 
-      await expect(service.create(dto, buildActor())).rejects.toMatchObject({
+      await expect(service.create(dto, buildActor(), 'key-1')).rejects.toMatchObject({
         status: 400,
         response: {
           code: 'VALIDATION_FAILED',
@@ -179,7 +304,7 @@ describe('ServiceTicketsService', () => {
       facilities.findOne.mockResolvedValue({ id: 'facility-1' });
       ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: false });
 
-      await expect(service.create(dto, buildActor())).rejects.toMatchObject({
+      await expect(service.create(dto, buildActor(), 'key-1')).rejects.toMatchObject({
         status: 400,
         response: {
           code: 'VALIDATION_FAILED',
@@ -194,7 +319,7 @@ describe('ServiceTicketsService', () => {
       storageUnits.findOne.mockResolvedValue({ id: 'unit-1', facilityId: 'facility-2' });
 
       await expect(
-        service.create({ ...dto, storageUnitId: 'unit-1' }, buildActor()),
+        service.create({ ...dto, storageUnitId: 'unit-1' }, buildActor(), 'key-1'),
       ).rejects.toMatchObject({
         status: 400,
         response: {
@@ -207,18 +332,18 @@ describe('ServiceTicketsService', () => {
     it('regenerates the ticket number on a unique-violation collision', async () => {
       facilities.findOne.mockResolvedValue({ id: 'facility-1' });
       ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
-      tickets.findOne.mockResolvedValue(buildTicket({ customerId: 'customer-1' }));
+      em.findOneOrFail.mockResolvedValue(buildTicket({ customerId: 'customer-1' }));
 
       const collision = Object.assign(
         new QueryFailedError('INSERT', [], new Error('duplicate key')),
         { driverError: { code: '23505' } },
       );
-      tickets.save.mockRejectedValueOnce(collision);
+      dataSource.transaction.mockRejectedValueOnce(collision);
 
-      const result = await service.create(dto, buildActor({ id: 'customer-1' }));
+      const result = await service.create(dto, buildActor({ id: 'customer-1' }), 'key-1');
 
-      expect(tickets.save).toHaveBeenCalledTimes(2);
-      expect(result.ticket.ticket_no).toMatch(/^ST-\d{8}-[0-9A-F]{8}$/);
+      expect(dataSource.transaction).toHaveBeenCalledTimes(2);
+      expect(result.data.ticket.ticket_no).toMatch(/^ST-\d{8}-[0-9A-F]{8}$/);
     });
 
     it('rejects a customer without an active contract on the unit', async () => {
@@ -229,7 +354,7 @@ describe('ServiceTicketsService', () => {
       contracts.createQueryBuilder.mockReturnValue(builder);
 
       await expect(
-        service.create({ ...dto, storageUnitId: 'unit-1' }, buildActor()),
+        service.create({ ...dto, storageUnitId: 'unit-1' }, buildActor(), 'key-1'),
       ).rejects.toMatchObject({ status: 403, response: { code: 'FORBIDDEN' } });
 
       expect(builder.andWhere).toHaveBeenCalledWith('bi.storageUnitId = :unitId', {
@@ -244,7 +369,7 @@ describe('ServiceTicketsService', () => {
       const builder = buildRentCheckBuilder(false);
       contracts.createQueryBuilder.mockReturnValue(builder);
 
-      await expect(service.create(dto, buildActor())).rejects.toMatchObject({
+      await expect(service.create(dto, buildActor(), 'key-1')).rejects.toMatchObject({
         status: 403,
         response: { code: 'FORBIDDEN' },
       });
@@ -253,21 +378,38 @@ describe('ServiceTicketsService', () => {
       expect(tickets.create).not.toHaveBeenCalled();
     });
 
+    it('accepts an ended contract for a facility-level ticket', async () => {
+      facilities.findOne.mockResolvedValue({ id: 'facility-1' });
+      ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
+      const builder = buildRentCheckBuilder(true);
+      contracts.createQueryBuilder.mockReturnValue(builder);
+      em.findOneOrFail.mockResolvedValue(buildTicket({ customerId: 'customer-1' }));
+
+      await service.create(dto, buildActor({ id: 'customer-1' }), 'key-1');
+
+      expect(builder.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('endedStatus'),
+        expect.objectContaining({ endedStatus: ContractStatus.ENDED }),
+      );
+      expect(tickets.create).toHaveBeenCalled();
+    });
+
     it('lets a customer with an active contract on the unit create a ticket', async () => {
       facilities.findOne.mockResolvedValue({ id: 'facility-1' });
       ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
       storageUnits.findOne.mockResolvedValue({ id: 'unit-1', facilityId: 'facility-1' });
-      tickets.findOne.mockResolvedValue(
+      em.findOneOrFail.mockResolvedValue(
         buildTicket({ customerId: 'customer-1', storageUnitId: 'unit-1' }),
       );
 
       const result = await service.create(
         { ...dto, storageUnitId: 'unit-1' },
         buildActor({ id: 'customer-1' }),
+        'key-1',
       );
 
       expect(tickets.create).toHaveBeenCalled();
-      expect(result.ticket.storage_unit_id).toBe('unit-1');
+      expect(result.data.ticket.storage_unit_id).toBe('unit-1');
     });
   });
 
@@ -335,6 +477,26 @@ describe('ServiceTicketsService', () => {
       expect(builder.where).not.toHaveBeenCalled();
       expect(roleAssignments.find).not.toHaveBeenCalled();
       expect(result.meta).toEqual({ page: 1, limit: 20, total: 1, totalPages: 1 });
+    });
+
+    it('applies status, priority and type filters on top of the visibility scope', async () => {
+      const builder = buildQueryBuilder([], 0);
+      tickets.createQueryBuilder.mockReturnValue(builder);
+
+      await service.list(
+        { status: TicketStatus.OPEN, priority: TicketPriority.URGENT, typeId: 'type-1' },
+        buildActor({ id: 'customer-1', roles: [UserRole.CUSTOMER] }),
+      );
+
+      expect(builder.andWhere).toHaveBeenCalledWith('ticket.status = :status', {
+        status: TicketStatus.OPEN,
+      });
+      expect(builder.andWhere).toHaveBeenCalledWith('ticket.priority = :priority', {
+        priority: TicketPriority.URGENT,
+      });
+      expect(builder.andWhere).toHaveBeenCalledWith('ticket.type_id = :typeId', {
+        typeId: 'type-1',
+      });
     });
   });
 
@@ -580,6 +742,155 @@ describe('ServiceTicketsService', () => {
       ).rejects.toMatchObject({ status: 403, response: { code: 'FORBIDDEN' } });
       expect(tickets.save).not.toHaveBeenCalled();
     });
+
+    it('forbids staff from setting CANCELLED — that belongs to the cancel endpoint', async () => {
+      tickets.findOne.mockResolvedValue(
+        buildTicket({ assignedTo: 'staff-1', status: TicketStatus.IN_PROGRESS }),
+      );
+
+      await expect(
+        service.update('ticket-1', { status: TicketStatus.CANCELLED }, staff),
+      ).rejects.toMatchObject({
+        status: 400,
+        response: {
+          code: 'VALIDATION_FAILED',
+          details: { fields: [{ field: 'status', code: 'notAllowed' }] },
+        },
+      });
+      expect(tickets.save).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [TicketStatus.IN_PROGRESS, TicketStatus.OPEN],
+      [TicketStatus.IN_PROGRESS, TicketStatus.ASSIGNED],
+      [TicketStatus.ASSIGNED, TicketStatus.OPEN],
+    ])('forbids moving a %s ticket backwards to %s', async (from, to) => {
+      tickets.findOne.mockResolvedValue(buildTicket({ assignedTo: 'staff-1', status: from }));
+
+      await expect(service.update('ticket-1', { status: to }, staff)).rejects.toMatchObject({
+        status: 400,
+        response: {
+          code: 'VALIDATION_FAILED',
+          details: { fields: [{ field: 'status', code: 'invalidTransition' }] },
+        },
+      });
+      expect(tickets.save).not.toHaveBeenCalled();
+    });
+
+    it('lets staff close a ticket without resolving it first', async () => {
+      tickets.findOne.mockResolvedValue(
+        buildTicket({ assignedTo: 'staff-1', status: TicketStatus.ASSIGNED }),
+      );
+
+      const result = await service.update('ticket-1', { status: TicketStatus.CLOSED }, staff);
+
+      expect(tickets.save).toHaveBeenCalledWith(
+        expect.objectContaining({ status: TicketStatus.CLOSED }),
+      );
+      expect(result.ticket.history.map((entry) => entry.action)).toEqual(['STATUS_CHANGED']);
+      expect(result.ticket.history[0].from).toBe(TicketStatus.ASSIGNED);
+      expect(result.ticket.history[0].to).toBe(TicketStatus.CLOSED);
+    });
+
+    it.each([TicketStatus.RESOLVED, TicketStatus.CLOSED, TicketStatus.CANCELLED])(
+      'forbids updating a ticket whose status is %s',
+      async (status) => {
+        tickets.findOne.mockResolvedValue(buildTicket({ assignedTo: 'staff-1', status }));
+
+        await expect(
+          service.update('ticket-1', { resolution: 'Edit after close' }, staff),
+        ).rejects.toMatchObject({ status: 409, response: { code: 'CONFLICT' } });
+        expect(tickets.save).not.toHaveBeenCalled();
+      },
+    );
+
+    it('lets staff change the priority with a history entry', async () => {
+      tickets.findOne.mockResolvedValue(
+        buildTicket({ assignedTo: 'staff-1', status: TicketStatus.IN_PROGRESS }),
+      );
+
+      const result = await service.update('ticket-1', { priority: TicketPriority.URGENT }, staff);
+
+      expect(tickets.save).toHaveBeenCalledWith(
+        expect.objectContaining({ priority: TicketPriority.URGENT }),
+      );
+      expect(result.ticket.priority).toBe(TicketPriority.URGENT);
+      expect(result.ticket.history.map((entry) => entry.action)).toEqual(['PRIORITY_CHANGED']);
+      expect(result.ticket.history[0].from).toBe(TicketPriority.NORMAL);
+    });
+  });
+
+  describe('cancel', () => {
+    const owner = buildActor({ id: 'customer-1', roles: [UserRole.CUSTOMER] });
+    const manager = buildActor({ id: 'manager-1', roles: [UserRole.FACILITY_MANAGER] });
+
+    it('lets the owning customer cancel an open ticket with a history entry', async () => {
+      tickets.findOne.mockResolvedValue(
+        buildTicket({ customerId: 'customer-1', status: TicketStatus.ASSIGNED }),
+      );
+
+      const result = await service.cancel('ticket-1', owner);
+
+      expect(tickets.save).toHaveBeenCalledWith(
+        expect.objectContaining({ status: TicketStatus.CANCELLED }),
+      );
+      expect(result.ticket.history.map((entry) => entry.action)).toEqual(['STATUS_CHANGED']);
+      expect(result.ticket.history[0].from).toBe(TicketStatus.ASSIGNED);
+      expect(result.ticket.history[0].to).toBe(TicketStatus.CANCELLED);
+    });
+
+    it('forbids a customer from cancelling another customer ticket', async () => {
+      tickets.findOne.mockResolvedValue(buildTicket({ customerId: 'customer-2' }));
+
+      await expect(service.cancel('ticket-1', owner)).rejects.toMatchObject({
+        status: 403,
+        response: { code: 'FORBIDDEN' },
+      });
+      expect(tickets.save).not.toHaveBeenCalled();
+    });
+
+    it('lets a facility manager cancel a ticket of a facility they manage', async () => {
+      tickets.findOne.mockResolvedValue(
+        buildTicket({
+          facilityId: 'facility-1',
+          customerId: 'customer-1',
+          status: TicketStatus.IN_PROGRESS,
+        }),
+      );
+      roleAssignments.find.mockResolvedValue([buildManagerAssignment('facility-1')]);
+
+      await service.cancel('ticket-1', manager);
+
+      expect(tickets.save).toHaveBeenCalledWith(
+        expect.objectContaining({ status: TicketStatus.CANCELLED }),
+      );
+    });
+
+    it('forbids a manager from cancelling a ticket of a facility they do not manage', async () => {
+      tickets.findOne.mockResolvedValue(
+        buildTicket({ facilityId: 'facility-2', customerId: 'customer-1' }),
+      );
+      roleAssignments.find.mockResolvedValue([buildManagerAssignment('facility-1')]);
+
+      await expect(service.cancel('ticket-1', manager)).rejects.toMatchObject({
+        status: 403,
+        response: { code: 'FORBIDDEN' },
+      });
+      expect(tickets.save).not.toHaveBeenCalled();
+    });
+
+    it.each([TicketStatus.RESOLVED, TicketStatus.CLOSED, TicketStatus.CANCELLED])(
+      'rejects cancelling a ticket whose status is %s',
+      async (status) => {
+        tickets.findOne.mockResolvedValue(buildTicket({ customerId: 'customer-1', status }));
+
+        await expect(service.cancel('ticket-1', owner)).rejects.toMatchObject({
+          status: 409,
+          response: { code: 'CONFLICT' },
+        });
+        expect(tickets.save).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('remove', () => {
@@ -619,18 +930,16 @@ describe('ServiceTicketsService', () => {
       expect(tickets.delete).toHaveBeenCalledWith({ id: 'ticket-1' });
     });
 
-    it('lets a manager delete a ticket of a facility they manage', async () => {
+    it('forbids a facility manager from deleting a ticket', async () => {
       tickets.findOne.mockResolvedValue(
         buildTicket({ facilityId: 'facility-1', assignedTo: 'staff-1' }),
       );
-      roleAssignments.find.mockResolvedValue([buildManagerAssignment('facility-1')]);
 
-      await expect(service.remove('ticket-1', manager)).resolves.toEqual({
-        deleted: true,
-        id: 'ticket-1',
+      await expect(service.remove('ticket-1', manager)).rejects.toMatchObject({
+        status: 403,
+        response: { code: 'FORBIDDEN' },
       });
-
-      expect(tickets.delete).toHaveBeenCalledWith({ id: 'ticket-1' });
+      expect(tickets.delete).not.toHaveBeenCalled();
     });
 
     it('reports deleted: false when the row is already gone', async () => {

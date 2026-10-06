@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { AppUser } from '@entities/app-user.entity';
 import { Contract } from '@entities/contract.entity';
 import { Facility } from '@entities/facility.entity';
+import { IdempotencyKey } from '@entities/idempotency-key.entity';
 import { ServiceTicket } from '@entities/service-ticket.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { TicketType } from '@entities/ticket-type.entity';
@@ -12,9 +13,18 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
+import { hashBody } from '@shared/utils/canonical-json.util';
+import { claimIdempotencyKey, releaseIdempotencyKey } from '@shared/utils/idempotency-key.util';
 import { isUniqueViolation } from '@shared/utils/pg-error.util';
-import { ContractStatus, TicketPriority, TicketStatus, UserRole, UserStatus } from '@storage/types';
-import { IsNull, Repository } from 'typeorm';
+import {
+  ContractStatus,
+  IdempotencyStatus,
+  TicketPriority,
+  TicketStatus,
+  UserRole,
+  UserStatus,
+} from '@storage/types';
+import { DataSource, IsNull, Repository } from 'typeorm';
 import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { DEFAULT_PAGE_SIZE, ListTicketsQueryDto } from './dto/list-tickets-query.dto';
@@ -28,12 +38,32 @@ import type {
 import { toServiceTicketRecord } from './types/service-ticket';
 
 const MAX_TICKET_NO_ATTEMPTS = 3;
-const RESOLVED_STATUSES: readonly TicketStatus[] = [TicketStatus.RESOLVED, TicketStatus.CLOSED];
+/** Staff workflow order — update() only moves a ticket forward along this path. */
+const STATUS_FLOW: readonly TicketStatus[] = [
+  TicketStatus.OPEN,
+  TicketStatus.ASSIGNED,
+  TicketStatus.IN_PROGRESS,
+  TicketStatus.RESOLVED,
+];
+/** RESOLVED already means done — CLOSED is a separate end state, not a step after it. */
+const TERMINAL_STATUSES: readonly TicketStatus[] = [
+  TicketStatus.RESOLVED,
+  TicketStatus.CLOSED,
+  TicketStatus.CANCELLED,
+];
 const ASSIGNABLE_STATUSES: readonly TicketStatus[] = [
   TicketStatus.OPEN,
   TicketStatus.ASSIGNED,
   TicketStatus.IN_PROGRESS,
 ];
+
+const TICKET_RELATIONS = {
+  type: true,
+  facility: true,
+  storageUnit: true,
+  customer: true,
+  assignee: true,
+} as const;
 
 @Injectable()
 export class ServiceTicketsService {
@@ -52,31 +82,64 @@ export class ServiceTicketsService {
     private readonly storageUnits: Repository<StorageUnit>,
     @InjectRepository(Contract)
     private readonly contracts: Repository<Contract>,
+    @InjectRepository(IdempotencyKey)
+    private readonly idempotencyKeys: Repository<IdempotencyKey>,
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
    * Creates a ticket on behalf of the authenticated customer. The owner is always the
    * session user (`actor.id`), never a client-supplied id; assignment stays null until a
-   * facility manager assigns a staff member.
+   * facility manager assigns a staff member. Idempotent via `Idempotency-Key`: a retry
+   * with the same key and payload returns the originally created ticket.
    */
-  async create(dto: CreateTicketDto, actor: AuthUser): Promise<ServiceTicketResponse> {
-    await this.validateTicketReferences(dto);
-    await this.assertCustomerRents(actor.id, dto);
+  async create(
+    dto: CreateTicketDto,
+    actor: AuthUser,
+    idempotencyKey: string,
+  ): Promise<{ data: ServiceTicketResponse; isRetry: boolean }> {
+    const requestHash = hashBody(dto as unknown as Record<string, unknown>);
+    const cached = await claimIdempotencyKey(
+      this.idempotencyKeys,
+      idempotencyKey,
+      actor.id,
+      requestHash,
+    );
+    if (cached) {
+      return { data: cached as unknown as ServiceTicketResponse, isRetry: true };
+    }
 
-    const ticket = this.tickets.create({
-      typeId: dto.typeId,
-      facilityId: dto.facilityId,
-      storageUnitId: dto.storageUnitId,
-      customerId: actor.id,
-      priority: dto.priority ?? TicketPriority.NORMAL,
-      status: TicketStatus.OPEN,
-      subject: dto.subject.trim(),
-      description: dto.description,
-      attachments: dto.attachments ?? [],
-    });
+    let isCommitted = false;
+    try {
+      await this.validateTicketReferences(dto);
+      await this.assertCustomerRents(actor.id, dto);
 
-    const saved = await this.saveWithTicketNoRetry(ticket);
-    return { ticket: toServiceTicketRecord(await this.findTicketOrFail(saved.id)) };
+      // Ticket insert and the DONE marker commit in one transaction; each ticket_no
+      // retry runs a fresh transaction because a failed statement aborts the current one.
+      const data = await this.saveWithTicketNoRetry(
+        {
+          typeId: dto.typeId,
+          facilityId: dto.facilityId,
+          storageUnitId: dto.storageUnitId,
+          customerId: actor.id,
+          priority: dto.priority ?? TicketPriority.NORMAL,
+          status: TicketStatus.OPEN,
+          subject: dto.subject.trim(),
+          description: dto.description,
+          attachments: dto.attachments ?? [],
+        },
+        idempotencyKey,
+        actor.id,
+      );
+
+      isCommitted = true;
+      return { data, isRetry: false };
+    } catch (error) {
+      if (!isCommitted) {
+        await releaseIdempotencyKey(this.idempotencyKeys, idempotencyKey, actor.id);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -129,6 +192,16 @@ export class ServiceTicketsService {
 
     if (!isAdmin) {
       builder.where(`(${branches.join(' OR ')})`, params);
+    }
+
+    if (query.status) {
+      builder.andWhere('ticket.status = :status', { status: query.status });
+    }
+    if (query.priority) {
+      builder.andWhere('ticket.priority = :priority', { priority: query.priority });
+    }
+    if (query.typeId) {
+      builder.andWhere('ticket.type_id = :typeId', { typeId: query.typeId });
     }
 
     const [rows, total] = await builder.getManyAndCount();
@@ -204,9 +277,13 @@ export class ServiceTicketsService {
   }
 
   /**
-   * Lets a staff member update processing fields (status/resolution/attachments) of a
-   * ticket assigned to them. `assigned_to`, ownership ids and `resolved_at` are never
-   * taken from the request; `resolved_at` is derived from the status transition.
+   * Lets a staff member update processing fields (status/priority/resolution/attachments)
+   * of a ticket assigned to them. `assigned_to`, ownership ids and `resolved_at` are never
+   * taken from the request; `resolved_at` is derived from the status transition. CANCELLED
+   * belongs to the cancel endpoint (owner/manager authorization), and terminal tickets
+   * are immutable. Status only moves forward along STATUS_FLOW; CLOSED stays settable as
+   * its own end state (e.g. dropped or resolved informally) — RESOLVED already ends the
+   * ticket, so CLOSED never follows it.
    */
   async update(id: string, dto: UpdateTicketDto, actor: AuthUser): Promise<ServiceTicketResponse> {
     const ticket = await this.findTicketOrFail(id);
@@ -219,14 +296,49 @@ export class ServiceTicketsService {
       );
     }
 
+    if (TERMINAL_STATUSES.includes(ticket.status)) {
+      throw new DomainException(
+        ErrorCode.CONFLICT,
+        `Ticket cannot be updated while its status is ${ticket.status}`,
+        HttpStatus.CONFLICT,
+      );
+    }
+    if (dto.status === TicketStatus.CANCELLED) {
+      throw this.fieldValidationError(
+        'status',
+        'notAllowed',
+        'Cancel via the dedicated cancel endpoint',
+      );
+    }
+    if (
+      dto.status !== undefined &&
+      dto.status !== ticket.status &&
+      dto.status !== TicketStatus.CLOSED &&
+      STATUS_FLOW.indexOf(dto.status) < STATUS_FLOW.indexOf(ticket.status)
+    ) {
+      throw this.fieldValidationError(
+        'status',
+        'invalidTransition',
+        `Cannot move a ${ticket.status} ticket backwards to ${dto.status}`,
+      );
+    }
+
     if (dto.status !== undefined && dto.status !== ticket.status) {
       const previousStatus = ticket.status;
       ticket.status = dto.status;
-      ticket.resolvedAt = RESOLVED_STATUSES.includes(dto.status) ? new Date() : null;
+      ticket.resolvedAt = dto.status === TicketStatus.RESOLVED ? new Date() : null;
       ticket.history = [
         ...(ticket.history ?? []),
         this.historyEntry('STATUS_CHANGED', previousStatus, dto.status, actor.id),
       ];
+    }
+
+    if (dto.priority !== undefined && dto.priority !== ticket.priority) {
+      ticket.history = [
+        ...(ticket.history ?? []),
+        this.historyEntry('PRIORITY_CHANGED', ticket.priority, dto.priority, actor.id),
+      ];
+      ticket.priority = dto.priority;
     }
 
     if (dto.resolution !== undefined) {
@@ -241,14 +353,57 @@ export class ServiceTicketsService {
   }
 
   /**
-   * Deletes a ticket. ADMIN may delete any ticket; FACILITY_MANAGER only tickets of
-   * facilities they manage.
+   * Cancels a ticket that is still being worked (OPEN/ASSIGNED/IN_PROGRESS). The owning
+   * customer may cancel their own ticket; a facility manager may cancel tickets of
+   * facilities they manage. Resolved tickets are already done — they cannot be cancelled.
+   */
+  async cancel(id: string, actor: AuthUser): Promise<ServiceTicketResponse> {
+    const ticket = await this.findTicketOrFail(id);
+
+    const isOwner = actor.roles.includes(UserRole.CUSTOMER) && ticket.customerId === actor.id;
+    if (!isOwner) {
+      if (!actor.roles.includes(UserRole.FACILITY_MANAGER)) {
+        throw new DomainException(
+          ErrorCode.FORBIDDEN,
+          'Only the ticket owner or a facility manager can cancel a ticket',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+      await this.assertManagesFacility(actor, ticket.facilityId);
+    }
+
+    if (!ASSIGNABLE_STATUSES.includes(ticket.status)) {
+      throw new DomainException(
+        ErrorCode.CONFLICT,
+        `Ticket cannot be cancelled while its status is ${ticket.status}`,
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    const previousStatus = ticket.status;
+    ticket.status = TicketStatus.CANCELLED;
+    ticket.history = [
+      ...(ticket.history ?? []),
+      this.historyEntry('STATUS_CHANGED', previousStatus, TicketStatus.CANCELLED, actor.id),
+    ];
+
+    const saved = await this.tickets.save(ticket);
+    return { ticket: toServiceTicketRecord(await this.findTicketOrFail(saved.id)) };
+  }
+
+  /**
+   * Hard-deletes a ticket. ADMIN only — tickets are business records tied to contracts and
+   * disputes, so everyone else ends a ticket via the cancel flow instead of deleting it.
    */
   async remove(id: string, actor: AuthUser): Promise<ServiceTicketDeleteResponse> {
     const ticket = await this.findTicketOrFail(id);
 
     if (!actor.roles.includes(UserRole.ADMIN)) {
-      await this.assertManagesFacility(actor, ticket.facilityId);
+      throw new DomainException(
+        ErrorCode.FORBIDDEN,
+        'Only administrators can delete tickets',
+        HttpStatus.FORBIDDEN,
+      );
     }
 
     const result = await this.tickets.delete({ id: ticket.id });
@@ -256,8 +411,9 @@ export class ServiceTicketsService {
   }
 
   /**
-   * Blocks ticket creation when the customer has no active contract covering the unit,
-   * or any unit of the facility when no storageUnitId is provided.
+   * Blocks ticket creation when the customer has no contract covering the target:
+   * a unit-scoped ticket needs an ACTIVE contract on that unit, while a facility-level
+   * ticket also accepts an ENDED contract (post-moveout complaints, deposit disputes).
    */
   private async assertCustomerRents(
     customerId: string,
@@ -268,17 +424,23 @@ export class ServiceTicketsService {
     const builder = this.contracts
       .createQueryBuilder('c')
       .innerJoin('c.bookingItem', 'bi')
-      .where('c.customerId = :customerId', { customerId })
-      .andWhere('c.status = :contractStatus', { contractStatus: ContractStatus.ACTIVE })
-      .andWhere('c.effectiveAt <= :now', { now })
-      .andWhere('(c.endedAt IS NULL OR c.endedAt >= :now)', { now });
+      .where('c.customerId = :customerId', { customerId });
 
     if (dto.storageUnitId) {
-      builder.andWhere('bi.storageUnitId = :unitId', { unitId: dto.storageUnitId });
+      builder
+        .andWhere('bi.storageUnitId = :unitId', { unitId: dto.storageUnitId })
+        .andWhere('c.status = :contractStatus', { contractStatus: ContractStatus.ACTIVE })
+        .andWhere('c.effectiveAt <= :now', { now })
+        .andWhere('(c.endedAt IS NULL OR c.endedAt >= :now)', { now });
     } else {
+      // ponytail: any ENDED contract qualifies regardless of age; add a grace window if abused
       builder
         .innerJoin('bi.storageUnit', 'su')
-        .andWhere('su.facilityId = :facilityId', { facilityId: dto.facilityId });
+        .andWhere('su.facilityId = :facilityId', { facilityId: dto.facilityId })
+        .andWhere(
+          '(c.status = :endedStatus OR (c.status = :activeStatus AND c.effectiveAt <= :now AND (c.endedAt IS NULL OR c.endedAt >= :now)))',
+          { endedStatus: ContractStatus.ENDED, activeStatus: ContractStatus.ACTIVE, now },
+        );
     }
 
     if (!(await builder.getExists())) {
@@ -295,7 +457,7 @@ export class ServiceTicketsService {
   private async findTicketOrFail(id: string): Promise<ServiceTicket> {
     const ticket = await this.tickets.findOne({
       where: { id },
-      relations: { type: true, facility: true, storageUnit: true, customer: true, assignee: true },
+      relations: TICKET_RELATIONS,
     });
 
     if (!ticket) notFound('Ticket');
@@ -384,12 +546,36 @@ export class ServiceTicketsService {
     }
   }
 
-  /** Inserts the ticket, regenerating `ticket_no` on a unique-violation collision. */
-  private async saveWithTicketNoRetry(ticket: ServiceTicket): Promise<ServiceTicket> {
+  /**
+   * Inserts the ticket and marks the idempotency key DONE with the cached response in one
+   * transaction; regenerates `ticket_no` and re-runs a fresh transaction on collision.
+   */
+  private async saveWithTicketNoRetry(
+    values: Partial<ServiceTicket>,
+    idempotencyKey: string,
+    userId: string,
+  ): Promise<ServiceTicketResponse> {
     for (let attempt = 1; ; attempt++) {
-      ticket.ticketNo = this.generateTicketNo();
+      const ticket = this.tickets.create({ ...values, ticketNo: this.generateTicketNo() });
       try {
-        return await this.tickets.save(ticket);
+        return await this.dataSource.transaction(async (em) => {
+          const saved = await em.save(ticket);
+          const full = await em.findOneOrFail(ServiceTicket, {
+            where: { id: saved.id },
+            relations: TICKET_RELATIONS,
+          });
+          const body = { ticket: toServiceTicketRecord(full) };
+          await em.update(
+            IdempotencyKey,
+            { key: idempotencyKey, userId },
+            {
+              status: IdempotencyStatus.DONE,
+              responseStatus: HttpStatus.CREATED,
+              responseBody: body,
+            },
+          );
+          return body;
+        });
       } catch (error) {
         if (attempt >= MAX_TICKET_NO_ATTEMPTS || !isUniqueViolation(error)) {
           throw error;

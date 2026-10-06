@@ -17,6 +17,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { ENV_KEY } from '@shared/constants';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
+import { canonicalStringify } from '@shared/utils/canonical-json.util';
+import { claimIdempotencyKey, releaseIdempotencyKey } from '@shared/utils/idempotency-key.util';
 import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import {
   BookingStatus,
@@ -33,7 +35,6 @@ import { extractBookingNos, generateBookingNo } from './booking-no.util';
 import { BookingResponseDto, CreateBookingDto } from './dto/booking.dto';
 
 const HOLD_MINUTES = 15;
-const IDEMPOTENCY_TTL_HOURS = 24;
 const STATUSES_AWAITING_DEPOSIT: BookingStatus[] = [
   BookingStatus.HOLDING,
   BookingStatus.PENDING_DEPOSIT,
@@ -41,22 +42,6 @@ const STATUSES_AWAITING_DEPOSIT: BookingStatus[] = [
 
 /** Rolls the confirm transaction back when the transfer arrived after the holds expired. */
 class LatePaymentError extends Error {}
-
-/** Recursively serializes an object with sorted keys (Canonical JSON). */
-function canonicalStringify(val: unknown): string {
-  if (val === null || typeof val !== 'object') {
-    return JSON.stringify(val);
-  }
-  if (Array.isArray(val)) {
-    return `[${val.map((item) => (item === undefined ? 'null' : canonicalStringify(item))).join(',')}]`;
-  }
-  const obj = val as Record<string, unknown>;
-  const sortedKeys = Object.keys(obj)
-    .filter((key) => obj[key] !== undefined)
-    .sort();
-  const pairs = sortedKeys.map((key) => `${JSON.stringify(key)}:${canonicalStringify(obj[key])}`);
-  return `{${pairs.join(',')}}`;
-}
 
 /** SHA-256 hex of a deterministic canonical JSON representation of the request body. */
 function hashBody(body: Record<string, unknown>): string {
@@ -66,8 +51,7 @@ function hashBody(body: Record<string, unknown>): string {
       String(a?.storageUnitId ?? '').localeCompare(String(b?.storageUnitId ?? '')),
     );
   }
-  const stable = canonicalStringify(normalized);
-  return createHash('sha256').update(stable).digest('hex');
+  return createHash('sha256').update(canonicalStringify(normalized)).digest('hex');
 }
 
 @Injectable()
@@ -107,81 +91,14 @@ export class BookingsService implements OnApplicationBootstrap {
     const requestHash = hashBody(dto as unknown as Record<string, unknown>);
 
     // ── 1. Idempotency check via atomic INSERT ON CONFLICT ─────────────────
-    type IdemRow = {
-      key: string;
-      user_id: string;
-      status: IdempotencyStatus;
-      request_hash: string;
-      response_status: number | null;
-      response_body: Record<string, unknown> | null;
-      created_at: string;
-      expires_at: string;
-      is_new_insert: boolean;
-    };
-
-    let [idem] = await this.idempotencyRepo.query<IdemRow[]>(
-      `INSERT INTO idempotency_keys (key, user_id, status, request_hash, expires_at)
-       VALUES ($1, $2, $3, $4, now() + make_interval(hours => $5))
-       ON CONFLICT (key, user_id) DO UPDATE
-         SET expires_at = idempotency_keys.expires_at
-       RETURNING *, (xmax = 0) AS is_new_insert`,
-      [idempotencyKey, user.id, IdempotencyStatus.PROCESSING, requestHash, IDEMPOTENCY_TTL_HOURS],
+    const cached = await claimIdempotencyKey(
+      this.idempotencyRepo,
+      idempotencyKey,
+      user.id,
+      requestHash,
     );
-
-    if (!idem.is_new_insert) {
-      // Retry path — compare snake_case fields from raw SQL result
-      if (idem.request_hash !== requestHash) {
-        throw new DomainException(
-          ErrorCode.IDEMPOTENCY_PAYLOAD_MISMATCH,
-          'Idempotency key đã được dùng với payload khác',
-          HttpStatus.UNPROCESSABLE_ENTITY,
-        );
-      }
-      if (idem.status === IdempotencyStatus.DONE) {
-        // Cache hit — return stored response directly
-        return {
-          data: (idem.response_body ?? {}) as Record<string, unknown>,
-          isRetry: true,
-        };
-      }
-
-      // If status = PROCESSING, check if it timed out (> 60 seconds ago from a crashed instance)
-      const createdAtMs = new Date(idem.created_at).getTime();
-      const isStale = Date.now() - createdAtMs > 60 * 1000;
-      if (!isStale) {
-        throw new DomainException(
-          ErrorCode.IDEMPOTENCY_KEY_CONFLICT,
-          'Request khác đang xử lý với cùng idempotency key, vui lòng thử lại sau',
-          HttpStatus.CONFLICT,
-        );
-      }
-
-      this.logger.warn(
-        `Idempotency key ${idempotencyKey} was stuck in PROCESSING for user ${user.id}. Re-claiming stale key.`,
-      );
-
-      // Reclaim stale key atomically: only one request matching PROCESSING and stale will succeed
-      const updatedRows = await this.idempotencyRepo.query<IdemRow[]>(
-        `UPDATE idempotency_keys
-         SET created_at = now(),
-             request_hash = $1,
-             expires_at = now() + make_interval(hours => $2)
-         WHERE key = $3
-           AND user_id = $4
-           AND status = $5
-           AND created_at <= now() - interval '60 seconds'
-         RETURNING *, true AS is_new_insert`,
-        [requestHash, IDEMPOTENCY_TTL_HOURS, idempotencyKey, user.id, IdempotencyStatus.PROCESSING],
-      );
-
-      if (!updatedRows || updatedRows.length === 0) {
-        throw new DomainException(
-          ErrorCode.IDEMPOTENCY_KEY_CONFLICT,
-          'Request khác đang xử lý với cùng idempotency key, vui lòng thử lại sau',
-          HttpStatus.CONFLICT,
-        );
-      }
-      idem = updatedRows[0];
+    if (cached) {
+      return { data: cached, isRetry: true };
     }
 
     let isCommitted = false;
@@ -404,7 +321,7 @@ export class BookingsService implements OnApplicationBootstrap {
     } catch (err) {
       // Clean up idempotency key if any error occurred before transaction commit
       if (!isCommitted) {
-        await this.deleteIdempotencyKey(idempotencyKey, user.id);
+        await releaseIdempotencyKey(this.idempotencyRepo, idempotencyKey, user.id);
       }
       throw err;
     }
@@ -648,14 +565,6 @@ export class BookingsService implements OnApplicationBootstrap {
         this.configService.get<string>(ENV_KEY.SEPAY_ACCOUNT_NO) &&
         this.configService.get<string>(ENV_KEY.SEPAY_ACCOUNT_NAME),
     );
-  }
-
-  private async deleteIdempotencyKey(key: string, userId: string): Promise<void> {
-    await this.idempotencyRepo.delete({
-      key,
-      userId,
-      status: IdempotencyStatus.PROCESSING,
-    });
   }
 
   // ---------------------------------------------------------------------------

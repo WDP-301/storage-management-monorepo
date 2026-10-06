@@ -1,5 +1,5 @@
 import type { SystemSetting } from '@entities/system-setting.entity';
-import { SETTINGS_REGISTRY, type SettingValueType } from '../settings.registry';
+import type { SettingValueType } from '@storage/types';
 
 export interface SystemSettingRecord {
   key: string;
@@ -15,20 +15,18 @@ export interface SystemSettingRecord {
   updated_at: string | Date;
 }
 
-/** Maps a `system_settings` row (merged with registry metadata) to its API representation. */
+/** Maps a `system_settings` row to its API representation — the row carries all metadata. */
 export function toSystemSettingRecord(row: SystemSetting): SystemSettingRecord {
-  const def = SETTINGS_REGISTRY[row.key];
-
   return {
     key: row.key,
     value: row.value,
     value_type: row.valueType,
     group: row.group,
-    label: def?.label ?? row.key,
-    description: row.description ?? def?.description ?? null,
-    default: def?.default ?? null,
-    min: def?.min ?? null,
-    max: def?.max ?? null,
+    label: row.label ?? row.key,
+    description: row.description ?? null,
+    default: row.defaultValue ?? null,
+    min: row.min ?? null,
+    max: row.max ?? null,
     updated_by: row.updatedBy ?? null,
     updated_at: row.updatedAt,
   };

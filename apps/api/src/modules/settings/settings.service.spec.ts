@@ -1,7 +1,7 @@
 import type { SystemSetting } from '@entities/system-setting.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import type { SettingValueType } from '@storage/types';
 import { UserRole, UserStatus } from '@storage/types';
-import { SETTINGS_REGISTRY } from './settings.registry';
 import { SettingsService } from './settings.service';
 
 const buildAdmin = (): AuthUser =>
@@ -15,25 +15,58 @@ const buildAdmin = (): AuthUser =>
     updatedAt: new Date('2024-01-01T00:00:00Z'),
   }) as AuthUser;
 
+/** Metadata now lives on the DB row — the spec mirrors the seeded values for the keys under test. */
+const ROW_META: Record<
+  string,
+  Pick<SystemSetting, 'valueType' | 'group' | 'label' | 'min' | 'max'>
+> = {
+  'booking.hold_minutes': {
+    valueType: 'int',
+    group: 'booking',
+    label: 'Booking hold time (minutes)',
+    min: 1,
+    max: 1440,
+  },
+  'booking.min_rental_months': {
+    valueType: 'int',
+    group: 'booking',
+    label: 'Minimum rental term (months)',
+    min: 1,
+    max: 60,
+  },
+  'booking.max_rental_months': {
+    valueType: 'int',
+    group: 'booking',
+    label: 'Maximum rental term (months)',
+    min: 1,
+    max: 60,
+  },
+  'booking.rental_months_options': {
+    valueType: 'int_list' as SettingValueType,
+    group: 'booking',
+    label: 'Suggested rental terms (months)',
+    min: 1,
+    max: 60,
+  },
+};
+
 const buildSetting = (key: string, value: unknown): SystemSetting =>
   ({
     key,
     value,
-    valueType: SETTINGS_REGISTRY[key].type,
-    group: SETTINGS_REGISTRY[key].group,
     description: null,
+    defaultValue: null,
     updatedBy: null,
     createdAt: new Date('2024-01-01T00:00:00Z'),
     updatedAt: new Date('2024-01-01T00:00:00Z'),
+    ...ROW_META[key],
   }) as SystemSetting;
 
 describe('SettingsService', () => {
   let repo: {
     find: jest.Mock;
     findOne: jest.Mock;
-    save: jest.Mock;
-    create: jest.Mock;
-    query: jest.Mock;
+    update: jest.Mock;
   };
   let service: SettingsService;
 
@@ -41,39 +74,9 @@ describe('SettingsService', () => {
     repo = {
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue(null),
-      save: jest.fn((rows) => Promise.resolve(rows)),
-      create: jest.fn((value) => value),
-      query: jest.fn().mockResolvedValue([]),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
     };
     service = new SettingsService(repo as never);
-  });
-
-  describe('onApplicationBootstrap', () => {
-    it('upserts every registry key with its default using an atomic INSERT ON CONFLICT', async () => {
-      repo.query.mockResolvedValue(Object.keys(SETTINGS_REGISTRY).map((key) => ({ key })));
-
-      await service.onApplicationBootstrap();
-
-      expect(repo.query).toHaveBeenCalledTimes(1);
-      const [sql, params] = repo.query.mock.calls[0] as [string, unknown[]];
-      expect(sql).toContain('INSERT INTO system_settings');
-      expect(sql).toContain('ON CONFLICT (key) DO NOTHING');
-      expect(params).toHaveLength(Object.keys(SETTINGS_REGISTRY).length * 5);
-
-      const valuesIndex = Object.keys(SETTINGS_REGISTRY).indexOf('booking.hold_minutes');
-      expect(params[valuesIndex * 5 + 1]).toBe('15');
-      const minMonthsIndex = Object.keys(SETTINGS_REGISTRY).indexOf('booking.min_rental_months');
-      expect(params[minMonthsIndex * 5 + 1]).toBe('6');
-    });
-
-    it('is idempotent when every key already exists (no rows returned)', async () => {
-      repo.query.mockResolvedValue([]);
-
-      await service.onApplicationBootstrap();
-
-      expect(repo.query).toHaveBeenCalledTimes(1);
-      expect(repo.save).not.toHaveBeenCalled();
-    });
   });
 
   describe('get', () => {
@@ -83,8 +86,11 @@ describe('SettingsService', () => {
       await expect(service.getBookingHoldMinutes()).resolves.toBe(10);
     });
 
-    it('falls back to the registry default when the row is missing', async () => {
-      await expect(service.getBookingHoldMinutes()).resolves.toBe(15);
+    it('throws INTERNAL_ERROR when the row is missing', async () => {
+      await expect(service.getBookingHoldMinutes()).rejects.toMatchObject({
+        status: 500,
+        response: { code: 'INTERNAL_ERROR' },
+      });
     });
 
     it('parses int_list values into numbers', async () => {
@@ -104,18 +110,18 @@ describe('SettingsService', () => {
   });
 
   describe('update', () => {
-    it('saves valid values with the admin id and returns the updated records', async () => {
+    it('updates only value and updated_by, then returns the updated records', async () => {
       repo.find.mockResolvedValue([buildSetting('booking.hold_minutes', 10)]);
 
       const result = await service.update({ 'booking.hold_minutes': 10 }, buildAdmin());
 
-      expect(repo.save).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({ key: 'booking.hold_minutes', value: 10, updatedBy: 'admin-1' }),
-        ]),
+      expect(repo.update).toHaveBeenCalledWith(
+        { key: 'booking.hold_minutes' },
+        { value: 10, updatedBy: 'admin-1' },
       );
       expect(result.settings).toHaveLength(1);
       expect(result.settings[0].value).toBe(10);
+      expect(result.settings[0].label).toBe('Booking hold time (minutes)');
     });
 
     it('rejects an empty update', async () => {
@@ -125,15 +131,22 @@ describe('SettingsService', () => {
       });
     });
 
-    it('rejects unknown keys', async () => {
+    it('rejects keys with no settings row', async () => {
+      repo.find.mockResolvedValue([]);
+
       await expect(service.update({ 'nope.key': 1 }, buildAdmin())).rejects.toMatchObject({
         status: 400,
         response: { code: 'VALIDATION_FAILED' },
       });
-      expect(repo.save).not.toHaveBeenCalled();
+      expect(repo.update).not.toHaveBeenCalled();
     });
 
     it('rejects out-of-range values', async () => {
+      repo.find.mockResolvedValue([
+        buildSetting('booking.hold_minutes', 15),
+        buildSetting('booking.max_rental_months', 60),
+      ]);
+
       await expect(
         service.update({ 'booking.hold_minutes': 0 }, buildAdmin()),
       ).rejects.toMatchObject({ status: 400, response: { code: 'VALIDATION_FAILED' } });
@@ -143,12 +156,16 @@ describe('SettingsService', () => {
     });
 
     it('rejects values of the wrong type', async () => {
+      repo.find.mockResolvedValue([buildSetting('booking.hold_minutes', 15)]);
+
       await expect(
         service.update({ 'booking.hold_minutes': 'abc' }, buildAdmin()),
       ).rejects.toMatchObject({ status: 400, response: { code: 'VALIDATION_FAILED' } });
     });
 
     it('rejects int_list items outside the allowed range', async () => {
+      repo.find.mockResolvedValue([buildSetting('booking.rental_months_options', [6, 12, 18])]);
+
       await expect(
         service.update({ 'booking.rental_months_options': [0, 6] }, buildAdmin()),
       ).rejects.toMatchObject({ status: 400, response: { code: 'VALIDATION_FAILED' } });

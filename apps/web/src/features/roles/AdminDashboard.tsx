@@ -1,19 +1,18 @@
-import { Badge, Button, LayerCard, Table, Text } from '@cloudflare/kumo';
-import { UserRole, UserStatus } from '@storage/types';
+import { Badge, Button, LayerCard, Select, Table, Text } from '@cloudflare/kumo';
 import {
-  Building2,
-  CheckCircle,
-  RefreshCw,
-  Shield,
+  ArrowsClockwise,
+  Buildings,
+  Faders,
   ShieldCheck,
-  SlidersHorizontal,
   UserCheck,
   Users,
-} from 'lucide-react';
+} from '@phosphor-icons/react';
+import { UserRole, UserStatus } from '@storage/types';
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ROLE_CONFIGS } from '../../lib/roles';
+import { useAppToast } from '../../lib/toast';
 
 interface SystemUser {
   id: string;
@@ -93,9 +92,9 @@ const AUDIT_LOGS = [
 
 export const AdminDashboard: React.FC = () => {
   const { user } = useAuth();
+  const toast = useAppToast();
   const [users, setUsers] = useState<SystemUser[]>(INITIAL_USERS);
   const [filterRole, setFilterRole] = useState<string>('ALL');
-  const [notice, setNotice] = useState<string | null>(null);
 
   const toggleUserStatus = (userId: string) => {
     setUsers((prev) =>
@@ -103,8 +102,10 @@ export const AdminDashboard: React.FC = () => {
         if (u.id === userId) {
           const nextStatus =
             u.status === UserStatus.ACTIVE ? UserStatus.SUSPENDED : UserStatus.ACTIVE;
-          setNotice(`Đã cập nhật trạng thái tài khoản ${u.email} sang: ${nextStatus}`);
-          setTimeout(() => setNotice(null), 4000);
+          toast.info(
+            'Cập nhật trạng thái',
+            `Đã cập nhật trạng thái tài khoản ${u.email} sang: ${nextStatus}`,
+          );
           return { ...u, status: nextStatus };
         }
         return u;
@@ -125,8 +126,10 @@ export const AdminDashboard: React.FC = () => {
         if (u.id === userId) {
           const currentIndex = roleKeys.indexOf(u.role);
           const nextRole = roleKeys[(currentIndex + 1) % roleKeys.length];
-          setNotice(`Đã chuyển vai trò của ${u.fullName} thành: ${ROLE_CONFIGS[nextRole].title}`);
-          setTimeout(() => setNotice(null), 4000);
+          toast.info(
+            'Đổi vai trò',
+            `Đã chuyển vai trò của ${u.fullName} thành: ${ROLE_CONFIGS[nextRole].title}`,
+          );
           return { ...u, role: nextRole };
         }
         return u;
@@ -144,13 +147,9 @@ export const AdminDashboard: React.FC = () => {
       {/* Header section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="grid gap-1.5">
-          <div className="flex items-center gap-2">
-            <span className="h-lh flex items-center text-kumo-brand">
-              <Shield className="w-5 h-5" />
-            </span>
-            <Text as="h2">System administration</Text>
-            <Badge variant="purple">Admin workspace</Badge>
-          </div>
+          <Text as="h1" variant="heading" size="lg">
+            Quản trị hệ thống
+          </Text>
           <Text variant="secondary">
             Quản trị toàn diện người dùng, phân quyền các cấp, giám sát bảo mật và thiết lập hệ
             thống.
@@ -159,22 +158,15 @@ export const AdminDashboard: React.FC = () => {
 
         <div className="flex items-center gap-2.5 flex-wrap">
           <Link to="/admin/settings">
-            <Button variant="secondary" icon={<SlidersHorizontal className="w-4 h-4" />}>
+            <Button variant="secondary" icon={<Faders className="w-4 h-4" />}>
               Cấu hình tham số
             </Button>
           </Link>
-          <Badge variant="primary" appearance="dot">
-            Phiên quản trị viên: {user?.email}
+          <Badge variant="neutral" appearance="dot">
+            {user?.email}
           </Badge>
         </div>
       </div>
-
-      {notice && (
-        <div className="p-3 bg-kumo-info-tint text-kumo-info rounded-lg text-sm flex items-center gap-2">
-          <CheckCircle className="w-4 h-4 shrink-0" />
-          <span>{notice}</span>
-        </div>
-      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -192,7 +184,7 @@ export const AdminDashboard: React.FC = () => {
         <LayerCard className="px-5 py-4 ring ring-kumo-line">
           <div className="flex items-center justify-between">
             <Text variant="secondary">Cơ sở kho hoạt động</Text>
-            <Building2 className="w-4 h-4 text-kumo-success" />
+            <Buildings className="w-4 h-4 text-kumo-success" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-semibold text-kumo-default">6</span>
@@ -209,7 +201,7 @@ export const AdminDashboard: React.FC = () => {
             <span className="text-2xl font-semibold text-kumo-default">
               {users.filter((u) => u.role !== UserRole.CUSTOMER).length}
             </span>
-            <Badge variant="purple">Internal staff</Badge>
+            <Badge variant="neutral">Nhân sự nội bộ</Badge>
           </div>
         </LayerCard>
 
@@ -238,23 +230,21 @@ export const AdminDashboard: React.FC = () => {
             </Text>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Text variant="secondary" size="xs">
-              Lọc vai trò:
-            </Text>
-            <select
+          <div className="w-48">
+            <Select
               aria-label="Lọc theo vai trò"
+              size="sm"
               value={filterRole}
-              onChange={(e) => setFilterRole(e.target.value)}
-              className="h-8 text-xs px-2.5 rounded-md bg-kumo-base border border-kumo-line text-kumo-default"
-            >
-              <option value="ALL">Tất cả vai trò</option>
-              <option value={UserRole.ADMIN}>Quản trị viên (Admin)</option>
-              <option value={UserRole.OPERATIONS_MANAGER}>Quản lý vận hành</option>
-              <option value={UserRole.FACILITY_MANAGER}>Quản lý cơ sở</option>
-              <option value={UserRole.FACILITY_STAFF}>Nhân viên cơ sở</option>
-              <option value={UserRole.CUSTOMER}>Khách hàng</option>
-            </select>
+              onValueChange={(v) => setFilterRole(v as string)}
+              items={[
+                { value: 'ALL', label: 'Tất cả vai trò' },
+                { value: UserRole.ADMIN, label: 'Quản trị viên' },
+                { value: UserRole.OPERATIONS_MANAGER, label: 'Quản lý vận hành' },
+                { value: UserRole.FACILITY_MANAGER, label: 'Quản lý cơ sở' },
+                { value: UserRole.FACILITY_STAFF, label: 'Nhân viên cơ sở' },
+                { value: UserRole.CUSTOMER, label: 'Khách hàng' },
+              ]}
+            />
           </div>
         </div>
 
@@ -282,7 +272,7 @@ export const AdminDashboard: React.FC = () => {
                       {u.email}
                     </Table.Cell>
                     <Table.Cell className="whitespace-nowrap">
-                      <Badge variant={config.badgeVariant}>{config.title}</Badge>
+                      <Badge variant="neutral">{config.title}</Badge>
                     </Table.Cell>
                     <Table.Cell className="whitespace-nowrap">
                       {u.status === UserStatus.ACTIVE ? (
@@ -303,7 +293,7 @@ export const AdminDashboard: React.FC = () => {
                         <Button
                           variant="secondary"
                           size="sm"
-                          icon={<RefreshCw className="w-3.5 h-3.5" />}
+                          icon={<ArrowsClockwise className="w-3.5 h-3.5" />}
                           onClick={() => cycleUserRole(u.id)}
                           title="Đổi vai trò người dùng"
                         >

@@ -1,6 +1,6 @@
 import { Button, LayerCard, Text } from '@cloudflare/kumo';
+import { ShieldWarning } from '@phosphor-icons/react';
 import { UserRole } from '@storage/types';
-import { ShieldAlert } from 'lucide-react';
 import React from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -40,7 +40,7 @@ export const RoleRoute: React.FC<RoleRouteProps> = ({ allowedRoles }) => {
       <div className="min-h-[70vh] flex items-center justify-center p-6">
         <LayerCard className="max-w-md w-full p-6 text-center ring ring-kumo-line">
           <div className="w-12 h-12 rounded-full bg-kumo-danger-tint text-kumo-danger flex items-center justify-center mx-auto mb-4">
-            <ShieldAlert className="w-6 h-6" />
+            <ShieldWarning className="w-6 h-6" />
           </div>
 
           <div className="grid gap-1.5 mb-4">

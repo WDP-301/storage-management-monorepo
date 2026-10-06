@@ -8,18 +8,17 @@ import {
   Switch,
   Text,
 } from '@cloudflare/kumo';
-import type { SystemSettingRecord } from '@storage/types';
 import {
-  AlertCircle,
+  ArrowCounterClockwise,
+  ArrowsClockwise,
   CheckCircle,
+  FloppyDisk,
+  MagnifyingGlass,
   Plus,
-  RefreshCw,
-  RotateCcw,
-  Save,
-  Search,
-  Settings,
+  WarningCircle,
   X,
-} from 'lucide-react';
+} from '@phosphor-icons/react';
+import type { SystemSettingRecord } from '@storage/types';
 import React, { useEffect, useMemo, useState } from 'react';
 import { SettingsApi } from '../../lib/api';
 
@@ -412,12 +411,6 @@ export const SystemSettingsPage: React.FC = () => {
     }));
   }, [configs]);
 
-  const getCategoryLabel = (val: string) => {
-    if (val === 'all') return 'Tất cả danh mục';
-    const found = categoryOptions.find((c) => c.id === val);
-    return found?.label || val;
-  };
-
   const categorySelectItems = useMemo(
     () => [
       { value: 'all', label: 'Tất cả danh mục' },
@@ -561,69 +554,20 @@ export const SystemSettingsPage: React.FC = () => {
     return matchesCategory && matchesQuery;
   });
 
-  const getCategoryBadge = (group: string) => {
-    switch (group) {
-      case 'booking':
-        return (
-          <Badge
-            variant="neutral"
-            className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/80 font-medium"
-          >
-            Đặt kho
-          </Badge>
-        );
-      case 'contract':
-        return (
-          <Badge
-            variant="neutral"
-            className="bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800/80 font-medium"
-          >
-            Hợp đồng
-          </Badge>
-        );
-      case 'billing':
-      case 'deposit':
-        return (
-          <Badge variant="success" className="font-medium">
-            Tiền cọc
-          </Badge>
-        );
-      case 'security':
-      case 'idempotency':
-        return (
-          <Badge
-            variant="neutral"
-            className="bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/80 font-medium"
-          >
-            Bảo mật
-          </Badge>
-        );
-      default:
-        return (
-          <Badge variant="neutral" className="font-medium">
-            {group}
-          </Badge>
-        );
-    }
-  };
+  const getCategoryBadge = (group: string) => (
+    <Badge variant="neutral">
+      {GROUP_LABELS[group] || group.charAt(0).toUpperCase() + group.slice(1)}
+    </Badge>
+  );
 
   return (
     <div className="space-y-6">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="grid gap-1.5">
-          <div className="flex items-center gap-2">
-            <span className="h-lh flex items-center text-kumo-brand">
-              <Settings className="w-5 h-5" />
-            </span>
-            <Text as="h2">Cấu hình tham số hệ thống</Text>
-            <Badge
-              variant="neutral"
-              className="bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/80 font-medium"
-            >
-              System parameters
-            </Badge>
-          </div>
+          <Text as="h1" variant="heading" size="lg">
+            Cấu hình tham số hệ thống
+          </Text>
           <Text variant="secondary">
             Thiết lập các quy tắc vận hành, thời gian giữ kho, chính sách cọc và bảo mật toàn hệ
             thống.
@@ -633,22 +577,22 @@ export const SystemSettingsPage: React.FC = () => {
         <div className="flex items-center gap-2">
           <Button
             variant="secondary"
-            icon={<RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />}
+            icon={<ArrowsClockwise className="w-4 h-4" />}
             onClick={loadSettings}
-            disabled={isLoading}
+            loading={isLoading}
           >
             Làm mới
           </Button>
           <Button
             variant="secondary"
-            icon={<RotateCcw className="w-4 h-4" />}
+            icon={<ArrowCounterClockwise className="w-4 h-4" />}
             onClick={handleResetDefaults}
           >
             Mặc định
           </Button>
           <Button
             variant="primary"
-            icon={<Save className="w-4 h-4" />}
+            icon={<FloppyDisk className="w-4 h-4" />}
             loading={isSaving}
             onClick={handleSave}
           >
@@ -659,17 +603,23 @@ export const SystemSettingsPage: React.FC = () => {
 
       {/* Save Success Alert */}
       {saveStatus && (
-        <div className="p-3.5 bg-kumo-info-tint text-kumo-info rounded-lg text-sm flex items-center gap-2.5 ring ring-kumo-line">
-          <CheckCircle className="w-4 h-4 shrink-0 text-kumo-brand" />
+        <div
+          role="alert"
+          className="p-3.5 bg-kumo-success-tint text-kumo-success rounded-lg text-sm flex items-center gap-2.5"
+        >
+          <CheckCircle className="w-4 h-4 shrink-0" />
           <span className="font-medium">{saveStatus}</span>
         </div>
       )}
 
       {/* Error Alert */}
       {errorMessage && (
-        <div className="p-3.5 bg-red-500/10 text-red-500 rounded-lg text-sm flex items-center justify-between gap-2.5 ring ring-red-500/20">
+        <div
+          role="alert"
+          className="p-3.5 bg-kumo-danger-tint text-kumo-danger rounded-lg text-sm flex items-center justify-between gap-2.5"
+        >
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+            <WarningCircle className="w-4 h-4 shrink-0" />
             <span className="font-medium">{errorMessage}</span>
           </div>
           <Button size="xs" variant="secondary" onClick={loadSettings}>
@@ -689,22 +639,14 @@ export const SystemSettingsPage: React.FC = () => {
               if (val) setActiveTab(val);
             }}
             items={categorySelectItems}
-            renderValue={(val) => getCategoryLabel(String(val))}
-          >
-            <Select.Option value="all">Tất cả danh mục</Select.Option>
-            {categoryOptions.map((cat) => (
-              <Select.Option key={cat.id} value={cat.id}>
-                {cat.label}
-              </Select.Option>
-            ))}
-          </Select>
+          />
         </div>
 
         {/* Search Input using Kumo InputGroup */}
         <div className="w-full sm:w-72">
           <InputGroup size="base">
             <InputGroup.Addon align="start">
-              <Search className="w-4 h-4 text-kumo-subtle" />
+              <MagnifyingGlass className="w-4 h-4 text-kumo-subtle" />
             </InputGroup.Addon>
             <InputGroup.Input
               type="text"
@@ -722,7 +664,7 @@ export const SystemSettingsPage: React.FC = () => {
       <div className="space-y-3">
         {isLoading && configs.length === 0 ? (
           <LayerCard className="p-8 text-center ring ring-kumo-line">
-            <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-kumo-brand" />
+            <ArrowsClockwise className="w-5 h-5 animate-spin mx-auto mb-2 text-kumo-brand" />
             <Text variant="secondary">Đang tải tham số cấu hình từ máy chủ...</Text>
           </LayerCard>
         ) : filteredConfigs.length === 0 ? (
@@ -792,7 +734,7 @@ export const SystemSettingsPage: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => handleRemoveTag(item.key, idx)}
-                                className="text-kumo-subtle hover:text-red-500 cursor-pointer p-0.5 rounded transition"
+                                className="text-kumo-subtle hover:text-kumo-danger cursor-pointer p-0.5 rounded transition"
                                 title={`Xóa gói ${val} ${item.unit || ''}`}
                               >
                                 <X className="w-3 h-3" />

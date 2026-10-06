@@ -1,15 +1,14 @@
-import { Badge, Button, LayerCard, Table, Text } from '@cloudflare/kumo';
+import { Badge, Button, LayerCard, Meter, Table, Text } from '@cloudflare/kumo';
 import {
   ArrowUpRight,
-  BarChart3,
-  Building,
-  CheckCircle,
-  Download,
-  Layers,
-  LineChart,
+  Buildings,
+  ChartBar,
+  DownloadSimple,
   Percent,
-} from 'lucide-react';
+  Stack,
+} from '@phosphor-icons/react';
 import React, { useState } from 'react';
+import { useAppToast } from '../../lib/toast';
 
 interface FacilityMetric {
   id: string;
@@ -78,15 +77,17 @@ const UNIT_DISTRIBUTION = [
 ];
 
 export const OperationsDashboard: React.FC = () => {
+  const toast = useAppToast();
   const [downloading, setDownloading] = useState(false);
-  const [reportMessage, setReportMessage] = useState<string | null>(null);
 
   const handleExportReport = () => {
     setDownloading(true);
     setTimeout(() => {
       setDownloading(false);
-      setReportMessage('Báo cáo phân tích công suất toàn mạng lưới đã được kết xuất thành công.');
-      setTimeout(() => setReportMessage(null), 5000);
+      toast.success(
+        'Xuất báo cáo',
+        'Báo cáo phân tích công suất toàn mạng lưới đã được kết xuất thành công.',
+      );
     }, 800);
   };
 
@@ -101,13 +102,9 @@ export const OperationsDashboard: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="grid gap-1.5">
-          <div className="flex items-center gap-2">
-            <span className="h-lh flex items-center text-kumo-brand">
-              <LineChart className="w-5 h-5" />
-            </span>
-            <Text as="h2">Operations overview</Text>
-            <Badge variant="blue">Operations director</Badge>
-          </div>
+          <Text as="h1" variant="heading" size="lg">
+            Tổng quan vận hành
+          </Text>
           <Text variant="secondary">
             Bảng điều phối giám sát toàn bộ mạng lưới kho bãi, tỷ lệ lấp đầy liên cơ sở và năng lực
             vận hành.
@@ -117,7 +114,7 @@ export const OperationsDashboard: React.FC = () => {
         <div className="flex items-center gap-2">
           <Button
             variant="secondary"
-            icon={<Download className="w-4 h-4" />}
+            icon={<DownloadSimple className="w-4 h-4" />}
             loading={downloading}
             onClick={handleExportReport}
           >
@@ -125,13 +122,6 @@ export const OperationsDashboard: React.FC = () => {
           </Button>
         </div>
       </div>
-
-      {reportMessage && (
-        <div className="p-3 bg-kumo-success-tint text-kumo-success rounded-lg text-sm flex items-center gap-2">
-          <CheckCircle className="w-4 h-4 shrink-0" />
-          <span>{reportMessage}</span>
-        </div>
-      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -149,7 +139,7 @@ export const OperationsDashboard: React.FC = () => {
         <LayerCard className="px-5 py-4 ring ring-kumo-line">
           <div className="flex items-center justify-between">
             <Text variant="secondary">Tổng kho đang thuê</Text>
-            <Layers className="w-4 h-4 text-kumo-success" />
+            <Stack className="w-4 h-4 text-kumo-success" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-semibold text-kumo-default">
@@ -163,7 +153,7 @@ export const OperationsDashboard: React.FC = () => {
         <LayerCard className="px-5 py-4 ring ring-kumo-line">
           <div className="flex items-center justify-between">
             <Text variant="secondary">Doanh thu dự kiến tháng</Text>
-            <BarChart3 className="w-4 h-4 text-kumo-brand" />
+            <ChartBar className="w-4 h-4 text-kumo-brand" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-semibold text-kumo-default">1.573 Tỷ</span>
@@ -174,7 +164,7 @@ export const OperationsDashboard: React.FC = () => {
         <LayerCard className="px-5 py-4 ring ring-kumo-line">
           <div className="flex items-center justify-between">
             <Text variant="secondary">Mạng lưới cơ sở</Text>
-            <Building className="w-4 h-4 text-kumo-brand" />
+            <Buildings className="w-4 h-4 text-kumo-brand" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-semibold text-kumo-default">4 Cơ sở</span>
@@ -221,20 +211,19 @@ export const OperationsDashboard: React.FC = () => {
                     <span className="font-semibold">{fac.rentedUnits}</span> / {fac.totalUnits}
                   </Table.Cell>
                   <Table.Cell className="whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm">{fac.occupancyRate}%</span>
-                      <div className="w-16 h-2 rounded-full bg-kumo-fill overflow-hidden">
-                        <div
-                          className={`h-full ${
-                            fac.occupancyRate > 90
-                              ? 'bg-kumo-danger'
-                              : fac.occupancyRate > 80
-                                ? 'bg-kumo-brand'
-                                : 'bg-kumo-warning'
-                          }`}
-                          style={{ width: `${fac.occupancyRate}%` }}
-                        />
-                      </div>
+                    <div className="w-36">
+                      <Meter
+                        label={`${fac.occupancyRate}%`}
+                        value={fac.occupancyRate}
+                        showValue={false}
+                        indicatorClassName={
+                          fac.occupancyRate > 90
+                            ? 'from-kumo-danger via-kumo-danger to-kumo-danger'
+                            : fac.occupancyRate > 80
+                              ? 'from-kumo-brand via-kumo-brand to-kumo-brand'
+                              : 'from-kumo-warning via-kumo-warning to-kumo-warning'
+                        }
+                      />
                     </div>
                   </Table.Cell>
                   <Table.Cell className="whitespace-nowrap text-kumo-default">
@@ -285,7 +274,7 @@ export const OperationsDashboard: React.FC = () => {
                 <span className="text-xl font-semibold text-kumo-default">
                   {dist.occupied} / {dist.count}
                 </span>
-                <Badge variant="blue">{dist.rate} thuê</Badge>
+                <Badge variant="neutral">{dist.rate} thuê</Badge>
               </div>
               <div className="mt-2 text-xs text-kumo-subtle flex items-center gap-1">
                 <ArrowUpRight className="w-3.5 h-3.5 text-kumo-brand" />

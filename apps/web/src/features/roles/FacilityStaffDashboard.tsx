@@ -1,15 +1,15 @@
-import { Badge, Button, LayerCard, Table, Text } from '@cloudflare/kumo';
+import { Badge, Button, Input, LayerCard, Select, Table, Text } from '@cloudflare/kumo';
 import {
-  AlertTriangle,
   CheckCircle,
-  ClipboardCheck,
-  KeyRound,
+  Key,
   Lock,
   ShieldCheck,
   UserCheck,
-} from 'lucide-react';
+  WarningDiamond,
+} from '@phosphor-icons/react';
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useAppToast } from '../../lib/toast';
 
 interface InspectionTask {
   id: string;
@@ -62,6 +62,7 @@ const INITIAL_TASKS: InspectionTask[] = [
 
 export const FacilityStaffDashboard: React.FC = () => {
   const { user } = useAuth();
+  const toast = useAppToast();
   const [tasks, setTasks] = useState<InspectionTask[]>(INITIAL_TASKS);
   const [checkInPin, setCheckInPin] = useState('');
   const [verifiedCustomer, setVerifiedCustomer] = useState<{
@@ -72,12 +73,10 @@ export const FacilityStaffDashboard: React.FC = () => {
   const [incidentUnit, setIncidentUnit] = useState('');
   const [incidentType, setIncidentType] = useState('Ổ khóa bị kẹt');
   const [incidentDesc, setIncidentDesc] = useState('');
-  const [notice, setNotice] = useState<string | null>(null);
 
   const markTaskDone = (taskId: string) => {
     setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: 'DONE' } : t)));
-    setNotice('Đã đánh dấu hoàn thành nhiệm vụ kiểm tra kho.');
-    setTimeout(() => setNotice(null), 4000);
+    toast.success('Hoàn thành', 'Đã đánh dấu hoàn thành nhiệm vụ kiểm tra kho.');
   };
 
   const handleVerifyAccess = (e: React.FormEvent) => {
@@ -90,28 +89,27 @@ export const FacilityStaffDashboard: React.FC = () => {
         unit: 'A-101 (Kho gia đình 5m²)',
         status: 'Hợp lệ • Hợp đồng ACTIVE',
       });
-      setNotice('Xác minh mã truy cập thành công! Đã cấp quyền mở cổng.');
+      toast.success('Xác minh thành công', 'Đã cấp quyền mở cổng cho khách hàng.');
     } else {
       setVerifiedCustomer({
         name: 'Khách hàng vãng lai',
         unit: `Kho ${checkInPin.toUpperCase()}`,
         status: 'Hợp lệ • Đã quét mã vào ca',
       });
-      setNotice(`Xác minh thành công mã ${checkInPin}.`);
+      toast.success('Xác minh thành công', `Đã xác minh mã ${checkInPin}.`);
     }
-    setTimeout(() => setNotice(null), 4000);
   };
 
   const handleReportIncident = (e: React.FormEvent) => {
     e.preventDefault();
     if (!incidentUnit.trim()) return;
 
-    setNotice(
-      `Đã ghi nhận báo cáo sự cố tại kho ${incidentUnit}: ${incidentType}. Đã gửi thông báo đến Quản lý cơ sở.`,
+    toast.success(
+      'Đã ghi nhận sự cố',
+      `Báo cáo sự cố tại kho ${incidentUnit}: ${incidentType}. Đã gửi thông báo đến Quản lý cơ sở.`,
     );
     setIncidentUnit('');
     setIncidentDesc('');
-    setTimeout(() => setNotice(null), 5000);
   };
 
   const completedCount = tasks.filter((t) => t.status === 'DONE').length;
@@ -121,13 +119,9 @@ export const FacilityStaffDashboard: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="grid gap-1.5">
-          <div className="flex items-center gap-2">
-            <span className="h-lh flex items-center text-kumo-brand">
-              <ClipboardCheck className="w-5 h-5" />
-            </span>
-            <Text as="h2">Facility staff console</Text>
-            <Badge variant="warning">Nhân sự ca trực kho</Badge>
-          </div>
+          <Text as="h1" variant="heading" size="lg">
+            Ca trực & kiểm tra cơ sở
+          </Text>
           <Text variant="secondary">
             Bảng điều khiển tác nghiệp tại chỗ: hỗ trợ check-in, thực hiện danh mục kiểm tra ca và
             báo cáo sự cố.
@@ -135,18 +129,11 @@ export const FacilityStaffDashboard: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <Badge variant="primary" appearance="dot">
-            Nhân viên ca trực: {user?.fullName}
+          <Badge variant="neutral" appearance="dot">
+            {user?.fullName}
           </Badge>
         </div>
       </div>
-
-      {notice && (
-        <div className="p-3 bg-kumo-success-tint text-kumo-success rounded-lg text-sm flex items-center gap-2">
-          <CheckCircle className="w-4 h-4 shrink-0" />
-          <span>{notice}</span>
-        </div>
-      )}
 
       {/* Shift Overview Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -208,7 +195,7 @@ export const FacilityStaffDashboard: React.FC = () => {
         {/* Customer Access / Check-in Tool */}
         <LayerCard className="px-5 py-4 ring ring-kumo-line">
           <div className="flex items-center gap-2 mb-3">
-            <KeyRound className="w-4 h-4 text-kumo-brand" />
+            <Key className="w-4 h-4 text-kumo-brand" />
             <Text as="h3" variant="heading">
               Xác minh mã truy cập & mở cổng kho
             </Text>
@@ -221,14 +208,16 @@ export const FacilityStaffDashboard: React.FC = () => {
           </div>
 
           <form onSubmit={handleVerifyAccess} className="space-y-3">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Nhập mã PIN (vd: 7492)..."
-                value={checkInPin}
-                onChange={(e) => setCheckInPin(e.target.value)}
-                className="flex-1 h-9 px-3 rounded-lg border border-kumo-line bg-kumo-base text-sm text-kumo-default"
-              />
+            <div className="flex gap-2 items-start">
+              <div className="flex-1">
+                <Input
+                  aria-label="Mã PIN khách hàng"
+                  type="text"
+                  placeholder="Nhập mã PIN (vd: 7492)..."
+                  value={checkInPin}
+                  onChange={(e) => setCheckInPin(e.target.value)}
+                />
+              </div>
               <Button variant="primary" type="submit">
                 Kiểm tra
               </Button>
@@ -252,7 +241,7 @@ export const FacilityStaffDashboard: React.FC = () => {
         {/* Quick Incident Reporting */}
         <LayerCard className="px-5 py-4 ring ring-kumo-line">
           <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle className="w-4 h-4 text-kumo-danger" />
+            <WarningDiamond className="w-4 h-4 text-kumo-danger" />
             <Text as="h3" variant="heading">
               Báo cáo nhanh sự cố phát sinh
             </Text>
@@ -264,33 +253,33 @@ export const FacilityStaffDashboard: React.FC = () => {
           </div>
 
           <form onSubmit={handleReportIncident} className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <input
+            <div className="grid grid-cols-2 gap-2 items-start">
+              <Input
+                aria-label="Mã kho xảy ra sự cố"
                 type="text"
                 placeholder="Mã kho (vd: A-102)..."
                 value={incidentUnit}
                 onChange={(e) => setIncidentUnit(e.target.value)}
-                className="h-9 px-3 rounded-lg border border-kumo-line bg-kumo-base text-sm text-kumo-default"
                 required
               />
-              <select
+              <Select
                 aria-label="Loại sự cố phát sinh"
                 value={incidentType}
-                onChange={(e) => setIncidentType(e.target.value)}
-                className="h-9 px-2 rounded-lg border border-kumo-line bg-kumo-base text-xs text-kumo-default"
-              >
-                <option value="Ổ khóa bị kẹt">Ổ khóa bị kẹt</option>
-                <option value="Cảnh báo nhiệt độ">Nhiệt độ/Độ ẩm cao</option>
-                <option value="Vấn đề vệ sinh">Cần vệ sinh khử khuẩn</option>
-                <option value="Đèn chiếu sáng hỏng">Đèn lối đi hỏng</option>
-              </select>
+                onValueChange={(v) => setIncidentType(v as string)}
+                items={[
+                  { value: 'Ổ khóa bị kẹt', label: 'Ổ khóa bị kẹt' },
+                  { value: 'Cảnh báo nhiệt độ', label: 'Nhiệt độ/Độ ẩm cao' },
+                  { value: 'Vấn đề vệ sinh', label: 'Cần vệ sinh khử khuẩn' },
+                  { value: 'Đèn chiếu sáng hỏng', label: 'Đèn lối đi hỏng' },
+                ]}
+              />
             </div>
-            <input
+            <Input
+              aria-label="Ghi chú chi tiết sự cố"
               type="text"
               placeholder="Ghi chú chi tiết sự cố..."
               value={incidentDesc}
               onChange={(e) => setIncidentDesc(e.target.value)}
-              className="w-full h-9 px-3 rounded-lg border border-kumo-line bg-kumo-base text-sm text-kumo-default"
             />
             <Button variant="secondary-destructive" type="submit" size="sm">
               Gửi báo cáo sự cố

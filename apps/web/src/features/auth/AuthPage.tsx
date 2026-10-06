@@ -1,10 +1,8 @@
-import { Button, Text } from '@cloudflare/kumo';
-import { AlertCircle, CheckCircle2, Lock, Mail, Phone, User } from 'lucide-react';
+import { Button, Input, Tabs, Text } from '@cloudflare/kumo';
+import { CheckCircle, WarningCircle } from '@phosphor-icons/react';
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { FieldError, Input, Label, TextField } from '../../design-system/Input';
-import { Tabs } from '../../design-system/Tabs';
 import { getRoleDefaultPath } from '../../lib/roles';
 
 type AuthMode = 'login' | 'register';
@@ -138,136 +136,101 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
 
   return (
     <div className="space-y-6">
-      {/* Tab Switcher */}
-      <div className="flex justify-center">
-        <Tabs
-          tabs={[
-            { id: 'login', label: 'Đăng nhập' },
-            { id: 'register', label: 'Đăng ký tài khoản' },
-          ]}
-          activeTab={mode}
-          onChange={(tabId) => switchMode(tabId as AuthMode)}
-        />
+      <Tabs
+        variant="segmented"
+        tabs={[
+          { value: 'login', label: 'Đăng nhập' },
+          { value: 'register', label: 'Đăng ký tài khoản' },
+        ]}
+        value={mode}
+        onValueChange={(v) => switchMode(v as AuthMode)}
+        className="w-full"
+      />
+
+      <div className="grid gap-1.5">
+        <Text as="h2" variant="heading" size="lg">
+          {mode === 'login' ? 'Chào mừng trở lại' : 'Tạo tài khoản mới'}
+        </Text>
+        <Text variant="secondary" size="sm">
+          {mode === 'login'
+            ? 'Đăng nhập để vào không gian làm việc phù hợp với vai trò của bạn.'
+            : 'Đăng ký tài khoản khách hàng để bắt đầu tìm kiếm và thuê kho ngay hôm nay.'}
+        </Text>
       </div>
 
-      <div>
-        <Text as="h2">{mode === 'login' ? 'Chào mừng trở lại' : 'Tạo tài khoản mới'}</Text>
-        <div className="mt-1">
-          <Text variant="secondary" size="xs">
-            {mode === 'login'
-              ? 'Đăng nhập để vào không gian làm việc phù hợp với vai trò của bạn.'
-              : 'Đăng ký tài khoản khách hàng để bắt đầu tìm kiếm và thuê kho ngay hôm nay.'}
-          </Text>
-        </div>
-      </div>
-
-      {/* Server Error Alert */}
       {serverError && (
         <div
           role="alert"
-          className="p-3.5 rounded-lg border border-kumo-danger/30 bg-kumo-danger-tint text-kumo-danger text-xs flex items-start gap-2.5"
+          className="p-3 rounded-lg bg-kumo-danger-tint text-kumo-danger text-sm flex items-start gap-2.5"
         >
-          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <div className="flex-1 font-medium">{serverError}</div>
+          <WarningCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>{serverError}</span>
         </div>
       )}
 
-      {/* Success Alert */}
       {successMessage && (
         <div
           role="alert"
-          className="p-3.5 rounded-lg border border-kumo-success/30 bg-kumo-success-tint text-kumo-success text-xs flex items-start gap-2.5"
+          className="p-3 rounded-lg bg-kumo-success-tint text-kumo-success text-sm flex items-start gap-2.5"
         >
-          <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-          <div className="flex-1 font-medium">{successMessage}</div>
+          <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>{successMessage}</span>
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         {mode === 'register' && (
           <>
-            <TextField isInvalid={!!fieldErrors.fullName} isRequired>
-              <Label isRequired htmlFor="reg-fullname">
-                Họ và tên
-              </Label>
-              <Input
-                id="reg-fullname"
-                type="text"
-                placeholder="Nguyễn Văn A"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                isInvalid={!!fieldErrors.fullName}
-                leftIcon={<User className="w-4 h-4" />}
-                autoComplete="name"
-              />
-              <FieldError>{fieldErrors.fullName}</FieldError>
-            </TextField>
-
-            <TextField isInvalid={!!fieldErrors.phone} isRequired>
-              <Label isRequired htmlFor="reg-phone">
-                Số điện thoại
-              </Label>
-              <Input
-                id="reg-phone"
-                type="tel"
-                placeholder="0912345678"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                isInvalid={!!fieldErrors.phone}
-                leftIcon={<Phone className="w-4 h-4" />}
-                autoComplete="tel"
-              />
-              <FieldError>{fieldErrors.phone}</FieldError>
-            </TextField>
+            <Input
+              id="reg-fullname"
+              type="text"
+              label="Họ và tên"
+              placeholder="Nguyễn Văn A"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              error={fieldErrors.fullName}
+              autoComplete="name"
+            />
+            <Input
+              id="reg-phone"
+              type="tel"
+              label="Số điện thoại"
+              placeholder="0912345678"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              error={fieldErrors.phone}
+              autoComplete="tel"
+            />
           </>
         )}
 
-        <TextField isInvalid={!!fieldErrors.email} isRequired>
-          <Label isRequired htmlFor="auth-email">
-            Email
-          </Label>
-          <Input
-            id="auth-email"
-            type="email"
-            placeholder="customer@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            isInvalid={!!fieldErrors.email}
-            leftIcon={<Mail className="w-4 h-4" />}
-            autoComplete="email"
-          />
-          <FieldError>{fieldErrors.email}</FieldError>
-        </TextField>
+        <Input
+          id="auth-email"
+          type="email"
+          label="Email"
+          placeholder="customer@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          error={fieldErrors.email}
+          autoComplete="email"
+        />
 
-        <TextField isInvalid={!!fieldErrors.password} isRequired>
-          <div className="flex items-center justify-between">
-            <Label isRequired htmlFor="auth-password">
-              Mật khẩu
-            </Label>
-            {mode === 'login' && (
-              <span className="text-[11px] text-kumo-subtle cursor-not-allowed">
-                Quên mật khẩu?
-              </span>
-            )}
-          </div>
-          <Input
-            id="auth-password"
-            type="password"
-            placeholder={mode === 'login' ? 'Nhập mật khẩu của bạn' : 'Tối thiểu 8 ký tự'}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            isInvalid={!!fieldErrors.password}
-            leftIcon={<Lock className="w-4 h-4" />}
-            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-          />
-          <FieldError>{fieldErrors.password}</FieldError>
-        </TextField>
+        <Input
+          id="auth-password"
+          type="password"
+          label="Mật khẩu"
+          placeholder={mode === 'login' ? 'Nhập mật khẩu của bạn' : 'Tối thiểu 8 ký tự'}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          error={fieldErrors.password}
+          autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+        />
 
         <div className="pt-2">
           <Button
             type="submit"
             variant="primary"
-            className="w-full min-h-[44px] justify-center text-sm font-medium"
+            className="w-full justify-center"
             loading={isSubmitting}
           >
             {mode === 'login' ? 'Đăng nhập vào hệ thống' : 'Tạo tài khoản'}
@@ -275,30 +238,32 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
         </div>
       </form>
 
-      <div className="mt-6 text-center text-xs text-kumo-subtle">
-        {mode === 'login' ? (
-          <>
-            Chưa có tài khoản?{' '}
-            <button
-              type="button"
-              onClick={() => switchMode('register')}
-              className="font-semibold text-kumo-brand hover:underline cursor-pointer"
-            >
-              Đăng ký ngay
-            </button>
-          </>
-        ) : (
-          <>
-            Đã có tài khoản?{' '}
-            <button
-              type="button"
-              onClick={() => switchMode('login')}
-              className="font-semibold text-kumo-brand hover:underline cursor-pointer"
-            >
-              Đăng nhập tại đây
-            </button>
-          </>
-        )}
+      <div className="text-center">
+        <Text variant="secondary" size="sm">
+          {mode === 'login' ? (
+            <>
+              Chưa có tài khoản?{' '}
+              <button
+                type="button"
+                onClick={() => switchMode('register')}
+                className="font-medium text-kumo-link hover:underline cursor-pointer"
+              >
+                Đăng ký ngay
+              </button>
+            </>
+          ) : (
+            <>
+              Đã có tài khoản?{' '}
+              <button
+                type="button"
+                onClick={() => switchMode('login')}
+                className="font-medium text-kumo-link hover:underline cursor-pointer"
+              >
+                Đăng nhập tại đây
+              </button>
+            </>
+          )}
+        </Text>
       </div>
     </div>
   );

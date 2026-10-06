@@ -1,5 +1,13 @@
-import { Badge, Button, LayerCard, Table, Text } from '@cloudflare/kumo';
-import { AlertCircle, Building2, CheckCircle, Layers, LifeBuoy, Wrench } from 'lucide-react';
+import { Badge, Button, Empty, InputGroup, LayerCard, Select, Table, Text } from '@cloudflare/kumo';
+import {
+  Buildings,
+  CheckCircle,
+  Lifebuoy,
+  MagnifyingGlass,
+  Stack,
+  WarningCircle,
+  Wrench,
+} from '@phosphor-icons/react';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -12,6 +20,7 @@ import {
   type UnitChangeRequestRecord,
   UnitsApi,
 } from '../../lib/api';
+import { useAppToast } from '../../lib/toast';
 
 const formatVnd = (value: number | string) => `${Number(value).toLocaleString('vi-VN')} đ/tháng`;
 const formatDate = (iso: string | Date) =>
@@ -63,17 +72,12 @@ export const FacilityManagerDashboard: React.FC = () => {
   const [units, setUnits] = useState<ManagedUnit[]>([]);
   const [requests, setRequests] = useState<UnitChangeRequestRecord[]>([]);
   const [tickets, setTickets] = useState<ServiceTicketRecord[]>([]);
+  const toast = useAppToast();
   const [isLoading, setIsLoading] = useState(true);
-  const [actionAlert, setActionAlert] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [busyId, setBusyId] = useState<string | null>(null);
-
-  const notify = (message: string) => {
-    setActionAlert(message);
-    setTimeout(() => setActionAlert(null), 4000);
-  };
 
   const loadFacilityData = useCallback(async (facilityId: string) => {
     const [unitsData, requestsData, ticketsData] = await Promise.all([
@@ -102,7 +106,8 @@ export const FacilityManagerDashboard: React.FC = () => {
     try {
       await UnitsApi.updateStatus(unit.id, next);
       setUnits((prev) => prev.map((u) => (u.id === unit.id ? { ...u, status: next } : u)));
-      notify(
+      toast.info(
+        'Cập nhật trạng thái kho',
         `Đã cập nhật kho ${unit.code} thành: ${next === 'MAINTENANCE' ? 'Đang bảo trì' : 'Sẵn sàng thuê'}`,
       );
     } catch (err) {
@@ -121,7 +126,8 @@ export const FacilityManagerDashboard: React.FC = () => {
         const unitsData = await UnitsApi.managed(selectedFacilityId);
         setUnits(unitsData.units);
       }
-      notify(
+      toast.info(
+        'Xử lý yêu cầu',
         decision === 'APPROVED' ? 'Đã phê duyệt yêu cầu đổi kho.' : 'Đã từ chối yêu cầu đổi kho.',
       );
     } catch (err) {
@@ -151,14 +157,11 @@ export const FacilityManagerDashboard: React.FC = () => {
 
   if (facilities.length === 0) {
     return (
-      <div className="space-y-3">
-        <Text as="h2">Facility management</Text>
-        <Text variant="secondary">
-          Tài khoản của bạn chưa được gán quản lý cơ sở nào. Liên hệ quản trị viên để được cấp
-          quyền.
-        </Text>
-        {error && <Text variant="secondary">{error}</Text>}
-      </div>
+      <Empty
+        icon={<Buildings className="w-8 h-8" />}
+        title="Chưa được gán cơ sở"
+        description="Tài khoản của bạn chưa được gán quản lý cơ sở nào. Liên hệ quản trị viên để được cấp quyền."
+      />
     );
   }
 
@@ -168,12 +171,11 @@ export const FacilityManagerDashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="grid gap-1.5">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="h-lh flex items-center text-kumo-brand">
-              <Building2 className="w-5 h-5" />
-            </span>
-            <Text as="h2">Facility management</Text>
+            <Text as="h1" variant="heading" size="lg">
+              Quản lý cơ sở kho
+            </Text>
             {selectedFacility && (
-              <Badge variant="teal">{`Đang xem: ${selectedFacility.name} (${selectedFacility.code})`}</Badge>
+              <Badge variant="neutral">{`${selectedFacility.name} (${selectedFacility.code})`}</Badge>
             )}
           </div>
           <Text variant="secondary">
@@ -184,26 +186,20 @@ export const FacilityManagerDashboard: React.FC = () => {
         <div className="flex items-center gap-3">
           <Button
             variant="secondary"
-            icon={<LifeBuoy className="w-4 h-4 text-kumo-brand" />}
+            icon={<Lifebuoy className="w-4 h-4" />}
             onClick={() => navigate('/facility-manager/tickets')}
           >
             Vé sự cố & Phân công
           </Button>
-          <Badge variant="primary" appearance="dot">
-            Quản lý trực: {user?.fullName}
+          <Badge variant="neutral" appearance="dot">
+            {user?.fullName}
           </Badge>
         </div>
       </div>
 
-      {actionAlert && (
-        <div className="p-3 bg-kumo-info-tint text-kumo-info rounded-lg text-sm flex items-center gap-2">
-          <CheckCircle className="w-4 h-4 shrink-0" />
-          <span>{actionAlert}</span>
-        </div>
-      )}
       {error && (
         <div className="p-3 bg-kumo-danger-tint text-kumo-danger rounded-lg text-sm flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" />
+          <WarningCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
@@ -213,7 +209,7 @@ export const FacilityManagerDashboard: React.FC = () => {
         <LayerCard className="px-5 py-4 ring ring-kumo-line">
           <div className="flex items-center justify-between">
             <Text variant="secondary">Kho đang cho thuê</Text>
-            <Layers className="w-4 h-4 text-kumo-success" />
+            <Stack className="w-4 h-4 text-kumo-success" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-semibold text-kumo-default">{rentedCount}</span>
@@ -235,7 +231,7 @@ export const FacilityManagerDashboard: React.FC = () => {
         <LayerCard className="px-5 py-4 ring ring-kumo-line">
           <div className="flex items-center justify-between">
             <Text variant="secondary">Yêu cầu đổi kho chờ duyệt</Text>
-            <AlertCircle className="w-4 h-4 text-kumo-warning" />
+            <WarningCircle className="w-4 h-4 text-kumo-warning" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-semibold text-kumo-default">{pendingRequestsCount}</span>
@@ -255,15 +251,17 @@ export const FacilityManagerDashboard: React.FC = () => {
         </LayerCard>
       </div>
 
-      {/* Service Tickets Quick Access Banner */}
-      <LayerCard className="p-4 ring ring-kumo-line bg-gradient-to-r from-kumo-brand/5 to-transparent flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Service Tickets Quick Access */}
+      <LayerCard className="p-4 ring ring-kumo-line flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-lg bg-kumo-brand/10 text-kumo-brand flex items-center justify-center shrink-0">
-            <LifeBuoy className="w-5 h-5" />
+          <div className="w-10 h-10 rounded-lg bg-kumo-fill text-kumo-default flex items-center justify-center shrink-0">
+            <Lifebuoy className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <Text as="h4">Phiếu sự cố & Yêu cầu kỹ thuật cơ sở</Text>
+              <Text as="h4" variant="heading">
+                Phiếu sự cố & yêu cầu kỹ thuật cơ sở
+              </Text>
               <Badge variant="warning">Cần phân công</Badge>
             </div>
             <Text variant="secondary">
@@ -274,7 +272,7 @@ export const FacilityManagerDashboard: React.FC = () => {
         </div>
         <Button
           variant="primary"
-          icon={<LifeBuoy className="w-4 h-4" />}
+          icon={<Lifebuoy className="w-4 h-4" />}
           onClick={() => navigate('/facility-manager/tickets')}
           className="shrink-0"
         >
@@ -310,8 +308,12 @@ export const FacilityManagerDashboard: React.FC = () => {
             <Table.Body>
               {requests.length === 0 && (
                 <Table.Row>
-                  <Table.Cell className="text-kumo-subtle" colSpan={8}>
-                    Chưa có yêu cầu nào tại cơ sở này.
+                  <Table.Cell className="p-0" colSpan={8}>
+                    <Empty
+                      size="sm"
+                      title="Chưa có yêu cầu nào"
+                      description="Chưa có yêu cầu nào tại cơ sở này."
+                    />
                   </Table.Cell>
                 </Table.Row>
               )}
@@ -386,26 +388,36 @@ export const FacilityManagerDashboard: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <input
-              type="text"
-              placeholder="Tìm mã kho hoặc loại..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="h-8 text-xs px-2.5 rounded-md bg-kumo-base border border-kumo-line text-kumo-default w-48"
-            />
-            <select
-              aria-label="Lọc trạng thái kho"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="h-8 text-xs px-2.5 rounded-md bg-kumo-base border border-kumo-line text-kumo-default"
-            >
-              <option value="ALL">Tất cả trạng thái</option>
-              <option value="AVAILABLE">Sẵn sàng (Trống)</option>
-              <option value="RENTED">Đang thuê</option>
-              <option value="HELD">Đang giữ chỗ</option>
-              <option value="BOOKED">Đã đặt</option>
-              <option value="MAINTENANCE">Bảo trì</option>
-            </select>
+            <div className="w-56">
+              <InputGroup size="sm">
+                <InputGroup.Addon align="start">
+                  <MagnifyingGlass className="w-4 h-4 text-kumo-subtle" />
+                </InputGroup.Addon>
+                <InputGroup.Input
+                  type="text"
+                  aria-label="Tìm mã kho hoặc loại kho"
+                  placeholder="Tìm mã kho hoặc loại..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </InputGroup>
+            </div>
+            <div className="w-48">
+              <Select
+                aria-label="Lọc trạng thái kho"
+                size="sm"
+                value={statusFilter}
+                onValueChange={(v) => setStatusFilter(v as string)}
+                items={[
+                  { value: 'ALL', label: 'Tất cả trạng thái' },
+                  { value: 'AVAILABLE', label: 'Sẵn sàng (Trống)' },
+                  { value: 'RENTED', label: 'Đang thuê' },
+                  { value: 'HELD', label: 'Đang giữ chỗ' },
+                  { value: 'BOOKED', label: 'Đã đặt' },
+                  { value: 'MAINTENANCE', label: 'Bảo trì' },
+                ]}
+              />
+            </div>
           </div>
         </div>
 
@@ -462,8 +474,12 @@ export const FacilityManagerDashboard: React.FC = () => {
               ))}
               {filteredUnits.length === 0 && (
                 <Table.Row>
-                  <Table.Cell className="text-kumo-subtle" colSpan={7}>
-                    Không có kho nào khớp bộ lọc.
+                  <Table.Cell className="p-0" colSpan={7}>
+                    <Empty
+                      size="sm"
+                      title="Không có kho nào"
+                      description="Không có kho nào khớp bộ lọc hiện tại."
+                    />
                   </Table.Cell>
                 </Table.Row>
               )}
@@ -497,8 +513,12 @@ export const FacilityManagerDashboard: React.FC = () => {
             <Table.Body>
               {tickets.length === 0 && (
                 <Table.Row>
-                  <Table.Cell className="text-kumo-subtle" colSpan={7}>
-                    Chưa có ticket nào tại cơ sở này.
+                  <Table.Cell className="p-0" colSpan={7}>
+                    <Empty
+                      size="sm"
+                      title="Chưa có ticket nào"
+                      description="Chưa có ticket nào tại cơ sở này."
+                    />
                   </Table.Cell>
                 </Table.Row>
               )}

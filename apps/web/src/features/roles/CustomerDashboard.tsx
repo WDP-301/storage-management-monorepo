@@ -1,15 +1,15 @@
-import { Badge, Button, LayerCard, Table, Text } from '@cloudflare/kumo';
+import { Badge, Button, Dialog, InputArea, LayerCard, Select, Table, Text } from '@cloudflare/kumo';
 import {
-  Calendar,
-  CheckCircle,
-  Download,
-  KeyRound,
+  CalendarBlank,
+  FileArrowDown,
+  Key,
   MapPin,
-  Package,
   PlusCircle,
   ShieldCheck,
-} from 'lucide-react';
+  X,
+} from '@phosphor-icons/react';
 import React, { useState } from 'react';
+import { useAppToast } from '../../lib/toast';
 
 interface CustomerRental {
   unitCode: string;
@@ -65,21 +65,27 @@ const MY_INVOICES: InvoiceRecord[] = [
   },
 ];
 
+const SIZE_OPTIONS = [
+  { value: '10m²', label: 'Kho doanh nghiệp Medium (10m² - 2.500.000 đ/tháng)' },
+  { value: '12m²', label: 'Kho lớn Doanh nghiệp (12m² - 3.200.000 đ/tháng)' },
+  { value: '15m² Lạnh', label: 'Kho kiểm soát nhiệt độ (15m² - 4.500.000 đ/tháng)' },
+];
+
 export const CustomerDashboard: React.FC = () => {
+  const toast = useAppToast();
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [requestedSize, setRequestedSize] = useState('10m²');
   const [requestNote, setRequestNote] = useState('');
-  const [notice, setNotice] = useState<string | null>(null);
   const [pinVisible, setPinVisible] = useState(false);
 
   const handleRequestChange = (e: React.FormEvent) => {
     e.preventDefault();
-    setNotice(
+    toast.success(
+      'Đã gửi yêu cầu',
       `Đã gửi yêu cầu chuyển đổi lên kho ${requestedSize} thành công. Ban quản lý cơ sở sẽ xét duyệt trong 24h.`,
     );
     setShowUpgradeModal(false);
     setRequestNote('');
-    setTimeout(() => setNotice(null), 5000);
   };
 
   return (
@@ -87,16 +93,11 @@ export const CustomerDashboard: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="grid gap-1.5">
-          <div className="flex items-center gap-2">
-            <span className="h-lh flex items-center text-kumo-brand">
-              <Package className="w-5 h-5" />
-            </span>
-            <Text as="h2">Customer storage space</Text>
-            <Badge variant="success">Khách hàng thành viên</Badge>
-          </div>
+          <Text as="h1" variant="heading" size="lg">
+            Kho lưu trữ của tôi
+          </Text>
           <Text variant="secondary">
-            Không gian lưu trữ cá nhân: quản lý kho đang thuê, lấy mã PIN ra vào cổng và hóa đơn
-            thanh toán.
+            Quản lý kho đang thuê, mã PIN ra vào cổng và hóa đơn thanh toán.
           </Text>
         </div>
 
@@ -110,13 +111,6 @@ export const CustomerDashboard: React.FC = () => {
           </Button>
         </div>
       </div>
-
-      {notice && (
-        <div className="p-3 bg-kumo-success-tint text-kumo-success rounded-lg text-sm flex items-center gap-2">
-          <CheckCircle className="w-4 h-4 shrink-0" />
-          <span>{notice}</span>
-        </div>
-      )}
 
       {/* Rented Units Display */}
       <div className="space-y-3">
@@ -138,7 +132,9 @@ export const CustomerDashboard: React.FC = () => {
                     <span className="text-xl font-semibold text-kumo-default font-mono">
                       Ô kho {rental.unitCode}
                     </span>
-                    <Badge variant="success">Đang hoạt động</Badge>
+                    <Badge variant="success" appearance="dot">
+                      Đang hoạt động
+                    </Badge>
                   </div>
                   <div className="mt-1">
                     <Text as="strong" bold>
@@ -162,7 +158,7 @@ export const CustomerDashboard: React.FC = () => {
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 shrink-0 text-kumo-brand" />
+                  <CalendarBlank className="w-4 h-4 shrink-0 text-kumo-brand" />
                   <span>
                     Kỳ thanh toán tiếp theo:{' '}
                     <strong className="text-kumo-default">{rental.nextBillingDate}</strong>
@@ -173,7 +169,7 @@ export const CustomerDashboard: React.FC = () => {
               {/* Digital Access PIN */}
               <div className="flex items-center justify-between p-3 rounded-lg bg-kumo-brand/5 border border-kumo-brand/20">
                 <div className="flex items-center gap-2.5">
-                  <KeyRound className="w-5 h-5 text-kumo-brand" />
+                  <Key className="w-5 h-5 text-kumo-brand" />
                   <div>
                     <Text as="strong" bold>
                       Mã PIN ra vào cổng kho
@@ -210,63 +206,59 @@ export const CustomerDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Upgrade / Change Request Modal */}
-      {showUpgradeModal && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <LayerCard className="max-w-md w-full p-6 ring ring-kumo-line space-y-4">
-            <div className="grid gap-1">
-              <Text as="h3" variant="heading">
-                Yêu cầu nâng cấp hoặc đổi ô kho
-              </Text>
-              <Text variant="secondary" size="xs">
-                Ban quản lý sẽ sắp xếp vị trí mới và hỗ trợ bạn chuyển đổi nhanh chóng.
-              </Text>
-            </div>
-
-            <form onSubmit={handleRequestChange} className="space-y-3">
-              <div>
-                <div className="mb-1">
-                  <Text size="xs">Kích cỡ mong muốn:</Text>
-                </div>
-                <select
-                  aria-label="Kích cỡ kho mong muốn"
-                  value={requestedSize}
-                  onChange={(e) => setRequestedSize(e.target.value)}
-                  className="w-full h-9 px-3 rounded-lg border border-kumo-line bg-kumo-base text-sm text-kumo-default"
+      {/* Upgrade / Change Request Dialog */}
+      <Dialog.Root open={showUpgradeModal} onOpenChange={setShowUpgradeModal}>
+        <Dialog className="p-6" size="lg">
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <Dialog.Title className="text-base font-semibold">
+              Yêu cầu nâng cấp hoặc đổi ô kho
+            </Dialog.Title>
+            <Dialog.Close
+              render={(props) => (
+                <button
+                  type="button"
+                  {...props}
+                  aria-label="Đóng"
+                  className="p-1.5 rounded-md text-kumo-subtle hover:text-kumo-default hover:bg-kumo-control cursor-pointer transition"
                 >
-                  <option value="10m²">Kho doanh nghiệp Medium (10m² - 2.500.000 đ/tháng)</option>
-                  <option value="12m²">Kho lớn Doanh nghiệp (12m² - 3.200.000 đ/tháng)</option>
-                  <option value="15m² Lạnh">
-                    Kho kiểm soát nhiệt độ (15m² - 4.500.000 đ/tháng)
-                  </option>
-                </select>
-              </div>
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            />
+          </div>
+          <Dialog.Description className="text-kumo-subtle">
+            Ban quản lý sẽ sắp xếp vị trí mới và hỗ trợ bạn chuyển đổi nhanh chóng.
+          </Dialog.Description>
 
-              <div>
-                <div className="mb-1">
-                  <Text size="xs">Lý do hoặc ghi chú thêm:</Text>
-                </div>
-                <textarea
-                  rows={3}
-                  placeholder="Ghi chú thời gian muốn nhận kho..."
-                  value={requestNote}
-                  onChange={(e) => setRequestNote(e.target.value)}
-                  className="w-full p-2.5 rounded-lg border border-kumo-line bg-kumo-base text-sm text-kumo-default"
-                />
-              </div>
+          <form onSubmit={handleRequestChange} className="mt-5 space-y-4">
+            <Select
+              label="Kích cỡ mong muốn"
+              aria-label="Kích cỡ kho mong muốn"
+              value={requestedSize}
+              onValueChange={(v) => setRequestedSize(v as string)}
+              items={SIZE_OPTIONS}
+              className="w-full"
+            />
 
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="ghost" onClick={() => setShowUpgradeModal(false)}>
-                  Hủy bỏ
-                </Button>
-                <Button variant="primary" type="submit">
-                  Gửi yêu cầu
-                </Button>
-              </div>
-            </form>
-          </LayerCard>
-        </div>
-      )}
+            <InputArea
+              label="Lý do hoặc ghi chú thêm"
+              rows={3}
+              placeholder="Ghi chú thời gian muốn nhận kho..."
+              value={requestNote}
+              onValueChange={setRequestNote}
+            />
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="secondary" onClick={() => setShowUpgradeModal(false)}>
+                Hủy bỏ
+              </Button>
+              <Button variant="primary" type="submit">
+                Gửi yêu cầu
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+      </Dialog.Root>
 
       {/* Invoices & Billing Table */}
       <div className="space-y-3">
@@ -305,14 +297,18 @@ export const CustomerDashboard: React.FC = () => {
                   </Table.Cell>
                   <Table.Cell className="whitespace-nowrap text-kumo-subtle">{inv.date}</Table.Cell>
                   <Table.Cell className="whitespace-nowrap">
-                    <Badge variant="success">Đã thanh toán</Badge>
+                    <Badge variant="success" appearance="dot">
+                      Đã thanh toán
+                    </Badge>
                   </Table.Cell>
                   <Table.Cell className="whitespace-nowrap text-right">
                     <Button
                       variant="ghost"
                       size="sm"
-                      icon={<Download className="w-3.5 h-3.5" />}
-                      onClick={() => setNotice(`Đã tải xuống biên lai điện tử: ${inv.code}`)}
+                      icon={<FileArrowDown className="w-3.5 h-3.5" />}
+                      onClick={() =>
+                        toast.info('Tải biên lai', `Đã tải xuống biên lai điện tử: ${inv.code}`)
+                      }
                     >
                       Tải PDF
                     </Button>

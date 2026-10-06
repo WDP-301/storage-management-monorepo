@@ -1,6 +1,6 @@
 import { Button, Text } from '@cloudflare/kumo';
+import { CircleNotch } from '@phosphor-icons/react';
 import { UserRole } from '@storage/types';
-import { Loader2 } from 'lucide-react';
 import React from 'react';
 import {
   BrowserRouter,
@@ -38,7 +38,7 @@ export const ProtectedRoute: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-kumo-base">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-kumo-brand" />
+          <CircleNotch className="w-8 h-8 animate-spin text-kumo-brand" />
           <Text variant="secondary" size="xs">
             Đang kiểm tra phiên làm việc...
           </Text>
@@ -63,7 +63,7 @@ export const PublicOnlyRoute: React.FC = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-kumo-base">
-        <Loader2 className="w-8 h-8 animate-spin text-kumo-brand" />
+        <CircleNotch className="w-8 h-8 animate-spin text-kumo-brand" />
       </div>
     );
   }

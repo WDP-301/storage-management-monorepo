@@ -8,20 +8,20 @@ import {
   Table,
   Text,
 } from '@cloudflare/kumo';
-import { TicketPriority, TicketStatus } from '@storage/types';
 import {
-  AlertCircle,
-  CheckCircle2,
+  ArrowsClockwise,
+  CheckCircle,
   Clock,
-  LifeBuoy,
-  RefreshCw,
-  Search,
-  Trash2,
+  Lifebuoy,
+  MagnifyingGlass,
+  Trash,
   UserCheck,
   UserPlus,
+  WarningCircle,
   Wrench,
   X,
-} from 'lucide-react';
+} from '@phosphor-icons/react';
+import { TicketPriority, TicketStatus } from '@storage/types';
 import React, { useEffect, useMemo, useState } from 'react';
 import { TicketsApi } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
@@ -201,43 +201,20 @@ export const ManagerTicketsPage: React.FC = () => {
     switch (priority) {
       case TicketPriority.URGENT:
         return (
-          <Badge
-            variant="neutral"
-            className="bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300 border border-red-200/80 font-semibold"
-          >
+          <Badge variant="error" appearance="dot">
             Khẩn cấp
           </Badge>
         );
       case TicketPriority.HIGH:
         return (
-          <Badge
-            variant="neutral"
-            className="bg-orange-50 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300 border border-orange-200/80 font-medium"
-          >
+          <Badge variant="warning" appearance="dot">
             Ưu tiên cao
           </Badge>
         );
-      case TicketPriority.NORMAL:
-        return (
-          <Badge
-            variant="neutral"
-            className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/80 font-medium"
-          >
-            Bình thường
-          </Badge>
-        );
       case TicketPriority.LOW:
-        return (
-          <Badge variant="neutral" className="text-kumo-subtle font-medium">
-            Thấp
-          </Badge>
-        );
+        return <Badge variant="neutral">Thấp</Badge>;
       default:
-        return (
-          <Badge variant="neutral" className="text-kumo-subtle font-medium">
-            Bình thường
-          </Badge>
-        );
+        return <Badge variant="neutral">Bình thường</Badge>;
     }
   };
 
@@ -245,55 +222,32 @@ export const ManagerTicketsPage: React.FC = () => {
     switch (status) {
       case TicketStatus.OPEN:
         return (
-          <Badge
-            variant="neutral"
-            className="bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/80 font-medium"
-          >
+          <Badge variant="warning" appearance="dot">
             Chờ phân công
           </Badge>
         );
       case TicketStatus.ASSIGNED:
         return (
-          <Badge
-            variant="neutral"
-            className="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/80 font-medium"
-          >
+          <Badge variant="primary" appearance="dot">
             Đã gán ca
           </Badge>
         );
       case TicketStatus.IN_PROGRESS:
         return (
-          <Badge
-            variant="neutral"
-            className="bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200/80 font-medium"
-          >
+          <Badge variant="info" appearance="dot">
             Đang xử lý
           </Badge>
         );
       case TicketStatus.RESOLVED:
         return (
-          <Badge variant="success" className="font-medium">
+          <Badge variant="success" appearance="dot">
             Đã giải quyết
           </Badge>
         );
       case TicketStatus.CLOSED:
-        return (
-          <Badge
-            variant="neutral"
-            className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700 font-medium"
-          >
-            Đã đóng
-          </Badge>
-        );
+        return <Badge variant="neutral">Đã đóng</Badge>;
       case TicketStatus.CANCELLED:
-        return (
-          <Badge
-            variant="neutral"
-            className="bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200/80 font-medium"
-          >
-            Đã hủy
-          </Badge>
-        );
+        return <Badge variant="neutral">Đã hủy</Badge>;
       default:
         return <Badge variant="neutral">{status}</Badge>;
     }
@@ -321,18 +275,9 @@ export const ManagerTicketsPage: React.FC = () => {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="grid gap-1.5">
-          <div className="flex items-center gap-2">
-            <span className="h-lh flex items-center text-kumo-brand">
-              <LifeBuoy className="w-5 h-5" />
-            </span>
-            <Text as="h2">Quản lý sự cố & Phiếu dịch vụ</Text>
-            <Badge
-              variant="neutral"
-              className="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/80 font-medium"
-            >
-              Manager Tickets
-            </Badge>
-          </div>
+          <Text as="h1" variant="heading" size="lg">
+            Quản lý sự cố & Phiếu dịch vụ
+          </Text>
           <Text variant="secondary">
             Tiếp nhận báo cáo sự cố kho từ khách hàng, theo dõi tiến độ và phân công nhân viên kỹ
             thuật giải quyết.
@@ -342,9 +287,9 @@ export const ManagerTicketsPage: React.FC = () => {
         <div className="flex items-center gap-2">
           <Button
             variant="secondary"
-            icon={<RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />}
+            icon={<ArrowsClockwise className="w-4 h-4" />}
             onClick={loadTickets}
-            disabled={isLoading}
+            loading={isLoading}
           >
             Làm mới
           </Button>
@@ -353,15 +298,21 @@ export const ManagerTicketsPage: React.FC = () => {
 
       {/* Action Alerts */}
       {actionSuccessMessage && (
-        <div className="p-3.5 bg-kumo-info-tint text-kumo-info rounded-lg text-sm flex items-center gap-2.5 ring ring-kumo-line">
-          <CheckCircle2 className="w-4 h-4 shrink-0 text-kumo-brand" />
+        <div
+          role="alert"
+          className="p-3.5 bg-kumo-success-tint text-kumo-success rounded-lg text-sm flex items-center gap-2.5"
+        >
+          <CheckCircle className="w-4 h-4 shrink-0" />
           <span className="font-medium">{actionSuccessMessage}</span>
         </div>
       )}
 
       {actionErrorMessage && (
-        <div className="p-3.5 bg-red-500/10 text-red-500 rounded-lg text-sm flex items-center gap-2.5 ring ring-red-500/20">
-          <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+        <div
+          role="alert"
+          className="p-3.5 bg-kumo-danger-tint text-kumo-danger rounded-lg text-sm flex items-center gap-2.5"
+        >
+          <WarningCircle className="w-4 h-4 shrink-0" />
           <span className="font-medium">{actionErrorMessage}</span>
         </div>
       )}
@@ -371,7 +322,7 @@ export const ManagerTicketsPage: React.FC = () => {
         <LayerCard className="px-5 py-4 ring ring-kumo-line">
           <div className="flex items-center justify-between">
             <Text variant="secondary">Tổng số phiếu sự cố</Text>
-            <LifeBuoy className="w-4 h-4 text-kumo-brand" />
+            <Lifebuoy className="w-4 h-4 text-kumo-subtle" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-semibold text-kumo-default">{totalTickets}</span>
@@ -382,16 +333,11 @@ export const ManagerTicketsPage: React.FC = () => {
         <LayerCard className="px-5 py-4 ring ring-kumo-line">
           <div className="flex items-center justify-between">
             <Text variant="secondary">Chờ phân công</Text>
-            <Clock className="w-4 h-4 text-amber-500" />
+            <Clock className="w-4 h-4 text-kumo-warning" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-semibold text-amber-600 dark:text-amber-400">
-              {unassignedCount}
-            </span>
-            <Badge
-              variant="neutral"
-              className="bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/80 font-medium"
-            >
+            <span className="text-2xl font-semibold text-kumo-default">{unassignedCount}</span>
+            <Badge variant="warning" appearance="dot">
               Cần gán ca
             </Badge>
           </div>
@@ -400,16 +346,11 @@ export const ManagerTicketsPage: React.FC = () => {
         <LayerCard className="px-5 py-4 ring ring-kumo-line">
           <div className="flex items-center justify-between">
             <Text variant="secondary">Đang tiến hành xử lý</Text>
-            <Wrench className="w-4 h-4 text-sky-500" />
+            <Wrench className="w-4 h-4 text-kumo-info" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-semibold text-sky-600 dark:text-sky-400">
-              {inProgressCount}
-            </span>
-            <Badge
-              variant="neutral"
-              className="bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200/80 font-medium"
-            >
+            <span className="text-2xl font-semibold text-kumo-default">{inProgressCount}</span>
+            <Badge variant="info" appearance="dot">
               Kỹ thuật đang làm
             </Badge>
           </div>
@@ -418,13 +359,11 @@ export const ManagerTicketsPage: React.FC = () => {
         <LayerCard className="px-5 py-4 ring ring-kumo-line">
           <div className="flex items-center justify-between">
             <Text variant="secondary">Đã xử lý dứt điểm</Text>
-            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            <CheckCircle className="w-4 h-4 text-kumo-success" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
-              {resolvedCount}
-            </span>
-            <Badge variant="success" className="font-medium">
+            <span className="text-2xl font-semibold text-kumo-default">{resolvedCount}</span>
+            <Badge variant="success" appearance="dot">
               Hoàn tất
             </Badge>
           </div>
@@ -441,16 +380,7 @@ export const ManagerTicketsPage: React.FC = () => {
               value={statusFilter}
               onValueChange={(val) => val && setStatusFilter(String(val))}
               items={statusOptions}
-              renderValue={(val) =>
-                statusOptions.find((o) => o.value === val)?.label || 'Trạng thái'
-              }
-            >
-              {statusOptions.map((opt) => (
-                <Select.Option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </Select.Option>
-              ))}
-            </Select>
+            />
           </div>
 
           {/* Priority Select */}
@@ -460,16 +390,7 @@ export const ManagerTicketsPage: React.FC = () => {
               value={priorityFilter}
               onValueChange={(val) => val && setPriorityFilter(String(val))}
               items={priorityOptions}
-              renderValue={(val) =>
-                priorityOptions.find((o) => o.value === val)?.label || 'Độ ưu tiên'
-              }
-            >
-              {priorityOptions.map((opt) => (
-                <Select.Option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </Select.Option>
-              ))}
-            </Select>
+            />
           </div>
         </div>
 
@@ -477,7 +398,7 @@ export const ManagerTicketsPage: React.FC = () => {
         <div className="w-full sm:w-72">
           <InputGroup size="base">
             <InputGroup.Addon align="start">
-              <Search className="w-4 h-4 text-kumo-subtle" />
+              <MagnifyingGlass className="w-4 h-4 text-kumo-subtle" />
             </InputGroup.Addon>
             <InputGroup.Input
               type="text"
@@ -583,7 +504,7 @@ export const ManagerTicketsPage: React.FC = () => {
                     <Table.Cell className="whitespace-nowrap">
                       {hasAssignee && ticket.assignee ? (
                         <div className="flex items-center gap-1.5 text-xs text-kumo-default font-medium">
-                          <UserCheck className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                          <UserCheck className="w-3.5 h-3.5 text-kumo-brand shrink-0" />
                           <span
                             className="truncate max-w-[140px]"
                             title={ticket.assignee.full_name}
@@ -592,7 +513,7 @@ export const ManagerTicketsPage: React.FC = () => {
                           </span>
                         </div>
                       ) : (
-                        <span className="text-xs text-amber-600 dark:text-amber-400 font-medium italic flex items-center gap-1">
+                        <span className="text-xs text-kumo-warning font-medium italic flex items-center gap-1">
                           <Clock className="w-3 h-3 shrink-0" />
                           Chưa phân công
                         </span>
@@ -622,7 +543,7 @@ export const ManagerTicketsPage: React.FC = () => {
                         <Button
                           size="xs"
                           variant="secondary-destructive"
-                          icon={<Trash2 className="w-3 h-3" />}
+                          icon={<Trash className="w-3 h-3" />}
                           onClick={() => setTicketToDelete(ticket)}
                           aria-label={`Xóa vé ${ticket.ticket_no}`}
                         >
@@ -654,7 +575,7 @@ export const ManagerTicketsPage: React.FC = () => {
           <div className="space-y-5">
             <div className="flex items-center justify-between border-b border-kumo-line pb-3.5">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-lg bg-kumo-brand/10 text-kumo-brand flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-kumo-fill text-kumo-default flex items-center justify-center shrink-0">
                   <UserPlus className="w-5 h-5" />
                 </div>
                 <div>
@@ -686,7 +607,7 @@ export const ManagerTicketsPage: React.FC = () => {
                 {/* Ticket Context Pill */}
                 <div className="p-4 bg-kumo-control rounded-lg ring ring-kumo-line space-y-2.5 text-xs">
                   <div className="flex items-center justify-between">
-                    <span className="font-mono font-bold text-sm text-kumo-brand">
+                    <span className="font-mono font-semibold text-sm text-kumo-brand">
                       {assignModalTicket.ticket_no}
                     </span>
                     <div className="flex items-center gap-2">
@@ -767,8 +688,8 @@ export const ManagerTicketsPage: React.FC = () => {
 
                 {/* Current Assignee Note */}
                 {assignModalTicket.assignee && (
-                  <div className="text-xs text-kumo-subtle bg-blue-50 dark:bg-blue-950/40 p-3 rounded-lg border border-blue-200/60 dark:border-blue-800/60 flex items-center gap-2.5">
-                    <UserCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                  <div className="text-xs text-kumo-subtle bg-kumo-info-tint p-3 rounded-lg flex items-center gap-2.5">
+                    <UserCheck className="w-4 h-4 text-kumo-info shrink-0" />
                     <span>
                       Hiện đang phân công cho:{' '}
                       <strong className="text-kumo-default">
@@ -816,8 +737,8 @@ export const ManagerTicketsPage: React.FC = () => {
           <div className="space-y-5">
             <div className="flex items-center justify-between border-b border-kumo-line pb-3.5">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-lg bg-kumo-brand/10 text-kumo-brand flex items-center justify-center shrink-0">
-                  <LifeBuoy className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-lg bg-kumo-fill text-kumo-default flex items-center justify-center shrink-0">
+                  <Lifebuoy className="w-5 h-5" />
                 </div>
                 <div>
                   <Dialog.Title className="text-base font-semibold text-kumo-default">
@@ -830,7 +751,7 @@ export const ManagerTicketsPage: React.FC = () => {
                   </div>
                 </div>
                 {isLoadingDetail && (
-                  <RefreshCw className="w-4 h-4 text-kumo-brand animate-spin ml-2" />
+                  <ArrowsClockwise className="w-4 h-4 text-kumo-brand animate-spin ml-2" />
                 )}
               </div>
               <Dialog.Close
@@ -851,7 +772,7 @@ export const ManagerTicketsPage: React.FC = () => {
                 {/* Header Information Card */}
                 <div className="p-4 bg-kumo-control rounded-lg ring ring-kumo-line space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-mono font-bold text-base text-kumo-brand">
+                    <span className="font-mono font-semibold text-base text-kumo-brand">
                       {selectedTicket.ticket_no}
                     </span>
                     <div className="flex items-center gap-2">
@@ -882,7 +803,7 @@ export const ManagerTicketsPage: React.FC = () => {
                     <span className="text-xs text-kumo-subtle block font-medium">
                       Vị trí kho ảnh hưởng:
                     </span>
-                    <span className="text-sm font-bold text-kumo-brand font-mono block whitespace-nowrap">
+                    <span className="text-sm font-semibold text-kumo-brand font-mono block whitespace-nowrap">
                       {selectedTicket.storage_unit?.code || 'Khu vực chung'}
                     </span>
                     <span className="text-xs text-kumo-subtle block">
@@ -929,10 +850,10 @@ export const ManagerTicketsPage: React.FC = () => {
                 {/* Resolution note if any */}
                 {selectedTicket.resolution && (
                   <div className="space-y-1.5">
-                    <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 block">
+                    <span className="text-xs font-semibold text-kumo-success block">
                       Kết quả xử lý & Ghi chú kỹ thuật:
                     </span>
-                    <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 rounded-lg border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-sm leading-relaxed">
+                    <div className="p-4 bg-kumo-success-tint rounded-lg text-kumo-default text-sm leading-relaxed">
                       {selectedTicket.resolution}
                     </div>
                   </div>
@@ -1005,9 +926,7 @@ export const ManagerTicketsPage: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-kumo-line pb-3">
               <div className="flex items-center gap-2">
-                <span className="h-lh flex items-center text-kumo-danger">
-                  <AlertCircle className="w-5 h-5 text-red-500" />
-                </span>
+                <WarningCircle className="w-5 h-5 text-kumo-danger" />
                 <Dialog.Title className="text-base font-semibold text-kumo-default">
                   Xác nhận xóa phiếu sự cố
                 </Dialog.Title>
@@ -1033,8 +952,8 @@ export const ManagerTicketsPage: React.FC = () => {
                   toàn bộ dữ liệu phiếu khỏi hệ thống và không thể hoàn tác.
                 </Text>
 
-                <div className="p-3 bg-red-500/10 rounded-lg ring ring-red-500/20 text-xs space-y-1">
-                  <div className="flex items-center justify-between font-mono font-semibold text-red-700 dark:text-red-400">
+                <div className="p-3 bg-kumo-danger-tint rounded-lg text-xs space-y-1">
+                  <div className="flex items-center justify-between font-mono font-semibold text-kumo-danger">
                     <span className="whitespace-nowrap">{ticketToDelete.ticket_no}</span>
                     <span className="whitespace-nowrap">
                       Kho: {ticketToDelete.storage_unit?.code || 'Chung'}
@@ -1060,7 +979,7 @@ export const ManagerTicketsPage: React.FC = () => {
                     variant="destructive"
                     loading={isDeleting}
                     disabled={isDeleting}
-                    icon={<Trash2 className="w-4 h-4" />}
+                    icon={<Trash className="w-4 h-4" />}
                     onClick={handleConfirmDelete}
                   >
                     Xác nhận xóa

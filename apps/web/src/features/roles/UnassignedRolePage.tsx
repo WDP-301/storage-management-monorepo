@@ -1,5 +1,5 @@
 import { Button, LayerCard, Text } from '@cloudflare/kumo';
-import { LogOut, RefreshCw, UserX } from 'lucide-react';
+import { ArrowsClockwise, SignOut, UserMinus } from '@phosphor-icons/react';
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -24,7 +24,7 @@ export const UnassignedRolePage: React.FC = () => {
     <div className="min-h-[70vh] flex items-center justify-center p-6">
       <LayerCard className="max-w-md w-full p-6 text-center ring ring-kumo-line">
         <div className="w-12 h-12 rounded-full bg-kumo-tint text-kumo-subtle flex items-center justify-center mx-auto mb-4">
-          <UserX className="w-6 h-6 text-kumo-warning" />
+          <UserMinus className="w-6 h-6 text-kumo-warning" />
         </div>
 
         <div className="grid gap-2 mb-6">
@@ -48,14 +48,14 @@ export const UnassignedRolePage: React.FC = () => {
           <Button
             variant="secondary"
             loading={isRefreshing}
-            icon={<RefreshCw className="w-4 h-4" />}
+            icon={<ArrowsClockwise className="w-4 h-4" />}
             onClick={handleRefresh}
           >
             Làm mới quyền
           </Button>
           <Button
             variant="secondary-destructive"
-            icon={<LogOut className="w-4 h-4" />}
+            icon={<SignOut className="w-4 h-4" />}
             onClick={() => void logout()}
           >
             Đăng xuất

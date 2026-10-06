@@ -1,13 +1,15 @@
 import { Badge, Button, Text } from '@cloudflare/kumo';
 import { UserRole } from '@storage/types';
-import { Boxes, LogOut, Menu, RefreshCw, ShieldCheck, User, X } from 'lucide-react';
+import { Boxes, Building2, LogOut, Menu, RefreshCw, ShieldCheck, User, X } from 'lucide-react';
 import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useFacility } from '../context/FacilityContext';
 import { getRoleDefaultPath, getRoleTitle } from '../lib/roles';
 
 export const AppShell: React.FC = () => {
   const { user, activeRole, logout, switchRole } = useAuth();
+  const { facilities, selectedFacility, selectFacility } = useFacility();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -345,6 +347,23 @@ export const AppShell: React.FC = () => {
         <header className="h-16 px-6 bg-kumo-base border-b border-kumo-line sticky top-0 z-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Text as="h2">{pageTitle}</Text>
+            {facilities.length > 0 && (
+              <div className="flex items-center gap-2 pl-3 border-l border-kumo-line">
+                <Building2 className="w-4 h-4 text-kumo-brand" />
+                <select
+                  aria-label="Cơ sở đang quản lý"
+                  value={selectedFacility?.id ?? ''}
+                  onChange={(e) => selectFacility(e.target.value)}
+                  className="h-8 text-xs px-2 rounded-md bg-kumo-base border border-kumo-line text-kumo-default"
+                >
+                  {facilities.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name} ({f.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-3">

@@ -5,6 +5,7 @@ import { StorageUnitStatus } from '@storage/types';
 import { Type } from 'class-transformer';
 import {
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -111,4 +112,37 @@ export class StorageUnitListResponseDto {
 
   @ApiProperty({ type: PaginationMetaDto })
   meta: PaginationMetaDto;
+}
+
+export class ManagedUnitsQueryDto {
+  @ApiProperty({ format: 'uuid', description: 'Facility the caller is assigned to' })
+  @IsUUID('all')
+  facilityId: string;
+
+  @ApiPropertyOptional({ enum: StorageUnitStatus, description: 'Filter by status' })
+  @IsEnum(StorageUnitStatus)
+  @IsOptional()
+  status?: StorageUnitStatus;
+
+  @ApiPropertyOptional({ default: 1, minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  @Min(1)
+  page?: number = 1;
+
+  @ApiPropertyOptional({ default: 100, minimum: 1, maximum: 100 })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  @Min(1)
+  @Max(100)
+  limit?: number = 100;
+}
+
+/** Facility managers may only toggle operational status, not rewrite inventory. */
+export class UpdateUnitStatusDto {
+  @ApiProperty({ enum: [StorageUnitStatus.AVAILABLE, StorageUnitStatus.MAINTENANCE] })
+  @IsIn([StorageUnitStatus.AVAILABLE, StorageUnitStatus.MAINTENANCE])
+  status: StorageUnitStatus;
 }

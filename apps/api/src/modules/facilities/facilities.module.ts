@@ -1,6 +1,7 @@
 import { Facility } from '@entities/facility.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitType } from '@entities/unit-type.entity';
+import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { AuthModule } from '@modules/auth/auth.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -13,7 +14,7 @@ import { UnitTypesService } from './unit-types.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Facility, UnitType, StorageUnit]),
+    TypeOrmModule.forFeature([Facility, UnitType, StorageUnit, UserRoleAssignment]),
     AuthModule, // provides SessionGuard and RolesGuard for controllers
   ],
   controllers: [FacilitiesController, UnitTypesController, StorageUnitsController],

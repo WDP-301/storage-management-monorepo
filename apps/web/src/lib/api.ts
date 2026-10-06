@@ -1,11 +1,15 @@
 import {
   ApiResponse,
+  ChangeRequestStatus,
   IStorageItem,
   IStorageLocation,
   PresignedUploadUrlResponse,
   StorageDashboardSummary,
+  StorageUnitStatus,
   SystemSettingRecord,
   SystemSettingsResponse,
+  TicketPriority,
+  TicketStatus,
   UpdateSettingsResponse,
   UploadedFileResponse,
 } from '@storage/types';
@@ -181,6 +185,107 @@ export const StorageApi = {
       params: { fileKey },
     });
     return res.data.data.downloadUrl;
+  },
+};
+
+/**
+ * Facility / unit / ticket portal services (facility-scoped roles)
+ */
+export interface FacilityRecord {
+  id: string;
+  code: string;
+  name: string;
+  addressLine: string;
+  status: string;
+}
+
+export interface ManagedUnit {
+  id: string;
+  code: string;
+  zone?: string | null;
+  areaM2: string;
+  status: StorageUnitStatus;
+  unitType: { id: string; code: string; name: string; monthlyPrice: string };
+}
+
+export interface UnitChangeRequestRecord {
+  id: string;
+  status: ChangeRequestStatus;
+  reason: string;
+  rent_difference: number;
+  decision_note: string | null;
+  facility_id: string | null;
+  created_at: string;
+  requester: { id: string; full_name: string; email: string } | null;
+  old_unit: { id: string; code: string } | null;
+  new_unit: { id: string; code: string } | null;
+}
+
+export interface ServiceTicketRecord {
+  id: string;
+  ticket_no: string;
+  subject: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  created_at: string;
+  facility: { id: string; code: string } | null;
+  customer: { id: string; full_name: string } | null;
+  assignee: { id: string; full_name: string } | null;
+}
+
+interface Paged {
+  meta: { total: number; page: number; limit: number; totalPages: number };
+}
+
+export const FacilitiesApi = {
+  mine: async (): Promise<FacilityRecord[]> => {
+    const res = await apiClient.get<ApiResponse<FacilityRecord[]>>('/facilities/mine');
+    return res.data.data;
+  },
+};
+
+export const UnitsApi = {
+  managed: async (facilityId: string) => {
+    const res = await apiClient.get<ApiResponse<{ units: ManagedUnit[] } & Paged>>(
+      '/storage-units/managed',
+      { params: { facilityId } },
+    );
+    return res.data.data;
+  },
+
+  updateStatus: async (id: string, status: 'AVAILABLE' | 'MAINTENANCE') => {
+    const res = await apiClient.patch<ApiResponse<ManagedUnit>>(`/storage-units/${id}/status`, {
+      status,
+    });
+    return res.data.data;
+  },
+};
+
+export const ChangeRequestsApi = {
+  list: async () => {
+    const res = await apiClient.get<ApiResponse<{ requests: UnitChangeRequestRecord[] } & Paged>>(
+      '/unit-change-requests',
+      { params: { limit: 50 } },
+    );
+    return res.data.data;
+  },
+
+  decide: async (id: string, decision: 'APPROVED' | 'REJECTED', decisionNote?: string) => {
+    const res = await apiClient.patch<ApiResponse<{ request: UnitChangeRequestRecord }>>(
+      `/unit-change-requests/${id}/decide`,
+      { decision, decisionNote },
+    );
+    return res.data.data;
+  },
+};
+
+export const TicketsApi = {
+  list: async (limit = 50) => {
+    const res = await apiClient.get<ApiResponse<{ tickets: ServiceTicketRecord[] } & Paged>>(
+      '/service-tickets',
+      { params: { limit } },
+    );
+    return res.data.data;
   },
 };
 

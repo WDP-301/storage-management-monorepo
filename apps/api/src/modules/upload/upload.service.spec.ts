@@ -18,7 +18,7 @@ describe('UploadService error contract', () => {
   it('returns FILE_NOT_FOUND when the requested object does not exist', async () => {
     send.mockRejectedValue(Object.assign(new Error('missing'), { name: 'NoSuchKey' }));
 
-    await expect(service.getFileStream('missing.txt')).rejects.toMatchObject({
+    await expect(service.getFileStream('uploads/missing.txt')).rejects.toMatchObject({
       status: 404,
       response: { code: 'FILE_NOT_FOUND' },
     });
@@ -28,7 +28,7 @@ describe('UploadService error contract', () => {
     send.mockRejectedValue(new Error('vendor secret'));
 
     await expect(
-      service.uploadBuffer('file.txt', Buffer.from('data'), 'text/plain'),
+      service.uploadBuffer('uploads/file.txt', Buffer.from('data'), 'text/plain'),
     ).rejects.toMatchObject({
       status: 500,
       response: {
@@ -42,9 +42,24 @@ describe('UploadService error contract', () => {
     const stream = Readable.from('data');
     send.mockResolvedValue({ Body: stream, ContentType: 'text/plain' });
 
-    await expect(service.getFileStream('file.txt')).resolves.toEqual({
+    await expect(service.getFileStream('uploads/file.txt')).resolves.toEqual({
       stream,
       contentType: 'text/plain',
     });
   });
+
+  it.each([['documents/id-card.png'], ['../escape.png'], ['uploads/../escape.png']])(
+    'rejects keys outside uploads/: %s',
+    async (fileKey) => {
+      await expect(service.getFileStream(fileKey)).rejects.toMatchObject({
+        status: 400,
+        response: { code: 'VALIDATION_FAILED' },
+      });
+      await expect(service.generatePresignedDownloadUrl(fileKey)).rejects.toMatchObject({
+        status: 400,
+      });
+      await expect(service.deleteFile(fileKey)).rejects.toMatchObject({ status: 400 });
+      expect(send).not.toHaveBeenCalled();
+    },
+  );
 });

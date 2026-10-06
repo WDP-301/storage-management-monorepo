@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { Readable } from 'node:stream';
 import {
   CreateBucketCommand,
@@ -67,21 +68,34 @@ export class UploadService implements OnModuleInit {
     }
   }
 
+  // ponytail: all externally reachable keys live under 'uploads/' — no per-user
+  // ownership model. Upgrade path: owner column / private documents bucket.
+  private assertUploadsKey(fileKey: string): void {
+    if (!fileKey.startsWith('uploads/') || fileKey.includes('..')) {
+      throw new DomainException(
+        ErrorCode.VALIDATION_FAILED,
+        'fileKey must reference an object under uploads/',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
   async generatePresignedUploadUrl(
     fileName: string,
     mimeType: string,
-    folder = 'uploads',
+    fileSize: number,
   ): Promise<PresignedUploadUrlResponse> {
     const cleanFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const timestamp = Date.now();
-    const randomHex = Math.random().toString(36).substring(2, 8);
-    const fileKey = `${folder}/${timestamp}-${randomHex}-${cleanFileName}`;
+    const fileKey = `uploads/${Date.now()}-${randomBytes(4).toString('hex')}-${cleanFileName}`;
 
     try {
+      // ContentLength is signed into the URL — S3 rejects the PUT if the
+      // actual body size differs, so fileSize bounds the upload.
       const command = new PutObjectCommand({
         Bucket: this.bucket,
         Key: fileKey,
         ContentType: mimeType,
+        ContentLength: fileSize,
       });
 
       const uploadUrl = await getSignedUrl(this.s3Client, command, {
@@ -106,6 +120,7 @@ export class UploadService implements OnModuleInit {
   }
 
   async generatePresignedDownloadUrl(fileKey: string, expiresIn = 3600): Promise<string> {
+    this.assertUploadsKey(fileKey);
     try {
       const command = new GetObjectCommand({
         Bucket: this.bucket,
@@ -154,6 +169,7 @@ export class UploadService implements OnModuleInit {
   }
 
   async getFileStream(fileKey: string): Promise<{ stream: Readable; contentType: string }> {
+    this.assertUploadsKey(fileKey);
     try {
       const res = await this.s3Client.send(
         new GetObjectCommand({
@@ -184,6 +200,7 @@ export class UploadService implements OnModuleInit {
   }
 
   async deleteFile(fileKey: string): Promise<{ key: string; deleted: boolean }> {
+    this.assertUploadsKey(fileKey);
     try {
       await this.s3Client.send(
         new DeleteObjectCommand({

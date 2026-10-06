@@ -1,5 +1,7 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsInt, IsNotEmpty, IsString, Max, Min } from 'class-validator';
+
+export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 
 export class GetPresignedUrlDto {
   @ApiProperty({ example: 'pallet-photo-001.jpg', description: 'Original file name' })
@@ -12,12 +14,14 @@ export class GetPresignedUrlDto {
   @IsNotEmpty()
   mimeType: string;
 
-  @ApiPropertyOptional({
-    example: 'inventory-items',
-    default: 'uploads',
-    description: 'Subfolder path in S3',
+  @ApiProperty({
+    example: 102400,
+    description:
+      'Exact size of the file in bytes. Signed into the presigned URL — the PUT fails unless Content-Length matches, so this bounds upload size.',
+    maximum: MAX_UPLOAD_BYTES,
   })
-  @IsString()
-  @IsOptional()
-  folder?: string = 'uploads';
+  @IsInt()
+  @Min(1)
+  @Max(MAX_UPLOAD_BYTES)
+  fileSize: number;
 }

@@ -23,9 +23,9 @@ export class PlacesController {
   @ApiOperation({
     summary: 'Find storage facilities near a place',
     description:
-      'Resolves a Goong place_id to lat/lng, then returns facilities within the given radius (km) sorted by distance.',
+      'Returns facilities within the given radius (km) sorted by distance. Center is either a Goong place_id or raw lat/lng (e.g. user GPS).',
   })
   findNearby(@Query() query: NearbyQueryDto) {
-    return this.placesService.findNearby(query.place_id, query.radius ?? 5);
+    return this.placesService.findNearby(query);
   }
 }

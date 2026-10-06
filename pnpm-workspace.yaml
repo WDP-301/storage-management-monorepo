@@ -1,8 +1,3 @@
 packages:
   - "apps/*"
   - "packages/*"
-allowBuilds:
-  '@parcel/watcher': set this to true or false
-  '@scarf/scarf': set this to true or false
-  lefthook: set this to true or false
-  unrs-resolver: set this to true or false

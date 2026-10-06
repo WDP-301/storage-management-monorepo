@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "description": "Storage Management Monorepo — Mobile (Expo SDK 54) + Web (React 19 Vite) + API (NestJS + PostgreSQL + Cloudflare R2)",
-  "packageManager": "pnpm@12.8.1",
+  "packageManager": "pnpm@10.23.0",
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"

@@ -115,6 +115,11 @@ export class BookingsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancel booking and release held units' })
   @ApiResponse({ status: 200, type: BookingActionResponseDto })
+  @ApiResponse({
+    status: 409,
+    description: 'Booking is not in a cancellable status',
+    type: ApiErrorResponseDto,
+  })
   cancel(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.bookingsService.cancel(id, user);
   }

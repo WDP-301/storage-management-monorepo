@@ -15,7 +15,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ENV_KEY } from '@shared/constants';
-import { DomainException } from '@shared/exceptions/domain.exception';
+import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { canonicalStringify } from '@shared/utils/canonical-json.util';
 import { claimIdempotencyKey, releaseIdempotencyKey } from '@shared/utils/idempotency-key.util';
@@ -410,7 +410,60 @@ export class BookingsService implements OnApplicationBootstrap {
         HttpStatus.FORBIDDEN,
       );
     }
-    return { message: 'Booking cancel — not yet implemented' };
+
+    const outcome = await this.dataSource.transaction(async (em) => {
+      // Lock the booking row — a SePay webhook may be confirming it concurrently.
+      const locked = await em.findOne(Booking, {
+        where: { id: booking.id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!locked) notFound('Booking', booking.id);
+      if (locked.status === BookingStatus.CANCELLED) return 'already-cancelled' as const;
+      if (!STATUSES_AWAITING_DEPOSIT.includes(locked.status)) {
+        throw new DomainException(
+          ErrorCode.BOOKING_NOT_CANCELLABLE,
+          locked.status === BookingStatus.CONFIRMED
+            ? 'Booking đã được xác nhận tiền cọc — vui lòng liên hệ nhân viên để được hỗ trợ'
+            : `Booking đang ở trạng thái ${locked.status}, không thể hủy`,
+          HttpStatus.CONFLICT,
+          { bookingId: locked.id, status: locked.status },
+        );
+      }
+
+      const now = new Date();
+      await em.update(Booking, { id: locked.id }, { status: BookingStatus.CANCELLED });
+
+      const activeHolds = await em.find(UnitHold, {
+        where: { bookingId: locked.id, status: HoldStatus.ACTIVE },
+      });
+      if (activeHolds.length > 0) {
+        await em.update(
+          UnitHold,
+          { bookingId: locked.id, status: HoldStatus.ACTIVE },
+          { status: HoldStatus.RELEASED, releasedAt: now },
+        );
+        await em.update(
+          StorageUnit,
+          { id: In(activeHolds.map((h) => h.storageUnitId)), status: StorageUnitStatus.HELD },
+          { status: StorageUnitStatus.AVAILABLE },
+        );
+      }
+
+      return em.getRepository(Payment).sum('amount', {
+        bookingId: locked.id,
+        status: PaymentStatus.SUCCEEDED,
+      });
+    });
+
+    if (outcome === 'already-cancelled') {
+      return { message: 'Booking đã được hủy trước đó' };
+    }
+    if (new Decimal(outcome ?? 0).gt(0)) {
+      this.logger.warn(
+        `Booking ${booking.bookingNo} cancelled with ${outcome} already paid — manual reconciliation needed`,
+      );
+    }
+    return { message: 'Đã hủy booking và giải phóng chỗ giữ' };
   }
 
   // ---------------------------------------------------------------------------

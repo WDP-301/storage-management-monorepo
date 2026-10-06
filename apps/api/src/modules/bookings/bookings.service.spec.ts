@@ -49,7 +49,13 @@ const buildEvent = (overrides: Partial<PaymentReceivedEvent> = {}): PaymentRecei
 
 describe('BookingsService.handlePaymentReceived', () => {
   let bookingRepo: { find: jest.Mock };
-  let em: { update: jest.Mock; count: jest.Mock; save: jest.Mock };
+  let em: {
+    findOne: jest.Mock;
+    update: jest.Mock;
+    count: jest.Mock;
+    save: jest.Mock;
+    getRepository: jest.Mock;
+  };
   let paymentRepo: { exists: jest.Mock; sum: jest.Mock; save: jest.Mock };
   let dataSource: { transaction: jest.Mock; getRepository: jest.Mock };
   let service: BookingsService;
@@ -58,11 +64,17 @@ describe('BookingsService.handlePaymentReceived', () => {
 
   beforeEach(() => {
     bookingRepo = { find: jest.fn() };
-    em = { update: jest.fn(), count: jest.fn(), save: jest.fn() };
     paymentRepo = {
       exists: jest.fn().mockResolvedValue(false),
       sum: jest.fn().mockResolvedValue(null),
       save: jest.fn().mockResolvedValue({}),
+    };
+    em = {
+      findOne: jest.fn().mockResolvedValue(buildBooking()),
+      update: jest.fn(),
+      count: jest.fn(),
+      save: jest.fn(),
+      getRepository: jest.fn(() => paymentRepo),
     };
     dataSource = {
       transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)),
@@ -73,6 +85,7 @@ describe('BookingsService.handlePaymentReceived', () => {
       {} as never,
       dataSource as never,
       { get: jest.fn() } as never,
+      {} as never,
     );
     warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
     logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation();
@@ -114,9 +127,9 @@ describe('BookingsService.handlePaymentReceived', () => {
 
     await service.handlePaymentReceived(buildEvent());
 
-    // The confirming transaction rolled back — no receipt inside it…
-    expect(em.save).not.toHaveBeenCalled();
-    // …but the money still reached the bank, so a receipt is recorded for reconciliation.
+    // The receipt was attempted inside the confirming transaction and rolled back…
+    expect(em.save).toHaveBeenCalledWith(Payment, expect.objectContaining({ providerRef: '42' }));
+    // …but the money still reached the bank, so a receipt is re-recorded for reconciliation.
     expect(paymentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ providerRef: '42' }));
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('arrived after holds expired'));
     expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('confirmed'));
@@ -136,10 +149,18 @@ describe('BookingsService.handlePaymentReceived', () => {
 
     await service.handlePaymentReceived(buildEvent({ amount: 500_000 }));
 
-    expect(paymentRepo.save).toHaveBeenCalledWith(
+    expect(dataSource.transaction).toHaveBeenCalled();
+    // Receipt is committed inside the locked transaction — no out-of-tx rewrite needed.
+    expect(em.save).toHaveBeenCalledWith(
+      Payment,
       expect.objectContaining({ amount: 500_000, providerRef: '42' }),
     );
-    expect(dataSource.transaction).not.toHaveBeenCalled();
+    expect(paymentRepo.save).not.toHaveBeenCalled();
+    expect(em.update).not.toHaveBeenCalledWith(
+      Booking,
+      expect.anything(),
+      expect.objectContaining({ status: BookingStatus.CONFIRMED }),
+    );
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('< deposit'));
   });
 
@@ -175,9 +196,31 @@ describe('BookingsService.handlePaymentReceived', () => {
     await service.handlePaymentReceived(buildEvent());
 
     expect(em.update).toHaveBeenCalledTimes(1);
-    expect(em.save).not.toHaveBeenCalled(); // rolled back before its own insert
     expect(paymentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ providerRef: '42' }));
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('status changed concurrently'));
+  });
+
+  it('keeps the receipt when the booking is no longer awaiting deposit under the lock', async () => {
+    bookingRepo.find.mockResolvedValue([buildBooking()]);
+    em.findOne.mockResolvedValue(buildBooking({ status: BookingStatus.CONFIRMED }));
+
+    await service.handlePaymentReceived(buildEvent());
+
+    expect(em.save).not.toHaveBeenCalled();
+    expect(em.update).not.toHaveBeenCalled();
+    expect(paymentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ providerRef: '42' }));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('status changed concurrently'));
+  });
+
+  it('treats a unique-violation on provider_ref as a duplicate delivery', async () => {
+    bookingRepo.find.mockResolvedValue([buildBooking()]);
+    em.save.mockRejectedValue({ code: '23505' }); // raced past the exists() check
+
+    await service.handlePaymentReceived(buildEvent());
+
+    expect(paymentRepo.save).not.toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('already recorded'));
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -228,6 +271,7 @@ describe('BookingsService.cancel', () => {
       {} as never,
       dataSource as never,
       { get: jest.fn() } as never,
+      {} as never,
     );
     warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
   });

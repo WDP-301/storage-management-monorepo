@@ -17,7 +17,8 @@ import {
 } from 'class-validator';
 
 /**
- * Validates that requestedStartAt is from today onwards and at most 30 days in advance.
+ * Validates that requestedStartAt is from today onwards. The lead-time cap is
+ * dynamic (`booking.lead_days` setting) and enforced in BookingsService.
  */
 export function IsValidBookingStartDate(validationOptions?: ValidationOptions) {
   return (object: object, propertyName: string) => {
@@ -43,15 +44,11 @@ export function IsValidBookingStartDate(validationOptions?: ValidationOptions) {
             0,
             0,
           );
-          // 30 days from today (inclusive to end of the 30th day)
-          const maxAdvanceDate = new Date(
-            startOfToday.getTime() + 30 * 24 * 60 * 60 * 1000 + (24 * 60 * 60 * 1000 - 1),
-          );
 
-          return date >= startOfToday && date <= maxAdvanceDate;
+          return date >= startOfToday;
         },
         defaultMessage(args: ValidationArguments) {
-          return `${args.property} phải từ ngày hôm nay trở đi và tối đa trước 30 ngày`;
+          return `${args.property} phải từ ngày hôm nay trở đi`;
         },
       },
     });
@@ -94,7 +91,8 @@ export class CreateBookingItemDto {
 
   @ApiProperty({
     example: '2026-10-01T00:00:00.000Z',
-    description: 'Requested rental start date for this unit (from today up to 30 days in advance)',
+    description:
+      'Requested rental start date for this unit (from today; max lead time is the booking.lead_days setting)',
   })
   @IsDateString()
   @IsValidBookingStartDate()

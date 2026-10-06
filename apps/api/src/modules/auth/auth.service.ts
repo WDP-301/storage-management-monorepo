@@ -8,6 +8,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
+import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import { DocumentType, UserRole, UserStatus } from '@storage/types';
 import { DataSource, Repository } from 'typeorm';
 import { AuthCookieService } from './auth.cookie';
@@ -69,27 +70,40 @@ export class AuthService {
 
     const passwordHash = await hashPassword(dto.password);
 
-    const user = await this.dataSource.transaction(async (manager) => {
-      const created = await manager.save(
-        manager.create(AppUser, {
-          email,
-          phone: dto.phone.trim(),
-          passwordHash,
-          fullName: dto.fullName.trim(),
-          status: UserStatus.ACTIVE,
-        }),
-      );
+    let user: AppUser;
+    try {
+      user = await this.dataSource.transaction(async (manager) => {
+        const created = await manager.save(
+          manager.create(AppUser, {
+            email,
+            phone: dto.phone.trim(),
+            passwordHash,
+            fullName: dto.fullName.trim(),
+            status: UserStatus.ACTIVE,
+          }),
+        );
 
-      await manager.save(
-        manager.create(UserRoleAssignment, {
-          userId: created.id,
-          role: UserRole.CUSTOMER,
-          startsAt: new Date(),
-        }),
-      );
+        await manager.save(
+          manager.create(UserRoleAssignment, {
+            userId: created.id,
+            role: UserRole.CUSTOMER,
+            startsAt: new Date(),
+          }),
+        );
 
-      return created;
-    });
+        return created;
+      });
+    } catch (err) {
+      // A concurrent register beat the pre-check to the unique index — same outcome.
+      if (isUniqueViolation(err)) {
+        throw new DomainException(
+          ErrorCode.EMAIL_ALREADY_REGISTERED,
+          'Email is already registered',
+          HttpStatus.CONFLICT,
+        );
+      }
+      throw err;
+    }
 
     return this.toAuthUser(user, [UserRole.CUSTOMER]);
   }

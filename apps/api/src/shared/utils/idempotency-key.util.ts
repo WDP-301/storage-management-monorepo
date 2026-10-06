@@ -6,7 +6,12 @@ import { IdempotencyStatus } from '@storage/types';
 import type { Repository } from 'typeorm';
 
 const IDEMPOTENCY_TTL_HOURS = 24;
-const STALE_PROCESSING_MS = 60 * 1000;
+const STALE_PROCESSING_SECONDS = 60;
+
+export interface ClaimIdempotencyOptions {
+  ttlHours?: number;
+  staleSeconds?: number;
+}
 
 const logger = new Logger('IdempotencyKey');
 
@@ -41,14 +46,18 @@ export async function claimIdempotencyKey(
   key: string,
   userId: string,
   requestHash: string,
+  opts?: ClaimIdempotencyOptions,
 ): Promise<Record<string, unknown> | null> {
+  const ttlHours = opts?.ttlHours ?? IDEMPOTENCY_TTL_HOURS;
+  const staleSeconds = opts?.staleSeconds ?? STALE_PROCESSING_SECONDS;
+
   const [idem] = await repo.query<IdemRow[]>(
     `INSERT INTO idempotency_keys (key, user_id, status, request_hash, expires_at)
      VALUES ($1, $2, $3, $4, now() + make_interval(hours => $5))
      ON CONFLICT (key, user_id) DO UPDATE
        SET expires_at = idempotency_keys.expires_at
      RETURNING *, (xmax = 0) AS is_new_insert`,
-    [key, userId, IdempotencyStatus.PROCESSING, requestHash, IDEMPOTENCY_TTL_HOURS],
+    [key, userId, IdempotencyStatus.PROCESSING, requestHash, ttlHours],
   );
 
   if (idem.is_new_insert) {
@@ -66,7 +75,7 @@ export async function claimIdempotencyKey(
     return idem.response_body ?? {};
   }
 
-  const isStale = Date.now() - new Date(idem.created_at).getTime() > STALE_PROCESSING_MS;
+  const isStale = Date.now() - new Date(idem.created_at).getTime() > staleSeconds * 1000;
   if (!isStale) {
     throw keyConflict();
   }
@@ -82,9 +91,9 @@ export async function claimIdempotencyKey(
      WHERE key = $3
        AND user_id = $4
        AND status = $5
-       AND created_at <= now() - interval '60 seconds'
+       AND created_at <= now() - make_interval(secs => $6)
      RETURNING *, true AS is_new_insert`,
-    [requestHash, IDEMPOTENCY_TTL_HOURS, key, userId, IdempotencyStatus.PROCESSING],
+    [requestHash, ttlHours, key, userId, IdempotencyStatus.PROCESSING, staleSeconds],
   );
 
   if (!reclaimed || reclaimed.length === 0) {

@@ -9,6 +9,7 @@ import type { AuthUser } from '@modules/auth/types/auth-user';
 import { generatePaymentNo } from '@modules/payments/payment-no.util';
 import { PAYMENT_EVENTS, PaymentReceivedEvent } from '@modules/payments/types/payment';
 import { buildVietQrUrl } from '@modules/payments/vietqr.util';
+import { SettingsService } from '@modules/settings/settings.service';
 import { HttpStatus, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
@@ -34,7 +35,6 @@ import { DataSource, DeepPartial, In, LessThan, MoreThan, Not, Repository } from
 import { extractBookingNos, generateBookingNo } from './booking-no.util';
 import { BookingResponseDto, CreateBookingDto } from './dto/booking.dto';
 
-const HOLD_MINUTES = 15;
 const STATUSES_AWAITING_DEPOSIT: BookingStatus[] = [
   BookingStatus.HOLDING,
   BookingStatus.PENDING_DEPOSIT,
@@ -65,6 +65,7 @@ export class BookingsService implements OnApplicationBootstrap {
     private readonly idempotencyRepo: Repository<IdempotencyKey>,
     private readonly dataSource: DataSource,
     private readonly configService: ConfigService,
+    private readonly settings: SettingsService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -90,12 +91,18 @@ export class BookingsService implements OnApplicationBootstrap {
   ): Promise<{ data: Record<string, unknown>; isRetry: boolean }> {
     const requestHash = hashBody(dto as unknown as Record<string, unknown>);
 
+    const [idemTtlHours, idemStaleSeconds] = await Promise.all([
+      this.settings.getIdempotencyTtlHours(),
+      this.settings.getIdempotencyStaleSeconds(),
+    ]);
+
     // ── 1. Idempotency check via atomic INSERT ON CONFLICT ─────────────────
     const cached = await claimIdempotencyKey(
       this.idempotencyRepo,
       idempotencyKey,
       user.id,
       requestHash,
+      { ttlHours: idemTtlHours, staleSeconds: idemStaleSeconds },
     );
     if (cached) {
       return { data: cached, isRetry: true };
@@ -103,6 +110,53 @@ export class BookingsService implements OnApplicationBootstrap {
 
     let isCommitted = false;
     try {
+      // Business rules are admin-configurable — load them per request (60s cached inside).
+      const [holdMinutes, leadDays, minRentalMonths, maxRentalMonths, maxUnits, depositMonths] =
+        await Promise.all([
+          this.settings.getBookingHoldMinutes(),
+          this.settings.getBookingLeadDays(),
+          this.settings.getBookingMinRentalMonths(),
+          this.settings.getBookingMaxRentalMonths(),
+          this.settings.getBookingMaxUnitsPerBooking(),
+          this.settings.getDepositDefaultMonths(),
+        ]);
+
+      const fieldErrors: Array<{ field: string; code: string; message: string }> = [];
+      if (dto.items.length > maxUnits) {
+        fieldErrors.push({
+          field: 'items',
+          code: 'maxSize',
+          message: `Tối đa ${maxUnits} storage unit mỗi booking`,
+        });
+      }
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const maxStartAt = new Date(startOfToday.getTime() + leadDays * 86_400_000 + 86_399_999);
+      dto.items.forEach((item, i) => {
+        if (item.rentalMonths < minRentalMonths || item.rentalMonths > maxRentalMonths) {
+          fieldErrors.push({
+            field: `items.${i}.rentalMonths`,
+            code: 'range',
+            message: `Kỳ thuê phải từ ${minRentalMonths} đến ${maxRentalMonths} tháng`,
+          });
+        }
+        if (new Date(item.requestedStartAt) > maxStartAt) {
+          fieldErrors.push({
+            field: `items.${i}.requestedStartAt`,
+            code: 'maxLeadDays',
+            message: `Ngày bắt đầu tối đa trước ${leadDays} ngày`,
+          });
+        }
+      });
+      if (fieldErrors.length > 0) {
+        throw new DomainException(
+          ErrorCode.VALIDATION_FAILED,
+          'Validation failed',
+          HttpStatus.BAD_REQUEST,
+          { fields: fieldErrors },
+        );
+      }
+
       // ── 2. Pre-check — outside TX, no lock (fast path) ─────────────────────
       const unitIds = dto.items.map((i) => i.storageUnitId);
       const preCheckUnits = await this.dataSource.getRepository(StorageUnit).find({
@@ -188,7 +242,7 @@ export class BookingsService implements OnApplicationBootstrap {
           }
 
           const monthlyDec = new Decimal(unit.unitType.monthlyPrice);
-          const depositMonthsDec = new Decimal(unit.unitType.defaultDepositMonths ?? 1);
+          const depositMonthsDec = new Decimal(unit.unitType.defaultDepositMonths ?? depositMonths);
           const depositSnapshot = monthlyDec.times(depositMonthsDec).toFixed(2);
           const monthlyPriceSnapshot = monthlyDec.toFixed(2);
 
@@ -217,7 +271,7 @@ export class BookingsService implements OnApplicationBootstrap {
         });
         await em.save(Booking, booking);
 
-        const expiresAt = new Date(Date.now() + HOLD_MINUTES * 60 * 1000);
+        const expiresAt = new Date(Date.now() + holdMinutes * 60 * 1000);
 
         // Check if any unit currently has an active, unexpired hold
         const activeUnexpiredHold = await em
@@ -676,7 +730,8 @@ export class BookingsService implements OnApplicationBootstrap {
     const paymentRepo = this.dataSource.getRepository(Payment);
     const providerRef = String(event.sepayId);
 
-    // The bank-side transfer already happened; webhook redelivery must not double-record it.
+    // Fast-path dedupe — the partial unique index UQ_payments_provider_ref is the
+    // real guard if two deliveries race past this check.
     if (await paymentRepo.exists({ where: { providerRef } })) {
       this.logger.log(`Payment sepayId=${event.sepayId} already recorded, skipping`);
       return;
@@ -684,14 +739,6 @@ export class BookingsService implements OnApplicationBootstrap {
 
     const paidAmount = new Decimal(event.amount);
     const depositRequired = new Decimal(booking.depositTotal);
-
-    // Earlier partial transfers count toward the deposit so a top-up can complete it.
-    const priorPaid = new Decimal(
-      (await paymentRepo.sum('amount', {
-        bookingId: booking.id,
-        status: PaymentStatus.SUCCEEDED,
-      })) ?? 0,
-    );
 
     const payment = {
       paymentNo: generatePaymentNo(),
@@ -705,20 +752,39 @@ export class BookingsService implements OnApplicationBootstrap {
       paidAt: new Date(event.transactionDate),
     };
 
-    if (paidAmount.plus(priorPaid).lt(depositRequired)) {
-      // The money is still real — keep the receipt; the booking stays pending until covered.
-      await paymentRepo.save(payment);
-      this.logger.warn(
-        `Payment sepayId=${event.sepayId} amount=${event.amount} (received ${paidAmount.plus(priorPaid)}) < deposit ${booking.depositTotal} for booking ${booking.bookingNo} — recorded, awaiting the remainder`,
-      );
-      return;
-    }
-
     const now = new Date();
-    let outcome: 'confirmed' | 'late' | 'status-changed';
+    let outcome: 'confirmed' | 'partial' | 'late' | 'status-changed' | 'already-recorded';
     try {
       outcome = await this.dataSource.transaction(async (em) => {
-        // Atomic guard — a concurrent webhook delivery may have confirmed already.
+        // Serialize all webhook deliveries for this booking on its row lock — priorPaid
+        // and the status transition are then always computed against committed state.
+        const locked = await em.findOne(Booking, {
+          where: { id: booking.id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!locked || !STATUSES_AWAITING_DEPOSIT.includes(locked.status)) {
+          return 'status-changed' as const;
+        }
+        if (await em.getRepository(Payment).exists({ where: { providerRef } })) {
+          return 'already-recorded' as const;
+        }
+
+        // Earlier partial transfers count toward the deposit so a top-up can complete it.
+        const priorPaid = new Decimal(
+          (await em.getRepository(Payment).sum('amount', {
+            bookingId: booking.id,
+            status: PaymentStatus.SUCCEEDED,
+          })) ?? 0,
+        );
+
+        // The transfer is real money regardless of outcome — record it first so every
+        // path (partial, confirm, rollback) leaves a receipt for reconciliation.
+        await em.save(Payment, payment);
+
+        if (paidAmount.plus(priorPaid).lt(depositRequired)) {
+          return 'partial' as const;
+        }
+
         const statusUpdate = await em.update(
           Booking,
           { id: booking.id, status: In(STATUSES_AWAITING_DEPOSIT) },
@@ -740,30 +806,48 @@ export class BookingsService implements OnApplicationBootstrap {
         });
         if (leftoverHolds > 0) throw new LatePaymentError();
 
-        // Receipt for the transfer that covered the deposit.
-        await em.save(Payment, payment);
         return 'confirmed' as const;
       });
     } catch (err) {
-      if (!(err instanceof LatePaymentError)) throw err;
-      outcome = 'late';
+      if (err instanceof LatePaymentError) {
+        outcome = 'late';
+      } else if (isUniqueViolation(err)) {
+        outcome = 'already-recorded';
+      } else {
+        throw err;
+      }
     }
 
     if (outcome === 'confirmed') {
       this.logger.log(
         `Booking ${booking.bookingNo} confirmed via payment sepayId=${event.sepayId} amount=${event.amount}`,
       );
-    } else {
-      // The transaction did not confirm, but the transfer still reached the bank —
-      // keep its receipt so reconciliation sees the money either way.
+      return;
+    }
+    if (outcome === 'already-recorded') {
+      this.logger.log(`Payment sepayId=${event.sepayId} already recorded, skipping`);
+      return;
+    }
+    if (outcome === 'partial') {
+      this.logger.warn(
+        `Payment sepayId=${event.sepayId} amount=${event.amount} < deposit ${booking.depositTotal} for booking ${booking.bookingNo} — recorded, awaiting the remainder`,
+      );
+      return;
+    }
+
+    // 'late' rolled the tx back (payment included) and 'status-changed' never wrote it —
+    // the transfer still reached the bank, so keep the receipt either way.
+    try {
       await paymentRepo.save(payment);
-      if (outcome === 'late') {
-        this.logger.warn(
-          `Payment sepayId=${event.sepayId} for booking ${booking.bookingNo} arrived after holds expired — manual reconciliation needed`,
-        );
-      } else {
-        this.logger.warn(`Booking ${booking.bookingNo} status changed concurrently, skipping`);
-      }
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+    }
+    if (outcome === 'late') {
+      this.logger.warn(
+        `Payment sepayId=${event.sepayId} for booking ${booking.bookingNo} arrived after holds expired — manual reconciliation needed`,
+      );
+    } else {
+      this.logger.warn(`Booking ${booking.bookingNo} status changed concurrently, skipping`);
     }
   }
 }

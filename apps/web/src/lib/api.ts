@@ -154,10 +154,11 @@ export const StorageApi = {
   getPresignedUploadUrl: async (
     fileName: string,
     mimeType: string,
+    fileSize: number,
   ): Promise<PresignedUploadUrlResponse> => {
     const res = await apiClient.post<ApiResponse<PresignedUploadUrlResponse>>(
       '/uploads/presigned-url',
-      { fileName, mimeType },
+      { fileName, mimeType, fileSize },
     );
     return res.data.data;
   },

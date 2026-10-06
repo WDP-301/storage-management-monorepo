@@ -6,6 +6,7 @@ import {
   CreateDateColumn,
   DeleteDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -13,6 +14,9 @@ import {
 } from 'typeorm';
 
 @Entity('contracts')
+// Partial unique index (kind='INITIAL' AND deleted_at IS NULL) — created by migration,
+// metadata kept sync-off so schema sync never tries to manage the WHERE clause.
+@Index('UQ_contract_initial_item', { synchronize: false })
 export class Contract {
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsOptional, Max, Min } from 'class-validator';
+import { TicketPriority, TicketStatus } from '@storage/types';
+import { IsEnum, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 
 export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 100;
@@ -22,4 +23,19 @@ export class ListTicketsQueryDto {
   @Min(1)
   @Max(MAX_PAGE_SIZE)
   limit?: number = DEFAULT_PAGE_SIZE;
+
+  @ApiPropertyOptional({ enum: TicketStatus, description: 'Filter by ticket status' })
+  @IsOptional()
+  @IsEnum(TicketStatus)
+  status?: TicketStatus;
+
+  @ApiPropertyOptional({ enum: TicketPriority, description: 'Filter by priority' })
+  @IsOptional()
+  @IsEnum(TicketPriority)
+  priority?: TicketPriority;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Filter by ticket type' })
+  @IsOptional()
+  @IsUUID('all')
+  typeId?: string;
 }

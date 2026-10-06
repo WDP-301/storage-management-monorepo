@@ -1,3 +1,4 @@
+import { SessionGuard } from '@modules/auth/guards/session.guard';
 import {
   Body,
   Controller,
@@ -8,6 +9,7 @@ import {
   Query,
   Res,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -24,7 +26,7 @@ import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { Response } from 'express';
 import { DownloadFileQueryDto, FileKeyParamDto } from './dto/download-file.dto';
-import { GetPresignedUrlDto } from './dto/upload.dto';
+import { GetPresignedUrlDto, MAX_UPLOAD_BYTES } from './dto/upload.dto';
 import {
   DeleteFileResponseDto,
   DownloadUrlResponseDto,
@@ -35,6 +37,7 @@ import { UploadService } from './upload.service';
 
 @ApiTags('Uploads (S3)')
 @Controller('uploads')
+@UseGuards(SessionGuard)
 export class UploadController {
   constructor(private readonly uploadService: UploadService) {}
 
@@ -46,7 +49,7 @@ export class UploadController {
     type: PresignedUploadUrlResponseDto,
   })
   async getPresignedUrl(@Body() dto: GetPresignedUrlDto) {
-    return this.uploadService.generatePresignedUploadUrl(dto.fileName, dto.mimeType, dto.folder);
+    return this.uploadService.generatePresignedUploadUrl(dto.fileName, dto.mimeType, dto.fileSize);
   }
 
   @Get('download-url')
@@ -73,7 +76,7 @@ export class UploadController {
     },
   })
   @ApiResponse({ status: 201, type: UploadResultDto })
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 15 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }))
   async uploadDirect(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new DomainException(ErrorCode.VALIDATION_FAILED, 'No file provided', 400, {
@@ -91,15 +94,17 @@ export class UploadController {
     );
   }
 
-  @Get('stream/*')
+  // Express 5 named splat: matches /uploads/stream/<key> and yields segments as an array.
+  @Get('stream/{*fileKey}')
   @RawResponse()
   @ApiOperation({ summary: 'Stream file directly from S3 storage (binary, not enveloped)' })
   @ApiResponse({
     status: 200,
     content: { 'application/octet-stream': { schema: { type: 'string', format: 'binary' } } },
   })
-  async streamFile(@Param('0') fileKey: string, @Res() res: Response) {
-    const { stream, contentType } = await this.uploadService.getFileStream(fileKey);
+  async streamFile(@Param('fileKey') fileKey: string[] | string, @Res() res: Response) {
+    const key = Array.isArray(fileKey) ? fileKey.join('/') : fileKey;
+    const { stream, contentType } = await this.uploadService.getFileStream(key);
     res.setHeader('Content-Type', contentType);
     stream.pipe(res);
   }

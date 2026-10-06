@@ -51,9 +51,12 @@ function CustomerTabBar({
   activeTab: CustomerTab;
   onSelect: (tab: CustomerTab) => void;
 }) {
-  const { heldBooking, remaining } = useHold();
+  const { activeHolds, heldBooking, heldUnitCount, remaining } = useHold();
   const [accentColor, mutedColor] = useThemeColor(['accent', 'muted']);
   const iconColor = (tab: CustomerTab) => (activeTab === tab ? accentColor : mutedColor);
+  // Several bookings can hold units at once, so the bar summarises all of them and counts down the
+  // one expiring first; naming a single booking number would hide the rest.
+  const hasManyHolds = activeHolds.length > 1;
 
   return (
     <View>
@@ -62,9 +65,17 @@ function CustomerTabBar({
           <View className="flex-row items-center justify-between gap-3">
             <View className="flex-1">
               <Text className="text-xs text-muted">
-                Đang giữ {heldBooking.items.length} kho · {heldBooking.bookingNo}
+                Đang giữ {heldUnitCount} kho ·{' '}
+                {hasManyHolds ? `${activeHolds.length} booking` : heldBooking.bookingNo}
               </Text>
-              <Text className="mt-1 font-mono text-lg font-bold text-accent">{remaining}</Text>
+              <View className="mt-1 flex-row items-baseline gap-2">
+                <Text className="font-mono text-lg font-bold text-accent">{remaining}</Text>
+                {hasManyHolds ? (
+                  <Text className="flex-1 text-[11px] text-muted" numberOfLines={1}>
+                    sắp hết hạn · {heldBooking.bookingNo}
+                  </Text>
+                ) : null}
+              </View>
             </View>
             <Button size="sm" onPress={() => onSelect('bookings')}>
               <Button.Label>Xem booking</Button.Label>
@@ -81,7 +92,7 @@ function CustomerTabBar({
           onPress={() => onSelect('browse')}
         />
         <BottomTabButton
-          badge={heldBooking?.items.length}
+          badge={heldUnitCount > 0 ? heldUnitCount : undefined}
           icon={<CalendarIcon color={iconColor('bookings')} />}
           isSelected={activeTab === 'bookings'}
           label="Booking của tôi"

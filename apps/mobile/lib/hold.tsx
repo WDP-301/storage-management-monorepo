@@ -10,7 +10,13 @@ import {
 } from 'react';
 import type { ApiBooking, BookingItemInput, CreatedBooking } from '../src/types/booking-api';
 import type { UnitOffer } from '../src/types/customer';
-import { holdState } from './booking-hold-state';
+import {
+  countHeldUnits,
+  earliestLapsedDeadline,
+  formatRemaining,
+  holdDeadline,
+  selectActiveHolds,
+} from './booking-hold-state';
 import { BookingsApi } from './bookings-api';
 
 export type RentalSchedule = {
@@ -21,8 +27,15 @@ export type RentalSchedule = {
 type HoldContextValue = {
   selectedUnits: UnitOffer[] | null;
   bookings: ApiBooking[];
+  /** Every booking still holding units, soonest deadline first. */
+  activeHolds: ApiBooking[];
+  /** The hold about to expire — `activeHolds[0]`, kept for screens that only need one. */
   heldBooking: ApiBooking | null;
+  /** Units held across all active bookings, which is what the customer actually has reserved. */
+  heldUnitCount: number;
   remaining: string;
+  /** Shared clock so every consumer classifies holds against the same instant. */
+  now: number;
   isLoading: boolean;
   isCreating: boolean;
   error: string | null;
@@ -52,8 +65,10 @@ export function HoldProvider({ children }: { children: ReactNode }) {
     try {
       const result = await BookingsApi.listMine();
       if (sequence === requestSequence.current) {
-        setNow(Date.now());
         setBookings(result);
+        // The ticker pauses while nothing is held, so `now` can be stale by the time fresh holds
+        // arrive. Resyncing here keeps the first rendered countdown accurate.
+        setNow(Date.now());
         setError(null);
       }
     } catch (cause) {
@@ -72,23 +87,26 @@ export function HoldProvider({ children }: { children: ReactNode }) {
     void refreshBookings().catch(() => undefined);
   }, [refreshBookings]);
 
-  const heldBooking = bookings.find((booking) => holdState(booking, now) === 'active') ?? null;
-  const hasActiveHold = heldBooking !== null;
+  const activeHolds = useMemo(() => selectActiveHolds(bookings, now), [bookings, now]);
+  // Soonest deadline first, so the bar counts down the hold that is actually at risk.
+  const heldBooking = activeHolds[0] ?? null;
+  const heldUnitCount = countHeldUnits(activeHolds);
 
+  // Ticking only matters while something is held; the last tick that empties `activeHolds` also
+  // tears the interval down.
+  const hasActiveHold = activeHolds.length > 0;
   useEffect(() => {
     if (!hasActiveHold) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [hasActiveHold]);
 
-  const expiredHolding = bookings.find(
-    (booking) => booking.status === 'HOLDING' && holdState(booking, now) === 'expired',
-  );
+  const lapsedDeadline = earliestLapsedDeadline(bookings, now);
   useEffect(() => {
-    if (!expiredHolding?.expiresAt || refreshedExpiry.current === expiredHolding.expiresAt) return;
-    refreshedExpiry.current = expiredHolding.expiresAt;
+    if (!lapsedDeadline || refreshedExpiry.current === lapsedDeadline) return;
+    refreshedExpiry.current = lapsedDeadline;
     void refreshBookings().catch(() => undefined);
-  }, [expiredHolding?.expiresAt, refreshBookings]);
+  }, [lapsedDeadline, refreshBookings]);
 
   const selectUnits = useCallback((units: UnitOffer[]) => {
     if (submitting.current) return;
@@ -116,11 +134,11 @@ export function HoldProvider({ children }: { children: ReactNode }) {
         // even if the schedule changes, so retries cannot accidentally create a new request.
         const created = await BookingsApi.create(items, selectionKey.current);
         requestSequence.current += 1;
-        setNow(Date.now());
         setBookings((current) => [
           toBooking(created, selectedUnits),
           ...current.filter((b) => b.id !== created.id),
         ]);
+        setNow(Date.now());
         clearSelection();
         void refreshBookings().catch(() => undefined);
         return true;
@@ -133,8 +151,7 @@ export function HoldProvider({ children }: { children: ReactNode }) {
   );
 
   const remaining = useMemo(
-    () =>
-      formatRemaining((heldBooking ? new Date(heldBooking.expiresAt ?? 0).getTime() : now) - now),
+    () => formatRemaining((heldBooking ? holdDeadline(heldBooking) : now) - now),
     [heldBooking, now],
   );
 
@@ -142,8 +159,11 @@ export function HoldProvider({ children }: { children: ReactNode }) {
     () => ({
       selectedUnits,
       bookings,
+      activeHolds,
       heldBooking,
+      heldUnitCount,
       remaining,
+      now,
       isLoading,
       isCreating,
       error,
@@ -155,8 +175,11 @@ export function HoldProvider({ children }: { children: ReactNode }) {
     [
       selectedUnits,
       bookings,
+      activeHolds,
       heldBooking,
+      heldUnitCount,
       remaining,
+      now,
       isLoading,
       isCreating,
       error,
@@ -198,9 +221,4 @@ function toBooking(created: CreatedBooking, units: UnitOffer[]): ApiBooking {
       };
     }),
   };
-}
-
-function formatRemaining(milliseconds: number) {
-  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
-  return `${String(Math.floor(totalSeconds / 60)).padStart(2, '0')}:${String(totalSeconds % 60).padStart(2, '0')}`;
 }

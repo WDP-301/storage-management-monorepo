@@ -11,7 +11,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { BookingItem } from './booking-item.entity';
-import { UnitHold } from './unit-hold.entity';
 
 @Entity('bookings')
 export class Booking {
@@ -51,10 +50,4 @@ export class Booking {
     (item) => item.booking,
   )
   items: BookingItem[];
-
-  @OneToMany(
-    () => UnitHold,
-    (hold) => hold.booking,
-  )
-  holds: UnitHold[];
 }

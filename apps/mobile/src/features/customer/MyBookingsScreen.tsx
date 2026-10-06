@@ -1,12 +1,21 @@
-import { Button, Card, Chip } from 'heroui-native';
+import { Button, Card } from 'heroui-native';
 import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { holdState } from '../../../lib/booking-hold-state';
+import {
+  countHeldUnits,
+  formatRemaining,
+  holdDeadline,
+  holdState,
+  isActiveHold,
+  selectActiveHolds,
+} from '../../../lib/booking-hold-state';
 import { formatArea, formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import { rentalEndIso } from '../../../lib/rental-schedule';
 import type { ApiBooking } from '../../types/booking-api';
 
 type Props = {
   bookings: ApiBooking[];
+  /** Shared clock from the hold provider, so this list and the countdown bar never disagree. */
+  now: number;
   isLoading: boolean;
   error: string | null;
   contentBottomPadding: number;
@@ -16,14 +25,15 @@ type Props = {
 
 export function MyBookingsScreen({
   bookings,
+  now,
   isLoading,
   error,
   contentBottomPadding,
   onBrowse,
   onRefresh,
 }: Props) {
-  const active = bookings.filter(isActiveHold);
-  const others = bookings.filter((booking) => !isActiveHold(booking));
+  const active = selectActiveHolds(bookings, now);
+  const others = bookings.filter((booking) => !isActiveHold(booking, now));
 
   return (
     <ScrollView
@@ -51,9 +61,14 @@ export function MyBookingsScreen({
         ) : null}
         {isLoading && bookings.length === 0 ? <ActivityIndicator /> : null}
 
-        <Text className="text-sm font-bold text-foreground">Đang giữ</Text>
+        <Text className="text-sm font-bold text-foreground">
+          Đang giữ
+          {active.length > 0 ? ` · ${countHeldUnits(active)} kho` : ''}
+        </Text>
         {active.length > 0 ? (
-          active.map((booking) => <BookingCard key={booking.id} booking={booking} isHolding />)
+          active.map((booking) => (
+            <BookingCard key={booking.id} booking={booking} now={now} isHolding />
+          ))
         ) : isLoading && bookings.length === 0 ? null : (
           <View className="items-center rounded-2xl border border-dashed border-border px-5 py-10">
             <Text className="font-semibold text-foreground">Chưa có booking đang giữ</Text>
@@ -69,7 +84,7 @@ export function MyBookingsScreen({
         <Text className="mt-3 text-sm font-bold text-foreground">Các booking khác</Text>
         {others.length > 0 ? (
           others.map((booking) => (
-            <BookingCard key={booking.id} booking={booking} isHolding={false} />
+            <BookingCard key={booking.id} booking={booking} now={now} isHolding={false} />
           ))
         ) : isLoading && bookings.length === 0 ? null : (
           <Text className="text-sm text-muted">Chưa có booking nào khác.</Text>
@@ -79,14 +94,22 @@ export function MyBookingsScreen({
   );
 }
 
-function BookingCard({ booking, isHolding }: { booking: ApiBooking; isHolding: boolean }) {
+function BookingCard({
+  booking,
+  now,
+  isHolding,
+}: {
+  booking: ApiBooking;
+  now: number;
+  isHolding: boolean;
+}) {
   const first = booking.items[0];
   const firstDate = first?.requestedStartAt.slice(0, 10);
   const sameSchedule = booking.items.every(
     (item) =>
       item.requestedStartAt.slice(0, 10) === firstDate && item.rentalMonths === first?.rentalMonths,
   );
-  const state = holdState(booking, Date.now());
+  const state = holdState(booking, now);
   const status = state === 'expired' ? 'Hết hạn giữ' : statusLabel(booking.status);
 
   return (
@@ -98,16 +121,17 @@ function BookingCard({ booking, isHolding }: { booking: ApiBooking; isHolding: b
       <Card.Body className="gap-4">
         <View className="flex-row items-start justify-between gap-3">
           <View className="flex-1">
-            <Text className="text-lg font-bold text-foreground">{booking.bookingNo}</Text>
+            {/* Booking numbers are long and have no spaces to break on, so they would squeeze the
+              status chip until its label wrapped out of sight. */}
+            <Text className="text-lg font-bold text-foreground" numberOfLines={1}>
+              {booking.bookingNo}
+            </Text>
             <Text className="mt-1 text-sm text-muted">{booking.items.length} kho</Text>
           </View>
-          <Chip
-            color={isHolding ? 'accent' : booking.status === 'CONFIRMED' ? 'success' : 'default'}
-            size="sm"
-            variant="soft"
-          >
-            <Chip.Label>{status}</Chip.Label>
-          </Chip>
+          <StatusChip
+            label={status}
+            tone={isHolding ? 'accent' : booking.status === 'CONFIRMED' ? 'success' : 'neutral'}
+          />
         </View>
 
         {state === 'unknown' ? (
@@ -120,7 +144,7 @@ function BookingCard({ booking, isHolding }: { booking: ApiBooking; isHolding: b
           <View className="rounded-xl bg-accent/10 px-3 py-3">
             <Text className="text-xs text-muted">Thời gian giữ còn lại</Text>
             <Text className="mt-1 font-mono text-xl font-bold text-accent">
-              {formatRemaining(new Date(booking.expiresAt).getTime() - Date.now())}
+              {formatRemaining(holdDeadline(booking) - now)}
             </Text>
           </View>
         ) : null}
@@ -180,8 +204,36 @@ function BookingCard({ booking, isHolding }: { booking: ApiBooking; isHolding: b
   );
 }
 
-function isActiveHold(booking: ApiBooking) {
-  return holdState(booking, Date.now()) === 'active';
+/** Full class strings, since uniwind resolves them statically and cannot see composed names. */
+const STATUS_TONES = {
+  accent: {
+    box: 'shrink-0 rounded-full bg-accent/10 px-3 py-1',
+    label: 'text-xs font-semibold text-accent',
+  },
+  success: {
+    box: 'shrink-0 rounded-full bg-success/10 px-3 py-1',
+    label: 'text-xs font-semibold text-success-foreground',
+  },
+  neutral: {
+    box: 'shrink-0 rounded-full bg-surface-secondary px-3 py-1',
+    label: 'text-xs font-semibold text-muted',
+  },
+} as const;
+
+/**
+ * Replaces heroui-native's Chip here: the Chip caps its own width, so the long booking number
+ * beside it squeezed "Đang giữ" onto a second line the chip was too short to show — only "Đang"
+ * survived. This pill hugs its label and never wraps.
+ */
+function StatusChip({ label, tone }: { label: string; tone: keyof typeof STATUS_TONES }) {
+  const tokens = STATUS_TONES[tone];
+  return (
+    <View className={tokens.box}>
+      <Text className={tokens.label} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
 }
 
 function statusLabel(status: ApiBooking['status']) {
@@ -199,9 +251,4 @@ function statusLabel(status: ApiBooking['status']) {
     default:
       return 'Nháp';
   }
-}
-
-function formatRemaining(milliseconds: number) {
-  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
-  return `${String(Math.floor(totalSeconds / 60)).padStart(2, '0')}:${String(totalSeconds % 60).padStart(2, '0')}`;
 }

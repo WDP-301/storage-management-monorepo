@@ -29,6 +29,7 @@ export type ApiBookingItem = BookingItemInput & {
   } | null;
 };
 
+/** Normalised booking the app works with: one `expiresAt`, whatever the endpoint called it. */
 export type ApiBooking = {
   id: string;
   bookingNo: string;
@@ -41,7 +42,11 @@ export type ApiBooking = {
   items: ApiBookingItem[];
 };
 
-/** GET /bookings/me uses holdExpiresAt; older responses used expiresAt. */
+/**
+ * Raw shape of `GET /bookings/me`, which names the hold deadline `holdExpiresAt` while
+ * `POST /bookings` returns `expiresAt`. Both are optional here so the client keeps working
+ * whichever name the API sends.
+ */
 export type BookingListItemResponse = Omit<ApiBooking, 'expiresAt'> & {
   holdExpiresAt?: string | null;
   expiresAt?: string | null;

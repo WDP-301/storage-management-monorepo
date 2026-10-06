@@ -82,7 +82,7 @@ export function MyBookingsScreen({
           <View className="items-center rounded-2xl border border-dashed border-border px-5 py-10">
             <Text className="font-semibold text-foreground">Chưa có booking đang giữ</Text>
             <Text className="mt-1 text-center text-sm leading-5 text-muted">
-              Chọn kho và lịch thuê để giữ chỗ trong 15 phút.
+              Chọn kho và lịch thuê để giữ chỗ trước khi thanh toán.
             </Text>
             <Button className="mt-5" variant="secondary" onPress={onBrowse}>
               <Button.Label>Tìm kho trống</Button.Label>

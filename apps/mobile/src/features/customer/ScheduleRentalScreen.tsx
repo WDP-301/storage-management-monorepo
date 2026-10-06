@@ -53,9 +53,10 @@ export function ScheduleRentalScreen({ units, isCreating, error, onConfirm }: Pr
 
       <Card className="mx-4 mt-4 border border-accent/30 bg-accent/5">
         <Card.Body>
+          {/* No hold duration named here: it is an admin setting the app cannot read, so any
+            number would go stale the moment it changes. */}
           <Text className="text-xs leading-5 text-muted">
-            Chọn lịch rồi xác nhận để giữ kho trong 15 phút. Giá và tình trạng kho sẽ được kiểm tra
-            lại khi gửi.
+            Chọn lịch rồi xác nhận để giữ kho. Giá và tình trạng kho sẽ được kiểm tra lại khi gửi.
           </Text>
         </Card.Body>
       </Card>

@@ -27,6 +27,20 @@ export const BookingsApi = {
       body: JSON.stringify({ items }),
     }),
 
+  /**
+   * Releases the held units. The API rejects this with 409 once a booking is CONFIRMED, and
+   * answers 200 for an already-cancelled one, so callers only need to surface the message.
+   *
+   * Given longer than the default: this takes a row lock and updates holds and units in one
+   * transaction, and the cancel commits server-side whether or not the app is still waiting —
+   * timing out early only costs the app the answer, not the effect.
+   */
+  cancel: (id: string) =>
+    request<{ message: string }>(`/bookings/${id}/cancel`, {
+      method: 'POST',
+      timeoutMs: 30000,
+    }),
+
   newIdempotencyKey: () => Crypto.randomUUID(),
 };
 

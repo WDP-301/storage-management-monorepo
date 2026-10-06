@@ -46,6 +46,8 @@ type HoldContextValue = {
   refreshBookings: () => Promise<void>;
   /** Merges one freshly fetched booking into the list — how deposit polling publishes its result. */
   applyBooking: (booking: ApiBooking) => void;
+  /** Releases the held units. Rejects with the API's message when the booking cannot be cancelled. */
+  cancelBooking: (bookingId: string) => Promise<void>;
 };
 
 const HoldContext = createContext<HoldContextValue | null>(null);
@@ -164,6 +166,21 @@ export function HoldProvider({ children }: { children: ReactNode }) {
     setNow(Date.now());
   }, []);
 
+  const cancelBooking = useCallback(
+    async (bookingId: string) => {
+      try {
+        await BookingsApi.cancel(bookingId);
+      } finally {
+        // Refresh even when the call rejected. A request that times out or loses its response on
+        // the way back may still have cancelled the booking server-side, and showing the customer
+        // a hold that no longer exists is worse than the failed request itself. Cancelling also
+        // frees units, so the whole list is stale, not just this row.
+        await refreshBookings().catch(() => undefined);
+      }
+    },
+    [refreshBookings],
+  );
+
   const remaining = useMemo(
     () => formatRemaining((heldBooking ? holdDeadline(heldBooking) : now) - now),
     [heldBooking, now],
@@ -186,6 +203,7 @@ export function HoldProvider({ children }: { children: ReactNode }) {
       createBooking,
       refreshBookings,
       applyBooking,
+      cancelBooking,
     }),
     [
       selectedUnits,
@@ -203,6 +221,7 @@ export function HoldProvider({ children }: { children: ReactNode }) {
       createBooking,
       refreshBookings,
       applyBooking,
+      cancelBooking,
     ],
   );
 

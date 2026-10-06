@@ -1,7 +1,9 @@
+import { BookingStatus } from '@storage/types';
 import * as Clipboard from 'expo-clipboard';
 import { Button, Card, useThemeColor } from 'heroui-native';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, ScrollView, Text, View } from 'react-native';
+import { ApiError } from '../../../lib/api';
 import type { DepositStage } from '../../../lib/booking-payment-state';
 import { formatIsoDateTime, formatMoney } from '../../../lib/format-vi';
 import {
@@ -27,6 +29,8 @@ type Props = {
   contentBottomPadding: number;
   onCheck: () => void;
   onDone: () => void;
+  /** Resolves once the booking is cancelled; rejects with the API's reason when it cannot be. */
+  onCancel: () => Promise<void>;
 };
 
 /**
@@ -41,6 +45,7 @@ export function DepositPaymentScreen({
   contentBottomPadding,
   onCheck,
   onDone,
+  onCancel,
 }: Props) {
   if (!booking || !stage) {
     return (
@@ -77,29 +82,11 @@ export function DepositPaymentScreen({
           </View>
         ) : null}
 
-        {stage === 'awaiting' ? <AwaitingTransfer booking={booking} /> : null}
+        {stage === 'awaiting' ? <AwaitingTransfer booking={booking} onCancel={onCancel} /> : null}
 
         {stage === 'paid' ? <PaymentSucceeded booking={booking} onDone={onDone} /> : null}
 
-        {stage === 'closed' ? (
-          <Card className="border border-border bg-surface">
-            <Card.Body className="gap-3 py-6">
-              <Text className="text-center font-bold text-foreground">Hết hạn giữ chỗ</Text>
-              <Text className="text-center text-sm leading-5 text-muted">
-                Booking này không còn chờ thanh toán. Bạn có thể chọn kho và đặt lại từ đầu.
-              </Text>
-              {/* A transfer that lands after the hold lapses is recorded but cannot confirm the
-                booking — the customer has to be told, not left waiting on a dead screen. */}
-              <Text className="text-center text-xs leading-5 text-muted">
-                Nếu bạn vừa chuyển khoản, tiền đã được ghi nhận nhưng cần đối soát thủ công — vui
-                lòng liên hệ hỗ trợ kèm mã {booking.bookingNo}.
-              </Text>
-              <Button className="mt-2" variant="secondary" onPress={onDone}>
-                <Button.Label>Về booking của tôi</Button.Label>
-              </Button>
-            </Card.Body>
-          </Card>
-        ) : null}
+        {stage === 'closed' ? <BookingClosed booking={booking} onDone={onDone} /> : null}
 
         {stage === 'unavailable' ? (
           <Card className="border border-border bg-surface">
@@ -167,6 +154,63 @@ function PaymentSucceeded({ booking, onDone }: { booking: ApiBooking; onDone: ()
   );
 }
 
+/**
+ * Where a booking ends up when it is no longer payable. Cancelling leads here on purpose: the
+ * screen turning into this *is* the confirmation, which is why cancelling does not navigate away.
+ * Expiry and cancellation share the shape but not the words — telling someone who just cancelled
+ * that their hold "hết hạn" would read as a second, unexplained failure.
+ */
+function BookingClosed({ booking, onDone }: { booking: ApiBooking; onDone: () => void }) {
+  const isCancelled = booking.status === BookingStatus.CANCELLED;
+  const [mutedColor] = useThemeColor(['muted']);
+
+  return (
+    <View className="gap-6 pt-2">
+      {/* Same receipt shape as the paid state — outcome, headline figure, timestamp, details —
+        so the two endings of this screen feel like one flow rather than two designs. */}
+      <View className="items-center gap-5">
+        {/* Muted, not the success green: the task finished, but nothing was gained. */}
+        <View className="h-16 w-16 items-center justify-center rounded-full bg-surface-secondary">
+          <CheckIcon color={mutedColor} />
+        </View>
+
+        <View className="items-center gap-2">
+          <Text className="text-base font-semibold text-foreground">
+            {isCancelled ? 'Đã hủy booking' : 'Hết hạn giữ chỗ'}
+          </Text>
+          {/* Where the paid state puts the amount: what the customer got back, not what they paid. */}
+          <Text className="text-3xl font-bold text-foreground">{booking.items.length} kho</Text>
+          <Text className="text-sm text-muted">
+            đã được trả lại · {formatIsoDateTime(booking.updatedAt)}
+          </Text>
+        </View>
+
+        <View className="w-full gap-3 rounded-xl border border-border bg-surface px-4 py-3">
+          <SummaryRow label="Mã booking" value={booking.bookingNo} />
+          <View className="h-px bg-separator" />
+          <SummaryRow
+            label="Tiền cọc"
+            value={`${formatMoney(Number(booking.depositTotal))} chưa thu`}
+          />
+        </View>
+      </View>
+
+      <View className="gap-3">
+        {/* Money already transferred cannot confirm a booking that is no longer awaiting a
+          deposit — the API records the payment and leaves it for manual reconciliation. */}
+        <Text className="text-center text-xs leading-5 text-muted">
+          {isCancelled
+            ? `Nếu bạn đã chuyển khoản cho booking này, vui lòng liên hệ hỗ trợ kèm mã ${booking.bookingNo}.`
+            : `Nếu bạn vừa chuyển khoản, tiền đã được ghi nhận nhưng cần đối soát thủ công — vui lòng liên hệ hỗ trợ kèm mã ${booking.bookingNo}.`}
+        </Text>
+        <Button onPress={onDone}>
+          <Button.Label>Về booking của tôi</Button.Label>
+        </Button>
+      </View>
+    </View>
+  );
+}
+
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
     <View className="flex-row items-center justify-between gap-3">
@@ -178,7 +222,13 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AwaitingTransfer({ booking }: { booking: ApiBooking }) {
+function AwaitingTransfer({
+  booking,
+  onCancel,
+}: {
+  booking: ApiBooking;
+  onCancel: () => Promise<void>;
+}) {
   const deposit = formatMoney(Number(booking.depositTotal));
   // Bound once so the save callback keeps the narrowed non-null type the JSX guard established.
   const qrUrl = booking.paymentQrUrl;
@@ -246,7 +296,60 @@ function AwaitingTransfer({ booking }: { booking: ApiBooking }) {
       <Text className="text-center text-xs leading-5 text-muted">
         Hệ thống tự cập nhật khi nhận được tiền, bạn không cần chờ ở màn hình này.
       </Text>
+
+      <CancelBookingButton onCancel={onCancel} />
     </>
+  );
+}
+
+/**
+ * Cancelling frees the units for other customers and cannot be undone, so it asks first. It also
+ * warns about money already sent: the API cancels a booking whose deposit arrived only partially
+ * and merely logs that the payment needs manual reconciliation — the customer has to hear that
+ * before they tap, not after.
+ */
+function CancelBookingButton({ onCancel }: { onCancel: () => Promise<void> }) {
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  const confirm = () =>
+    Alert.alert(
+      'Hủy booking này?',
+      'Các kho đang giữ sẽ được trả lại cho khách khác và không thể hoàn tác. Nếu bạn đã chuyển khoản, hãy liên hệ hỗ trợ trước khi hủy.',
+      [
+        { text: 'Không hủy', style: 'cancel' },
+        {
+          text: 'Hủy booking',
+          style: 'destructive',
+          onPress: async () => {
+            setIsCancelling(true);
+            try {
+              await onCancel();
+            } catch (cause) {
+              // A status code means the server decided — most often 409, when the webhook
+              // confirmed the booking while this screen was open. Without one the request never
+              // got an answer, and the cancel may well have gone through: the screen refreshes
+              // either way, so promising "không hủy được" would contradict what it then shows.
+              const answered = cause instanceof ApiError && cause.statusCode !== undefined;
+              Alert.alert(
+                answered ? 'Không hủy được booking' : 'Không rõ kết quả',
+                answered && cause instanceof Error
+                  ? cause.message
+                  : 'Mạng bị gián đoạn. Vui lòng kiểm tra lại trạng thái booking của bạn.',
+              );
+            } finally {
+              setIsCancelling(false);
+            }
+          },
+        },
+      ],
+    );
+
+  return (
+    <Button variant="ghost" isDisabled={isCancelling} onPress={confirm}>
+      <Button.Label className="text-danger">
+        {isCancelling ? 'Đang hủy...' : 'Hủy booking'}
+      </Button.Label>
+    </Button>
   );
 }
 

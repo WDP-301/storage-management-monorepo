@@ -63,10 +63,20 @@ export function earliestLapsedDeadline(bookings: ApiBooking[], now: number): str
     );
 }
 
-/** mm:ss, floored at 00:00 so an overshoot never renders a negative countdown. */
+/**
+ * Countdown text, floored at 00:00 so an overshoot never renders a negative value.
+ *
+ * `mm:ss` only holds up for a short hold. The hold length is an admin setting that goes up to 1440
+ * minutes, and a day-long hold rendered as `mm:ss` reads as "1439:42" — a number nobody can parse
+ * as a day. Past an hour the seconds are noise anyway, so it switches to `23h 59m`.
+ */
 export function formatRemaining(milliseconds: number): string {
   const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
-  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
-  const seconds = String(totalSeconds % 60).padStart(2, '0');
-  return `${minutes}:${seconds}`;
+  const pad = (value: number) => String(value).padStart(2, '0');
+
+  if (totalSeconds >= 3600) {
+    const hours = Math.floor(totalSeconds / 3600);
+    return `${hours}h ${pad(Math.floor((totalSeconds % 3600) / 60))}m`;
+  }
+  return `${pad(Math.floor(totalSeconds / 60))}:${pad(totalSeconds % 60)}`;
 }

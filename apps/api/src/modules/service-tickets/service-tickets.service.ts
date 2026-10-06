@@ -9,11 +9,12 @@ import { TicketType } from '@entities/ticket-type.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
 import { hashBody } from '@shared/utils/canonical-json.util';
+import { claimIdempotencyKey, releaseIdempotencyKey } from '@shared/utils/idempotency-key.util';
 import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import {
   ContractStatus,
@@ -37,26 +38,24 @@ import type {
 import { toServiceTicketRecord } from './types/service-ticket';
 
 const MAX_TICKET_NO_ATTEMPTS = 3;
-const IDEMPOTENCY_TTL_HOURS = 24;
-const RESOLVED_STATUSES: readonly TicketStatus[] = [TicketStatus.RESOLVED, TicketStatus.CLOSED];
-const TERMINAL_STATUSES: readonly TicketStatus[] = [TicketStatus.CLOSED, TicketStatus.CANCELLED];
+/** Staff workflow order — update() only moves a ticket forward along this path. */
+const STATUS_FLOW: readonly TicketStatus[] = [
+  TicketStatus.OPEN,
+  TicketStatus.ASSIGNED,
+  TicketStatus.IN_PROGRESS,
+  TicketStatus.RESOLVED,
+];
+/** RESOLVED already means done — CLOSED is a separate end state, not a step after it. */
+const TERMINAL_STATUSES: readonly TicketStatus[] = [
+  TicketStatus.RESOLVED,
+  TicketStatus.CLOSED,
+  TicketStatus.CANCELLED,
+];
 const ASSIGNABLE_STATUSES: readonly TicketStatus[] = [
   TicketStatus.OPEN,
   TicketStatus.ASSIGNED,
   TicketStatus.IN_PROGRESS,
 ];
-
-type IdemRow = {
-  key: string;
-  user_id: string;
-  status: IdempotencyStatus;
-  request_hash: string;
-  response_status: number | null;
-  response_body: Record<string, unknown> | null;
-  created_at: string;
-  expires_at: string;
-  is_new_insert: boolean;
-};
 
 const TICKET_RELATIONS = {
   type: true,
@@ -68,8 +67,6 @@ const TICKET_RELATIONS = {
 
 @Injectable()
 export class ServiceTicketsService {
-  private readonly logger = new Logger(ServiceTicketsService.name);
-
   constructor(
     @InjectRepository(ServiceTicket)
     private readonly tickets: Repository<ServiceTicket>,
@@ -102,7 +99,12 @@ export class ServiceTicketsService {
     idempotencyKey: string,
   ): Promise<{ data: ServiceTicketResponse; isRetry: boolean }> {
     const requestHash = hashBody(dto as unknown as Record<string, unknown>);
-    const cached = await this.claimIdempotencyKey(idempotencyKey, actor.id, requestHash);
+    const cached = await claimIdempotencyKey(
+      this.idempotencyKeys,
+      idempotencyKey,
+      actor.id,
+      requestHash,
+    );
     if (cached) {
       return { data: cached as unknown as ServiceTicketResponse, isRetry: true };
     }
@@ -134,7 +136,7 @@ export class ServiceTicketsService {
       return { data, isRetry: false };
     } catch (error) {
       if (!isCommitted) {
-        await this.idempotencyKeys.delete({ key: idempotencyKey, userId: actor.id });
+        await releaseIdempotencyKey(this.idempotencyKeys, idempotencyKey, actor.id);
       }
       throw error;
     }
@@ -279,8 +281,9 @@ export class ServiceTicketsService {
    * of a ticket assigned to them. `assigned_to`, ownership ids and `resolved_at` are never
    * taken from the request; `resolved_at` is derived from the status transition. CANCELLED
    * belongs to the cancel endpoint (owner/manager authorization), and terminal tickets
-   * are immutable. CLOSED is settable — the customer confirms the fix in person and the
-   * staff member records it.
+   * are immutable. Status only moves forward along STATUS_FLOW; CLOSED stays settable as
+   * its own end state (e.g. dropped or resolved informally) — RESOLVED already ends the
+   * ticket, so CLOSED never follows it.
    */
   async update(id: string, dto: UpdateTicketDto, actor: AuthUser): Promise<ServiceTicketResponse> {
     const ticket = await this.findTicketOrFail(id);
@@ -307,11 +310,23 @@ export class ServiceTicketsService {
         'Cancel via the dedicated cancel endpoint',
       );
     }
+    if (
+      dto.status !== undefined &&
+      dto.status !== ticket.status &&
+      dto.status !== TicketStatus.CLOSED &&
+      STATUS_FLOW.indexOf(dto.status) < STATUS_FLOW.indexOf(ticket.status)
+    ) {
+      throw this.fieldValidationError(
+        'status',
+        'invalidTransition',
+        `Cannot move a ${ticket.status} ticket backwards to ${dto.status}`,
+      );
+    }
 
     if (dto.status !== undefined && dto.status !== ticket.status) {
       const previousStatus = ticket.status;
       ticket.status = dto.status;
-      ticket.resolvedAt = RESOLVED_STATUSES.includes(dto.status) ? new Date() : null;
+      ticket.resolvedAt = dto.status === TicketStatus.RESOLVED ? new Date() : null;
       ticket.history = [
         ...(ticket.history ?? []),
         this.historyEntry('STATUS_CHANGED', previousStatus, dto.status, actor.id),
@@ -340,7 +355,7 @@ export class ServiceTicketsService {
   /**
    * Cancels a ticket that is still being worked (OPEN/ASSIGNED/IN_PROGRESS). The owning
    * customer may cancel their own ticket; a facility manager may cancel tickets of
-   * facilities they manage. Resolved tickets are closed via the customer close flow.
+   * facilities they manage. Resolved tickets are already done — they cannot be cancelled.
    */
   async cancel(id: string, actor: AuthUser): Promise<ServiceTicketResponse> {
     const ticket = await this.findTicketOrFail(id);
@@ -370,38 +385,6 @@ export class ServiceTicketsService {
     ticket.history = [
       ...(ticket.history ?? []),
       this.historyEntry('STATUS_CHANGED', previousStatus, TicketStatus.CANCELLED, actor.id),
-    ];
-
-    const saved = await this.tickets.save(ticket);
-    return { ticket: toServiceTicketRecord(await this.findTicketOrFail(saved.id)) };
-  }
-
-  /**
-   * Lets the owning customer close their own ticket once it is RESOLVED — the in-app
-   * counterpart of confirming the fix in person (which the staff records via update).
-   */
-  async close(id: string, actor: AuthUser): Promise<ServiceTicketResponse> {
-    const ticket = await this.findTicketOrFail(id);
-
-    if (ticket.customerId !== actor.id) {
-      throw new DomainException(
-        ErrorCode.FORBIDDEN,
-        'Only the ticket owner can close it',
-        HttpStatus.FORBIDDEN,
-      );
-    }
-    if (ticket.status !== TicketStatus.RESOLVED) {
-      throw new DomainException(
-        ErrorCode.CONFLICT,
-        `Only a resolved ticket can be closed (current status: ${ticket.status})`,
-        HttpStatus.CONFLICT,
-      );
-    }
-
-    ticket.status = TicketStatus.CLOSED;
-    ticket.history = [
-      ...(ticket.history ?? []),
-      this.historyEntry('STATUS_CHANGED', TicketStatus.RESOLVED, TicketStatus.CLOSED, actor.id),
     ];
 
     const saved = await this.tickets.save(ticket);
@@ -561,77 +544,6 @@ export class ServiceTicketsService {
         );
       }
     }
-  }
-
-  /**
-   * Atomically claims an idempotency key (same protocol as bookings.create): INSERT …
-   * ON CONFLICT returns whether this call won the claim. A DONE row with the same payload
-   * returns its cached response; a fresh PROCESSING row conflicts; a stale one (>60 s,
-   * crashed instance) is reclaimed atomically. Returns the cached response body or null
-   * when this caller owns the claim and must do the work.
-   */
-  private async claimIdempotencyKey(
-    key: string,
-    userId: string,
-    requestHash: string,
-  ): Promise<Record<string, unknown> | null> {
-    const [idem] = await this.idempotencyKeys.query<IdemRow[]>(
-      `INSERT INTO idempotency_keys (key, user_id, status, request_hash, expires_at)
-       VALUES ($1, $2, $3, $4, now() + make_interval(hours => $5))
-       ON CONFLICT (key, user_id) DO UPDATE
-         SET expires_at = idempotency_keys.expires_at
-       RETURNING *, (xmax = 0) AS is_new_insert`,
-      [key, userId, IdempotencyStatus.PROCESSING, requestHash, IDEMPOTENCY_TTL_HOURS],
-    );
-
-    if (idem.is_new_insert) {
-      return null;
-    }
-
-    if (idem.request_hash !== requestHash) {
-      throw new DomainException(
-        ErrorCode.IDEMPOTENCY_PAYLOAD_MISMATCH,
-        'Idempotency key đã được dùng với payload khác',
-        HttpStatus.UNPROCESSABLE_ENTITY,
-      );
-    }
-    if (idem.status === IdempotencyStatus.DONE) {
-      return idem.response_body ?? {};
-    }
-
-    const isStale = Date.now() - new Date(idem.created_at).getTime() > 60 * 1000;
-    if (!isStale) {
-      throw new DomainException(
-        ErrorCode.IDEMPOTENCY_KEY_CONFLICT,
-        'Request khác đang xử lý với cùng idempotency key, vui lòng thử lại sau',
-        HttpStatus.CONFLICT,
-      );
-    }
-
-    this.logger.warn(
-      `Idempotency key ${key} was stuck in PROCESSING for user ${userId}. Re-claiming stale key.`,
-    );
-    const reclaimed = await this.idempotencyKeys.query<IdemRow[]>(
-      `UPDATE idempotency_keys
-       SET created_at = now(),
-           request_hash = $1,
-           expires_at = now() + make_interval(hours => $2)
-       WHERE key = $3
-         AND user_id = $4
-         AND status = $5
-         AND created_at <= now() - interval '60 seconds'
-       RETURNING *, true AS is_new_insert`,
-      [requestHash, IDEMPOTENCY_TTL_HOURS, key, userId, IdempotencyStatus.PROCESSING],
-    );
-
-    if (!reclaimed || reclaimed.length === 0) {
-      throw new DomainException(
-        ErrorCode.IDEMPOTENCY_KEY_CONFLICT,
-        'Request khác đang xử lý với cùng idempotency key, vui lòng thử lại sau',
-        HttpStatus.CONFLICT,
-      );
-    }
-    return null;
   }
 
   /**

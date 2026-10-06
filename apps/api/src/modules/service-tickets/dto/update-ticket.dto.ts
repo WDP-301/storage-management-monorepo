@@ -7,8 +7,9 @@ import { IsArray, IsEnum, IsOptional, IsString, MaxLength } from 'class-validato
  * Ownership fields (customer_id, facility_id, assigned_to, ticket_no, …) are not
  * accepted here; the update target and the acting user are resolved server-side.
  * CANCELLED is rejected here — it belongs to the cancel endpoint, which carries
- * the owner/manager authorization. CLOSED stays settable: customers confirm the
- * fix in person and the assigned staff member records it.
+ * the owner/manager authorization. Status only moves forward
+ * (OPEN → ASSIGNED → IN_PROGRESS → RESOLVED); CLOSED stays settable as its own
+ * end state (dropped or resolved informally); RESOLVED already ends the ticket.
  */
 export class UpdateTicketDto {
   @ApiPropertyOptional({ enum: TicketStatus })

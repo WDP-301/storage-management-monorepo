@@ -165,21 +165,6 @@ export class ServiceTicketsController {
     return this.serviceTickets.cancel(params.id, user);
   }
 
-  @Patch(':id/close')
-  @Roles(UserRole.CUSTOMER)
-  @ApiOperation({
-    summary: 'Close a resolved ticket — the owning customer ends it themselves',
-  })
-  @ApiResponse({ status: 200, description: 'The closed ticket', type: ServiceTicketResponseDto })
-  @ApiResponse({ status: 404, description: 'Ticket not found', type: ApiErrorResponseDto })
-  @ApiResponse({ status: 409, description: 'Ticket is not RESOLVED', type: ApiErrorResponseDto })
-  close(
-    @Param() params: TicketIdParamDto,
-    @CurrentUser() user: AuthUser,
-  ): Promise<ServiceTicketResponse> {
-    return this.serviceTickets.close(params.id, user);
-  }
-
   @Patch(':id')
   @Roles(UserRole.FACILITY_STAFF)
   @ApiOperation({

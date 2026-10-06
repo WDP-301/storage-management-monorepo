@@ -283,6 +283,7 @@ describe('ServiceTicketsService', () => {
       expect(idempotencyKeys.delete).toHaveBeenCalledWith({
         key: 'key-1',
         userId: 'customer-1',
+        status: IdempotencyStatus.PROCESSING,
       });
     });
 
@@ -759,9 +760,26 @@ describe('ServiceTicketsService', () => {
       expect(tickets.save).not.toHaveBeenCalled();
     });
 
-    it('lets staff close a ticket after the customer confirmed in person', async () => {
+    it.each([
+      [TicketStatus.IN_PROGRESS, TicketStatus.OPEN],
+      [TicketStatus.IN_PROGRESS, TicketStatus.ASSIGNED],
+      [TicketStatus.ASSIGNED, TicketStatus.OPEN],
+    ])('forbids moving a %s ticket backwards to %s', async (from, to) => {
+      tickets.findOne.mockResolvedValue(buildTicket({ assignedTo: 'staff-1', status: from }));
+
+      await expect(service.update('ticket-1', { status: to }, staff)).rejects.toMatchObject({
+        status: 400,
+        response: {
+          code: 'VALIDATION_FAILED',
+          details: { fields: [{ field: 'status', code: 'invalidTransition' }] },
+        },
+      });
+      expect(tickets.save).not.toHaveBeenCalled();
+    });
+
+    it('lets staff close a ticket without resolving it first', async () => {
       tickets.findOne.mockResolvedValue(
-        buildTicket({ assignedTo: 'staff-1', status: TicketStatus.RESOLVED }),
+        buildTicket({ assignedTo: 'staff-1', status: TicketStatus.ASSIGNED }),
       );
 
       const result = await service.update('ticket-1', { status: TicketStatus.CLOSED }, staff);
@@ -770,10 +788,11 @@ describe('ServiceTicketsService', () => {
         expect.objectContaining({ status: TicketStatus.CLOSED }),
       );
       expect(result.ticket.history.map((entry) => entry.action)).toEqual(['STATUS_CHANGED']);
+      expect(result.ticket.history[0].from).toBe(TicketStatus.ASSIGNED);
       expect(result.ticket.history[0].to).toBe(TicketStatus.CLOSED);
     });
 
-    it.each([TicketStatus.CLOSED, TicketStatus.CANCELLED])(
+    it.each([TicketStatus.RESOLVED, TicketStatus.CLOSED, TicketStatus.CANCELLED])(
       'forbids updating a ticket whose status is %s',
       async (status) => {
         tickets.findOne.mockResolvedValue(buildTicket({ assignedTo: 'staff-1', status }));
@@ -872,54 +891,6 @@ describe('ServiceTicketsService', () => {
         expect(tickets.save).not.toHaveBeenCalled();
       },
     );
-  });
-
-  describe('close', () => {
-    const owner = buildActor({ id: 'customer-1', roles: [UserRole.CUSTOMER] });
-
-    it('lets the owning customer close a resolved ticket with a history entry', async () => {
-      tickets.findOne.mockResolvedValue(
-        buildTicket({ customerId: 'customer-1', status: TicketStatus.RESOLVED }),
-      );
-
-      const result = await service.close('ticket-1', owner);
-
-      expect(tickets.save).toHaveBeenCalledWith(
-        expect.objectContaining({ status: TicketStatus.CLOSED }),
-      );
-      expect(result.ticket.status).toBe(TicketStatus.CLOSED);
-      expect(result.ticket.history.map((entry) => entry.action)).toEqual(['STATUS_CHANGED']);
-      expect(result.ticket.history[0].from).toBe(TicketStatus.RESOLVED);
-      expect(result.ticket.history[0].to).toBe(TicketStatus.CLOSED);
-    });
-
-    it('forbids a non-owner from closing the ticket', async () => {
-      tickets.findOne.mockResolvedValue(
-        buildTicket({ customerId: 'customer-2', status: TicketStatus.RESOLVED }),
-      );
-
-      await expect(service.close('ticket-1', owner)).rejects.toMatchObject({
-        status: 403,
-        response: { code: 'FORBIDDEN' },
-      });
-      expect(tickets.save).not.toHaveBeenCalled();
-    });
-
-    it.each([
-      TicketStatus.OPEN,
-      TicketStatus.ASSIGNED,
-      TicketStatus.IN_PROGRESS,
-      TicketStatus.CLOSED,
-      TicketStatus.CANCELLED,
-    ])('rejects closing a ticket whose status is %s', async (status) => {
-      tickets.findOne.mockResolvedValue(buildTicket({ customerId: 'customer-1', status }));
-
-      await expect(service.close('ticket-1', owner)).rejects.toMatchObject({
-        status: 409,
-        response: { code: 'CONFLICT' },
-      });
-      expect(tickets.save).not.toHaveBeenCalled();
-    });
   });
 
   describe('remove', () => {

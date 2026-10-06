@@ -21,6 +21,7 @@ export default function BookingsRoute() {
       isLoading={isLoading}
       error={error}
       onBrowse={() => router.navigate('/(customer)/browse')}
+      onPay={(bookingId) => router.navigate(`/(customer)/payment?id=${bookingId}`)}
       onRefresh={() => void refreshBookings().catch(() => undefined)}
     />
   );

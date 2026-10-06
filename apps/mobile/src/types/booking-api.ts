@@ -13,6 +13,7 @@ export type CreatedBooking = {
   subtotal: string;
   depositTotal: string;
   expiresAt: string;
+  paymentQrUrl: string | null;
   items: BookingItemInput[];
 };
 
@@ -38,7 +39,17 @@ export type ApiBooking = {
   subtotal: string;
   depositTotal: string;
   createdAt: string;
+  /**
+   * Last write to the booking. The deposit receipt reads it as "confirmed at": the webhook flipping
+   * the status to CONFIRMED is the last thing that touches a booking in this flow.
+   */
+  updatedAt: string;
   expiresAt: string | null;
+  /**
+   * VietQR image URL for the deposit transfer, or null once the deposit window closed — the API
+   * blanks it after confirmation and after the holds lapse, so it doubles as "stop polling".
+   */
+  paymentQrUrl: string | null;
   items: ApiBookingItem[];
 };
 

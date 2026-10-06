@@ -21,7 +21,9 @@ export default function ScheduleRoute() {
       onConfirm={async (schedule) => {
         setError(null);
         try {
-          if (await createBooking(schedule)) router.navigate('/(customer)/bookings');
+          // Straight to the deposit: the hold is already ticking, so the transfer is the next step.
+          const booking = await createBooking(schedule);
+          if (booking) router.navigate(`/(customer)/payment?id=${booking.id}`);
         } catch (cause) {
           setError(
             cause instanceof Error ? cause.message : 'Không giữ được kho. Vui lòng thử lại.',

@@ -8,6 +8,7 @@ import {
   isActiveHold,
   selectActiveHolds,
 } from '../../../lib/booking-hold-state';
+import { depositStage } from '../../../lib/booking-payment-state';
 import { formatArea, formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import { rentalEndIso } from '../../../lib/rental-schedule';
 import type { ApiBooking } from '../../types/booking-api';
@@ -21,6 +22,7 @@ type Props = {
   contentBottomPadding: number;
   onBrowse: () => void;
   onRefresh: () => void;
+  onPay: (bookingId: string) => void;
 };
 
 export function MyBookingsScreen({
@@ -31,6 +33,7 @@ export function MyBookingsScreen({
   contentBottomPadding,
   onBrowse,
   onRefresh,
+  onPay,
 }: Props) {
   const active = selectActiveHolds(bookings, now);
   const others = bookings.filter((booking) => !isActiveHold(booking, now));
@@ -67,7 +70,13 @@ export function MyBookingsScreen({
         </Text>
         {active.length > 0 ? (
           active.map((booking) => (
-            <BookingCard key={booking.id} booking={booking} now={now} isHolding />
+            <BookingCard
+              key={booking.id}
+              booking={booking}
+              now={now}
+              isHolding
+              onPay={() => onPay(booking.id)}
+            />
           ))
         ) : isLoading && bookings.length === 0 ? null : (
           <View className="items-center rounded-2xl border border-dashed border-border px-5 py-10">
@@ -98,10 +107,12 @@ function BookingCard({
   booking,
   now,
   isHolding,
+  onPay,
 }: {
   booking: ApiBooking;
   now: number;
   isHolding: boolean;
+  onPay?: () => void;
 }) {
   const first = booking.items[0];
   const firstDate = first?.requestedStartAt.slice(0, 10);
@@ -111,6 +122,7 @@ function BookingCard({
   );
   const state = holdState(booking, now);
   const status = state === 'expired' ? 'Hết hạn giữ' : statusLabel(booking.status);
+  const isPayable = onPay !== undefined && depositStage(booking, now) === 'awaiting';
 
   return (
     <Card
@@ -199,6 +211,12 @@ function BookingCard({
             {formatMoney(Number(booking.depositTotal))}
           </Text>
         </View>
+
+        {isPayable ? (
+          <Button onPress={onPay}>
+            <Button.Label>Thanh toán tiền cọc</Button.Label>
+          </Button>
+        ) : null}
       </Card.Body>
     </Card>
   );

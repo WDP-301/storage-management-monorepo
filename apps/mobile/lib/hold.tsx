@@ -41,8 +41,11 @@ type HoldContextValue = {
   error: string | null;
   selectUnits: (units: UnitOffer[]) => void;
   clearSelection: () => void;
-  createBooking: (schedule: RentalSchedule) => Promise<boolean>;
+  /** Resolves to the created booking so the caller can send the customer straight to its deposit. */
+  createBooking: (schedule: RentalSchedule) => Promise<ApiBooking | null>;
   refreshBookings: () => Promise<void>;
+  /** Merges one freshly fetched booking into the list — how deposit polling publishes its result. */
+  applyBooking: (booking: ApiBooking) => void;
 };
 
 const HoldContext = createContext<HoldContextValue | null>(null);
@@ -120,7 +123,7 @@ export function HoldProvider({ children }: { children: ReactNode }) {
 
   const createBooking = useCallback(
     async (schedule: RentalSchedule) => {
-      if (!selectedUnits?.length || !selectionKey.current || submitting.current) return false;
+      if (!selectedUnits?.length || !selectionKey.current || submitting.current) return null;
       const items: BookingItemInput[] = selectedUnits.map((unit) => ({
         storageUnitId: unit.id,
         // Noon UTC keeps the selected calendar day stable for the API's date validation.
@@ -133,15 +136,13 @@ export function HoldProvider({ children }: { children: ReactNode }) {
         // A lost response may still represent a committed booking. Keep the selection's key
         // even if the schedule changes, so retries cannot accidentally create a new request.
         const created = await BookingsApi.create(items, selectionKey.current);
+        const booking = toBooking(created, selectedUnits);
         requestSequence.current += 1;
-        setBookings((current) => [
-          toBooking(created, selectedUnits),
-          ...current.filter((b) => b.id !== created.id),
-        ]);
+        setBookings((current) => [booking, ...current.filter((b) => b.id !== created.id)]);
         setNow(Date.now());
         clearSelection();
         void refreshBookings().catch(() => undefined);
-        return true;
+        return booking;
       } finally {
         submitting.current = false;
         setIsCreating(false);
@@ -149,6 +150,19 @@ export function HoldProvider({ children }: { children: ReactNode }) {
     },
     [clearSelection, refreshBookings, selectedUnits],
   );
+
+  const applyBooking = useCallback((booking: ApiBooking) => {
+    setBookings((current) => {
+      const index = current.findIndex((b) => b.id === booking.id);
+      if (index === -1) return [booking, ...current];
+      const next = [...current];
+      next[index] = booking;
+      return next;
+    });
+    // Same reason as in refreshBookings: a paused ticker leaves `now` stale, and the deposit
+    // countdown would render against the wrong instant on the first frame after a poll.
+    setNow(Date.now());
+  }, []);
 
   const remaining = useMemo(
     () => formatRemaining((heldBooking ? holdDeadline(heldBooking) : now) - now),
@@ -171,6 +185,7 @@ export function HoldProvider({ children }: { children: ReactNode }) {
       clearSelection,
       createBooking,
       refreshBookings,
+      applyBooking,
     }),
     [
       selectedUnits,
@@ -187,6 +202,7 @@ export function HoldProvider({ children }: { children: ReactNode }) {
       clearSelection,
       createBooking,
       refreshBookings,
+      applyBooking,
     ],
   );
 
@@ -200,10 +216,14 @@ export function useHold() {
 }
 
 function toBooking(created: CreatedBooking, units: UnitOffer[]): ApiBooking {
+  // A booking this fresh has never been updated, so both stamps are "now". The deposit receipt
+  // only reads `updatedAt` once the server has confirmed the booking and sent its own copy back.
+  const now = new Date().toISOString();
   return {
     ...created,
     currency: 'VND',
-    createdAt: new Date().toISOString(),
+    createdAt: now,
+    updatedAt: now,
     items: created.items.map((item, index) => {
       const unit = units.find((candidate) => candidate.id === item.storageUnitId) ?? units[index];
       return {

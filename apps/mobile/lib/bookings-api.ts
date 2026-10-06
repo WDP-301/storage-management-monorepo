@@ -13,6 +13,13 @@ export const BookingsApi = {
     return bookings.map(normaliseBooking);
   },
 
+  /**
+   * One booking, fresh from the server. The deposit screen polls this while waiting for the SePay
+   * webhook to confirm the transfer — the API has no push channel for it.
+   */
+  getById: async (id: string, signal?: AbortSignal): Promise<ApiBooking> =>
+    normaliseBooking(await request<BookingListItemResponse>(`/bookings/${id}`, { signal })),
+
   create: (items: BookingItemInput[], idempotencyKey: string) =>
     request<CreatedBooking>('/bookings', {
       method: 'POST',

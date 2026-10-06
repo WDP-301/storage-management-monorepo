@@ -38,6 +38,8 @@ export default function CustomerTabsLayout() {
           <RouterTabs.Screen name="settings" options={{ title: 'Cài đặt' }} />
           {/* Scheduling is reached after selecting units; the custom tab bar has three buttons. */}
           <RouterTabs.Screen name="schedule" options={{ title: 'Đặt lịch thuê' }} />
+          {/* Deposit payment is reached from a booking, so it has no tab button either. */}
+          <RouterTabs.Screen name="payment" options={{ title: 'Thanh toán tiền cọc' }} />
         </RouterTabs>
       </SafeAreaView>
     </HoldProvider>
@@ -112,5 +114,7 @@ function CustomerTabBar({
 function toCustomerTab(routeName: string | undefined): CustomerTab {
   if (routeName === 'bookings' || routeName === 'settings') return routeName;
   if (routeName === 'schedule') return 'browse';
+  // Paying a deposit belongs to the booking the customer came from, not to browsing.
+  if (routeName === 'payment') return 'bookings';
   return 'browse';
 }

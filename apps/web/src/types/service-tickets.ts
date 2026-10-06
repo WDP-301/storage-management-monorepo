@@ -1,4 +1,4 @@
-import type { PaginationMeta, PaginationQuery, TicketPriority, TicketStatus } from '@storage/types';
+import type { PaginationMeta, TicketPriority, TicketStatus } from '@storage/types';
 
 export interface TicketTypeInfo {
   id: string;
@@ -60,13 +60,12 @@ export interface AssignTicketDto {
   assignedTo: string;
 }
 
-export interface ListTicketsQuery extends PaginationQuery {
-  facility_id?: string;
+export interface ListTicketsQuery {
+  page?: number;
+  limit?: number;
   status?: TicketStatus;
   priority?: TicketPriority;
-  type_id?: string;
-  assigned_to_user_id?: string;
-  created_by_user_id?: string;
+  typeId?: string;
 }
 
 export interface ServiceTicketResponse {

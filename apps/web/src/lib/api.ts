@@ -80,7 +80,9 @@ apiClient.interceptors.response.use(
       errorMessage = error.message;
     }
 
-    return Promise.reject(new Error(errorMessage));
+    const err = new Error(errorMessage) as Error & { status?: number };
+    err.status = status;
+    return Promise.reject(err);
   },
 );
 

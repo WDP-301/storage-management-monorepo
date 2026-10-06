@@ -9,7 +9,6 @@ import {
   Text,
 } from '@cloudflare/kumo';
 import { TicketPriority, TicketStatus } from '@storage/types';
-import axios from 'axios';
 import {
   AlertCircle,
   CheckCircle2,
@@ -24,13 +23,11 @@ import {
   X,
 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
 import { TicketsApi } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
 import type { ServiceTicketRecord, TicketUserInfo } from '../../types/service-tickets';
 
 export const ManagerTicketsPage: React.FC = () => {
-  const { user } = useAuth();
   const toast = useAppToast();
   const [tickets, setTickets] = useState<ServiceTicketRecord[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,14 +57,14 @@ export const ManagerTicketsPage: React.FC = () => {
     setIsLoading(true);
     setActionErrorMessage(null);
     try {
-      const res = await TicketsApi.getAll();
+      // ponytail: fetches max page size (100) and filters client-side — tickets
+      // beyond that silently drop off; upgrade path = server-side filters + pagination UI.
+      const res = await TicketsApi.getAll({ limit: 100 });
       setTickets(res?.tickets || []);
     } catch (err: unknown) {
       setTickets([]);
       const msg =
-        axios.isAxiosError(err) && err.response?.data?.message
-          ? String(err.response.data.message)
-          : 'Không thể tải danh sách phiếu sự cố từ hệ thống.';
+        err instanceof Error ? err.message : 'Không thể tải danh sách phiếu sự cố từ hệ thống.';
       setActionErrorMessage(msg);
       toast.error('Lỗi tải dữ liệu', msg);
     } finally {
@@ -103,61 +100,30 @@ export const ManagerTicketsPage: React.FC = () => {
     setIsAssigning(true);
     setActionErrorMessage(null);
     try {
-      const chosenStaff = availableStaff.find((s) => s.id === selectedStaffId);
-      const staffName = chosenStaff?.full_name || 'Nhân viên';
       const updatedTicket = await TicketsApi.assign(assignModalTicket.id, selectedStaffId);
-
       setTickets((prev) =>
-        prev.map((t) => {
-          if (t.id === assignModalTicket.id) {
-            const nextStatus = t.status === TicketStatus.OPEN ? TicketStatus.ASSIGNED : t.status;
-            return {
-              ...t,
-              ...updatedTicket,
-              assigned_to: selectedStaffId,
-              status: updatedTicket?.status ?? nextStatus,
-              assignee: updatedTicket?.assignee ??
-                chosenStaff ?? {
-                  id: selectedStaffId,
-                  full_name: staffName,
-                  email: 'staff@storagehub.vn',
-                },
-              history: updatedTicket?.history ?? [
-                ...(t.history || []),
-                {
-                  action: 'ASSIGNED',
-                  to: staffName,
-                  at: new Date().toISOString(),
-                  by: user?.fullName || 'Manager',
-                },
-              ],
-            };
-          }
-          return t;
-        }),
+        prev.map((t) => (t.id === assignModalTicket.id ? { ...t, ...updatedTicket } : t)),
       );
 
+      const staffName =
+        updatedTicket.assignee?.full_name ??
+        availableStaff.find((s) => s.id === selectedStaffId)?.full_name ??
+        'nhân viên mới';
       const successMsg = `Đã phân công vé ${assignModalTicket.ticket_no} cho nhân viên ${staffName} thành công.`;
       setActionSuccessMessage(successMsg);
       toast.success('Phân công thành công', successMsg);
       setAssignModalTicket(null);
       setTimeout(() => setActionSuccessMessage(null), 4000);
     } catch (err: unknown) {
-      let msg = 'Lỗi khi phân công nhân viên.';
-      if (axios.isAxiosError(err)) {
-        const serverMsg = err.response?.data?.message;
-        if (typeof serverMsg === 'string') {
-          msg = serverMsg;
-        } else if (Array.isArray(serverMsg) && serverMsg.length > 0) {
-          msg = serverMsg.join(', ');
-        } else if (err.response?.status === 403) {
-          msg = 'Tài khoản không có quyền phân công (yêu cầu vai trò Quản lý cơ sở của cơ sở này).';
-        } else if (err.response?.status === 404) {
-          msg = 'Không tìm thấy phiếu sự cố hoặc nhân viên kỹ thuật trên hệ thống.';
-        }
-      } else if (err instanceof Error) {
-        msg = err.message;
-      }
+      const status = (err as { status?: number }).status;
+      const msg =
+        status === 403
+          ? 'Tài khoản không có quyền phân công (yêu cầu vai trò Quản lý cơ sở của cơ sở này).'
+          : status === 404
+            ? 'Không tìm thấy phiếu sự cố hoặc nhân viên kỹ thuật trên hệ thống.'
+            : err instanceof Error
+              ? err.message
+              : 'Lỗi khi phân công nhân viên.';
       setActionErrorMessage(msg);
       toast.error('Phân công thất bại', msg);
     } finally {
@@ -182,22 +148,15 @@ export const ManagerTicketsPage: React.FC = () => {
       setTicketToDelete(null);
       setTimeout(() => setActionSuccessMessage(null), 4000);
     } catch (err: unknown) {
-      let msg = 'Lỗi khi xóa vé sự cố.';
-      if (axios.isAxiosError(err)) {
-        const serverMsg = err.response?.data?.message;
-        if (err.response?.status === 403) {
-          msg =
-            'Tài khoản không có quyền xóa phiếu sự cố này (yêu cầu vai trò Quản trị viên hoặc Quản lý cơ sở của cơ sở này).';
-        } else if (typeof serverMsg === 'string') {
-          msg = serverMsg;
-        } else if (Array.isArray(serverMsg) && serverMsg.length > 0) {
-          msg = serverMsg.join(', ');
-        } else if (err.response?.status === 404) {
-          msg = 'Không tìm thấy phiếu sự cố trên hệ thống.';
-        }
-      } else if (err instanceof Error) {
-        msg = err.message;
-      }
+      const status = (err as { status?: number }).status;
+      const msg =
+        status === 403
+          ? 'Tài khoản không có quyền xóa phiếu sự cố này (yêu cầu vai trò Quản trị viên hoặc Quản lý cơ sở của cơ sở này).'
+          : status === 404
+            ? 'Không tìm thấy phiếu sự cố trên hệ thống.'
+            : err instanceof Error
+              ? err.message
+              : 'Lỗi khi xóa vé sự cố.';
       setActionErrorMessage(msg);
       toast.error('Xóa vé thất bại', msg);
     } finally {

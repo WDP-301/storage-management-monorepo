@@ -15,12 +15,17 @@
           "savePhotosPermission": "Cho phép lưu mã QR thanh toán vào thư viện ảnh để bạn quét bằng app ngân hàng.",
           "isAccessMediaLocationEnabled": false
         }
+      ],
+      "@maplibre/maplibre-react-native",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#2563eb",
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain"
+        }
       ]
     ],
-    "splash": {
-      "resizeMode": "contain",
-      "backgroundColor": "#2563eb"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.storage.management"

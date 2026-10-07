@@ -81,6 +81,9 @@ export function groupUnitsByFacility(
       address: offer.address,
       provinceCode: offer.provinceCode,
       wardCode: offer.wardCode,
+      // Already coerced to numbers by `toUnitOffer`; every unit of a facility carries the same pair.
+      latitude: offer.latitude,
+      longitude: offer.longitude,
       units: [offer],
     });
   }

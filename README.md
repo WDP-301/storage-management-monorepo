@@ -19,7 +19,7 @@ storage-management-monorepo/
 ├── apps/
 │   ├── api/                     # @storage/api      — NestJS 11 + TypeORM (PostgreSQL) + S3 (R2) + Swagger
 │   ├── web/                     # @storage/web      — React 19 + Vite 8 SPA + Tailwind v4 + S3 Upload
-│   └── mobile/                  # @storage/mobile   — React Native Expo SDK 54 (Barcode Scanner Simulation)
+│   └── mobile/                  # @storage/mobile   — React Native Expo SDK 54 (dev client, không chạy Expo Go)
 ├── packages/
 │   ├── types/                   # @storage/types    — Shared TypeScript interfaces, DTOs & S3 types
 │   └── tsconfig/                # @storage/tsconfig — Shared TypeScript compiler presets (nest, react, react-native, base)
@@ -40,7 +40,7 @@ storage-management-monorepo/
 | :--- | :--- | :--- | :--- |
 | **Backend API (`apps/api`)** | NestJS 11, TypeORM, PostgreSQL (`pg`), AWS SDK v3 S3, Swagger | `3001` | REST API, Warehouse Inventory CRUD & S3 Presigned URL services |
 | **Web App (`apps/web`)** | React 19, Vite 8, Tailwind CSS v4, Lucide React, Axios | `3000` | Operations & Admin desktop dashboard SPA (Pure React Hooks) |
-| **Mobile App (`apps/mobile`)** | React Native, Expo SDK 54, Metro monorepo | `8081` | Handheld warehouse barcode scanner simulator & KPI view |
+| **Mobile App (`apps/mobile`)** | React Native, Expo SDK 54, MapLibre + Goong, Metro monorepo | `8081` | Customer booking flow, warehouse map & KPI view (dev client, **không chạy Expo Go**) |
 | **Shared Types (`packages/types`)** | TypeScript | N/A | DTOs, entity interfaces, and API response contracts |
 | **Shared Config (`packages/tsconfig`)**| TSConfig Presets | N/A | Shared tsconfig (`nest`, `react`, `react-native`, `base`) |
 | **Relational Database** | PostgreSQL (Render, managed) | `5432` | Primary relational database |
@@ -75,6 +75,17 @@ cp apps/api/.env.example apps/api/.env
 pnpm --filter @storage/api migration:run
 ```
 
+### 2b. Mobile: dev client (bắt buộc từ khi có bản đồ)
+
+`apps/mobile` có native module (MapLibre) nên **không chạy trên Expo Go**. Lần đầu trên mỗi máy:
+
+```bash
+cd apps/mobile && npx expo prebuild --platform android --clean && npx expo run:android
+```
+
+Cần JDK 17 + Android SDK. Chi tiết env, yêu cầu máy và troubleshooting:
+[`apps/mobile/README.md`](apps/mobile/README.md).
+
 ### 3. Run Development Servers
 ```bash
 # Run API, Web, and Mobile simultaneously:
@@ -83,7 +94,7 @@ pnpm dev
 # Or run individual workspaces:
 pnpm dev:api     # Backend API at http://localhost:3001/api/v1
 pnpm dev:web     # React Vite Web at http://localhost:3000
-pnpm dev:mobile  # Expo SDK 54 Mobile Metro bundler
+pnpm dev:mobile  # Expo SDK 54 Metro bundler (--dev-client; cần build một lần, xem 2b)
 ```
 
 ---

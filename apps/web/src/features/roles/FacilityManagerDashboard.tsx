@@ -18,6 +18,7 @@ import {
   WarningCircle,
   Wrench,
 } from '@phosphor-icons/react';
+import { UserRole } from '@storage/types';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -74,7 +75,7 @@ export const FacilityManagerDashboard: React.FC = () => {
   const [kpiUnits, setKpiUnits] = useState<ManagedUnit[]>([]);
   const [requests, setRequests] = useState<UnitChangeRequestRecord[]>([]);
   const toast = useAppToast();
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -98,7 +99,13 @@ export const FacilityManagerDashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!selectedFacilityId) return;
+    if (!selectedFacilityId) {
+      setUnits([]);
+      setUnitsMeta(null);
+      setRequests([]);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     loadFacilityData(selectedFacilityId, unitsPage, statusFilter)
       .catch((err: Error) => setError(err.message))
@@ -107,7 +114,10 @@ export const FacilityManagerDashboard: React.FC = () => {
 
   // KPI snapshot — status-agnostic, capped at 100 (same ceiling as the old unpaged fetch).
   const refreshKpi = useCallback(() => {
-    if (!selectedFacilityId) return;
+    if (!selectedFacilityId) {
+      setKpiUnits([]);
+      return;
+    }
     UnitsApi.managed(selectedFacilityId, { limit: 100 })
       .then((d) => setKpiUnits(d.units))
       .catch(() => setKpiUnits([]));
@@ -175,18 +185,28 @@ export const FacilityManagerDashboard: React.FC = () => {
   const occupancy =
     kpiUnits.length > 0 ? ((rentedCount / kpiUnits.length) * 100).toFixed(1) : '0.0';
 
-  if (facilitiesLoading || (isLoading && facilities.length === 0)) {
+  if (facilitiesLoading) {
     return <Text variant="secondary">Đang tải danh sách cơ sở...</Text>;
   }
 
   if (facilities.length === 0) {
+    const isAdminOrOps =
+      user?.roles?.includes(UserRole.ADMIN) || user?.roles?.includes(UserRole.OPERATIONS_MANAGER);
     return (
       <Empty
         icon={<Buildings className="w-8 h-8" />}
-        title="Chưa được gán cơ sở"
-        description="Tài khoản của bạn chưa được gán quản lý cơ sở nào. Liên hệ quản trị viên để được cấp quyền."
+        title={isAdminOrOps ? 'Chưa có cơ sở kho nào' : 'Chưa được gán cơ sở'}
+        description={
+          isAdminOrOps
+            ? 'Hệ thống chưa có cơ sở kho nào đang hoạt động. Vui lòng thêm cơ sở kho mới.'
+            : 'Tài khoản của bạn chưa được gán quản lý cơ sở nào. Liên hệ quản trị viên để được cấp quyền.'
+        }
       />
     );
+  }
+
+  if (isLoading && units.length === 0 && !error) {
+    return <Text variant="secondary">Đang tải dữ liệu cơ sở...</Text>;
   }
 
   return (

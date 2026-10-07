@@ -4,7 +4,8 @@ import { FacilitiesApi, type FacilityRecord } from '../lib/api';
 import { useAuth } from './AuthContext';
 
 const STORAGE_KEY = 'storage:selectedFacilityId';
-const FACILITY_SCOPED_ROLES: UserRole[] = [UserRole.FACILITY_MANAGER, UserRole.FACILITY_STAFF];
+const ALL_FACILITY_ROLES: UserRole[] = [UserRole.ADMIN, UserRole.OPERATIONS_MANAGER];
+const ASSIGNED_FACILITY_ROLES: UserRole[] = [UserRole.FACILITY_MANAGER, UserRole.FACILITY_STAFF];
 
 interface FacilityContextValue {
   facilities: FacilityRecord[];
@@ -21,26 +22,34 @@ export const FacilityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const isFacilityScoped = Boolean(activeRole && FACILITY_SCOPED_ROLES.includes(activeRole));
+  const shouldFetchAll = Boolean(activeRole && ALL_FACILITY_ROLES.includes(activeRole));
+  const shouldFetchAssigned = Boolean(activeRole && ASSIGNED_FACILITY_ROLES.includes(activeRole));
 
   useEffect(() => {
-    if (!user || !isFacilityScoped) {
+    if (!user || (!shouldFetchAll && !shouldFetchAssigned)) {
       setFacilities([]);
       setSelectedFacilityId(null);
+      setIsLoading(false);
       return;
     }
 
     setIsLoading(true);
-    FacilitiesApi.mine()
+    const fetchPromise = shouldFetchAll ? FacilitiesApi.listAll() : FacilitiesApi.mine();
+
+    fetchPromise
       .then((list) => {
-        setFacilities(list);
+        const facilityList = list || [];
+        setFacilities(facilityList);
         const saved = localStorage.getItem(STORAGE_KEY);
-        const valid = list.find((f) => f.id === saved);
-        setSelectedFacilityId((valid ?? list[0])?.id ?? null);
+        const valid = facilityList.find((f) => f.id === saved);
+        setSelectedFacilityId((valid ?? facilityList[0])?.id ?? null);
       })
-      .catch(() => setFacilities([]))
+      .catch(() => {
+        setFacilities([]);
+        setSelectedFacilityId(null);
+      })
       .finally(() => setIsLoading(false));
-  }, [user, isFacilityScoped]);
+  }, [user, shouldFetchAll, shouldFetchAssigned]);
 
   const selectFacility = useCallback((id: string) => {
     setSelectedFacilityId(id);

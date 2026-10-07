@@ -71,11 +71,11 @@ const getRoleBadge = (role: UserRole) => {
     case UserRole.ADMIN:
       return <Badge variant="neutral">{getRoleTitle(role)}</Badge>;
     case UserRole.OPERATIONS_MANAGER:
-      return <Badge variant="info">{getRoleTitle(role)}</Badge>;
+      return <Badge variant="neutral">{getRoleTitle(role)}</Badge>;
     case UserRole.FACILITY_MANAGER:
       return <Badge variant="warning">{getRoleTitle(role)}</Badge>;
     case UserRole.FACILITY_STAFF:
-      return <Badge variant="secondary">{getRoleTitle(role)}</Badge>;
+      return <Badge variant="neutral">{getRoleTitle(role)}</Badge>;
     case UserRole.CUSTOMER:
       return <Badge variant="neutral">{getRoleTitle(role)}</Badge>;
     default:

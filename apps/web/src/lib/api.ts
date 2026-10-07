@@ -5,8 +5,17 @@ import {
   SystemSettingRecord,
   SystemSettingsResponse,
   UpdateSettingsResponse,
+  UserStatus,
 } from '@storage/types';
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import type {
+  AdminUser,
+  AdminUserListResponse,
+  AdminUserResponse,
+  AssignRoleDto,
+  ListUsersQuery,
+  RevokeRoleResponse,
+} from '../types/admin-user';
 import { AuthUser, LoginInput, LoginResponse, RegisterInput } from '../types/auth';
 import type {
   AssignTicketDto,
@@ -172,6 +181,11 @@ export const FacilitiesApi = {
     const res = await apiClient.get<ApiResponse<FacilityRecord[]>>('/facilities/mine');
     return res.data.data;
   },
+
+  listAll: async (): Promise<FacilityRecord[]> => {
+    const res = await apiClient.get<ApiResponse<FacilityRecord[]>>('/facilities');
+    return res.data.data;
+  },
 };
 
 export const UnitsApi = {
@@ -308,5 +322,59 @@ export const SettingsApi = {
       values,
     });
     return res.data.data.settings;
+  },
+};
+
+/**
+ * Admin User Management API Service
+ */
+export const AdminUsersApi = {
+  /**
+   * List users with pagination and optional filters (search, status, role)
+   */
+  list: async (params?: ListUsersQuery): Promise<AdminUserListResponse> => {
+    const res = await apiClient.get<ApiResponse<AdminUserListResponse>>('/admin/users', {
+      params,
+    });
+    return res.data.data;
+  },
+
+  /**
+   * Get a single user by ID including their role assignments
+   */
+  getById: async (id: string): Promise<AdminUser> => {
+    const res = await apiClient.get<ApiResponse<AdminUserResponse>>(`/admin/users/${id}`);
+    return res.data.data.user;
+  },
+
+  /**
+   * Change user account status (ACTIVE, SUSPENDED, DISABLED)
+   */
+  updateStatus: async (id: string, status: UserStatus): Promise<AdminUser> => {
+    const res = await apiClient.patch<ApiResponse<AdminUserResponse>>(`/admin/users/${id}/status`, {
+      status,
+    });
+    return res.data.data.user;
+  },
+
+  /**
+   * Assign a role to a user
+   */
+  assignRole: async (id: string, dto: AssignRoleDto): Promise<AdminUser> => {
+    const res = await apiClient.post<ApiResponse<AdminUserResponse>>(
+      `/admin/users/${id}/roles`,
+      dto,
+    );
+    return res.data.data.user;
+  },
+
+  /**
+   * Revoke a role assignment from a user
+   */
+  revokeRole: async (id: string, assignmentId: string): Promise<boolean> => {
+    const res = await apiClient.delete<ApiResponse<RevokeRoleResponse>>(
+      `/admin/users/${id}/roles/${assignmentId}`,
+    );
+    return res.data.data.revoked;
   },
 };

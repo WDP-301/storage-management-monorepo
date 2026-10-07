@@ -780,6 +780,7 @@ export const ManagerTicketsPage: React.FC = () => {
                               shape="square"
                               icon={<DotsThree weight="bold" />}
                               aria-label={`Thao tác vé ${ticket.ticket_no}`}
+                              title={`Thao tác vé ${ticket.ticket_no}`}
                             />
                           )}
                         />

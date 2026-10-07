@@ -12,6 +12,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -19,6 +20,7 @@ import { ApiErrorResponseDto } from '@shared/models/api-response';
 import { UserRole } from '@storage/types';
 import { ContractsService } from './contracts.service';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
+import { UploadContractEvidenceDto } from './dto/upload-contract-evidence.dto';
 
 @ApiTags('Contracts')
 @Controller('contracts')
@@ -61,6 +63,13 @@ export class ContractsController {
   @ApiOperation({ summary: 'Update a contract' })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateContractDto) {
     return this.contractsService.update(id, dto);
+  }
+
+  @Put(':id/evidence')
+  @ApiOperation({ summary: 'Set the contract evidence URL (R2 public link)' })
+  @ApiResponse({ status: 400, type: ApiErrorResponseDto })
+  uploadEvidence(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UploadContractEvidenceDto) {
+    return this.contractsService.uploadEvidence(id, dto);
   }
 
   @Delete(':id')

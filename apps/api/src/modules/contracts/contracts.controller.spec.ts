@@ -11,7 +11,7 @@ import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
 describe('Contract access and input validation', () => {
   const guard = new RolesGuard(new Reflector());
 
-  it.each(['create', 'findAll', 'findOne', 'update', 'remove'] as const)(
+  it.each(['create', 'findAll', 'findOne', 'update', 'uploadEvidence', 'remove'] as const)(
     '%s requires a session and permits all four staff roles, excluding customers',
     (method) => {
       expect(Reflect.getMetadata(GUARDS_METADATA, ContractsController)).toEqual([

@@ -3,15 +3,17 @@ import { AppUser } from '@entities/app-user.entity';
 import { Booking } from '@entities/booking.entity';
 import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
+import { Inspection } from '@entities/inspection.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { isUniqueViolation } from '@shared/utils/pg-error.util';
-import { BookingStatus, ContractKind, ContractStatus } from '@storage/types';
+import { BookingStatus, ContractKind, ContractStatus, InspectionType } from '@storage/types';
 import Decimal from 'decimal.js';
 import { DataSource, IsNull, Repository } from 'typeorm';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
+import { UploadContractEvidenceDto } from './dto/upload-contract-evidence.dto';
 
 const CONTRACT_CREATION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -86,6 +88,7 @@ export class ContractsService {
         months: item.rentalMonths,
         monthlyPriceSnapshot: monthlyPriceSnapshot as unknown as number,
         termsSnapshot: dto.termsSnapshot ?? {},
+        evidence: dto.evidence ?? null,
         customerSnapshot: {
           id: customer.id,
           fullName: customer.fullName,
@@ -93,8 +96,9 @@ export class ContractsService {
           phone: customer.phone ?? null,
         },
       });
+      let saved: Contract;
       try {
-        return await manager.save(Contract, contract);
+        saved = await manager.save(Contract, contract);
       } catch (err) {
         // UQ_contract_initial_item — a second INITIAL contract raced past the item lock.
         if (isUniqueViolation(err)) {
@@ -107,6 +111,16 @@ export class ContractsService {
         }
         throw err;
       }
+      // Auto-create an empty PRE_HANDOVER inspection for the new contract.
+      // Same transaction: inspection failure rolls back the contract.
+      // Other fields use entity/DB defaults (evidence/damages=[],
+      // inspectedBy/conditionNotes/inspectedAt/finalizedAt=NULL).
+      const inspection = manager.create(Inspection, {
+        contractId: saved.id,
+        type: InspectionType.PRE_HANDOVER,
+      });
+      await manager.save(Inspection, inspection);
+      return saved;
     });
   }
 
@@ -167,6 +181,22 @@ export class ContractsService {
   async softDelete(id: string): Promise<void> {
     const result = await this.contracts.softDelete({ id, deletedAt: IsNull() });
     if (!result.affected) notFound('Contract', id);
+  }
+
+  /**
+   * Sets the contract evidence URL (single link, replaces the previous one).
+   * The file itself is uploaded by the client beforehand via
+   * POST /uploads/presigned-url + PUT to R2 — this endpoint only stores the link.
+   * Allowed even after `signedAt` (evidence is not a sealed commercial term).
+   */
+  async uploadEvidence(id: string, dto: UploadContractEvidenceDto): Promise<Contract> {
+    await this.findById(id);
+    const result = await this.contracts.update(
+      { id, deletedAt: IsNull() },
+      { evidence: dto.evidenceUrl },
+    );
+    if (!result.affected) notFound('Contract', id);
+    return this.findById(id);
   }
 
   private validateDates(effectiveAt: Date, endedAt?: Date): void {

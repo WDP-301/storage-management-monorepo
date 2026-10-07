@@ -90,6 +90,16 @@ const buildRentCheckBuilder = (exists: boolean) => ({
   getExists: jest.fn().mockResolvedValue(exists),
 });
 
+const buildRawRowsBuilder = (rows: unknown[]) => ({
+  innerJoin: jest.fn().mockReturnThis(),
+  select: jest.fn().mockReturnThis(),
+  distinct: jest.fn().mockReturnThis(),
+  where: jest.fn().mockReturnThis(),
+  andWhere: jest.fn().mockReturnThis(),
+  orderBy: jest.fn().mockReturnThis(),
+  getRawMany: jest.fn().mockResolvedValue(rows),
+});
+
 describe('ServiceTicketsService', () => {
   let tickets: {
     createQueryBuilder: jest.Mock;
@@ -98,7 +108,7 @@ describe('ServiceTicketsService', () => {
     save: jest.Mock;
     delete: jest.Mock;
   };
-  let ticketTypes: { findOne: jest.Mock };
+  let ticketTypes: { findOne: jest.Mock; find: jest.Mock };
   let roleAssignments: { find: jest.Mock; findOne: jest.Mock };
   let users: { findOne: jest.Mock };
   let facilities: { findOne: jest.Mock };
@@ -117,7 +127,10 @@ describe('ServiceTicketsService', () => {
       save: jest.fn((value) => Promise.resolve(value)),
       delete: jest.fn().mockResolvedValue({ affected: 1 }),
     };
-    ticketTypes = { findOne: jest.fn().mockResolvedValue(null) };
+    ticketTypes = {
+      findOne: jest.fn().mockResolvedValue(null),
+      find: jest.fn().mockResolvedValue([]),
+    };
     roleAssignments = {
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue(null),
@@ -586,6 +599,69 @@ describe('ServiceTicketsService', () => {
 
       expect(result.ticket.id).toBe('ticket-1');
       expect(roleAssignments.find).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('formOptions', () => {
+    it('returns only active types', async () => {
+      ticketTypes.find.mockResolvedValue([
+        { id: 'type-1', code: 'MAINTENANCE', name: 'Facility Maintenance', isActive: true },
+      ]);
+      contracts.createQueryBuilder
+        .mockReturnValueOnce(buildRawRowsBuilder([]))
+        .mockReturnValueOnce(buildRawRowsBuilder([]));
+
+      const result = await service.formOptions(buildActor({ id: 'customer-1' }));
+
+      expect(ticketTypes.find).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ isActive: true }) }),
+      );
+      expect(result.options.types).toEqual([
+        { id: 'type-1', code: 'MAINTENANCE', name: 'Facility Maintenance' },
+      ]);
+    });
+
+    it('nests actively-rented units under their facility and keeps ENDED-only facilities empty', async () => {
+      ticketTypes.find.mockResolvedValue([]);
+      contracts.createQueryBuilder
+        .mockReturnValueOnce(
+          buildRawRowsBuilder([
+            { id: 'facility-1', code: 'F001', name: 'Facility One' },
+            { id: 'facility-2', code: 'F002', name: 'Facility Two' },
+          ]),
+        )
+        .mockReturnValueOnce(
+          buildRawRowsBuilder([
+            { id: 'unit-1', code: 'A-108', facilityId: 'facility-1' },
+            { id: 'unit-2', code: 'A-109', facilityId: 'facility-1' },
+          ]),
+        );
+
+      const result = await service.formOptions(buildActor({ id: 'customer-1' }));
+
+      expect(result.options.facilities).toEqual([
+        {
+          id: 'facility-1',
+          code: 'F001',
+          name: 'Facility One',
+          units: [
+            { id: 'unit-1', code: 'A-108' },
+            { id: 'unit-2', code: 'A-109' },
+          ],
+        },
+        { id: 'facility-2', code: 'F002', name: 'Facility Two', units: [] },
+      ]);
+    });
+
+    it('returns empty collections for a customer without contracts', async () => {
+      ticketTypes.find.mockResolvedValue([]);
+      contracts.createQueryBuilder
+        .mockReturnValueOnce(buildRawRowsBuilder([]))
+        .mockReturnValueOnce(buildRawRowsBuilder([]));
+
+      const result = await service.formOptions(buildActor({ id: 'customer-1' }));
+
+      expect(result.options).toEqual({ types: [], facilities: [] });
     });
   });
 

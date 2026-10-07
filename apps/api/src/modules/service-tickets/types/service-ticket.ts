@@ -108,6 +108,21 @@ export interface ServiceTicketResponse {
   ticket: ServiceTicketRecord;
 }
 
+/** A facility the customer may file against, with the units they actively rent there. */
+export interface TicketFacilityOption extends TicketFacilityInfo {
+  units: TicketStorageUnitInfo[];
+}
+
+/** Options backing the customer create-ticket form. */
+export interface TicketFormOptions {
+  types: TicketTypeInfo[];
+  facilities: TicketFacilityOption[];
+}
+
+export interface TicketFormOptionsResponse {
+  options: TicketFormOptions;
+}
+
 export interface ServiceTicketDeleteResponse {
   deleted: boolean;
   id: string;

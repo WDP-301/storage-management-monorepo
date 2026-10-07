@@ -33,7 +33,10 @@ import type {
   ServiceTicketDeleteResponse,
   ServiceTicketListResponse,
   ServiceTicketResponse,
+  TicketFacilityInfo,
+  TicketFormOptionsResponse,
   TicketHistoryEntry,
+  TicketStorageUnitInfo,
 } from './types/service-ticket';
 import { toServiceTicketRecord } from './types/service-ticket';
 
@@ -217,6 +220,68 @@ export class ServiceTicketsService {
     await this.assertCanAccess(ticket, actor);
 
     return { ticket: toServiceTicketRecord(ticket) };
+  }
+
+  /**
+   * Options backing the customer create-ticket form: active ticket types plus the
+   * facilities and units the customer may file against. Mirrors the rental rules in
+   * `assertCustomerRents` — a unit needs an ACTIVE in-window contract, a facility also
+   * accepts an ENDED one — so an option offered here always survives create validation.
+   */
+  async formOptions(actor: AuthUser): Promise<TicketFormOptionsResponse> {
+    const now = new Date();
+
+    const types = await this.ticketTypes.find({
+      where: { isActive: true, deletedAt: IsNull() },
+      order: { code: 'ASC' },
+    });
+
+    const facilityRows = await this.contracts
+      .createQueryBuilder('c')
+      .innerJoin('c.bookingItem', 'bi')
+      .innerJoin('bi.storageUnit', 'su')
+      .innerJoin('su.facility', 'f')
+      .select(['f.id AS "id"', 'f.code AS "code"', 'f.name AS "name"'])
+      .distinct(true)
+      .where('c.customerId = :customerId', { customerId: actor.id })
+      .andWhere('f.deletedAt IS NULL')
+      .andWhere(
+        '(c.status = :endedStatus OR (c.status = :activeStatus AND c.effectiveAt <= :now AND (c.endedAt IS NULL OR c.endedAt >= :now)))',
+        { endedStatus: ContractStatus.ENDED, activeStatus: ContractStatus.ACTIVE, now },
+      )
+      .orderBy('f.name', 'ASC')
+      .getRawMany<TicketFacilityInfo>();
+
+    const unitRows = await this.contracts
+      .createQueryBuilder('c')
+      .innerJoin('c.bookingItem', 'bi')
+      .innerJoin('bi.storageUnit', 'su')
+      .select(['su.id AS "id"', 'su.code AS "code"', 'su.facilityId AS "facilityId"'])
+      .distinct(true)
+      .where('c.customerId = :customerId', { customerId: actor.id })
+      .andWhere('su.deletedAt IS NULL')
+      .andWhere('c.status = :activeStatus', { activeStatus: ContractStatus.ACTIVE })
+      .andWhere('c.effectiveAt <= :now', { now })
+      .andWhere('(c.endedAt IS NULL OR c.endedAt >= :now)', { now })
+      .orderBy('su.code', 'ASC')
+      .getRawMany<TicketStorageUnitInfo & { facilityId: string }>();
+
+    const unitsByFacility = new Map<string, TicketStorageUnitInfo[]>();
+    for (const { facilityId, ...unit } of unitRows) {
+      const units = unitsByFacility.get(facilityId) ?? [];
+      units.push(unit);
+      unitsByFacility.set(facilityId, units);
+    }
+
+    return {
+      options: {
+        types: types.map(({ id, code, name }) => ({ id, code, name })),
+        facilities: facilityRows.map((f) => ({
+          ...f,
+          units: unitsByFacility.get(f.id) ?? [],
+        })),
+      },
+    };
   }
 
   /**

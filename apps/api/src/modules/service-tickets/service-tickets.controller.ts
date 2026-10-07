@@ -24,6 +24,7 @@ import { UserRole } from '@storage/types';
 import type { Response } from 'express';
 import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
+import { ServiceTicketFormOptionsResponseDto } from './dto/form-options.dto';
 import { ListTicketsQueryDto } from './dto/list-tickets-query.dto';
 import { TicketIdParamDto } from './dto/ticket-params.dto';
 import {
@@ -37,6 +38,7 @@ import type {
   ServiceTicketDeleteResponse,
   ServiceTicketListResponse,
   ServiceTicketResponse,
+  TicketFormOptionsResponse,
 } from './types/service-ticket';
 
 @ApiTags('Service Tickets')
@@ -114,6 +116,24 @@ export class ServiceTicketsController {
     @CurrentUser() user: AuthUser,
   ): Promise<ServiceTicketListResponse> {
     return this.serviceTickets.list(query, user);
+  }
+
+  // Static route declared before ':id' so 'form-options' never lands in the param handler.
+  @Get('form-options')
+  @Roles(UserRole.CUSTOMER)
+  @ApiOperation({
+    summary: 'Options for the create-ticket form',
+    description:
+      'Active ticket types plus the facilities and units the customer may file against ' +
+      '(facilities also match ENDED contracts, units require an active one — same rules as create).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Types and rentable targets',
+    type: ServiceTicketFormOptionsResponseDto,
+  })
+  formOptions(@CurrentUser() user: AuthUser): Promise<TicketFormOptionsResponse> {
+    return this.serviceTickets.formOptions(user);
   }
 
   @Get(':id')

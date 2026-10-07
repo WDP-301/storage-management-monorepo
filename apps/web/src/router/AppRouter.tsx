@@ -13,12 +13,7 @@ import {
 } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from '../features/auth/AuthPage';
-import { DashboardPage } from '../features/dashboard/DashboardPage';
-import { AdminDashboard } from '../features/roles/AdminDashboard';
-import { CustomerDashboard } from '../features/roles/CustomerDashboard';
 import { FacilityManagerDashboard } from '../features/roles/FacilityManagerDashboard';
-import { FacilityStaffDashboard } from '../features/roles/FacilityStaffDashboard';
-import { OperationsDashboard } from '../features/roles/OperationsDashboard';
 import { RoleLandingPage } from '../features/roles/RoleLandingPage';
 import { UnassignedRolePage } from '../features/roles/UnassignedRolePage';
 import { SystemSettingsPage } from '../features/settings/SystemSettingsPage';
@@ -92,14 +87,7 @@ export const AppRouter: React.FC = () => {
           <Route element={<AppShell />}>
             {/* Role-specific dedicated interfaces with guards */}
             <Route element={<RoleRoute allowedRoles={[UserRole.ADMIN]} />}>
-              <Route path="/admin" element={<AdminDashboard />} />
-            </Route>
-
-            <Route
-              element={<RoleRoute allowedRoles={[UserRole.ADMIN, UserRole.OPERATIONS_MANAGER]} />}
-            >
               <Route path="/admin/settings" element={<SystemSettingsPage />} />
-              <Route path="/operations" element={<OperationsDashboard />} />
             </Route>
 
             <Route
@@ -107,40 +95,6 @@ export const AppRouter: React.FC = () => {
             >
               <Route path="/facility-manager" element={<FacilityManagerDashboard />} />
               <Route path="/facility-manager/tickets" element={<ManagerTicketsPage />} />
-            </Route>
-
-            <Route
-              element={
-                <RoleRoute
-                  allowedRoles={[
-                    UserRole.ADMIN,
-                    UserRole.FACILITY_MANAGER,
-                    UserRole.FACILITY_STAFF,
-                  ]}
-                />
-              }
-            >
-              <Route path="/facility-staff" element={<FacilityStaffDashboard />} />
-            </Route>
-
-            <Route element={<RoleRoute allowedRoles={[UserRole.CUSTOMER, UserRole.ADMIN]} />}>
-              <Route path="/customer" element={<CustomerDashboard />} />
-            </Route>
-
-            {/* General inventory and warehouse management (Admin, Operations Manager, Facility Manager only) */}
-            <Route
-              element={
-                <RoleRoute
-                  allowedRoles={[
-                    UserRole.ADMIN,
-                    UserRole.OPERATIONS_MANAGER,
-                    UserRole.FACILITY_MANAGER,
-                  ]}
-                />
-              }
-            >
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/browse" element={<Navigate to="/dashboard" replace />} />
             </Route>
 
             {/* Unassigned role fallback view (accessible to any authenticated user) */}

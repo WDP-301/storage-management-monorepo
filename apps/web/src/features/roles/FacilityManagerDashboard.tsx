@@ -1,4 +1,14 @@
-import { Badge, Button, Empty, InputGroup, LayerCard, Select, Table, Text } from '@cloudflare/kumo';
+import {
+  Badge,
+  Button,
+  Empty,
+  InputGroup,
+  LayerCard,
+  Pagination,
+  Select,
+  Table,
+  Text,
+} from '@cloudflare/kumo';
 import {
   Buildings,
   CheckCircle,
@@ -15,12 +25,12 @@ import { useFacility } from '../../context/FacilityContext';
 import {
   ChangeRequestsApi,
   type ManagedUnit,
-  type ServiceTicketRecord,
-  TicketsApi,
   type UnitChangeRequestRecord,
   UnitsApi,
 } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
+
+const UNITS_PAGE_SIZE = 20;
 
 const formatVnd = (value: number | string) => `${Number(value).toLocaleString('vi-VN')} đ/tháng`;
 const formatDate = (iso: string | Date) =>
@@ -52,53 +62,61 @@ const REQUEST_STATUS_LABEL: Record<
   CANCELLED: { label: 'Đã hủy', variant: 'neutral' },
 };
 
-const TICKET_STATUS_LABEL: Record<
-  ServiceTicketRecord['status'],
-  { label: string; variant: 'success' | 'primary' | 'error' | 'warning' | 'neutral' }
-> = {
-  OPEN: { label: 'Mới', variant: 'warning' },
-  ASSIGNED: { label: 'Đã giao', variant: 'primary' },
-  IN_PROGRESS: { label: 'Đang xử lý', variant: 'primary' },
-  RESOLVED: { label: 'Đã xong', variant: 'success' },
-  CLOSED: { label: 'Đóng', variant: 'neutral' },
-  CANCELLED: { label: 'Đã hủy', variant: 'neutral' },
-};
-
 export const FacilityManagerDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { facilities, selectedFacility, isLoading: facilitiesLoading } = useFacility();
   const selectedFacilityId = selectedFacility?.id;
   const [units, setUnits] = useState<ManagedUnit[]>([]);
+  const [unitsMeta, setUnitsMeta] = useState<{ page: number; limit: number; total: number } | null>(
+    null,
+  );
+  const [kpiUnits, setKpiUnits] = useState<ManagedUnit[]>([]);
   const [requests, setRequests] = useState<UnitChangeRequestRecord[]>([]);
-  const [tickets, setTickets] = useState<ServiceTicketRecord[]>([]);
   const toast = useAppToast();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [unitsPage, setUnitsPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const loadFacilityData = useCallback(async (facilityId: string) => {
-    const [unitsData, requestsData, ticketsData] = await Promise.all([
-      UnitsApi.managed(facilityId),
+  const loadFacilityData = useCallback(async (facilityId: string, page: number, status: string) => {
+    const [unitsData, requestsData] = await Promise.all([
+      UnitsApi.managed(facilityId, {
+        page,
+        limit: UNITS_PAGE_SIZE,
+        ...(status !== 'ALL' ? { status: status as ManagedUnit['status'] } : {}),
+      }),
       ChangeRequestsApi.list(),
-      TicketsApi.list(),
     ]);
-    // ponytail: requests/tickets fetch limit=50 then filter client-side — silent
-    // truncation past 50 open items; upgrade path = facilityId param on those list APIs.
+    // ponytail: requests fetch limit=50 then filter client-side — silent
+    // truncation past 50 open items; upgrade path = facilityId param on the list API.
     setUnits(unitsData.units);
+    setUnitsMeta(unitsData.meta);
     setRequests(requestsData.requests.filter((r) => r.facility_id === facilityId));
-    setTickets(ticketsData.tickets.filter((t) => t.facility?.id === facilityId));
   }, []);
 
   useEffect(() => {
     if (!selectedFacilityId) return;
     setIsLoading(true);
-    loadFacilityData(selectedFacilityId)
+    loadFacilityData(selectedFacilityId, unitsPage, statusFilter)
       .catch((err: Error) => setError(err.message))
       .finally(() => setIsLoading(false));
-  }, [selectedFacilityId, loadFacilityData]);
+  }, [selectedFacilityId, unitsPage, statusFilter, loadFacilityData]);
+
+  // KPI snapshot — status-agnostic, capped at 100 (same ceiling as the old unpaged fetch).
+  const refreshKpi = useCallback(() => {
+    if (!selectedFacilityId) return;
+    UnitsApi.managed(selectedFacilityId, { limit: 100 })
+      .then((d) => setKpiUnits(d.units))
+      .catch(() => setKpiUnits([]));
+  }, [selectedFacilityId]);
+
+  useEffect(() => {
+    setUnitsPage(1);
+    refreshKpi();
+  }, [refreshKpi]);
 
   const toggleMaintenance = async (unit: ManagedUnit) => {
     const next = unit.status === 'MAINTENANCE' ? 'AVAILABLE' : 'MAINTENANCE';
@@ -106,6 +124,7 @@ export const FacilityManagerDashboard: React.FC = () => {
     try {
       await UnitsApi.updateStatus(unit.id, next);
       setUnits((prev) => prev.map((u) => (u.id === unit.id ? { ...u, status: next } : u)));
+      refreshKpi();
       toast.info(
         'Cập nhật trạng thái kho',
         `Đã cập nhật kho ${unit.code} thành: ${next === 'MAINTENANCE' ? 'Đang bảo trì' : 'Sẵn sàng thuê'}`,
@@ -123,8 +142,13 @@ export const FacilityManagerDashboard: React.FC = () => {
       const { request } = await ChangeRequestsApi.decide(requestId, decision);
       setRequests((prev) => prev.map((r) => (r.id === requestId ? request : r)));
       if (decision === 'APPROVED' && selectedFacilityId) {
-        const unitsData = await UnitsApi.managed(selectedFacilityId);
+        const unitsData = await UnitsApi.managed(selectedFacilityId, {
+          page: unitsPage,
+          limit: UNITS_PAGE_SIZE,
+        });
         setUnits(unitsData.units);
+        setUnitsMeta(unitsData.meta);
+        refreshKpi();
       }
       toast.info(
         'Xử lý yêu cầu',
@@ -137,19 +161,19 @@ export const FacilityManagerDashboard: React.FC = () => {
     }
   };
 
-  const filteredUnits = units.filter((u) => {
-    const matchesSearch =
+  // Status is filtered server-side; search stays client-side on the current page.
+  const filteredUnits = units.filter(
+    (u) =>
       u.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.unitType.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'ALL' || u.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+      u.unitType.name.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
 
-  const rentedCount = units.filter((u) => u.status === 'RENTED').length;
-  const availableCount = units.filter((u) => u.status === 'AVAILABLE').length;
-  const maintenanceCount = units.filter((u) => u.status === 'MAINTENANCE').length;
+  const rentedCount = kpiUnits.filter((u) => u.status === 'RENTED').length;
+  const availableCount = kpiUnits.filter((u) => u.status === 'AVAILABLE').length;
+  const maintenanceCount = kpiUnits.filter((u) => u.status === 'MAINTENANCE').length;
   const pendingRequestsCount = requests.filter((r) => r.status === 'REQUESTED').length;
-  const occupancy = units.length > 0 ? ((rentedCount / units.length) * 100).toFixed(1) : '0.0';
+  const occupancy =
+    kpiUnits.length > 0 ? ((rentedCount / kpiUnits.length) * 100).toFixed(1) : '0.0';
 
   if (facilitiesLoading || (isLoading && facilities.length === 0)) {
     return <Text variant="secondary">Đang tải danh sách cơ sở...</Text>;
@@ -250,35 +274,6 @@ export const FacilityManagerDashboard: React.FC = () => {
           </div>
         </LayerCard>
       </div>
-
-      {/* Service Tickets Quick Access */}
-      <LayerCard className="p-4 ring ring-kumo-line flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-lg bg-kumo-fill text-kumo-default flex items-center justify-center shrink-0">
-            <Lifebuoy className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <Text as="h4" variant="heading">
-                Phiếu sự cố & yêu cầu kỹ thuật cơ sở
-              </Text>
-              <Badge variant="warning">Cần phân công</Badge>
-            </div>
-            <Text variant="secondary">
-              Theo dõi sự cố khách hàng gửi, chỉ định nhân viên kỹ thuật trực tiếp xử lý và kiểm
-              soát chất lượng cơ sở.
-            </Text>
-          </div>
-        </div>
-        <Button
-          variant="primary"
-          icon={<Lifebuoy className="w-4 h-4" />}
-          onClick={() => navigate('/facility-manager/tickets')}
-          className="shrink-0"
-        >
-          Xem danh sách & Gán ca
-        </Button>
-      </LayerCard>
 
       {/* Customer Change Requests Approval Queue */}
       <div className="space-y-3">
@@ -407,7 +402,10 @@ export const FacilityManagerDashboard: React.FC = () => {
                 aria-label="Lọc trạng thái kho"
                 size="sm"
                 value={statusFilter}
-                onValueChange={(v) => setStatusFilter(v as string)}
+                onValueChange={(v) => {
+                  setStatusFilter(v as string);
+                  setUnitsPage(1);
+                }}
                 items={[
                   { value: 'ALL', label: 'Tất cả trạng thái' },
                   { value: 'AVAILABLE', label: 'Sẵn sàng (Trống)' },
@@ -486,78 +484,18 @@ export const FacilityManagerDashboard: React.FC = () => {
             </Table.Body>
           </Table>
         </LayerCard>
-      </div>
 
-      {/* Service Tickets */}
-      <div className="space-y-3">
-        <div className="grid gap-1">
-          <Text as="h3" variant="heading">
-            Ticket dịch vụ tại cơ sở
-          </Text>
-          <Text variant="secondary">Các yêu cầu hỗ trợ / bảo trì khách gửi tới cơ sở này.</Text>
-        </div>
-
-        <LayerCard className="overflow-x-auto p-0 ring ring-kumo-line">
-          <Table>
-            <Table.Header>
-              <Table.Row>
-                <Table.Head>Mã ticket</Table.Head>
-                <Table.Head>Chủ đề</Table.Head>
-                <Table.Head>Khách hàng</Table.Head>
-                <Table.Head>Nhân viên xử lý</Table.Head>
-                <Table.Head>Ưu tiên</Table.Head>
-                <Table.Head>Trạng thái</Table.Head>
-                <Table.Head>Ngày tạo</Table.Head>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {tickets.length === 0 && (
-                <Table.Row>
-                  <Table.Cell className="p-0" colSpan={7}>
-                    <Empty
-                      size="sm"
-                      title="Chưa có ticket nào"
-                      description="Chưa có ticket nào tại cơ sở này."
-                    />
-                  </Table.Cell>
-                </Table.Row>
-              )}
-              {tickets.map((t) => (
-                <Table.Row key={t.id}>
-                  <Table.Cell className="whitespace-nowrap font-mono text-xs">
-                    {t.ticket_no}
-                  </Table.Cell>
-                  <Table.Cell className="whitespace-nowrap font-medium text-kumo-default">
-                    {t.subject}
-                  </Table.Cell>
-                  <Table.Cell className="whitespace-nowrap text-kumo-subtle">
-                    {t.customer?.full_name ?? '—'}
-                  </Table.Cell>
-                  <Table.Cell className="whitespace-nowrap text-kumo-subtle">
-                    {t.assignee?.full_name ?? 'Chưa giao'}
-                  </Table.Cell>
-                  <Table.Cell className="whitespace-nowrap">
-                    <Badge
-                      variant={
-                        t.priority === 'URGENT' || t.priority === 'HIGH' ? 'error' : 'neutral'
-                      }
-                    >
-                      {t.priority}
-                    </Badge>
-                  </Table.Cell>
-                  <Table.Cell className="whitespace-nowrap">
-                    <Badge variant={TICKET_STATUS_LABEL[t.status].variant}>
-                      {TICKET_STATUS_LABEL[t.status].label}
-                    </Badge>
-                  </Table.Cell>
-                  <Table.Cell className="whitespace-nowrap text-kumo-subtle">
-                    {formatDate(t.created_at)}
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table>
-        </LayerCard>
+        {unitsMeta && unitsMeta.total > 0 && (
+          <Pagination
+            page={unitsPage}
+            setPage={setUnitsPage}
+            perPage={unitsMeta.limit}
+            totalCount={unitsMeta.total}
+          >
+            <Pagination.Info />
+            <Pagination.Controls />
+          </Pagination>
+        )}
       </div>
     </div>
   );

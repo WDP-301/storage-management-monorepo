@@ -10,19 +10,8 @@ vi.mock('./lib/api', () => ({
     register: vi.fn(),
     logout: vi.fn(),
   },
-  StorageApi: {
-    getDashboardSummary: vi.fn().mockResolvedValue({
-      totalLocations: 2,
-      totalItems: 5,
-      totalQuantity: 20,
-      lowStockCount: 1,
-      outOfStockCount: 0,
-    }),
-    getItems: vi.fn().mockResolvedValue({ data: [] }),
-    getLocations: vi.fn().mockResolvedValue([]),
-    uploadFileDirect: vi.fn(),
-    getPresignedUploadUrl: vi.fn(),
-    getDownloadUrl: vi.fn(),
+  FacilitiesApi: {
+    mine: vi.fn().mockResolvedValue([]),
   },
   setUnauthorizedCallback: vi.fn(),
 }));
@@ -52,11 +41,11 @@ describe('App', () => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
-    window.history.pushState({}, 'Dashboard', '/dashboard');
+    window.history.pushState({}, 'Home', '/');
 
     render(<App />);
 
-    expect((await screen.findAllByText('Tổng quan & Hàng tồn')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Storage Hub')).length).toBeGreaterThan(0);
     expect((await screen.findAllByText('Quản trị viên')).length).toBeGreaterThan(0);
   });
 });

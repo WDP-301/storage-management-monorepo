@@ -595,7 +595,11 @@ describe('ServiceTicketsService', () => {
 
     beforeEach(() => {
       roleAssignments.find.mockResolvedValue([buildManagerAssignment('facility-1')]);
-      users.findOne.mockResolvedValue({ id: 'staff-1', status: UserStatus.ACTIVE });
+      users.findOne.mockResolvedValue({
+        id: 'staff-1',
+        status: UserStatus.ACTIVE,
+        fullName: 'Staff One',
+      });
       roleAssignments.findOne.mockResolvedValue(buildStaffAssignment('facility-1'));
     });
 
@@ -817,6 +821,53 @@ describe('ServiceTicketsService', () => {
       expect(result.ticket.priority).toBe(TicketPriority.URGENT);
       expect(result.ticket.history.map((entry) => entry.action)).toEqual(['PRIORITY_CHANGED']);
       expect(result.ticket.history[0].from).toBe(TicketPriority.NORMAL);
+    });
+
+    it('lets a facility manager update a ticket of a facility they manage', async () => {
+      const manager = buildActor({ id: 'manager-1', roles: [UserRole.FACILITY_MANAGER] });
+      tickets.findOne.mockResolvedValue(
+        buildTicket({ assignedTo: 'staff-9', status: TicketStatus.IN_PROGRESS }),
+      );
+      roleAssignments.find.mockResolvedValue([buildManagerAssignment('facility-1')]);
+
+      const result = await service.update(
+        'ticket-1',
+        { priority: TicketPriority.URGENT, resolution: 'Escalated by manager' },
+        manager,
+      );
+
+      expect(tickets.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          priority: TicketPriority.URGENT,
+          resolution: 'Escalated by manager',
+        }),
+      );
+      expect(result.ticket.history.map((entry) => entry.action)).toEqual(['PRIORITY_CHANGED']);
+    });
+
+    it('forbids a facility manager from updating a ticket of a facility they do not manage', async () => {
+      const manager = buildActor({ id: 'manager-1', roles: [UserRole.FACILITY_MANAGER] });
+      tickets.findOne.mockResolvedValue(buildTicket({ facilityId: 'facility-2' }));
+      roleAssignments.find.mockResolvedValue([buildManagerAssignment('facility-1')]);
+
+      await expect(
+        service.update('ticket-1', { status: TicketStatus.CLOSED }, manager),
+      ).rejects.toMatchObject({ status: 403, response: { code: 'FORBIDDEN' } });
+      expect(tickets.save).not.toHaveBeenCalled();
+    });
+
+    it('lets an admin update any ticket', async () => {
+      const admin = buildActor({ id: 'admin-1', roles: [UserRole.ADMIN] });
+      tickets.findOne.mockResolvedValue(
+        buildTicket({ assignedTo: 'staff-9', status: TicketStatus.IN_PROGRESS }),
+      );
+
+      const result = await service.update('ticket-1', { resolution: 'Admin note' }, admin);
+
+      expect(tickets.save).toHaveBeenCalledWith(
+        expect.objectContaining({ resolution: 'Admin note' }),
+      );
+      expect(result.ticket.resolution).toBe('Admin note');
     });
   });
 

@@ -60,6 +60,13 @@ export interface AssignTicketDto {
   assignedTo: string;
 }
 
+export interface UpdateTicketDto {
+  status?: TicketStatus;
+  priority?: TicketPriority;
+  resolution?: string | null;
+  attachments?: unknown[];
+}
+
 export interface ListTicketsQuery {
   page?: number;
   limit?: number;

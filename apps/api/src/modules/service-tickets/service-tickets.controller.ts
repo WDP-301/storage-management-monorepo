@@ -166,9 +166,10 @@ export class ServiceTicketsController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.FACILITY_STAFF)
+  @Roles(UserRole.FACILITY_STAFF, UserRole.FACILITY_MANAGER, UserRole.ADMIN)
   @ApiOperation({
-    summary: 'Update processing fields of a ticket assigned to the authenticated staff member',
+    summary:
+      'Update processing fields of a ticket — assigned staff, facility manager of the ticket, or admin',
   })
   @ApiResponse({ status: 200, description: 'The updated ticket', type: ServiceTicketResponseDto })
   @ApiResponse({ status: 404, description: 'Ticket not found', type: ApiErrorResponseDto })

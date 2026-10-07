@@ -102,7 +102,7 @@ describe('RoleRoute RBAC Protection', () => {
           <Route element={<RoleRoute allowedRoles={[UserRole.ADMIN]} />}>
             <Route path="/admin" element={<div>Admin Secret Dashboard</div>} />
           </Route>
-          <Route path="/facility-staff" element={<div>Staff Target Home</div>} />
+          <Route path="/unassigned-role" element={<div>Unassigned Role Home</div>} />
         </Routes>
       </MemoryRouter>,
     );
@@ -110,7 +110,7 @@ describe('RoleRoute RBAC Protection', () => {
     const backBtn = screen.getByRole('button', { name: /về bảng điều khiển của tôi/i });
     fireEvent.click(backBtn);
 
-    expect(screen.getByText('Staff Target Home')).toBeTruthy();
+    expect(screen.getByText('Unassigned Role Home')).toBeTruthy();
   });
 
   it('renders unassigned role warning when user has empty roles list', () => {

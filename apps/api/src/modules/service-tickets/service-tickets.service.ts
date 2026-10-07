@@ -266,7 +266,7 @@ export class ServiceTicketsService {
     }
 
     const history = [...(ticket.history ?? [])];
-    history.push(this.historyEntry('ASSIGNED', previousAssigneeId, dto.assignedTo, actor.id));
+    history.push(this.historyEntry('ASSIGNED', previousAssigneeId, assignee.fullName, actor.id));
     if (ticket.status !== previousStatus) {
       history.push(this.historyEntry('STATUS_CHANGED', previousStatus, ticket.status, actor.id));
     }
@@ -288,12 +288,18 @@ export class ServiceTicketsService {
   async update(id: string, dto: UpdateTicketDto, actor: AuthUser): Promise<ServiceTicketResponse> {
     const ticket = await this.findTicketOrFail(id);
 
-    if (ticket.assignedTo !== actor.id) {
-      throw new DomainException(
-        ErrorCode.FORBIDDEN,
-        'You can only update tickets assigned to you',
-        HttpStatus.FORBIDDEN,
-      );
+    // Staff update only tickets assigned to them; facility managers update
+    // tickets of facilities they manage; admins update any ticket.
+    if (ticket.assignedTo !== actor.id && !actor.roles.includes(UserRole.ADMIN)) {
+      if (actor.roles.includes(UserRole.FACILITY_MANAGER)) {
+        await this.assertManagesFacility(actor, ticket.facilityId);
+      } else {
+        throw new DomainException(
+          ErrorCode.FORBIDDEN,
+          'You can only update tickets assigned to you',
+          HttpStatus.FORBIDDEN,
+        );
+      }
     }
 
     if (TERMINAL_STATUSES.includes(ticket.status)) {

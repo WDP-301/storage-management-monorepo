@@ -1,8 +1,18 @@
 import { useKumoToastManager } from '@cloudflare/kumo';
+import { useMemo, useRef } from 'react';
 
 export interface ToastOptions {
   timeout?: number;
 }
+
+type ToastVariant = 'success' | 'error' | 'warning' | 'info';
+
+const DEFAULT_TIMEOUTS: Record<ToastVariant, number> = {
+  success: 4000,
+  error: 5000,
+  warning: 4500,
+  info: 4000,
+};
 
 /**
  * Project-wide Toast notification hook built on Cloudflare Kumo UI (<Toasty>).
@@ -18,94 +28,76 @@ export function useAppToast() {
     manager = null;
   }
 
-  const success = (title: string, description?: string, options?: ToastOptions) => {
-    if (manager) {
-      manager.add({
-        variant: 'success',
+  // `useKumoToastManager` returns a fresh object every render, so it can't be a
+  // useMemo dep. Keep the latest in a ref and memoize the API once — the
+  // returned object must be referentially stable or anything that puts `toast`
+  // in a useCallback/useEffect dep will loop forever.
+  const managerRef = useRef(manager);
+  managerRef.current = manager;
+
+  return useMemo(() => {
+    const add = (
+      variant: ToastVariant,
+      title: string,
+      description?: string,
+      options?: ToastOptions,
+    ) => {
+      managerRef.current?.add({
+        variant,
         title,
         description,
-        timeout: options?.timeout ?? 4000,
+        timeout: options?.timeout ?? DEFAULT_TIMEOUTS[variant],
       });
-    }
-  };
+    };
 
-  const error = (title: string, description?: string, options?: ToastOptions) => {
-    if (manager) {
-      manager.add({
-        variant: 'error',
-        title,
-        description,
-        timeout: options?.timeout ?? 5000,
-      });
-    }
-  };
+    const success = (title: string, description?: string, options?: ToastOptions) =>
+      add('success', title, description, options);
 
-  const warning = (title: string, description?: string, options?: ToastOptions) => {
-    if (manager) {
-      manager.add({
-        variant: 'warning',
-        title,
-        description,
-        timeout: options?.timeout ?? 4500,
-      });
-    }
-  };
+    return {
+      success,
+      error: (title: string, description?: string, options?: ToastOptions) =>
+        add('error', title, description, options),
+      warning: (title: string, description?: string, options?: ToastOptions) =>
+        add('warning', title, description, options),
+      info: (title: string, description?: string, options?: ToastOptions) =>
+        add('info', title, description, options),
 
-  const info = (title: string, description?: string, options?: ToastOptions) => {
-    if (manager) {
-      manager.add({
-        variant: 'info',
-        title,
-        description,
-        timeout: options?.timeout ?? 4000,
-      });
-    }
-  };
+      /**
+       * Standardized notification for newly created resources across the project
+       */
+      notifyCreated: (resourceName: string, identifier?: string) =>
+        success(
+          'Tạo thành công',
+          identifier
+            ? `Đã tạo ${resourceName} "${identifier}" thành công.`
+            : `Đã tạo ${resourceName} mới thành công.`,
+        ),
 
-  /**
-   * Standardized notification for newly created resources across the project
-   */
-  const notifyCreated = (resourceName: string, identifier?: string) => {
-    success(
-      'Tạo thành công',
-      identifier
-        ? `Đã tạo ${resourceName} "${identifier}" thành công.`
-        : `Đã tạo ${resourceName} mới thành công.`,
-    );
-  };
+      /**
+       * Standardized notification for updated/saved resources across the project
+       */
+      notifyUpdated: (resourceName: string, identifier?: string) =>
+        success(
+          'Cập nhật thành công',
+          identifier
+            ? `Đã cập nhật ${resourceName} "${identifier}" thành công.`
+            : `Đã lưu thay đổi ${resourceName} thành công.`,
+        ),
 
-  /**
-   * Standardized notification for updated/saved resources across the project
-   */
-  const notifyUpdated = (resourceName: string, identifier?: string) => {
-    success(
-      'Cập nhật thành công',
-      identifier
-        ? `Đã cập nhật ${resourceName} "${identifier}" thành công.`
-        : `Đã lưu thay đổi ${resourceName} thành công.`,
-    );
-  };
+      /**
+       * Standardized notification for deleted resources across the project
+       */
+      notifyDeleted: (resourceName: string, identifier?: string) =>
+        success(
+          'Xóa thành công',
+          identifier
+            ? `Đã xóa ${resourceName} "${identifier}" khỏi hệ thống.`
+            : `Đã xóa ${resourceName} thành công.`,
+        ),
 
-  /**
-   * Standardized notification for deleted resources across the project
-   */
-  const notifyDeleted = (resourceName: string, identifier?: string) => {
-    success(
-      'Xóa thành công',
-      identifier
-        ? `Đã xóa ${resourceName} "${identifier}" khỏi hệ thống.`
-        : `Đã xóa ${resourceName} thành công.`,
-    );
-  };
-
-  return {
-    success,
-    error,
-    warning,
-    info,
-    notifyCreated,
-    notifyUpdated,
-    notifyDeleted,
-    manager,
-  };
+      get manager() {
+        return managerRef.current;
+      },
+    };
+  }, []);
 }

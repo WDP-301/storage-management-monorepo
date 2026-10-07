@@ -1,15 +1,5 @@
 import { Badge, Button, Select, Sidebar, Text, useSidebar } from '@cloudflare/kumo';
-import {
-  ChartLine,
-  ClipboardText,
-  Faders,
-  Gauge,
-  GearSix,
-  Package,
-  SignOut,
-  User,
-  Warehouse,
-} from '@phosphor-icons/react';
+import { Faders, Lifebuoy, Package, SignOut, User, Warehouse } from '@phosphor-icons/react';
 import { UserRole } from '@storage/types';
 import React from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -23,40 +13,20 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
 }
 
-const OVERVIEW_ITEM: NavItem = {
-  to: '/dashboard',
-  label: 'Tổng quan & Hàng tồn',
-  icon: Gauge,
-};
-
 const ROLE_NAV: Record<UserRole, NavItem[]> = {
   [UserRole.ADMIN]: [
-    { to: '/admin', label: 'Quản trị hệ thống', icon: GearSix },
     { to: '/admin/settings', label: 'Cấu hình tham số', icon: Faders },
-    { to: '/operations', label: 'Điều hành & Vận hành', icon: ChartLine },
     { to: '/facility-manager', label: 'Quản lý cơ sở kho', icon: Warehouse },
-    { to: '/facility-staff', label: 'Ca trực & Kiểm tra', icon: ClipboardText },
-    { to: '/customer', label: 'Kho lưu trữ khách hàng', icon: Package },
+    { to: '/facility-manager/tickets', label: 'Vé sự cố', icon: Lifebuoy },
   ],
-  [UserRole.OPERATIONS_MANAGER]: [
-    { to: '/operations', label: 'Điều hành & Vận hành', icon: ChartLine },
-    { to: '/admin/settings', label: 'Cấu hình tham số', icon: Faders },
-  ],
+  [UserRole.OPERATIONS_MANAGER]: [],
   [UserRole.FACILITY_MANAGER]: [
     { to: '/facility-manager', label: 'Quản lý cơ sở kho', icon: Warehouse },
-    { to: '/facility-staff', label: 'Ca trực & Kiểm tra', icon: ClipboardText },
+    { to: '/facility-manager/tickets', label: 'Vé sự cố', icon: Lifebuoy },
   ],
-  [UserRole.FACILITY_STAFF]: [
-    { to: '/facility-staff', label: 'Ca trực & Kiểm tra', icon: ClipboardText },
-  ],
-  [UserRole.CUSTOMER]: [{ to: '/customer', label: 'Kho lưu trữ của tôi', icon: Package }],
+  [UserRole.FACILITY_STAFF]: [],
+  [UserRole.CUSTOMER]: [],
 };
-
-const OVERVIEW_ROLES: UserRole[] = [
-  UserRole.ADMIN,
-  UserRole.OPERATIONS_MANAGER,
-  UserRole.FACILITY_MANAGER,
-];
 
 const AppSidebar: React.FC = () => {
   const { user, activeRole, logout, switchRole } = useAuth();
@@ -65,10 +35,7 @@ const AppSidebar: React.FC = () => {
   const location = useLocation();
 
   const currentRole = activeRole ?? user?.roles?.[0];
-  const roleNavItems = currentRole ? (ROLE_NAV[currentRole] ?? []) : [];
-  const canAccessOverview = Boolean(currentRole && OVERVIEW_ROLES.includes(currentRole));
-
-  const allItems = canAccessOverview ? [OVERVIEW_ITEM, ...roleNavItems] : roleNavItems;
+  const allItems = currentRole ? (ROLE_NAV[currentRole] ?? []) : [];
   const activePath =
     allItems.find((item) => location.pathname === item.to)?.to ??
     allItems
@@ -109,36 +76,23 @@ const AppSidebar: React.FC = () => {
       </Sidebar.Header>
 
       <Sidebar.Content>
-        {canAccessOverview && (
+        {allItems.length > 0 && (
           <Sidebar.Group>
-            <Sidebar.GroupLabel>Tổng quan</Sidebar.GroupLabel>
+            <Sidebar.GroupLabel>Chức năng</Sidebar.GroupLabel>
             <Sidebar.Menu>
-              <Sidebar.MenuButton
-                icon={OVERVIEW_ITEM.icon}
-                active={activePath === OVERVIEW_ITEM.to}
-                onClick={() => go(OVERVIEW_ITEM.to)}
-              >
-                {OVERVIEW_ITEM.label}
-              </Sidebar.MenuButton>
+              {allItems.map((item) => (
+                <Sidebar.MenuButton
+                  key={item.to}
+                  icon={item.icon}
+                  active={activePath === item.to}
+                  onClick={() => go(item.to)}
+                >
+                  {item.label}
+                </Sidebar.MenuButton>
+              ))}
             </Sidebar.Menu>
           </Sidebar.Group>
         )}
-
-        <Sidebar.Group>
-          <Sidebar.GroupLabel>Chức năng</Sidebar.GroupLabel>
-          <Sidebar.Menu>
-            {roleNavItems.map((item) => (
-              <Sidebar.MenuButton
-                key={item.to}
-                icon={item.icon}
-                active={activePath === item.to}
-                onClick={() => go(item.to)}
-              >
-                {item.label}
-              </Sidebar.MenuButton>
-            ))}
-          </Sidebar.Menu>
-        </Sidebar.Group>
 
         {user?.roles && user.roles.length > 1 && (
           <Sidebar.Group>

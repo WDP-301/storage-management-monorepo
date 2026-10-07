@@ -2,40 +2,131 @@ import {
   Badge,
   Button,
   Dialog,
+  DropdownMenu,
   InputGroup,
   LayerCard,
+  Pagination,
   Select,
   Table,
   Text,
+  Textarea,
 } from '@cloudflare/kumo';
 import {
   ArrowsClockwise,
   CheckCircle,
   Clock,
+  DotsThree,
+  Eye,
   Lifebuoy,
   MagnifyingGlass,
+  Paperclip,
   Trash,
   UserCheck,
   UserPlus,
   WarningCircle,
   Wrench,
   X,
+  XCircle,
 } from '@phosphor-icons/react';
-import { TicketPriority, TicketStatus } from '@storage/types';
-import React, { useEffect, useMemo, useState } from 'react';
+import { TicketPriority, TicketStatus, UserRole } from '@storage/types';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { TicketsApi } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
-import type { ServiceTicketRecord, TicketUserInfo } from '../../types/service-tickets';
+import type {
+  ServiceTicketRecord,
+  TicketUserInfo,
+  UpdateTicketDto,
+} from '../../types/service-tickets';
+
+const PAGE_SIZE = 20;
+
+const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
+  [TicketStatus.OPEN]: 'Chờ phân công',
+  [TicketStatus.ASSIGNED]: 'Đã gán ca',
+  [TicketStatus.IN_PROGRESS]: 'Đang xử lý',
+  [TicketStatus.RESOLVED]: 'Đã giải quyết',
+  [TicketStatus.CLOSED]: 'Đã đóng',
+  [TicketStatus.CANCELLED]: 'Đã hủy',
+};
+
+const TICKET_PRIORITY_LABELS: Record<TicketPriority, string> = {
+  [TicketPriority.URGENT]: 'Khẩn cấp',
+  [TicketPriority.HIGH]: 'Ưu tiên cao',
+  [TicketPriority.NORMAL]: 'Bình thường',
+  [TicketPriority.LOW]: 'Thấp',
+};
+
+/** Workflow order mirrored from the API — updates only move a ticket forward. */
+const TICKET_STATUS_FLOW: readonly TicketStatus[] = [
+  TicketStatus.OPEN,
+  TicketStatus.ASSIGNED,
+  TicketStatus.IN_PROGRESS,
+  TicketStatus.RESOLVED,
+];
+
+/** Terminal tickets are immutable — same rule as the API's update endpoint. */
+const TERMINAL_STATUSES: readonly TicketStatus[] = [
+  TicketStatus.RESOLVED,
+  TicketStatus.CLOSED,
+  TicketStatus.CANCELLED,
+];
+
+/** Tickets still being worked can be cancelled — mirrors the API's ASSIGNABLE_STATUSES. */
+const CANCELLABLE_STATUSES: readonly TicketStatus[] = [
+  TicketStatus.OPEN,
+  TicketStatus.ASSIGNED,
+  TicketStatus.IN_PROGRESS,
+];
+
+const formatFileSize = (bytes: number) =>
+  bytes >= 1048576
+    ? `${(bytes / 1048576).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+
+interface AttachmentView {
+  name: string;
+  url?: string;
+  size?: number;
+}
+
+/** Attachments are free-form file refs ({name, key, url|publicUrl, size} or a bare string). */
+const toAttachmentView = (a: unknown, idx: number): AttachmentView => {
+  if (typeof a === 'string') {
+    return { name: a.split('/').pop() || a, url: a };
+  }
+  if (a && typeof a === 'object') {
+    const o = a as Record<string, unknown>;
+    const url = (o.url ?? o.publicUrl ?? o.href) as string | undefined;
+    const rawName = o.name ?? o.fileName ?? o.filename ?? o.key ?? url;
+    const name = String(rawName ?? `Tệp đính kèm ${idx + 1}`);
+    return {
+      name: name.split('/').pop() || name,
+      url: url ? String(url) : undefined,
+      size: typeof o.size === 'number' ? o.size : undefined,
+    };
+  }
+  return { name: `Tệp đính kèm ${idx + 1}` };
+};
 
 export const ManagerTicketsPage: React.FC = () => {
   const toast = useAppToast();
+  const { user } = useAuth();
+  const roles = user?.roles ?? [];
+  const canAssign = roles.includes(UserRole.FACILITY_MANAGER);
+  const canDelete = roles.includes(UserRole.ADMIN);
+  const canEdit = canAssign || canDelete;
   const [tickets, setTickets] = useState<ServiceTicketRecord[]>([]);
+  const [meta, setMeta] = useState<{ page: number; limit: number; total: number } | null>(null);
+  const [counts, setCounts] = useState({ total: 0, unassigned: 0, inProgress: 0, resolved: 0 });
+  const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
   const [isLoading, setIsLoading] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
   const [actionErrorMessage, setActionErrorMessage] = useState<string | null>(null);
 
@@ -43,8 +134,15 @@ export const ManagerTicketsPage: React.FC = () => {
   const [selectedTicket, setSelectedTicket] = useState<ServiceTicketRecord | null>(null);
   const [assignModalTicket, setAssignModalTicket] = useState<ServiceTicketRecord | null>(null);
   const [ticketToDelete, setTicketToDelete] = useState<ServiceTicketRecord | null>(null);
+  const [ticketToCancel, setTicketToCancel] = useState<ServiceTicketRecord | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+
+  // Edit form state (detail modal)
+  const [editStatus, setEditStatus] = useState<TicketStatus>(TicketStatus.OPEN);
+  const [editPriority, setEditPriority] = useState<TicketPriority>(TicketPriority.NORMAL);
+  const [editResolution, setEditResolution] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const availableStaff = useMemo(() => {
     const existingAssignees = tickets
@@ -53,16 +151,39 @@ export const ManagerTicketsPage: React.FC = () => {
     return Array.from(new Map(existingAssignees.map((a) => [a.id, a])).values());
   }, [tickets]);
 
-  const loadTickets = async () => {
+  const loadTickets = useCallback(async () => {
     setIsLoading(true);
     setActionErrorMessage(null);
+    const countByStatus = (s: TicketStatus) =>
+      TicketsApi.getAll({ status: s, limit: 1 }).then((r) => r?.meta?.total ?? 0);
     try {
-      // ponytail: fetches max page size (100) and filters client-side — tickets
-      // beyond that silently drop off; upgrade path = server-side filters + pagination UI.
-      const res = await TicketsApi.getAll({ limit: 100 });
+      const [res, total, open, assigned, inProgress, resolved, closed] = await Promise.all([
+        TicketsApi.getAll({
+          page,
+          limit: PAGE_SIZE,
+          ...(statusFilter !== 'ALL' && statusFilter !== 'UNASSIGNED'
+            ? { status: statusFilter as TicketStatus }
+            : {}),
+          ...(priorityFilter !== 'ALL' ? { priority: priorityFilter as TicketPriority } : {}),
+        }),
+        TicketsApi.getAll({ limit: 1 }).then((r) => r?.meta?.total ?? 0),
+        countByStatus(TicketStatus.OPEN),
+        countByStatus(TicketStatus.ASSIGNED),
+        countByStatus(TicketStatus.IN_PROGRESS),
+        countByStatus(TicketStatus.RESOLVED),
+        countByStatus(TicketStatus.CLOSED),
+      ]);
       setTickets(res?.tickets || []);
+      setMeta(res?.meta ?? null);
+      setCounts({
+        total,
+        unassigned: open,
+        inProgress: assigned + inProgress,
+        resolved: resolved + closed,
+      });
     } catch (err: unknown) {
       setTickets([]);
+      setMeta(null);
       const msg =
         err instanceof Error ? err.message : 'Không thể tải danh sách phiếu sự cố từ hệ thống.';
       setActionErrorMessage(msg);
@@ -70,18 +191,26 @@ export const ManagerTicketsPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [page, statusFilter, priorityFilter, toast]);
 
   useEffect(() => {
     loadTickets();
-  }, []);
+  }, [loadTickets]);
+
+  const syncEditState = (ticket: ServiceTicketRecord) => {
+    setEditStatus(ticket.status);
+    setEditPriority(ticket.priority);
+    setEditResolution(ticket.resolution ?? '');
+  };
 
   const handleOpenDetailModal = async (ticket: ServiceTicketRecord) => {
     setSelectedTicket(ticket);
+    syncEditState(ticket);
     setIsLoadingDetail(true);
     try {
       const freshTicket = await TicketsApi.getOne(ticket.id);
       setSelectedTicket(freshTicket);
+      syncEditState(freshTicket);
     } catch (err: unknown) {
       console.warn('Failed to fetch ticket detail:', err);
     } finally {
@@ -141,7 +270,7 @@ export const ManagerTicketsPage: React.FC = () => {
     try {
       await TicketsApi.remove(targetTicket.id);
 
-      setTickets((prev) => prev.filter((t) => t.id !== targetTicket.id));
+      await loadTickets();
       const deleteMsg = `Đã xóa phiếu sự cố ${targetTicket.ticket_no} thành công.`;
       setActionSuccessMessage(deleteMsg);
       toast.notifyDeleted('phiếu sự cố', targetTicket.ticket_no);
@@ -164,19 +293,122 @@ export const ManagerTicketsPage: React.FC = () => {
     }
   };
 
-  // Metrics calculation
-  const totalTickets = tickets.length;
-  const unassignedCount = tickets.filter(
-    (t) => t.status === TicketStatus.OPEN || !t.assigned_to,
-  ).length;
-  const inProgressCount = tickets.filter(
-    (t) => t.status === TicketStatus.ASSIGNED || t.status === TicketStatus.IN_PROGRESS,
-  ).length;
-  const resolvedCount = tickets.filter(
-    (t) => t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED,
-  ).length;
+  const handleConfirmCancel = async () => {
+    if (!ticketToCancel) return;
 
-  // Filtered tickets
+    setIsCancelling(true);
+    setActionErrorMessage(null);
+    const targetTicket = ticketToCancel;
+
+    try {
+      const updated = await TicketsApi.cancel(targetTicket.id);
+      setTickets((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)));
+      if (selectedTicket?.id === updated.id) {
+        setSelectedTicket(updated);
+        syncEditState(updated);
+      }
+      const cancelMsg = `Đã hủy phiếu ${targetTicket.ticket_no} thành công.`;
+      setActionSuccessMessage(cancelMsg);
+      toast.success('Hủy phiếu thành công', cancelMsg);
+      setTicketToCancel(null);
+      setTimeout(() => setActionSuccessMessage(null), 4000);
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
+      const msg =
+        status === 403
+          ? 'Tài khoản không có quyền hủy phiếu sự cố này (yêu cầu vai trò Quản lý cơ sở của cơ sở này).'
+          : status === 404
+            ? 'Không tìm thấy phiếu sự cố trên hệ thống.'
+            : status === 409
+              ? 'Phiếu không còn ở trạng thái có thể hủy.'
+              : err instanceof Error
+                ? err.message
+                : 'Lỗi khi hủy phiếu.';
+      setActionErrorMessage(msg);
+      toast.error('Hủy phiếu thất bại', msg);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const hasEditChanges =
+    selectedTicket != null &&
+    (editStatus !== selectedTicket.status ||
+      editPriority !== selectedTicket.priority ||
+      editResolution.trim() !== (selectedTicket.resolution ?? '').trim());
+
+  const statusEditOptions = useMemo(() => {
+    if (!selectedTicket) return [];
+    const idx = TICKET_STATUS_FLOW.indexOf(selectedTicket.status);
+    const allowed = [
+      selectedTicket.status,
+      ...(idx >= 0 ? TICKET_STATUS_FLOW.slice(idx + 1) : []),
+      TicketStatus.CLOSED,
+    ];
+    return [...new Set(allowed)].map((value) => ({
+      value,
+      label: TICKET_STATUS_LABELS[value],
+    }));
+  }, [selectedTicket]);
+
+  const priorityEditOptions = useMemo(
+    () =>
+      (Object.values(TicketPriority) as TicketPriority[]).map((value) => ({
+        value,
+        label: TICKET_PRIORITY_LABELS[value],
+      })),
+    [],
+  );
+
+  const handleSaveEdit = async () => {
+    if (!selectedTicket || !hasEditChanges) return;
+
+    const dto: UpdateTicketDto = {};
+    if (editStatus !== selectedTicket.status) dto.status = editStatus;
+    if (editPriority !== selectedTicket.priority) dto.priority = editPriority;
+    const trimmedResolution = editResolution.trim();
+    if (trimmedResolution !== (selectedTicket.resolution ?? '')) {
+      dto.resolution = trimmedResolution || null;
+    }
+    if (Object.keys(dto).length === 0) return;
+
+    setIsSavingEdit(true);
+    setActionErrorMessage(null);
+    try {
+      const updated = await TicketsApi.update(selectedTicket.id, dto);
+      setSelectedTicket(updated);
+      setTickets((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)));
+      syncEditState(updated);
+      const msg = `Đã cập nhật phiếu ${updated.ticket_no} thành công.`;
+      setActionSuccessMessage(msg);
+      toast.success('Cập nhật thành công', msg);
+      setTimeout(() => setActionSuccessMessage(null), 4000);
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
+      const msg =
+        status === 403
+          ? 'Tài khoản không có quyền cập nhật phiếu sự cố này.'
+          : status === 409
+            ? 'Phiếu đã ở trạng thái kết thúc, không thể cập nhật.'
+            : err instanceof Error
+              ? err.message
+              : 'Lỗi khi cập nhật phiếu sự cố.';
+      setActionErrorMessage(msg);
+      toast.error('Cập nhật thất bại', msg);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Metrics come from server-side counts (limit=1 reads meta.total), not the
+  // current page. "Chờ phân công" uses OPEN as the closest server proxy for unassigned.
+  const totalTickets = counts.total;
+  const unassignedCount = counts.unassigned;
+  const inProgressCount = counts.inProgress;
+  const resolvedCount = counts.resolved;
+
+  // Status/priority are filtered server-side; search and the pseudo-status
+  // UNASSIGNED stay client-side on the current page.
   const filteredTickets = useMemo(() => {
     return tickets.filter((t) => {
       const matchSearch =
@@ -187,74 +419,74 @@ export const ManagerTicketsPage: React.FC = () => {
         Boolean(t.storage_unit?.code?.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchStatus =
-        statusFilter === 'ALL' ||
-        (statusFilter === 'UNASSIGNED' && (!t.assigned_to || t.status === TicketStatus.OPEN)) ||
-        t.status === statusFilter;
+        statusFilter !== 'UNASSIGNED' || !t.assigned_to || t.status === TicketStatus.OPEN;
 
-      const matchPriority = priorityFilter === 'ALL' || t.priority === priorityFilter;
-
-      return matchSearch && matchStatus && matchPriority;
+      return matchSearch && matchStatus;
     });
-  }, [tickets, searchQuery, statusFilter, priorityFilter]);
+  }, [tickets, searchQuery, statusFilter]);
 
   const getPriorityBadge = (priority: TicketPriority) => {
+    const label = TICKET_PRIORITY_LABELS[priority] ?? priority;
     switch (priority) {
       case TicketPriority.URGENT:
         return (
           <Badge variant="error" appearance="dot">
-            Khẩn cấp
+            {label}
           </Badge>
         );
       case TicketPriority.HIGH:
         return (
           <Badge variant="warning" appearance="dot">
-            Ưu tiên cao
+            {label}
           </Badge>
         );
-      case TicketPriority.LOW:
-        return <Badge variant="neutral">Thấp</Badge>;
       default:
-        return <Badge variant="neutral">Bình thường</Badge>;
+        return <Badge variant="neutral">{label}</Badge>;
     }
   };
 
+  // History ASSIGNED entries store the staff id (old rows) or name (new rows) in
+  // `to` — resolve ids to names where we know them, else show the raw value.
+  const resolveStaffLabel = (idOrName?: string | null) => {
+    if (!idOrName) return '';
+    if (selectedTicket?.assignee?.id === idOrName) return selectedTicket.assignee.full_name;
+    return availableStaff.find((s) => s.id === idOrName)?.full_name ?? idOrName;
+  };
+
   const getStatusBadge = (status: TicketStatus) => {
+    const label = TICKET_STATUS_LABELS[status] ?? status;
     switch (status) {
       case TicketStatus.OPEN:
         return (
           <Badge variant="warning" appearance="dot">
-            Chờ phân công
+            {label}
           </Badge>
         );
       case TicketStatus.ASSIGNED:
         return (
           <Badge variant="primary" appearance="dot">
-            Đã gán ca
+            {label}
           </Badge>
         );
       case TicketStatus.IN_PROGRESS:
         return (
           <Badge variant="info" appearance="dot">
-            Đang xử lý
+            {label}
           </Badge>
         );
       case TicketStatus.RESOLVED:
         return (
           <Badge variant="success" appearance="dot">
-            Đã giải quyết
+            {label}
           </Badge>
         );
-      case TicketStatus.CLOSED:
-        return <Badge variant="neutral">Đã đóng</Badge>;
-      case TicketStatus.CANCELLED:
-        return <Badge variant="neutral">Đã hủy</Badge>;
       default:
-        return <Badge variant="neutral">{status}</Badge>;
+        return <Badge variant="neutral">{label}</Badge>;
     }
   };
 
   const statusOptions = [
-    { value: 'ALL', label: 'Tất cả trạng thái' },
+    { value: 'ALL', label: 'Tất cả' },
     { value: 'UNASSIGNED', label: 'Chờ phân công' },
     { value: TicketStatus.ASSIGNED, label: 'Đã gán ca' },
     { value: TicketStatus.IN_PROGRESS, label: 'Đang xử lý' },
@@ -263,7 +495,7 @@ export const ManagerTicketsPage: React.FC = () => {
   ];
 
   const priorityOptions = [
-    { value: 'ALL', label: 'Tất cả mức độ' },
+    { value: 'ALL', label: 'Tất cả' },
     { value: TicketPriority.URGENT, label: 'Khẩn cấp' },
     { value: TicketPriority.HIGH, label: 'Ưu tiên cao' },
     { value: TicketPriority.NORMAL, label: 'Bình thường' },
@@ -378,8 +610,16 @@ export const ManagerTicketsPage: React.FC = () => {
             <Select
               aria-label="Lọc trạng thái vé"
               value={statusFilter}
-              onValueChange={(val) => val && setStatusFilter(String(val))}
+              onValueChange={(val) => {
+                if (val) {
+                  setStatusFilter(String(val));
+                  setPage(1);
+                }
+              }}
               items={statusOptions}
+              renderValue={(v) =>
+                `Trạng thái: ${statusOptions.find((o) => o.value === v)?.label ?? String(v)}`
+              }
             />
           </div>
 
@@ -388,8 +628,16 @@ export const ManagerTicketsPage: React.FC = () => {
             <Select
               aria-label="Lọc mức độ ưu tiên"
               value={priorityFilter}
-              onValueChange={(val) => val && setPriorityFilter(String(val))}
+              onValueChange={(val) => {
+                if (val) {
+                  setPriorityFilter(String(val));
+                  setPage(1);
+                }
+              }}
               items={priorityOptions}
+              renderValue={(v) =>
+                `Mức độ: ${priorityOptions.find((o) => o.value === v)?.label ?? String(v)}`
+              }
             />
           </div>
         </div>
@@ -522,34 +770,48 @@ export const ManagerTicketsPage: React.FC = () => {
 
                     {/* Actions */}
                     <Table.Cell className="whitespace-nowrap text-right">
-                      <div className="inline-flex items-center gap-1.5 justify-end">
-                        <Button
-                          size="xs"
-                          variant="secondary"
-                          onClick={() => handleOpenDetailModal(ticket)}
-                        >
-                          Chi tiết
-                        </Button>
-
-                        <Button
-                          size="xs"
-                          variant={hasAssignee ? 'secondary' : 'primary'}
-                          icon={<UserPlus className="w-3 h-3" />}
-                          onClick={() => handleOpenAssignModal(ticket)}
-                        >
-                          {hasAssignee ? 'Đổi ca' : 'Phân công'}
-                        </Button>
-
-                        <Button
-                          size="xs"
-                          variant="secondary-destructive"
-                          icon={<Trash className="w-3 h-3" />}
-                          onClick={() => setTicketToDelete(ticket)}
-                          aria-label={`Xóa vé ${ticket.ticket_no}`}
-                        >
-                          Xóa
-                        </Button>
-                      </div>
+                      <DropdownMenu>
+                        <DropdownMenu.Trigger
+                          render={(props) => (
+                            <Button
+                              {...props}
+                              size="sm"
+                              variant="ghost"
+                              shape="square"
+                              icon={<DotsThree weight="bold" />}
+                              aria-label={`Thao tác vé ${ticket.ticket_no}`}
+                            />
+                          )}
+                        />
+                        <DropdownMenu.Content align="end" sideOffset={4}>
+                          <DropdownMenu.Item
+                            icon={Eye}
+                            onClick={() => handleOpenDetailModal(ticket)}
+                          >
+                            Chi tiết
+                          </DropdownMenu.Item>
+                          {canAssign && (
+                            <DropdownMenu.Item
+                              icon={UserPlus}
+                              onClick={() => handleOpenAssignModal(ticket)}
+                            >
+                              {hasAssignee ? 'Đổi ca trực' : 'Phân công'}
+                            </DropdownMenu.Item>
+                          )}
+                          {canDelete && (
+                            <>
+                              <DropdownMenu.Separator />
+                              <DropdownMenu.Item
+                                variant="danger"
+                                icon={Trash}
+                                onClick={() => setTicketToDelete(ticket)}
+                              >
+                                Xóa vé
+                              </DropdownMenu.Item>
+                            </>
+                          )}
+                        </DropdownMenu.Content>
+                      </DropdownMenu>
                     </Table.Cell>
                   </Table.Row>
                 );
@@ -559,12 +821,15 @@ export const ManagerTicketsPage: React.FC = () => {
         </Table>
       </LayerCard>
 
-      {/* Footer Info */}
-      <div className="flex items-center justify-between text-xs text-kumo-subtle pt-2 border-t border-kumo-line">
-        <span>
-          Đang hiển thị {filteredTickets.length} / {totalTickets} phiếu sự cố
-        </span>
-      </div>
+      {/* Footer: Pagination */}
+      {meta && meta.total > 0 && (
+        <div className="pt-2 border-t border-kumo-line">
+          <Pagination page={page} setPage={setPage} perPage={meta.limit} totalCount={meta.total}>
+            <Pagination.Info />
+            <Pagination.Controls />
+          </Pagination>
+        </div>
+      )}
 
       {/* Modal 1: Assign Staff Dialog */}
       <Dialog.Root
@@ -730,43 +995,40 @@ export const ManagerTicketsPage: React.FC = () => {
         open={Boolean(selectedTicket)}
         onOpenChange={(open) => !open && setSelectedTicket(null)}
       >
-        <Dialog
-          size="xl"
-          className="p-6 sm:p-8 max-w-3xl sm:w-[768px] w-full max-h-[88vh] overflow-y-auto"
-        >
-          <div className="space-y-5">
-            <div className="flex items-center justify-between border-b border-kumo-line pb-3.5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-lg bg-kumo-fill text-kumo-default flex items-center justify-center shrink-0">
-                  <Lifebuoy className="w-5 h-5" />
-                </div>
-                <div>
-                  <Dialog.Title className="text-base font-semibold text-kumo-default">
-                    Chi tiết phiếu sự cố dịch vụ
-                  </Dialog.Title>
-                  <div className="text-xs">
-                    <Text variant="secondary">
-                      Xem thông tin đầy đủ, lịch sử xử lý và trạng thái phiếu
-                    </Text>
-                  </div>
-                </div>
-                {isLoadingDetail && (
-                  <ArrowsClockwise className="w-4 h-4 text-kumo-brand animate-spin ml-2" />
-                )}
+        <Dialog size="xl" className="p-0 max-w-3xl sm:w-[768px] w-full max-h-[88vh] flex flex-col">
+          <div className="flex items-center justify-between border-b border-kumo-line px-6 sm:px-8 pt-6 sm:pt-8 pb-3.5 shrink-0">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-lg bg-kumo-fill text-kumo-default flex items-center justify-center shrink-0">
+                <Lifebuoy className="w-5 h-5" />
               </div>
-              <Dialog.Close
-                render={(props) => (
-                  <button
-                    type="button"
-                    {...props}
-                    className="p-1.5 rounded-md text-kumo-subtle hover:text-kumo-default hover:bg-kumo-control cursor-pointer transition"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              />
+              <div>
+                <Dialog.Title className="text-base font-semibold text-kumo-default">
+                  Chi tiết phiếu sự cố dịch vụ
+                </Dialog.Title>
+                <div className="text-xs">
+                  <Text variant="secondary">
+                    Xem thông tin đầy đủ, lịch sử xử lý và trạng thái phiếu
+                  </Text>
+                </div>
+              </div>
+              {isLoadingDetail && (
+                <ArrowsClockwise className="w-4 h-4 text-kumo-brand animate-spin ml-2" />
+              )}
             </div>
+            <Dialog.Close
+              render={(props) => (
+                <button
+                  type="button"
+                  {...props}
+                  className="p-1.5 rounded-md text-kumo-subtle hover:text-kumo-default hover:bg-kumo-control cursor-pointer transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            />
+          </div>
 
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 sm:px-8 py-5">
             {selectedTicket && (
               <div className="space-y-4">
                 {/* Header Information Card */}
@@ -847,6 +1109,47 @@ export const ManagerTicketsPage: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Attachments */}
+                {selectedTicket.attachments.length > 0 && (
+                  <div className="space-y-1.5">
+                    <span className="text-xs font-semibold text-kumo-default block">
+                      Tệp đính kèm:
+                    </span>
+                    <div className="space-y-1.5">
+                      {selectedTicket.attachments.map((a, idx) => {
+                        const att = toAttachmentView(a, idx);
+                        return (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-2 p-2.5 bg-kumo-control rounded-lg border border-kumo-line text-xs"
+                          >
+                            <Paperclip className="w-3.5 h-3.5 text-kumo-subtle shrink-0" />
+                            {att.url ? (
+                              <a
+                                href={att.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-medium text-kumo-brand hover:underline truncate"
+                              >
+                                {att.name}
+                              </a>
+                            ) : (
+                              <span className="font-medium text-kumo-default truncate">
+                                {att.name}
+                              </span>
+                            )}
+                            {att.size != null && (
+                              <span className="ml-auto text-kumo-subtle shrink-0">
+                                {formatFileSize(att.size)}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* Resolution note if any */}
                 {selectedTicket.resolution && (
                   <div className="space-y-1.5">
@@ -873,12 +1176,19 @@ export const ManagerTicketsPage: React.FC = () => {
                         >
                           <span className="font-medium text-kumo-default">
                             {h.action === 'CREATED' && 'Tạo phiếu sự cố'}
-                            {h.action === 'ASSIGNED' && `Phân công: ${h.to || ''}`}
-                            {h.action === 'STATUS_CHANGED' && `Chuyển trạng thái: ${h.to || ''}`}
+                            {h.action === 'ASSIGNED' && `Phân công: ${resolveStaffLabel(h.to)}`}
+                            {h.action === 'STATUS_CHANGED' &&
+                              `Chuyển trạng thái: ${TICKET_STATUS_LABELS[h.to as TicketStatus] ?? h.to ?? ''}`}
                             {h.action === 'RESOLVED' && 'Đã xử lý xong'}
-                            {!['CREATED', 'ASSIGNED', 'STATUS_CHANGED', 'RESOLVED'].includes(
-                              h.action,
-                            ) && h.action}
+                            {h.action === 'PRIORITY_CHANGED' &&
+                              `Đổi mức độ: ${TICKET_PRIORITY_LABELS[h.to as TicketPriority] ?? h.to ?? ''}`}
+                            {![
+                              'CREATED',
+                              'ASSIGNED',
+                              'STATUS_CHANGED',
+                              'RESOLVED',
+                              'PRIORITY_CHANGED',
+                            ].includes(h.action) && h.action}
                           </span>
                           <span className="text-kumo-subtle font-mono text-[11px]">
                             {new Date(h.at).toLocaleDateString('vi-VN', {
@@ -894,26 +1204,80 @@ export const ManagerTicketsPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Action Buttons */}
-                <div className="flex items-center justify-end gap-3 pt-3 border-t border-kumo-line">
-                  <Button variant="secondary" onClick={() => setSelectedTicket(null)}>
-                    Đóng
-                  </Button>
-                  <Button
-                    variant="primary"
-                    icon={<UserPlus className="w-4 h-4" />}
-                    onClick={() => {
-                      const t = selectedTicket;
-                      setSelectedTicket(null);
-                      handleOpenAssignModal(t);
-                    }}
-                  >
-                    {selectedTicket.assigned_to ? 'Chuyển ca trực' : 'Phân công ngay'}
-                  </Button>
-                </div>
+                {/* Edit panel — managers/admins update processing fields */}
+                {canEdit && !TERMINAL_STATUSES.includes(selectedTicket.status) && (
+                  <div className="space-y-3 p-4 bg-kumo-control rounded-lg ring ring-kumo-line">
+                    <span className="text-xs font-semibold text-kumo-default block">
+                      Cập nhật xử lý
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Select
+                        label="Trạng thái"
+                        value={editStatus}
+                        onValueChange={(val) => val && setEditStatus(val as TicketStatus)}
+                        items={statusEditOptions}
+                      />
+                      <Select
+                        label="Mức độ ưu tiên"
+                        value={editPriority}
+                        onValueChange={(val) => val && setEditPriority(val as TicketPriority)}
+                        items={priorityEditOptions}
+                      />
+                    </div>
+                    <Textarea
+                      label="Kết quả xử lý / Ghi chú kỹ thuật"
+                      rows={3}
+                      value={editResolution}
+                      onChange={(e) => setEditResolution(e.target.value)}
+                      placeholder="Ghi chú kết quả xử lý gửi khách hàng..."
+                    />
+                    <div className="flex justify-end">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={handleSaveEdit}
+                        disabled={!hasEditChanges}
+                        loading={isSavingEdit}
+                      >
+                        Lưu thay đổi
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
+
+          {/* Action Buttons — pinned footer, never scrolls away */}
+          {selectedTicket && (
+            <div className="px-6 sm:px-8 py-4 border-t border-kumo-line flex items-center justify-end gap-3 shrink-0">
+              <Button variant="secondary" onClick={() => setSelectedTicket(null)}>
+                Đóng
+              </Button>
+              {canAssign && CANCELLABLE_STATUSES.includes(selectedTicket.status) && (
+                <Button
+                  variant="secondary-destructive"
+                  icon={<XCircle className="w-4 h-4" />}
+                  onClick={() => setTicketToCancel(selectedTicket)}
+                >
+                  Hủy phiếu
+                </Button>
+              )}
+              {canAssign && (
+                <Button
+                  variant="primary"
+                  icon={<UserPlus className="w-4 h-4" />}
+                  onClick={() => {
+                    const t = selectedTicket;
+                    setSelectedTicket(null);
+                    handleOpenAssignModal(t);
+                  }}
+                >
+                  {selectedTicket.assigned_to ? 'Chuyển ca trực' : 'Phân công ngay'}
+                </Button>
+              )}
+            </div>
+          )}
         </Dialog>
       </Dialog.Root>
 
@@ -983,6 +1347,80 @@ export const ManagerTicketsPage: React.FC = () => {
                     onClick={handleConfirmDelete}
                   >
                     Xác nhận xóa
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </Dialog>
+      </Dialog.Root>
+
+      {/* Modal 4: Cancel Ticket Confirmation Dialog */}
+      <Dialog.Root
+        open={Boolean(ticketToCancel)}
+        onOpenChange={(open) => !open && !isCancelling && setTicketToCancel(null)}
+      >
+        <Dialog size="lg" className="p-6 max-w-lg sm:w-[500px] w-full">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between border-b border-kumo-line pb-3">
+              <div className="flex items-center gap-2">
+                <WarningCircle className="w-5 h-5 text-kumo-warning" />
+                <Dialog.Title className="text-base font-semibold text-kumo-default">
+                  Xác nhận hủy phiếu sự cố
+                </Dialog.Title>
+              </div>
+              <Dialog.Close
+                render={(props) => (
+                  <button
+                    type="button"
+                    {...props}
+                    disabled={isCancelling}
+                    className="p-1 rounded-md text-kumo-subtle hover:text-kumo-default cursor-pointer transition disabled:opacity-50"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              />
+            </div>
+
+            {ticketToCancel && (
+              <div className="space-y-3">
+                <Text variant="secondary">
+                  Bạn có chắc chắn muốn hủy phiếu sự cố này không? Phiếu sẽ chuyển sang trạng thái
+                  "Đã hủy" và không thể tiếp tục xử lý.
+                </Text>
+
+                <div className="p-3 bg-kumo-warning-tint rounded-lg text-xs space-y-1">
+                  <div className="flex items-center justify-between font-mono font-semibold text-kumo-warning">
+                    <span className="whitespace-nowrap">{ticketToCancel.ticket_no}</span>
+                    <span className="whitespace-nowrap">
+                      Kho: {ticketToCancel.storage_unit?.code || 'Chung'}
+                    </span>
+                  </div>
+                  <div className="text-kumo-default font-medium line-clamp-2">
+                    {ticketToCancel.subject}
+                  </div>
+                  <div className="text-kumo-subtle text-[11px]">
+                    Khách báo: {ticketToCancel.customer?.full_name || 'Khách vãng lai'}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-kumo-line">
+                  <Button
+                    variant="secondary"
+                    onClick={() => setTicketToCancel(null)}
+                    disabled={isCancelling}
+                  >
+                    Quay lại
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    loading={isCancelling}
+                    disabled={isCancelling}
+                    icon={<XCircle className="w-4 h-4" />}
+                    onClick={handleConfirmCancel}
+                  >
+                    Xác nhận hủy phiếu
                   </Button>
                 </div>
               </div>

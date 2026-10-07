@@ -1,15 +1,10 @@
 import {
   ApiResponse,
   ChangeRequestStatus,
-  IStorageItem,
-  IStorageLocation,
-  PresignedUploadUrlResponse,
-  StorageDashboardSummary,
   StorageUnitStatus,
   SystemSettingRecord,
   SystemSettingsResponse,
   UpdateSettingsResponse,
-  UploadedFileResponse,
 } from '@storage/types';
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { AuthUser, LoginInput, LoginResponse, RegisterInput } from '../types/auth';
@@ -20,6 +15,7 @@ import type {
   ServiceTicketListResponse,
   ServiceTicketRecord,
   ServiceTicketResponse,
+  UpdateTicketDto,
 } from '../types/service-tickets';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
@@ -133,70 +129,6 @@ export const AuthApi = {
 };
 
 /**
- * Storage & Facility API Service
- */
-export const StorageApi = {
-  getDashboardSummary: async (): Promise<StorageDashboardSummary> => {
-    const res = await apiClient.get<ApiResponse<StorageDashboardSummary>>('/storage/dashboard');
-    return res.data.data;
-  },
-
-  getItems: async (params?: {
-    search?: string;
-    status?: string;
-    page?: number;
-    limit?: number;
-  }) => {
-    const res = await apiClient.get<ApiResponse<IStorageItem[]>>('/storage/items', {
-      params,
-    });
-    return res.data;
-  },
-
-  getLocations: async (): Promise<IStorageLocation[]> => {
-    const res = await apiClient.get<ApiResponse<IStorageLocation[]>>('/storage/locations');
-    return res.data.data;
-  },
-
-  createItem: async (data: Partial<IStorageItem>) => {
-    const res = await apiClient.post<ApiResponse<IStorageItem>>('/storage/items', data);
-    return res.data.data;
-  },
-
-  getPresignedUploadUrl: async (
-    fileName: string,
-    mimeType: string,
-    fileSize: number,
-  ): Promise<PresignedUploadUrlResponse> => {
-    const res = await apiClient.post<ApiResponse<PresignedUploadUrlResponse>>(
-      '/uploads/presigned-url',
-      { fileName, mimeType, fileSize },
-    );
-    return res.data.data;
-  },
-
-  uploadFileDirect: async (file: File): Promise<UploadedFileResponse> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    const res = await apiClient.post<ApiResponse<UploadedFileResponse>>(
-      '/uploads/direct',
-      formData,
-      {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      },
-    );
-    return res.data.data;
-  },
-
-  getDownloadUrl: async (fileKey: string): Promise<string> => {
-    const res = await apiClient.get<ApiResponse<{ downloadUrl: string }>>('/uploads/download-url', {
-      params: { fileKey },
-    });
-    return res.data.data.downloadUrl;
-  },
-};
-
-/**
  * Facility / unit / ticket portal services (facility-scoped roles)
  */
 export interface FacilityRecord {
@@ -243,10 +175,13 @@ export const FacilitiesApi = {
 };
 
 export const UnitsApi = {
-  managed: async (facilityId: string) => {
+  managed: async (
+    facilityId: string,
+    params?: { page?: number; limit?: number; status?: StorageUnitStatus },
+  ) => {
     const res = await apiClient.get<ApiResponse<{ units: ManagedUnit[] } & Paged>>(
       '/storage-units/managed',
-      { params: { facilityId } },
+      { params: { facilityId, ...params } },
     );
     return res.data.data;
   },
@@ -260,10 +195,10 @@ export const UnitsApi = {
 };
 
 export const ChangeRequestsApi = {
-  list: async () => {
+  list: async (params?: { page?: number; limit?: number }) => {
     const res = await apiClient.get<ApiResponse<{ requests: UnitChangeRequestRecord[] } & Paged>>(
       '/unit-change-requests',
-      { params: { limit: 50 } },
+      { params: { limit: 50, ...params } },
     );
     return res.data.data;
   },
@@ -295,11 +230,6 @@ export const TicketsApi = {
   },
 
   /**
-   * List the most recent tickets (dashboard summary)
-   */
-  list: (limit = 50) => TicketsApi.getAll({ limit }),
-
-  /**
    * Get a single ticket by ID
    */
   getOne: async (id: string): Promise<ServiceTicketRecord> => {
@@ -318,6 +248,29 @@ export const TicketsApi = {
     const res = await apiClient.patch<ApiResponse<ServiceTicketResponse> | ServiceTicketResponse>(
       `/service-tickets/${id}/assign`,
       payload,
+    );
+    const body = res.data && 'data' in res.data ? res.data.data : res.data;
+    return body.ticket;
+  },
+
+  /**
+   * Update processing fields of a ticket (assigned Staff, facility Manager, Admin)
+   */
+  update: async (id: string, dto: UpdateTicketDto): Promise<ServiceTicketRecord> => {
+    const res = await apiClient.patch<ApiResponse<ServiceTicketResponse> | ServiceTicketResponse>(
+      `/service-tickets/${id}`,
+      dto,
+    );
+    const body = res.data && 'data' in res.data ? res.data.data : res.data;
+    return body.ticket;
+  },
+
+  /**
+   * Cancel a ticket that is still being worked (owning Customer or facility Manager)
+   */
+  cancel: async (id: string): Promise<ServiceTicketRecord> => {
+    const res = await apiClient.patch<ApiResponse<ServiceTicketResponse> | ServiceTicketResponse>(
+      `/service-tickets/${id}/cancel`,
     );
     const body = res.data && 'data' in res.data ? res.data.data : res.data;
     return body.ticket;

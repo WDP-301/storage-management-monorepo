@@ -163,6 +163,11 @@ describe('ManagerTicketsPage Component', () => {
     expect(screen.getByText('A-102')).toBeTruthy();
   });
 
+  const openRowMenu = async () => {
+    const triggers = await screen.findAllByRole('button', { name: /thao tác vé/i });
+    fireEvent.click(triggers[0]);
+  };
+
   it('opens details dialog when clicking Chi tiết', async () => {
     render(<ManagerTicketsPage />);
 
@@ -170,9 +175,8 @@ describe('ManagerTicketsPage Component', () => {
       expect(screen.getByText('TK-2026-0001')).toBeTruthy();
     });
 
-    const detailButtons = screen.getAllByRole('button', { name: /chi tiết/i });
-    expect(detailButtons.length).toBeGreaterThan(0);
-    fireEvent.click(detailButtons[0]);
+    await openRowMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: /chi tiết/i }));
 
     expect(await screen.findByText('Chi tiết phiếu sự cố dịch vụ')).toBeTruthy();
     expect(await screen.findByText('Nội dung mô tả sự cố:')).toBeTruthy();
@@ -186,9 +190,8 @@ describe('ManagerTicketsPage Component', () => {
       expect(screen.getByText('TK-2026-0001')).toBeTruthy();
     });
 
-    const assignButtons = screen.getAllByRole('button', { name: /phân công/i });
-    expect(assignButtons.length).toBeGreaterThan(0);
-    fireEvent.click(assignButtons[0]);
+    await openRowMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: /phân công/i }));
 
     expect(await screen.findByText('Phân công kỹ thuật viên phụ trách')).toBeTruthy();
 
@@ -203,7 +206,76 @@ describe('ManagerTicketsPage Component', () => {
     });
   });
 
+  it('lets a manager update processing fields from the detail dialog', async () => {
+    const updateSpy = vi.spyOn(TicketsApi, 'update').mockResolvedValue({
+      ...TEST_TICKETS[0],
+      resolution: 'Đã thay khóa mới',
+    });
+    render(<ManagerTicketsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('TK-2026-0001')).toBeTruthy();
+    });
+
+    await openRowMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: /chi tiết/i }));
+
+    expect(await screen.findByText('Cập nhật xử lý')).toBeTruthy();
+
+    const resolutionInput = await screen.findByPlaceholderText(/Ghi chú kết quả xử lý/i);
+    fireEvent.change(resolutionInput, { target: { value: 'Đã thay khóa mới' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /lưu thay đổi/i }));
+
+    await waitFor(() => {
+      expect(updateSpy).toHaveBeenCalledWith('t-1', { resolution: 'Đã thay khóa mới' });
+    });
+  });
+
+  it('lets a manager cancel an open ticket from the detail dialog', async () => {
+    const cancelSpy = vi.spyOn(TicketsApi, 'cancel').mockResolvedValue({
+      ...TEST_TICKETS[0],
+      status: TicketStatus.CANCELLED,
+    });
+    render(<ManagerTicketsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('TK-2026-0001')).toBeTruthy();
+    });
+
+    await openRowMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: /chi tiết/i }));
+
+    fireEvent.click(await screen.findByRole('button', { name: /hủy phiếu/i }));
+    expect(await screen.findByText('Xác nhận hủy phiếu sự cố')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /xác nhận hủy phiếu/i }));
+
+    await waitFor(() => {
+      expect(cancelSpy).toHaveBeenCalledWith('t-1');
+    });
+  });
+
   it('opens delete confirmation dialog and deletes ticket on confirm', async () => {
+    // DELETE /service-tickets/:id is ADMIN-only on the backend — swap the mocked
+    // user to an admin so the delete button renders.
+    vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
+      user: {
+        id: 'adm-1',
+        email: 'admin@example.com',
+        fullName: 'Quản trị viên',
+        status: 'ACTIVE',
+        roles: ['ADMIN'],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      isAuthenticated: true,
+      isLoading: false,
+      login: vi.fn(),
+      register: vi.fn(),
+      logout: vi.fn(),
+      refreshUser: vi.fn(),
+    });
     const removeSpy = vi
       .spyOn(TicketsApi, 'remove')
       .mockResolvedValue({ deleted: true, id: 't-1' });
@@ -213,9 +285,8 @@ describe('ManagerTicketsPage Component', () => {
       expect(screen.getByText('TK-2026-0001')).toBeTruthy();
     });
 
-    const deleteButtons = screen.getAllByRole('button', { name: /xóa/i });
-    expect(deleteButtons.length).toBeGreaterThan(0);
-    fireEvent.click(deleteButtons[0]);
+    await openRowMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: /xóa vé/i }));
 
     expect(await screen.findByText('Xác nhận xóa phiếu sự cố')).toBeTruthy();
     expect(

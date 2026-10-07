@@ -772,9 +772,8 @@ export const ManagerTicketsPage: React.FC = () => {
                     <Table.Cell className="whitespace-nowrap text-right">
                       <DropdownMenu>
                         <DropdownMenu.Trigger
-                          render={(props) => (
+                          render={
                             <Button
-                              {...props}
                               size="sm"
                               variant="ghost"
                               shape="square"
@@ -782,7 +781,7 @@ export const ManagerTicketsPage: React.FC = () => {
                               aria-label={`Thao tác vé ${ticket.ticket_no}`}
                               title={`Thao tác vé ${ticket.ticket_no}`}
                             />
-                          )}
+                          }
                         />
                         <DropdownMenu.Content align="end" sideOffset={4}>
                           <DropdownMenu.Item

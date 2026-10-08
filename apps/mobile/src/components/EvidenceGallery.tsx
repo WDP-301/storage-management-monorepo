@@ -5,20 +5,34 @@ import type { EvidenceFile } from '../types/contract-api';
 
 type Props = {
   files: readonly EvidenceFile[];
+  /** Edit mode: shows a remove badge on each thumb. */
+  onRemove?: (file: EvidenceFile) => void;
 };
 
 /**
  * Photo grid for inspection evidence. The bucket is private, so each thumb resolves its own
  * presigned URL; tapping opens it full screen with a fresh URL (presigned links expire).
  */
-export function EvidenceGallery({ files }: Props) {
+export function EvidenceGallery({ files, onRemove }: Props) {
   const [viewing, setViewing] = useState<EvidenceFile | null>(null);
   if (files.length === 0) return null;
 
   return (
     <View className="flex-row flex-wrap gap-2">
       {files.map((file) => (
-        <EvidenceThumb key={file.fileKey} file={file} onPress={() => setViewing(file)} />
+        <View key={file.fileKey}>
+          <EvidenceThumb file={file} onPress={() => setViewing(file)} />
+          {onRemove ? (
+            <Pressable
+              accessibilityLabel={`Xoá ${file.name}`}
+              className="absolute -right-1.5 -top-1.5 size-6 items-center justify-center rounded-full bg-danger"
+              hitSlop={6}
+              onPress={() => onRemove(file)}
+            >
+              <Text className="text-xs font-bold text-white">✕</Text>
+            </Pressable>
+          ) : null}
+        </View>
       ))}
       <EvidenceViewer file={viewing} onClose={() => setViewing(null)} />
     </View>

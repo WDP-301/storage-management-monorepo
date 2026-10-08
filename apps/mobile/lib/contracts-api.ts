@@ -2,11 +2,10 @@ import type {
   ApiContract,
   ApiInspection,
   CustomerContractResponse,
-  EvidenceFile,
-  InspectionDamage,
   InspectionSummaryResponse,
 } from '../src/types/contract-api';
 import { request } from './api';
+import { isEvidenceFile, toDamages } from './evidence';
 
 export const ContractsApi = {
   /** Contracts the signed-in customer holds — the "Kho của tôi" source. */
@@ -66,26 +65,6 @@ function normaliseInspection(inspection: InspectionSummaryResponse): ApiInspecti
     inspectorName: inspection.inspector_name,
     conditionNotes: inspection.condition_notes,
     evidence: (inspection.evidence ?? []).filter(isEvidenceFile),
-    damages: (inspection.damages ?? []).filter(isDamage).map((damage) => ({
-      ...damage,
-      evidence: (damage.evidence ?? []).filter(isEvidenceFile),
-    })),
+    damages: toDamages(inspection.damages),
   };
-}
-
-/** Older rows stored bare URLs; only `{ fileKey }` entries can be presigned and shown. */
-function isEvidenceFile(value: unknown): value is EvidenceFile {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as EvidenceFile).fileKey === 'string'
-  );
-}
-
-function isDamage(value: unknown): value is InspectionDamage {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as InspectionDamage).description === 'string'
-  );
 }

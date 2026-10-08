@@ -18,6 +18,11 @@ import type {
 } from '../types/admin-user';
 import { AuthUser, LoginInput, LoginResponse, RegisterInput } from '../types/auth';
 import type {
+  FacilityStaffMember,
+  InspectionRecord,
+  ListInspectionsQuery,
+} from '../types/inspection';
+import type {
   AssignTicketDto,
   ListTicketsQuery,
   ServiceTicketDeleteResponse,
@@ -185,6 +190,51 @@ export const FacilitiesApi = {
   listAll: async (): Promise<FacilityRecord[]> => {
     const res = await apiClient.get<ApiResponse<FacilityRecord[]>>('/facilities');
     return res.data.data;
+  },
+
+  /** Active staff of a facility — the people a manager can assign work to. */
+  listStaff: async (facilityId: string): Promise<FacilityStaffMember[]> => {
+    const res = await apiClient.get<ApiResponse<FacilityStaffMember[]>>(
+      `/facilities/${facilityId}/staff`,
+    );
+    return res.data.data;
+  },
+};
+
+export const InspectionsApi = {
+  /** Scoped by the API to the facilities the caller manages. */
+  list: async (query: ListInspectionsQuery = {}): Promise<InspectionRecord[]> => {
+    const res = await apiClient.get<ApiResponse<InspectionRecord[]>>('/inspections', {
+      params: query,
+    });
+    return res.data.data;
+  },
+
+  get: async (id: string): Promise<InspectionRecord> => {
+    const res = await apiClient.get<ApiResponse<InspectionRecord>>(`/inspections/${id}`);
+    return res.data.data;
+  },
+
+  assign: async (id: string, inspectedBy: string): Promise<InspectionRecord> => {
+    const res = await apiClient.patch<ApiResponse<InspectionRecord>>(`/inspections/${id}/assign`, {
+      inspectedBy,
+    });
+    return res.data.data;
+  },
+
+  finalize: async (id: string): Promise<InspectionRecord> => {
+    const res = await apiClient.post<ApiResponse<InspectionRecord>>(`/inspections/${id}/finalize`);
+    return res.data.data;
+  },
+};
+
+export const UploadsApi = {
+  /** Presigned GET for a private object; links expire, so resolve right before opening. */
+  downloadUrl: async (fileKey: string): Promise<string> => {
+    const res = await apiClient.get<ApiResponse<{ downloadUrl: string }>>('/uploads/download-url', {
+      params: { fileKey },
+    });
+    return res.data.data.downloadUrl;
   },
 };
 

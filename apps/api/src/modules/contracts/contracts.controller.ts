@@ -1,6 +1,8 @@
+import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
 import { Roles } from '@modules/auth/decorators/roles.decorator';
 import { RolesGuard } from '@modules/auth/guards/roles.guard';
 import { SessionGuard } from '@modules/auth/guards/session.guard';
+import type { AuthUser } from '@modules/auth/types/auth-user';
 import {
   Body,
   Controller,
@@ -51,6 +53,13 @@ export class ContractsController {
   @ApiOperation({ summary: 'List contracts excluding soft-deleted records' })
   findAll() {
     return this.contractsService.findAll();
+  }
+
+  @Get('mine')
+  @Roles(UserRole.CUSTOMER)
+  @ApiOperation({ summary: "List the caller's contracts with unit and facility info" })
+  findMine(@CurrentUser() user: AuthUser) {
+    return this.contractsService.findMine(user.id);
   }
 
   @Get(':id')

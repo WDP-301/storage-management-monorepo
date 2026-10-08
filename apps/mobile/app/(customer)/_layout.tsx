@@ -6,7 +6,7 @@ import { SafeAreaView as RNSafeAreaView } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
 import { HoldProvider, useHold } from '../../lib/hold';
 import { BottomTabButton } from '../../src/components/BottomTabButton';
-import { CalendarIcon, SettingsIcon, UnitsIcon } from '../../src/components/TabIcons';
+import { CalendarIcon, SettingsIcon, StorageIcon, UnitsIcon } from '../../src/components/TabIcons';
 import type { CustomerTab } from '../../src/types/customer';
 
 const SafeAreaView = withUniwind(RNSafeAreaView);
@@ -14,6 +14,7 @@ const SafeAreaView = withUniwind(RNSafeAreaView);
 const TAB_HREFS = {
   browse: '/(customer)/browse',
   bookings: '/(customer)/bookings',
+  storage: '/(customer)/storage',
   settings: '/(customer)/settings',
 } as const;
 
@@ -25,6 +26,9 @@ export default function CustomerTabsLayout() {
       <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
         <StatusBar style="dark" />
         <RouterTabs
+          // Hidden screens (contract detail, payment, tickets) must go back to where they were
+          // opened from, not to the first tab.
+          backBehavior="history"
           screenOptions={{ headerShown: false }}
           tabBar={({ state }) => (
             <CustomerTabBar
@@ -35,8 +39,11 @@ export default function CustomerTabsLayout() {
         >
           <RouterTabs.Screen name="browse" options={{ title: 'Browse units' }} />
           <RouterTabs.Screen name="bookings" options={{ title: 'Booking của tôi' }} />
+          <RouterTabs.Screen name="storage" options={{ title: 'Kho của tôi' }} />
+          {/* Contract detail is reached from a "Kho của tôi" card; it has no tab button. */}
+          <RouterTabs.Screen name="contract-detail" options={{ title: 'Chi tiết hợp đồng' }} />
           <RouterTabs.Screen name="settings" options={{ title: 'Cài đặt' }} />
-          {/* Scheduling is reached after selecting units; the custom tab bar has three buttons. */}
+          {/* Scheduling is reached after selecting units; it has no tab button. */}
           <RouterTabs.Screen name="schedule" options={{ title: 'Đặt lịch thuê' }} />
           {/* Deposit payment is reached from a booking, so it has no tab button either. */}
           <RouterTabs.Screen name="payment" options={{ title: 'Thanh toán tiền cọc' }} />
@@ -105,6 +112,12 @@ function CustomerTabBar({
           onPress={() => onSelect('bookings')}
         />
         <BottomTabButton
+          icon={<StorageIcon color={iconColor('storage')} />}
+          isSelected={activeTab === 'storage'}
+          label="Kho của tôi"
+          onPress={() => onSelect('storage')}
+        />
+        <BottomTabButton
           icon={<SettingsIcon color={iconColor('settings')} />}
           isSelected={activeTab === 'settings'}
           label="Cài đặt"
@@ -116,7 +129,10 @@ function CustomerTabBar({
 }
 
 function toCustomerTab(routeName: string | undefined): CustomerTab {
-  if (routeName === 'bookings' || routeName === 'settings') return routeName;
+  if (routeName === 'bookings' || routeName === 'storage' || routeName === 'settings') {
+    return routeName;
+  }
+  if (routeName === 'contract-detail') return 'storage';
   if (routeName === 'schedule') return 'browse';
   // Paying a deposit belongs to the booking the customer came from, not to browsing.
   if (routeName === 'payment') return 'bookings';

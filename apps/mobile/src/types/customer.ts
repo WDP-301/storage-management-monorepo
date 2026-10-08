@@ -1,4 +1,4 @@
-export type CustomerTab = 'browse' | 'bookings' | 'settings';
+export type CustomerTab = 'browse' | 'bookings' | 'storage' | 'settings';
 export type BrowseMode = 'recommended' | 'manual';
 
 export type UnitOffer = {

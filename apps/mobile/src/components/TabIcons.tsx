@@ -65,6 +65,26 @@ export function RequestIcon({ color }: IconProps) {
   );
 }
 
+export function StorageIcon({ color }: IconProps) {
+  return (
+    <Svg height={22} viewBox="0 0 24 24" width={22} fill="none">
+      <Path
+        d="M3 21V8.5L12 3l9 5.5V21H3Z"
+        stroke={color}
+        strokeLinejoin="round"
+        strokeWidth={1.8}
+      />
+      <Path
+        d="M9 21v-7h6v7M9 17.5h6"
+        stroke={color}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.8}
+      />
+    </Svg>
+  );
+}
+
 export function SettingsIcon({ color }: IconProps) {
   return (
     <Svg height={22} viewBox="0 0 24 24" width={22} fill="none">

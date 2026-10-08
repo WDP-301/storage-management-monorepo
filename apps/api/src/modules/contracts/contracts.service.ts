@@ -12,6 +12,7 @@ import { BookingStatus, ContractKind, ContractStatus } from '@storage/types';
 import Decimal from 'decimal.js';
 import { DataSource, IsNull, Repository } from 'typeorm';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
+import { type CustomerContractRecord, toCustomerContractRecord } from './types/customer-contract';
 
 const CONTRACT_CREATION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -112,6 +113,15 @@ export class ContractsService {
 
   findAll(): Promise<Contract[]> {
     return this.contracts.find({ where: { deletedAt: IsNull() }, order: { createdAt: 'DESC' } });
+  }
+
+  async findMine(customerId: string): Promise<CustomerContractRecord[]> {
+    const contracts = await this.contracts.find({
+      where: { customerId, deletedAt: IsNull() },
+      relations: { bookingItem: { storageUnit: { facility: true, unitType: true } } },
+      order: { effectiveAt: 'DESC' },
+    });
+    return contracts.map(toCustomerContractRecord);
   }
 
   async findById(id: string): Promise<Contract> {

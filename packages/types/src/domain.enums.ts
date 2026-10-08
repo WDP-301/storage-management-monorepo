@@ -256,3 +256,13 @@ export const FeedbackStatus = {
   HIDDEN: 'HIDDEN',
 } as const;
 export type FeedbackStatus = (typeof FeedbackStatus)[keyof typeof FeedbackStatus];
+
+export const TourAppointmentStatus = {
+  PENDING: 'PENDING',
+  CONFIRMED: 'CONFIRMED',
+  ASSIGNED: 'ASSIGNED',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type TourAppointmentStatus =
+  (typeof TourAppointmentStatus)[keyof typeof TourAppointmentStatus];

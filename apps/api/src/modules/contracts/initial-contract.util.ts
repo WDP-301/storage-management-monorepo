@@ -78,7 +78,11 @@ export async function persistContract(
   // inspectedBy/conditionNotes/inspectedAt/finalizedAt=NULL).
   await manager.save(
     Inspection,
-    manager.create(Inspection, { contractId: saved.id, type: InspectionType.PRE_HANDOVER }),
+    manager.create(Inspection, {
+      contractId: saved.id,
+      type: InspectionType.PRE_HANDOVER,
+      scheduledAt: saved.effectiveAt,
+    }),
   );
   return saved;
 }

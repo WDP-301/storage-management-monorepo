@@ -177,8 +177,16 @@ describe('BookingsService.handlePaymentReceived', () => {
     );
     const inspections = em.save.mock.calls.filter(([entity]) => entity === Inspection);
     expect(inspections.map(([, data]) => data)).toEqual([
-      { contractId: 'c-item-1', type: InspectionType.PRE_HANDOVER },
-      { contractId: 'c-item-2', type: InspectionType.PRE_HANDOVER },
+      {
+        contractId: 'c-item-1',
+        type: InspectionType.PRE_HANDOVER,
+        scheduledAt: new Date('2026-10-20T00:00:00Z'),
+      },
+      {
+        contractId: 'c-item-2',
+        type: InspectionType.PRE_HANDOVER,
+        scheduledAt: new Date('2026-10-20T00:00:00Z'),
+      },
     ]);
     expect(em.update).toHaveBeenCalledWith(
       StorageUnit,

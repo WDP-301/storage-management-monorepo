@@ -97,12 +97,23 @@ export class ContractsService {
     });
     if (contracts.length === 0) return [];
 
-    const handovers = await this.dataSource.getRepository(Inspection).find({
-      where: { contractId: In(contracts.map((c) => c.id)), type: InspectionType.PRE_HANDOVER },
+    // Oldest first, so the latest RETURN wins when several exist for one contract.
+    const inspections = await this.dataSource.getRepository(Inspection).find({
+      where: {
+        contractId: In(contracts.map((c) => c.id)),
+        type: In([InspectionType.PRE_HANDOVER, InspectionType.RETURN]),
+      },
       relations: { inspector: true },
+      order: { createdAt: 'ASC' },
     });
-    const handoverByContract = new Map(handovers.map((i) => [i.contractId, i]));
-    return contracts.map((c) => toCustomerContractRecord(c, handoverByContract.get(c.id)));
+    const byContract = new Map<string, { handover?: Inspection; return?: Inspection }>();
+    for (const inspection of inspections) {
+      const entry = byContract.get(inspection.contractId) ?? {};
+      if (inspection.type === InspectionType.PRE_HANDOVER) entry.handover = inspection;
+      else entry.return = inspection;
+      byContract.set(inspection.contractId, entry);
+    }
+    return contracts.map((c) => toCustomerContractRecord(c, byContract.get(c.id)));
   }
 
   async findById(id: string): Promise<Contract> {

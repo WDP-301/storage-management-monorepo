@@ -1,346 +1,200 @@
 import { AppUser } from '@entities/app-user.entity';
+import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { UserRole } from '@storage/types';
-import { Repository } from 'typeorm';
+import { DamageSeverity, InspectionType, UserRole } from '@storage/types';
+import { In, IsNull } from 'typeorm';
 import { InspectionService } from './inspection.service';
+import { INSPECTION_RELATIONS } from './inspection-access.util';
 
 const actor = (id: string, roles: UserRole[] = []): AuthUser => ({ id, roles }) as AuthUser;
+const STAFF = actor('staff-1', [UserRole.FACILITY_STAFF]);
+const MANAGER = actor('manager-1', [UserRole.FACILITY_MANAGER]);
+const OPS = actor('ops-1', [UserRole.OPERATIONS_MANAGER]);
 
-const activeStaffAssignment = (userId: string): UserRoleAssignment =>
+const assignment = (userId: string, role: UserRole, facilityId: string) =>
   ({
-    id: 'assignment-1',
     userId,
-    role: UserRole.FACILITY_STAFF,
-    facilityId: 'facility-1',
+    role,
+    facilityId,
     startsAt: new Date('2024-01-01T00:00:00Z'),
     endsAt: null,
   }) as UserRoleAssignment;
 
+const buildInspection = (overrides: Partial<Inspection> = {}): Inspection =>
+  ({
+    id: 'inspection-1',
+    contractId: 'contract-1',
+    type: InspectionType.PRE_HANDOVER,
+    inspectedBy: 'staff-1',
+    contract: { customerId: 'customer-1' },
+    evidence: [],
+    damages: [],
+    ...overrides,
+  }) as Inspection;
+
+const PHOTO = { fileKey: 'uploads/1-door.jpg', name: 'door.jpg', mimeType: 'image/jpeg' };
+
 describe('InspectionService', () => {
-  let inspections: { find: jest.Mock; findOne: jest.Mock; save: jest.Mock };
-  let users: { findOne: jest.Mock };
-  let roleAssignments: { find: jest.Mock };
+  let em: { find: jest.Mock; findOne: jest.Mock; save: jest.Mock };
+  let assignments: UserRoleAssignment[];
+  let inspection: Inspection | null;
   let service: InspectionService;
 
   beforeEach(() => {
-    inspections = {
-      find: jest.fn(),
-      findOne: jest.fn(),
-      save: jest.fn((inspection) => Promise.resolve(inspection)),
+    assignments = [assignment('manager-1', UserRole.FACILITY_MANAGER, 'facility-1')];
+    inspection = buildInspection();
+    em = {
+      find: jest.fn(async (entity, options) => {
+        if (entity !== UserRoleAssignment) return [];
+        const { userId, role } = options.where;
+        return assignments.filter((a) => a.userId === userId && a.role === role);
+      }),
+      findOne: jest.fn(async (entity, options) => {
+        if (entity === Inspection) return inspection;
+        if (entity === Contract)
+          return { bookingItem: { storageUnit: { facilityId: 'facility-1' } } };
+        if (entity === AppUser) return options.where.id === 'staff-2' ? { id: 'staff-2' } : null;
+        return null;
+      }),
+      save: jest.fn(async (_entity, data) => data),
     };
-    users = { findOne: jest.fn() };
-    roleAssignments = { find: jest.fn() };
-    service = new InspectionService(
-      inspections as unknown as Repository<Inspection>,
-      users as unknown as Repository<AppUser>,
-      roleAssignments as unknown as Repository<UserRoleAssignment>,
-    );
+    service = new InspectionService({ manager: em } as never);
   });
 
-  it('lists all inspections without scoping, newest first', async () => {
-    inspections.find.mockResolvedValue([{ id: 'inspection-1' }]);
+  describe('lists', () => {
+    it('scopes a facility manager to the facilities they manage, with filters', async () => {
+      await service.findAll(MANAGER, { type: InspectionType.RETURN, status: 'open' });
 
-    await expect(service.findAll()).resolves.toEqual([{ id: 'inspection-1' }]);
-    expect(inspections.find).toHaveBeenCalledWith({
-      relations: { contract: true },
-      order: { createdAt: 'DESC' },
-    });
-  });
-
-  it('lists inspections of the customer contracts', async () => {
-    inspections.find.mockResolvedValue([{ id: 'inspection-1' }]);
-
-    await expect(service.findMyInspections(actor('customer-1'))).resolves.toEqual([
-      { id: 'inspection-1' },
-    ]);
-    expect(inspections.find).toHaveBeenCalledWith({
-      where: { contract: { customerId: 'customer-1' } },
-      relations: { contract: true },
-      order: { createdAt: 'DESC' },
-    });
-  });
-
-  it('lists inspections assigned to the staff member', async () => {
-    inspections.find.mockResolvedValue([{ id: 'inspection-1' }]);
-
-    await expect(service.findStaffInspections(actor('staff-1'))).resolves.toEqual([
-      { id: 'inspection-1' },
-    ]);
-    expect(inspections.find).toHaveBeenCalledWith({
-      where: { inspectedBy: 'staff-1' },
-      relations: { contract: true },
-      order: { createdAt: 'DESC' },
-    });
-  });
-
-  it('returns an inspection of the contract owner', async () => {
-    inspections.findOne.mockResolvedValue({
-      id: 'inspection-1',
-      inspectedBy: 'staff-1',
-      contract: { id: 'contract-1', customerId: 'customer-1' },
-      damages: [],
-      finalizedAt: null,
-    });
-
-    await expect(service.findById('inspection-1', actor('customer-1'))).resolves.toMatchObject({
-      id: 'inspection-1',
-    });
-    expect(inspections.findOne).toHaveBeenCalledWith({
-      where: { id: 'inspection-1' },
-      relations: { contract: true },
-    });
-  });
-
-  it('returns an inspection assigned to the actor', async () => {
-    inspections.findOne.mockResolvedValue({
-      id: 'inspection-1',
-      inspectedBy: 'staff-1',
-      contract: { id: 'contract-1', customerId: 'customer-1' },
-    });
-
-    await expect(service.findById('inspection-1', actor('staff-1'))).resolves.toMatchObject({
-      id: 'inspection-1',
-    });
-  });
-
-  it('throws 404 for an unknown inspection', async () => {
-    inspections.findOne.mockResolvedValue(null);
-
-    await expect(service.findById('missing', actor('staff-1'))).rejects.toMatchObject({
-      status: 404,
-      response: { code: 'RESOURCE_NOT_FOUND' },
-    });
-  });
-
-  it('throws 403 for a user who is neither owner nor assignee', async () => {
-    inspections.findOne.mockResolvedValue({
-      id: 'inspection-1',
-      inspectedBy: 'staff-1',
-      contract: { id: 'contract-1', customerId: 'customer-1' },
-    });
-
-    await expect(service.findById('inspection-1', actor('stranger'))).rejects.toMatchObject({
-      status: 403,
-      response: { code: 'FORBIDDEN' },
-    });
-  });
-
-  it.each([UserRole.ADMIN, UserRole.OPERATIONS_MANAGER, UserRole.FACILITY_MANAGER])(
-    'lets %s view an inspection they do not belong to',
-    async (role) => {
-      inspections.findOne.mockResolvedValue({
-        id: 'inspection-1',
-        inspectedBy: 'staff-1',
-        contract: { id: 'contract-1', customerId: 'customer-1' },
+      expect(em.find).toHaveBeenLastCalledWith(Inspection, {
+        where: {
+          type: InspectionType.RETURN,
+          finalizedAt: IsNull(),
+          contract: { bookingItem: { storageUnit: { facilityId: In(['facility-1']) } } },
+        },
+        relations: INSPECTION_RELATIONS,
+        order: { scheduledAt: { direction: 'ASC', nulls: 'LAST' }, createdAt: 'DESC' },
       });
+    });
 
-      await expect(service.findById('inspection-1', actor('boss', [role]))).resolves.toMatchObject({
-        id: 'inspection-1',
+    it('returns nothing when a manager filters on a facility they do not manage', async () => {
+      await expect(service.findAll(MANAGER, { facilityId: 'facility-9' })).resolves.toEqual([]);
+      expect(em.find).not.toHaveBeenCalledWith(Inspection, expect.anything());
+    });
+
+    it('lets operations see every facility', async () => {
+      await service.findAll(OPS);
+
+      expect(em.find).toHaveBeenCalledWith(Inspection, expect.objectContaining({ where: {} }));
+    });
+
+    it('lists the staff member’s own inspections', async () => {
+      await service.findStaffInspections(STAFF, { status: 'done' });
+
+      expect(em.find).toHaveBeenCalledWith(
+        Inspection,
+        expect.objectContaining({
+          where: expect.objectContaining({ inspectedBy: 'staff-1' }),
+        }),
+      );
+    });
+  });
+
+  describe('findById', () => {
+    it.each([
+      ['the contract owner', actor('customer-1', [UserRole.CUSTOMER])],
+      ['the assigned inspector', STAFF],
+      ['a manager of the facility', MANAGER],
+    ])('is readable by %s', async (_label, who) => {
+      await expect(service.findById('inspection-1', who)).resolves.toBe(inspection);
+    });
+
+    it('is hidden from a manager of another facility', async () => {
+      assignments = [assignment('manager-1', UserRole.FACILITY_MANAGER, 'facility-2')];
+
+      await expect(service.findById('inspection-1', MANAGER)).rejects.toMatchObject({
+        status: 403,
       });
-    },
-  );
-
-  it('assigns an active facility staff member', async () => {
-    inspections.findOne.mockResolvedValue({ id: 'inspection-1' });
-    users.findOne.mockResolvedValue({ id: 'staff-1' });
-    roleAssignments.find.mockResolvedValue([activeStaffAssignment('staff-1')]);
-
-    await expect(
-      service.assignStaff('inspection-1', { inspectedBy: 'staff-1' }),
-    ).resolves.toMatchObject({ id: 'inspection-1', inspectedBy: 'staff-1' });
-    expect(inspections.save).toHaveBeenCalledWith(
-      expect.objectContaining({ inspectedBy: 'staff-1' }),
-    );
-  });
-
-  it('throws 404 when assigning an unknown inspection', async () => {
-    inspections.findOne.mockResolvedValue(null);
-
-    await expect(service.assignStaff('missing', { inspectedBy: 'staff-1' })).rejects.toMatchObject({
-      status: 404,
-      response: { code: 'RESOURCE_NOT_FOUND' },
-    });
-    expect(inspections.save).not.toHaveBeenCalled();
-  });
-
-  it('rejects a user who is not facility staff', async () => {
-    inspections.findOne.mockResolvedValue({ id: 'inspection-1' });
-    users.findOne.mockResolvedValue({ id: 'user-1' });
-    roleAssignments.find.mockResolvedValue([]);
-
-    await expect(
-      service.assignStaff('inspection-1', { inspectedBy: 'user-1' }),
-    ).rejects.toMatchObject({
-      status: 400,
-      response: {
-        code: 'VALIDATION_FAILED',
-        details: { fields: [{ field: 'inspectedBy', code: 'notStaff' }] },
-      },
-    });
-    expect(inspections.save).not.toHaveBeenCalled();
-  });
-
-  it('rejects an unknown or inactive user', async () => {
-    inspections.findOne.mockResolvedValue({ id: 'inspection-1' });
-    users.findOne.mockResolvedValue(null);
-
-    await expect(
-      service.assignStaff('inspection-1', { inspectedBy: 'ghost' }),
-    ).rejects.toMatchObject({
-      status: 400,
-      response: {
-        code: 'VALIDATION_FAILED',
-        details: { fields: [{ field: 'inspectedBy', code: 'notFound' }] },
-      },
-    });
-    expect(inspections.save).not.toHaveBeenCalled();
-  });
-
-  it('lets the assigned inspector update', async () => {
-    inspections.findOne.mockResolvedValue({ id: 'inspection-1', inspectedBy: 'staff-1' });
-
-    await expect(
-      service.update(
-        'inspection-1',
-        { conditionNotes: 'Scratch on door', damages: [{ item: 'door' }] },
-        actor('staff-1', [UserRole.FACILITY_STAFF]),
-      ),
-    ).resolves.toMatchObject({
-      id: 'inspection-1',
-      conditionNotes: 'Scratch on door',
-      damages: [{ item: 'door' }],
-    });
-    expect(inspections.save).toHaveBeenCalled();
-  });
-
-  it('lets a manager update an inspection assigned to someone else', async () => {
-    inspections.findOne.mockResolvedValue({ id: 'inspection-1', inspectedBy: 'staff-1' });
-
-    await expect(
-      service.update(
-        'inspection-1',
-        { conditionNotes: 'Checked, no damage' },
-        actor('manager-1', [UserRole.FACILITY_MANAGER]),
-      ),
-    ).resolves.toMatchObject({ id: 'inspection-1', conditionNotes: 'Checked, no damage' });
-    expect(inspections.save).toHaveBeenCalled();
-  });
-
-  it('rejects update by a staff member who is not the assignee', async () => {
-    inspections.findOne.mockResolvedValue({ id: 'inspection-1', inspectedBy: 'staff-1' });
-
-    await expect(
-      service.update(
-        'inspection-1',
-        { conditionNotes: 'x' },
-        actor('staff-2', [UserRole.FACILITY_STAFF]),
-      ),
-    ).rejects.toMatchObject({
-      status: 403,
-      response: { code: 'FORBIDDEN' },
-    });
-    expect(inspections.save).not.toHaveBeenCalled();
-  });
-
-  it('rejects edits and reassignment once the inspection is finalized', async () => {
-    inspections.findOne.mockResolvedValue({
-      id: 'inspection-1',
-      inspectedBy: 'staff-1',
-      finalizedAt: new Date('2026-10-12T09:00:00Z'),
-    });
-    const manager = actor('manager-1', [UserRole.FACILITY_MANAGER]);
-
-    await expect(
-      service.update('inspection-1', { conditionNotes: 'x' }, manager),
-    ).rejects.toMatchObject({ status: 409, response: { code: 'CONFLICT' } });
-    await expect(
-      service.assignStaff('inspection-1', { inspectedBy: 'staff-2' }),
-    ).rejects.toMatchObject({ status: 409 });
-    await expect(
-      service.uploadEvidence('inspection-1', { evidenceUrl: 'https://x/y.jpg' }, manager),
-    ).rejects.toMatchObject({ status: 409 });
-    expect(inspections.save).not.toHaveBeenCalled();
-  });
-
-  it('throws 404 when updating an unknown inspection', async () => {
-    inspections.findOne.mockResolvedValue(null);
-
-    await expect(
-      service.update(
-        'missing',
-        { conditionNotes: 'x' },
-        actor('manager-1', [UserRole.OPERATIONS_MANAGER]),
-      ),
-    ).rejects.toMatchObject({
-      status: 404,
-      response: { code: 'RESOURCE_NOT_FOUND' },
-    });
-    expect(inspections.save).not.toHaveBeenCalled();
-  });
-
-  it('appends an R2 URL to empty evidence', async () => {
-    inspections.findOne.mockResolvedValue({ id: 'inspection-1', inspectedBy: 'staff-1' });
-
-    await expect(
-      service.uploadEvidence(
-        'inspection-1',
-        { evidenceUrl: 'https://r2.example.com/uploads/a.jpg' },
-        actor('staff-1', [UserRole.FACILITY_STAFF]),
-      ),
-    ).resolves.toMatchObject({
-      id: 'inspection-1',
-      evidence: ['https://r2.example.com/uploads/a.jpg'],
-    });
-    expect(inspections.save).toHaveBeenCalled();
-  });
-
-  it('dedupes an already stored URL', async () => {
-    inspections.findOne.mockResolvedValue({
-      id: 'inspection-1',
-      inspectedBy: 'staff-1',
-      evidence: ['https://r2.example.com/uploads/a.jpg'],
     });
 
-    await expect(
-      service.uploadEvidence(
-        'inspection-1',
-        { evidenceUrl: 'https://r2.example.com/uploads/a.jpg' },
-        actor('manager-1', [UserRole.FACILITY_MANAGER]),
-      ),
-    ).resolves.toMatchObject({ evidence: ['https://r2.example.com/uploads/a.jpg'] });
+    it('throws 404 for an unknown inspection', async () => {
+      inspection = null;
+      await expect(service.findById('missing', OPS)).rejects.toMatchObject({ status: 404 });
+    });
   });
 
-  it('rejects evidence upload by a staff member who is not the assignee', async () => {
-    inspections.findOne.mockResolvedValue({ id: 'inspection-1', inspectedBy: 'staff-1' });
+  describe('assignStaff', () => {
+    it('assigns staff of the same facility', async () => {
+      assignments.push(assignment('staff-2', UserRole.FACILITY_STAFF, 'facility-1'));
 
-    await expect(
-      service.uploadEvidence(
-        'inspection-1',
-        { evidenceUrl: 'https://r2.example.com/uploads/a.jpg' },
-        actor('staff-2', [UserRole.FACILITY_STAFF]),
-      ),
-    ).rejects.toMatchObject({
-      status: 403,
-      response: { code: 'FORBIDDEN' },
+      await expect(
+        service.assignStaff('inspection-1', { inspectedBy: 'staff-2' }, MANAGER),
+      ).resolves.toMatchObject({ inspectedBy: 'staff-2' });
     });
-    expect(inspections.save).not.toHaveBeenCalled();
+
+    it('rejects staff of another facility', async () => {
+      assignments.push(assignment('staff-2', UserRole.FACILITY_STAFF, 'facility-2'));
+
+      await expect(
+        service.assignStaff('inspection-1', { inspectedBy: 'staff-2' }, MANAGER),
+      ).rejects.toMatchObject({
+        response: { details: { fields: [{ field: 'inspectedBy', code: 'notStaff' }] } },
+      });
+      expect(em.save).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown or inactive user', async () => {
+      await expect(
+        service.assignStaff('inspection-1', { inspectedBy: 'ghost' }, MANAGER),
+      ).rejects.toMatchObject({
+        response: { details: { fields: [{ field: 'inspectedBy', code: 'notFound' }] } },
+      });
+    });
+
+    it('is not open to the inspector or to managers of other facilities', async () => {
+      await expect(
+        service.assignStaff('inspection-1', { inspectedBy: 'staff-2' }, STAFF),
+      ).rejects.toMatchObject({ status: 403 });
+      assignments = [assignment('manager-1', UserRole.FACILITY_MANAGER, 'facility-2')];
+      await expect(
+        service.assignStaff('inspection-1', { inspectedBy: 'staff-2' }, MANAGER),
+      ).rejects.toMatchObject({ status: 403 });
+    });
   });
 
-  it('throws 404 when uploading evidence to an unknown inspection', async () => {
-    inspections.findOne.mockResolvedValue(null);
+  describe('update', () => {
+    it('stores typed evidence and damages for the assigned inspector', async () => {
+      const damages = [
+        { description: 'Móp cửa', severity: DamageSeverity.MINOR, evidence: [PHOTO] },
+      ];
 
-    await expect(
-      service.uploadEvidence(
-        'missing',
-        { evidenceUrl: 'https://r2.example.com/uploads/a.jpg' },
-        actor('manager-1', [UserRole.OPERATIONS_MANAGER]),
-      ),
-    ).rejects.toMatchObject({
-      status: 404,
-      response: { code: 'RESOURCE_NOT_FOUND' },
+      await expect(
+        service.update('inspection-1', { conditionNotes: 'OK', evidence: [PHOTO], damages }, STAFF),
+      ).resolves.toMatchObject({ conditionNotes: 'OK', evidence: [PHOTO], damages });
     });
-    expect(inspections.save).not.toHaveBeenCalled();
+
+    it('rejects staff who are not the assignee', async () => {
+      await expect(
+        service.update(
+          'inspection-1',
+          { conditionNotes: 'x' },
+          actor('staff-2', [UserRole.FACILITY_STAFF]),
+        ),
+      ).rejects.toMatchObject({ status: 403, response: { code: 'FORBIDDEN' } });
+      expect(em.save).not.toHaveBeenCalled();
+    });
+
+    it('rejects edits and reassignment once the inspection is finalized', async () => {
+      inspection = buildInspection({ finalizedAt: new Date('2026-10-12T09:00:00Z') });
+
+      await expect(
+        service.update('inspection-1', { conditionNotes: 'x' }, MANAGER),
+      ).rejects.toMatchObject({ status: 409, response: { code: 'CONFLICT' } });
+      await expect(
+        service.assignStaff('inspection-1', { inspectedBy: 'staff-2' }, MANAGER),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(em.save).not.toHaveBeenCalled();
+    });
   });
 });

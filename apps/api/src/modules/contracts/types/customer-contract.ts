@@ -19,6 +19,7 @@ export interface CustomerContractFacility {
 export interface CustomerInspectionSummary {
   id: string;
   type: string;
+  scheduled_at: string | Date | null;
   inspected_at: string | Date | null;
   finalized_at: string | Date | null;
   inspector_name: string | null;
@@ -41,12 +42,15 @@ export interface CustomerContractRecord {
   facility: CustomerContractFacility | null;
   /** Handover receipt (PRE_HANDOVER inspection); finalized once the customer received the unit. */
   handover: CustomerInspectionSummary | null;
+  /** Latest RETURN inspection — open while the customer waits to move out. */
+  return: CustomerInspectionSummary | null;
 }
 
 export function toCustomerInspectionSummary(inspection: Inspection): CustomerInspectionSummary {
   return {
     id: inspection.id,
     type: inspection.type,
+    scheduled_at: inspection.scheduledAt ?? null,
     inspected_at: inspection.inspectedAt ?? null,
     finalized_at: inspection.finalizedAt ?? null,
     inspector_name: inspection.inspector?.fullName ?? null,
@@ -58,7 +62,7 @@ export function toCustomerInspectionSummary(inspection: Inspection): CustomerIns
 
 export function toCustomerContractRecord(
   contract: Contract,
-  handover?: Inspection,
+  inspections: { handover?: Inspection; return?: Inspection } = {},
 ): CustomerContractRecord {
   const unit = contract.bookingItem?.storageUnit;
   return {
@@ -87,6 +91,7 @@ export function toCustomerContractRecord(
           address_line: unit.facility.addressLine,
         }
       : null,
-    handover: handover ? toCustomerInspectionSummary(handover) : null,
+    handover: inspections.handover ? toCustomerInspectionSummary(inspections.handover) : null,
+    return: inspections.return ? toCustomerInspectionSummary(inspections.return) : null,
   };
 }

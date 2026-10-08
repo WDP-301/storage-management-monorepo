@@ -7,11 +7,37 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { ContractStatus, InspectionType, StorageUnitStatus } from '@storage/types';
-import { DataSource, In } from 'typeorm';
+import { DataSource, type EntityManager, In } from 'typeorm';
 import { assertInspectorOrManager, assertNotFinalized } from './inspection-access.util';
 
-/** Units reserved for a not-yet-handed-over contract (HELD covers bookings confirmed before BOOKED existed). */
-const RESERVED_UNIT_STATUSES = [StorageUnitStatus.BOOKED, StorageUnitStatus.HELD];
+interface Transition {
+  contractFrom: ContractStatus;
+  contractTo: ContractStatus;
+  /** Contract date stamped with the finalize time. */
+  stamp: 'signedAt' | 'endedAt';
+  unitFrom: StorageUnitStatus[];
+  unitTo: (inspection: Inspection) => StorageUnitStatus;
+}
+
+const TRANSITIONS: Partial<Record<InspectionType, Transition>> = {
+  // Handover: HELD covers bookings confirmed before units moved to BOOKED on deposit.
+  [InspectionType.PRE_HANDOVER]: {
+    contractFrom: ContractStatus.DRAFT,
+    contractTo: ContractStatus.ACTIVE,
+    stamp: 'signedAt',
+    unitFrom: [StorageUnitStatus.BOOKED, StorageUnitStatus.HELD],
+    unitTo: () => StorageUnitStatus.RENTED,
+  },
+  // Return: recorded damage keeps the unit out of rotation until it is repaired.
+  [InspectionType.RETURN]: {
+    contractFrom: ContractStatus.ACTIVE,
+    contractTo: ContractStatus.ENDED,
+    stamp: 'endedAt',
+    unitFrom: [StorageUnitStatus.RENTED],
+    unitTo: (inspection) =>
+      inspection.damages?.length ? StorageUnitStatus.MAINTENANCE : StorageUnitStatus.AVAILABLE,
+  },
+};
 
 @Injectable()
 export class InspectionLifecycleService {
@@ -20,9 +46,10 @@ export class InspectionLifecycleService {
   constructor(private readonly dataSource: DataSource) {}
 
   /**
-   * Signs off an inspection. Handover (PRE_HANDOVER): the contract DRAFT → ACTIVE with
-   * signedAt = now and the unit → RENTED. All rows change in one transaction under row
-   * locks, so a concurrent finalize sees the committed finalizedAt and gets 409.
+   * Signs off an inspection and moves the contract and unit along with it:
+   * handover DRAFT → ACTIVE / unit RENTED, return ACTIVE → ENDED / unit AVAILABLE or
+   * MAINTENANCE. Everything changes in one transaction under row locks, so a concurrent
+   * finalize sees the committed finalizedAt and gets 409.
    */
   async finalize(id: string, actor: AuthUser): Promise<Inspection> {
     return this.dataSource.transaction(async (em) => {
@@ -31,27 +58,22 @@ export class InspectionLifecycleService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!inspection) notFound('Inspection', id);
-      assertInspectorOrManager(
+      await assertInspectorOrManager(
+        em,
         inspection,
         actor,
         'Only the assigned inspector or a manager can finalize this inspection',
       );
       assertNotFinalized(inspection);
       if (!inspection.inspectedBy) {
-        throw new DomainException(
-          ErrorCode.CONFLICT,
-          'Assign an inspector before finalizing',
-          HttpStatus.CONFLICT,
-          { inspectionId: id },
-        );
+        throw conflict('Assign an inspector before finalizing', { inspectionId: id });
       }
-      if (inspection.type !== InspectionType.PRE_HANDOVER) {
-        throw new DomainException(
-          ErrorCode.CONFLICT,
-          `Finalizing ${inspection.type} inspections is not supported yet`,
-          HttpStatus.CONFLICT,
-          { inspectionId: id, type: inspection.type },
-        );
+      const transition = TRANSITIONS[inspection.type];
+      if (!transition) {
+        throw conflict(`${inspection.type} inspections cannot be finalized`, {
+          inspectionId: id,
+          type: inspection.type,
+        });
       }
 
       const contract = await em.findOne(Contract, {
@@ -59,46 +81,53 @@ export class InspectionLifecycleService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!contract) notFound('Contract', inspection.contractId);
-      if (contract.status !== ContractStatus.DRAFT) {
-        throw new DomainException(
-          ErrorCode.CONFLICT,
-          'Handover requires a DRAFT contract',
-          HttpStatus.CONFLICT,
-          {
-            contractId: contract.id,
-            status: contract.status,
-            requiredStatus: ContractStatus.DRAFT,
-          },
-        );
+      if (contract.status !== transition.contractFrom) {
+        throw conflict(`${inspection.type} requires a ${transition.contractFrom} contract`, {
+          contractId: contract.id,
+          status: contract.status,
+          requiredStatus: transition.contractFrom,
+        });
       }
 
-      const item = await em.findOneOrFail(BookingItem, { where: { id: contract.bookingItemId } });
-      const unitUpdate = await em.update(
-        StorageUnit,
-        { id: item.storageUnitId, status: In(RESERVED_UNIT_STATUSES) },
-        { status: StorageUnitStatus.RENTED },
-      );
-      if (!unitUpdate.affected) {
-        const unit = await em.findOne(StorageUnit, { where: { id: item.storageUnitId } });
-        throw new DomainException(
-          ErrorCode.CONFLICT,
-          'The storage unit is not reserved for this contract',
-          HttpStatus.CONFLICT,
-          { storageUnitId: item.storageUnitId, status: unit?.status ?? null },
-        );
-      }
-
+      await this.moveUnit(em, contract, transition, inspection);
       const now = new Date();
       await em.update(
         Contract,
         { id: contract.id },
-        { status: ContractStatus.ACTIVE, signedAt: now },
+        { status: transition.contractTo, [transition.stamp]: now },
       );
       inspection.finalizedAt = now;
       inspection.inspectedAt ??= now;
       const saved = await em.save(Inspection, inspection);
-      this.logger.log(`Handover ${id} finalized — contract ${contract.contractNo} ACTIVE`);
+      this.logger.log(
+        `${inspection.type} ${id} finalized — contract ${contract.contractNo} ${transition.contractTo}`,
+      );
       return saved;
     });
   }
+
+  private async moveUnit(
+    em: EntityManager,
+    contract: Contract,
+    transition: Transition,
+    inspection: Inspection,
+  ): Promise<void> {
+    const item = await em.findOneOrFail(BookingItem, { where: { id: contract.bookingItemId } });
+    const result = await em.update(
+      StorageUnit,
+      { id: item.storageUnitId, status: In(transition.unitFrom) },
+      { status: transition.unitTo(inspection) },
+    );
+    if (result.affected) return;
+    const unit = await em.findOne(StorageUnit, { where: { id: item.storageUnitId } });
+    throw conflict('The storage unit is not in the expected state for this contract', {
+      storageUnitId: item.storageUnitId,
+      status: unit?.status ?? null,
+      expected: transition.unitFrom,
+    });
+  }
+}
+
+function conflict(message: string, details: Record<string, unknown>): DomainException {
+  return new DomainException(ErrorCode.CONFLICT, message, HttpStatus.CONFLICT, details);
 }

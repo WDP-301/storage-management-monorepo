@@ -51,19 +51,27 @@ describe('ContractsService', () => {
 
   afterEach(() => jest.restoreAllMocks());
 
-  it('attaches each contract its handover receipt in /contracts/mine', async () => {
+  it('attaches the handover and the latest return to each contract in /contracts/mine', async () => {
+    const summary = (id: string, type: InspectionType, createdAt: string) => ({
+      id,
+      contractId: 'contract-1',
+      type,
+      scheduledAt: new Date('2026-10-13T00:00:00Z'),
+      finalizedAt: null,
+      inspector: { fullName: 'Staff A' },
+      evidence: [],
+      damages: [],
+      createdAt: new Date(createdAt),
+    });
     const inspectionRepo = {
-      find: jest.fn().mockResolvedValue([
-        {
-          id: 'insp-1',
-          contractId: 'contract-1',
-          type: InspectionType.PRE_HANDOVER,
-          finalizedAt: new Date('2026-10-13T03:00:00Z'),
-          inspector: { fullName: 'Staff A' },
-          evidence: [],
-          damages: [],
-        },
-      ]),
+      // Oldest first, as the service requests.
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          summary('handover-1', InspectionType.PRE_HANDOVER, '2026-10-01'),
+          summary('return-old', InspectionType.RETURN, '2026-11-01'),
+          summary('return-new', InspectionType.RETURN, '2026-12-01'),
+        ]),
     };
     service = new ContractsService(
       repo as unknown as Repository<Contract>,
@@ -71,18 +79,24 @@ describe('ContractsService', () => {
     );
     repo.find.mockResolvedValue([{ id: 'contract-1' }, { id: 'contract-2' }]);
 
-    const [withReceipt, withoutReceipt] = await service.findMine('customer-1');
+    const [withInspections, bare] = await service.findMine('customer-1');
 
     expect(inspectionRepo.find).toHaveBeenCalledWith({
-      where: { contractId: In(['contract-1', 'contract-2']), type: InspectionType.PRE_HANDOVER },
+      where: {
+        contractId: In(['contract-1', 'contract-2']),
+        type: In([InspectionType.PRE_HANDOVER, InspectionType.RETURN]),
+      },
       relations: { inspector: true },
+      order: { createdAt: 'ASC' },
     });
-    expect(withReceipt.handover).toMatchObject({
-      id: 'insp-1',
-      finalized_at: new Date('2026-10-13T03:00:00Z'),
+    expect(withInspections.handover).toMatchObject({
+      id: 'handover-1',
+      scheduled_at: new Date('2026-10-13T00:00:00Z'),
       inspector_name: 'Staff A',
     });
-    expect(withoutReceipt.handover).toBeNull();
+    expect(withInspections.return).toMatchObject({ id: 'return-new' });
+    expect(bare.handover).toBeNull();
+    expect(bare.return).toBeNull();
   });
 
   it('allows creation one millisecond before the 7-day deadline', async () => {

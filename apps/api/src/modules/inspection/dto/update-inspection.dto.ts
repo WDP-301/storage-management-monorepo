@@ -1,5 +1,15 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateIf,
+  ValidateNested,
+} from 'class-validator';
+import { DamageDto, EvidenceFileDto } from './inspection-evidence.dto';
 
 export class UpdateInspectionDto {
   @ApiPropertyOptional({ maxLength: 5000, nullable: true })
@@ -8,13 +18,19 @@ export class UpdateInspectionDto {
   @MaxLength(5000)
   conditionNotes?: string | null;
 
-  @ApiPropertyOptional({ type: [Object] })
+  @ApiPropertyOptional({ type: [EvidenceFileDto], maxItems: 20 })
   @IsOptional()
   @IsArray()
-  evidence?: unknown[];
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => EvidenceFileDto)
+  evidence?: EvidenceFileDto[];
 
-  @ApiPropertyOptional({ type: [Object] })
+  @ApiPropertyOptional({ type: [DamageDto], maxItems: 20 })
   @IsOptional()
   @IsArray()
-  damages?: unknown[];
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => DamageDto)
+  damages?: DamageDto[];
 }

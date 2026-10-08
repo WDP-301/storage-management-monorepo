@@ -33,6 +33,10 @@ export class Inspection {
   @Column({ type: 'jsonb', default: () => "'[]'" })
   damages: any[];
 
+  /** Appointment for the handover/return visit, so staff can plan their schedule. */
+  @Column({ type: 'timestamptz', nullable: true, name: 'scheduled_at' })
+  scheduledAt?: Date;
+
   @Column({ type: 'timestamptz', nullable: true, name: 'inspected_at' })
   inspectedAt?: Date;
 

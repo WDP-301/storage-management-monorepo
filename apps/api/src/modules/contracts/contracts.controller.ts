@@ -20,8 +20,10 @@ import {
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ApiErrorResponseDto } from '@shared/models/api-response';
 import { UserRole } from '@storage/types';
+import { ContractReturnService } from './contract-return.service';
 import { ContractsService } from './contracts.service';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
+import { ReturnRequestDto } from './dto/return-request.dto';
 import { UploadContractEvidenceDto } from './dto/upload-contract-evidence.dto';
 
 @ApiTags('Contracts')
@@ -36,7 +38,10 @@ import { UploadContractEvidenceDto } from './dto/upload-contract-evidence.dto';
 @ApiResponse({ status: 401, type: ApiErrorResponseDto })
 @ApiResponse({ status: 403, type: ApiErrorResponseDto })
 export class ContractsController {
-  constructor(private readonly contractsService: ContractsService) {}
+  constructor(
+    private readonly contractsService: ContractsService,
+    private readonly contractReturn: ContractReturnService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a contract from a confirmed booking item' })
@@ -60,6 +65,18 @@ export class ContractsController {
   @ApiOperation({ summary: "List the caller's contracts with unit and facility info" })
   findMine(@CurrentUser() user: AuthUser) {
     return this.contractsService.findMine(user.id);
+  }
+
+  @Post(':id/return-request')
+  @Roles(UserRole.CUSTOMER)
+  @ApiOperation({ summary: 'Ask to move out — opens a RETURN inspection on the chosen date' })
+  @ApiResponse({ status: 409, description: 'Contract not ACTIVE or a return is already open' })
+  requestReturn(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReturnRequestDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.contractReturn.requestReturn(id, user.id, dto);
   }
 
   @Get(':id')

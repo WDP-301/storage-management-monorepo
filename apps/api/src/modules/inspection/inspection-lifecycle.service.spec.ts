@@ -28,11 +28,13 @@ const buildContract = (overrides: Partial<Contract> = {}): Contract =>
     contractNo: 'CT-1',
     bookingItemId: 'item-1',
     status: ContractStatus.DRAFT,
+    bookingItem: { storageUnit: { facilityId: 'facility-1' } },
     ...overrides,
-  }) as Contract;
+  }) as unknown as Contract;
 
 describe('InspectionLifecycleService.finalize', () => {
   let em: {
+    find: jest.Mock;
     findOne: jest.Mock;
     findOneOrFail: jest.Mock;
     update: jest.Mock;
@@ -51,6 +53,12 @@ describe('InspectionLifecycleService.finalize', () => {
 
   beforeEach(() => {
     em = {
+      // Manager-1 manages facility-1 only.
+      find: jest.fn(async (_entity, { where }) =>
+        where.userId === 'manager-1'
+          ? [{ facilityId: 'facility-1', startsAt: new Date('2024-01-01T00:00:00Z'), endsAt: null }]
+          : [],
+      ),
       findOne: jest.fn(),
       findOneOrFail: jest.fn().mockResolvedValue({ id: 'item-1', storageUnitId: 'unit-1' }),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
@@ -126,12 +134,65 @@ describe('InspectionLifecycleService.finalize', () => {
     ).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
   });
 
-  it('does not finalize RETURN inspections yet', async () => {
+  it('ends the contract and frees the unit on a clean return', async () => {
+    stubRows(
+      buildInspection({ type: InspectionType.RETURN }),
+      buildContract({ status: ContractStatus.ACTIVE }),
+    );
+
+    await service.finalize('insp-1', actor('staff-1'));
+
+    expect(em.update).toHaveBeenCalledWith(
+      StorageUnit,
+      { id: 'unit-1', status: In([StorageUnitStatus.RENTED]) },
+      { status: StorageUnitStatus.AVAILABLE },
+    );
+    expect(em.update).toHaveBeenCalledWith(
+      Contract,
+      { id: 'contract-1' },
+      { status: ContractStatus.ENDED, endedAt: expect.any(Date) },
+    );
+  });
+
+  it('sends a damaged unit to maintenance on return', async () => {
+    stubRows(
+      buildInspection({
+        type: InspectionType.RETURN,
+        damages: [{ description: 'Móp cửa', severity: 'MAJOR' }],
+      }),
+      buildContract({ status: ContractStatus.ACTIVE }),
+    );
+
+    await service.finalize('insp-1', actor('staff-1'));
+
+    expect(em.update).toHaveBeenCalledWith(StorageUnit, expect.anything(), {
+      status: StorageUnitStatus.MAINTENANCE,
+    });
+  });
+
+  it('rejects a return on a contract that is not ACTIVE', async () => {
     stubRows(buildInspection({ type: InspectionType.RETURN }));
 
     await expect(service.finalize('insp-1', actor('staff-1'))).rejects.toMatchObject({
       status: HttpStatus.CONFLICT,
     });
+    expect(em.update).not.toHaveBeenCalled();
+  });
+
+  it('does not finalize MAINTENANCE inspections', async () => {
+    stubRows(buildInspection({ type: InspectionType.MAINTENANCE }));
+
+    await expect(service.finalize('insp-1', actor('staff-1'))).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+    });
+  });
+
+  it('rejects a manager of another facility', async () => {
+    stubRows(buildInspection());
+
+    await expect(
+      service.finalize('insp-1', actor('manager-2', [UserRole.FACILITY_MANAGER])),
+    ).rejects.toMatchObject({ status: HttpStatus.FORBIDDEN });
     expect(em.update).not.toHaveBeenCalled();
   });
 

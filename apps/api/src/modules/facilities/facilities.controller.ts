@@ -41,6 +41,14 @@ export class FacilitiesController {
     return this.facilitiesService.findAssigned(user.id);
   }
 
+  @Get(':id/staff')
+  @UseGuards(SessionGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER, UserRole.FACILITY_MANAGER)
+  @ApiOperation({ summary: 'List active staff of a facility (for assigning inspections)' })
+  findStaff(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.facilitiesService.findStaff(id, user);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get facility by ID' })
   @ApiResponse({ status: 404, description: 'Facility not found' })

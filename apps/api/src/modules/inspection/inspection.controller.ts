@@ -83,7 +83,7 @@ export class InspectionController {
   }
 
   @Patch(':id/assign')
-  @Roles(UserRole.FACILITY_MANAGER, UserRole.OPERATIONS_MANAGER)
+  @Roles(UserRole.ADMIN, UserRole.FACILITY_MANAGER, UserRole.OPERATIONS_MANAGER)
   @ApiOperation({ summary: 'Assign a facility staff member as the inspector' })
   @ApiResponse({ status: 400, type: ApiErrorResponseDto })
   assignStaff(
@@ -96,7 +96,12 @@ export class InspectionController {
 
   @Post(':id/finalize')
   @HttpCode(HttpStatus.OK)
-  @Roles(UserRole.FACILITY_STAFF, UserRole.FACILITY_MANAGER, UserRole.OPERATIONS_MANAGER)
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.FACILITY_STAFF,
+    UserRole.FACILITY_MANAGER,
+    UserRole.OPERATIONS_MANAGER,
+  )
   @ApiOperation({
     summary:
       'Finalize an inspection — handover activates the contract, return ends it and frees the unit',

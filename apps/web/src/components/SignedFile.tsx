@@ -22,9 +22,24 @@ const formatFileSize = (bytes: number) =>
  * Presigned links expire, so each click asks for a fresh one. The tab is opened before the
  * request resolves — a `window.open` after an await would be eaten by the popup blocker.
  */
+/**
+ * Legacy attachment URLs are customer-supplied: only http(s) may be opened, never
+ * `javascript:`/`data:` (window.open does not get React's href sanitising).
+ */
+export function safeHttpUrl(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url, window.location.href);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
+
 async function openFile(file: FileRef): Promise<void> {
   if (!file.fileKey) {
-    if (file.url) window.open(file.url, '_blank', 'noopener');
+    const url = safeHttpUrl(file.url);
+    if (url) window.open(url, '_blank', 'noopener');
     return;
   }
   const tab = window.open('', '_blank');
@@ -38,7 +53,7 @@ async function openFile(file: FileRef): Promise<void> {
 }
 
 export const SignedFileLink: React.FC<{ file: FileRef }> = ({ file }) => {
-  const canOpen = Boolean(file.fileKey || file.url);
+  const canOpen = Boolean(file.fileKey || safeHttpUrl(file.url));
   return (
     <div className="flex items-center gap-2 p-2.5 bg-kumo-control rounded-lg border border-kumo-line text-xs">
       <Paperclip className="w-3.5 h-3.5 text-kumo-subtle shrink-0" />

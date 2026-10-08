@@ -24,6 +24,7 @@ import {
   loadInspectionFacilityId,
   loadManagedFacilityIds,
   managesInspectionFacility,
+  withPublicInspector,
 } from './inspection-access.util';
 
 @Injectable()
@@ -79,37 +80,42 @@ export class InspectionService {
         HttpStatus.FORBIDDEN,
       );
     }
-    return inspection;
+    return withPublicInspector(inspection);
   }
 
   /** Assigns an ACTIVE user holding an active FACILITY_STAFF role at the unit's facility. */
   async assignStaff(id: string, dto: AssignInspectionDto, actor: AuthUser): Promise<Inspection> {
-    const inspection = await this.em.findOne(Inspection, { where: { id } });
-    if (!inspection) notFound('Inspection', id);
-    await assertManagesInspection(this.em, inspection, actor);
-    assertNotFinalized(inspection);
+    return this.dataSource.transaction(async (em) => {
+      const inspection = await em.findOne(Inspection, {
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!inspection) notFound('Inspection', id);
+      await assertManagesInspection(em, inspection, actor);
+      assertNotFinalized(inspection);
 
-    const assignee = await this.em.findOne(AppUser, {
-      where: { id: dto.inspectedBy, status: UserStatus.ACTIVE },
+      const assignee = await em.findOne(AppUser, {
+        where: { id: dto.inspectedBy, status: UserStatus.ACTIVE },
+      });
+      if (!assignee) {
+        throw fieldValidationError('inspectedBy', 'notFound', 'Staff user does not exist');
+      }
+
+      const staffAssignments = await em.find(UserRoleAssignment, {
+        where: { userId: dto.inspectedBy, role: UserRole.FACILITY_STAFF },
+      });
+      const facilityId = await loadInspectionFacilityId(em, inspection);
+      if (!facilityId || !activeFacilityIds(staffAssignments).includes(facilityId)) {
+        throw fieldValidationError(
+          'inspectedBy',
+          'notStaff',
+          'User is not an active staff member of this facility',
+        );
+      }
+
+      inspection.inspectedBy = dto.inspectedBy;
+      return em.save(Inspection, inspection);
     });
-    if (!assignee) {
-      throw fieldValidationError('inspectedBy', 'notFound', 'Staff user does not exist');
-    }
-
-    const staffAssignments = await this.em.find(UserRoleAssignment, {
-      where: { userId: dto.inspectedBy, role: UserRole.FACILITY_STAFF },
-    });
-    const facilityId = await loadInspectionFacilityId(this.em, inspection);
-    if (!facilityId || !activeFacilityIds(staffAssignments).includes(facilityId)) {
-      throw fieldValidationError(
-        'inspectedBy',
-        'notStaff',
-        'User is not an active staff member of this facility',
-      );
-    }
-
-    inspection.inspectedBy = dto.inspectedBy;
-    return this.em.save(Inspection, inspection);
   }
 
   /**
@@ -117,22 +123,29 @@ export class InspectionService {
    * `inspected_by` only changes through assign, `finalized_at` only through finalize.
    */
   async update(id: string, dto: UpdateInspectionDto, actor: AuthUser): Promise<Inspection> {
-    const inspection = await this.em.findOne(Inspection, { where: { id } });
-    if (!inspection) notFound('Inspection', id);
-    await assertInspectorOrManager(
-      this.em,
-      inspection,
-      actor,
-      'Only the assigned inspector or a manager can update this inspection',
-    );
-    assertNotFinalized(inspection);
+    // Row lock: a save racing a finalize must see the committed finalizedAt (409),
+    // not write its stale copy back and clear it.
+    return this.dataSource.transaction(async (em) => {
+      const inspection = await em.findOne(Inspection, {
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!inspection) notFound('Inspection', id);
+      await assertInspectorOrManager(
+        em,
+        inspection,
+        actor,
+        'Only the assigned inspector or a manager can update this inspection',
+      );
+      assertNotFinalized(inspection);
 
-    if (dto.conditionNotes !== undefined) {
-      inspection.conditionNotes = dto.conditionNotes ?? undefined;
-    }
-    if (dto.evidence !== undefined) inspection.evidence = dto.evidence;
-    if (dto.damages !== undefined) inspection.damages = dto.damages;
-    return this.em.save(Inspection, inspection);
+      if (dto.conditionNotes !== undefined) {
+        inspection.conditionNotes = dto.conditionNotes ?? undefined;
+      }
+      if (dto.evidence !== undefined) inspection.evidence = dto.evidence;
+      if (dto.damages !== undefined) inspection.damages = dto.damages;
+      return em.save(Inspection, inspection);
+    });
   }
 
   private filters(query: ListInspectionsQueryDto): FindOptionsWhere<Inspection> {
@@ -143,11 +156,12 @@ export class InspectionService {
     };
   }
 
-  private list(where: FindOptionsWhere<Inspection>): Promise<Inspection[]> {
-    return this.em.find(Inspection, {
+  private async list(where: FindOptionsWhere<Inspection>): Promise<Inspection[]> {
+    const rows = await this.em.find(Inspection, {
       where,
       relations: INSPECTION_RELATIONS,
       order: { scheduledAt: { direction: 'ASC', nulls: 'LAST' }, createdAt: 'DESC' },
     });
+    return rows.map(withPublicInspector);
   }
 }

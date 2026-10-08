@@ -60,7 +60,10 @@ describe('InspectionService', () => {
       }),
       save: jest.fn(async (_entity, data) => data),
     };
-    service = new InspectionService({ manager: em } as never);
+    service = new InspectionService({
+      manager: em,
+      transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)),
+    } as never);
   });
 
   describe('lists', () => {
@@ -108,6 +111,25 @@ describe('InspectionService', () => {
       ['a manager of the facility', MANAGER],
     ])('is readable by %s', async (_label, who) => {
       await expect(service.findById('inspection-1', who)).resolves.toBe(inspection);
+    });
+
+    it('exposes only the inspector name, not their account', async () => {
+      inspection = buildInspection({
+        inspector: {
+          id: 'staff-1',
+          fullName: 'Lê Nhân Viên',
+          email: 'staff@example.com',
+          phone: '0900',
+          oauthSubject: 'google-123',
+        } as never,
+      });
+
+      const result = await service.findById(
+        'inspection-1',
+        actor('customer-1', [UserRole.CUSTOMER]),
+      );
+
+      expect(result.inspector).toEqual({ id: 'staff-1', fullName: 'Lê Nhân Viên' });
     });
 
     it('is hidden from a manager of another facility', async () => {
@@ -172,6 +194,15 @@ describe('InspectionService', () => {
       await expect(
         service.update('inspection-1', { conditionNotes: 'OK', evidence: [PHOTO], damages }, STAFF),
       ).resolves.toMatchObject({ conditionNotes: 'OK', evidence: [PHOTO], damages });
+    });
+
+    it('locks the row so a concurrent finalize cannot be overwritten', async () => {
+      await service.update('inspection-1', { conditionNotes: 'OK' }, STAFF);
+
+      expect(em.findOne).toHaveBeenCalledWith(Inspection, {
+        where: { id: 'inspection-1' },
+        lock: { mode: 'pessimistic_write' },
+      });
     });
 
     it('rejects staff who are not the assignee', async () => {

@@ -188,10 +188,10 @@ describe('ContractsService', () => {
   it('updates normal contract fields without changing booking/customer links', async () => {
     repo.findOne.mockResolvedValue({ id: 'contract-1', effectiveAt: item.requestedStartAt });
     repo.update.mockResolvedValue({ affected: 1 });
-    await service.update('contract-1', { status: ContractStatus.ACTIVE, months: 12 });
+    await service.update('contract-1', { months: 12 });
     expect(repo.update).toHaveBeenCalledWith(
       { id: 'contract-1', deletedAt: IsNull() },
-      { status: ContractStatus.ACTIVE, months: 12 },
+      { months: 12 },
     );
   });
 

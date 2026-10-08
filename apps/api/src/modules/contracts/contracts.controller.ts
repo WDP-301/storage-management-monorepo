@@ -85,7 +85,9 @@ export class ContractsController {
     return this.contractsService.findById(id);
   }
 
+  // Editing or deleting a contract can strand its unit (BOOKED/RENTED) — system-wide roles only.
   @Patch(':id')
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
   @ApiOperation({ summary: 'Update a contract' })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateContractDto) {
     return this.contractsService.update(id, dto);
@@ -99,6 +101,7 @@ export class ContractsController {
   }
 
   @Delete(':id')
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Soft-delete a contract' })
   remove(@Param('id', ParseUUIDPipe) id: string) {

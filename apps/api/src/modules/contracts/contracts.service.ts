@@ -75,7 +75,6 @@ export class ContractsService {
         item,
         customer,
         kind: dto.kind,
-        status: dto.status,
         effectiveAt,
         endedAt,
         signedAt: dto.signedAt ? new Date(dto.signedAt) : undefined,

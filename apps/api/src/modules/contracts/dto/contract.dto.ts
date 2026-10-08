@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { ContractKind, ContractStatus } from '@storage/types';
+import { ContractKind } from '@storage/types';
 import {
   IsDateString,
   IsEnum,
@@ -14,16 +14,12 @@ import {
   ValidateIf,
 } from 'class-validator';
 
+/** Status is not writable: contracts start DRAFT and move only through handover/return finalize. */
 export class ContractFieldsDto {
   @ApiPropertyOptional({ enum: ContractKind, default: ContractKind.INITIAL })
   @ValidateIf((_object, value) => value !== undefined)
   @IsEnum(ContractKind)
   kind?: ContractKind;
-
-  @ApiPropertyOptional({ enum: ContractStatus, default: ContractStatus.DRAFT })
-  @ValidateIf((_object, value) => value !== undefined)
-  @IsEnum(ContractStatus)
-  status?: ContractStatus;
 
   @ApiPropertyOptional({ format: 'date-time' })
   @ValidateIf((_object, value) => value !== undefined)

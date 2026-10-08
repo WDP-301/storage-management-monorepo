@@ -1,3 +1,4 @@
+import type { AppUser } from '@entities/app-user.entity';
 import { Contract } from '@entities/contract.entity';
 import type { Inspection } from '@entities/inspection.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
@@ -14,6 +15,18 @@ export const INSPECTION_RELATIONS = {
   contract: { bookingItem: { storageUnit: { facility: true } } },
   inspector: true,
 } as const;
+
+/**
+ * Inspection reads go to customers and staff alike: expose who inspects, not their
+ * account (email, phone, OAuth subject, status).
+ */
+export function withPublicInspector<T extends Inspection | null>(inspection: T): T {
+  if (inspection?.inspector) {
+    const { id, fullName } = inspection.inspector;
+    inspection.inspector = { id, fullName } as AppUser;
+  }
+  return inspection;
+}
 
 /** ADMIN and OPERATIONS_MANAGER act across every facility. */
 export function isGlobalManager(actor: AuthUser): boolean {

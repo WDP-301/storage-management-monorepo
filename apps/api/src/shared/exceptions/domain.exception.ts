@@ -26,3 +26,19 @@ export function notFound(resource: string, id?: string): never {
     HttpStatus.NOT_FOUND,
   );
 }
+
+/** Builds a VALIDATION_FAILED (400) error for a single field — callers `throw` it. */
+export function fieldValidationError(
+  field: string,
+  code: string,
+  message: string,
+): DomainException {
+  return new DomainException(
+    ErrorCode.VALIDATION_FAILED,
+    'Validation failed',
+    HttpStatus.BAD_REQUEST,
+    {
+      fields: [{ field, code, message }],
+    },
+  );
+}

@@ -12,6 +12,7 @@ import {
   useLocation,
 } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { UserManagementPage } from '../features/admin/UserManagementPage';
 import { AuthPage } from '../features/auth/AuthPage';
 import { FacilityManagerDashboard } from '../features/roles/FacilityManagerDashboard';
 import { RoleLandingPage } from '../features/roles/RoleLandingPage';
@@ -87,6 +88,7 @@ export const AppRouter: React.FC = () => {
           <Route element={<AppShell />}>
             {/* Role-specific dedicated interfaces with guards */}
             <Route element={<RoleRoute allowedRoles={[UserRole.ADMIN]} />}>
+              <Route path="/admin/users" element={<UserManagementPage />} />
               <Route path="/admin/settings" element={<SystemSettingsPage />} />
             </Route>
 

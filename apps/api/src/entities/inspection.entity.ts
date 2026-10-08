@@ -1,6 +1,6 @@
 import { AppUser } from '@entities/app-user.entity';
 import { Contract } from '@entities/contract.entity';
-import { InspectionStatus, InspectionType } from '@storage/types';
+import { InspectionType } from '@storage/types';
 import {
   Column,
   CreateDateColumn,
@@ -20,9 +20,6 @@ export class Inspection {
 
   @Column({ type: 'varchar', length: 20 })
   type: InspectionType;
-
-  @Column({ type: 'varchar', length: 20, default: InspectionStatus.PENDING })
-  status: InspectionStatus;
 
   @Column({ type: 'uuid', nullable: true, name: 'inspected_by' })
   inspectedBy?: string;

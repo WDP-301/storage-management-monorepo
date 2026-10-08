@@ -14,6 +14,7 @@ import { ContractsModule } from './modules/contracts/contracts.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { FacilitiesModule } from './modules/facilities/facilities.module';
 import { HealthModule } from './modules/health/health.module';
+import { InspectionModule } from './modules/inspection/inspection.module';
 import { LocationsModule } from './modules/locations/locations.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PlacesModule } from './modules/places/places.module';
@@ -58,6 +59,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
     BookingsModule,
     ChangeRequestsModule,
     ContractsModule,
+    InspectionModule,
     HealthModule,
     LocationsModule,
     UploadModule,

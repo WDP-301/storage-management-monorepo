@@ -10,7 +10,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
   [UserRole.ADMIN]: {
     role: UserRole.ADMIN,
     title: 'Quản trị viên',
-    defaultPath: '/facility-manager',
+    defaultPath: '/admin/users',
   },
   [UserRole.OPERATIONS_MANAGER]: {
     role: UserRole.OPERATIONS_MANAGER,

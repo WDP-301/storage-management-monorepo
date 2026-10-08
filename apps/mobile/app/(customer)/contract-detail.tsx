@@ -6,7 +6,7 @@ import { useMyContracts } from '../../src/features/customer/use-my-contracts';
 export default function ContractDetailRoute() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { contracts, isLoading, refetch } = useMyContracts();
+  const { contracts, isLoading, error, refetch } = useMyContracts();
 
   useFocusEffect(
     useCallback(() => {
@@ -20,6 +20,7 @@ export default function ContractDetailRoute() {
       contract={contracts.find((contract) => contract.id === id) ?? null}
       now={Date.now()}
       isLoading={isLoading}
+      error={error}
       onBack={() => router.back()}
       onSupport={() => router.navigate('/(customer)/ticket-create')}
       onRefresh={refetch}

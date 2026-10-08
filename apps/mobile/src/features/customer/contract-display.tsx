@@ -1,21 +1,42 @@
 import { Text, View } from 'react-native';
-import { rentalEndIso } from '../../../lib/rental-schedule';
+import { rentalEndIso, toIsoDate } from '../../../lib/rental-schedule';
 import type { ApiContract } from '../../types/contract-api';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+/**
+ * Contract dates are UTC timestamps; slicing the ISO string would give the UTC day, which is a day
+ * early for anything set before 07:00 Vietnam time. Read them as the device's local day instead.
+ */
+function localDayIso(timestamp: string): string {
+  return toIsoDate(new Date(timestamp));
+}
+
+export function contractStartIso(contract: ApiContract): string {
+  return localDayIso(contract.effectiveAt);
+}
+
 /** Lease end: the recorded move-out date, or `effectiveAt + months` while it is still open. */
 export function contractEndIso(contract: ApiContract): string {
   return contract.endedAt
-    ? contract.endedAt.slice(0, 10)
-    : rentalEndIso(contract.effectiveAt.slice(0, 10), contract.months);
+    ? localDayIso(contract.endedAt)
+    : rentalEndIso(contractStartIso(contract), contract.months);
 }
 
-/** Days until the lease ends — only meaningful while ACTIVE. */
+/**
+ * Days until the lease ends — only meaningful while ACTIVE. Negative once the end date has passed:
+ * contracts are not closed automatically, so an ACTIVE lease can run past its term.
+ */
 export function contractDaysLeft(contract: ApiContract, now: number): number | null {
   if (contract.status !== 'ACTIVE') return null;
   const end = new Date(`${contractEndIso(contract)}T00:00:00`).getTime();
-  return Math.max(0, Math.ceil((end - now) / MS_PER_DAY));
+  return Math.ceil((end - now) / MS_PER_DAY);
+}
+
+export function contractRemainingLabel(daysLeft: number): string {
+  if (daysLeft > 0) return `Còn ${daysLeft} ngày thuê`;
+  if (daysLeft < 0) return `Quá hạn ${-daysLeft} ngày`;
+  return 'Hết hạn hôm nay';
 }
 
 const STATUS_TONES = {

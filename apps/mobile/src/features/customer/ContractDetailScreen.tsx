@@ -7,12 +7,15 @@ import {
   contractDaysLeft,
   contractEndIso,
   contractKindLabel,
+  contractRemainingLabel,
+  contractStartIso,
 } from './contract-display';
 
 type Props = {
   contract: ApiContract | null;
   now: number;
   isLoading: boolean;
+  error: string | null;
   contentBottomPadding: number;
   onBack: () => void;
   onSupport: () => void;
@@ -23,6 +26,7 @@ export function ContractDetailScreen({
   contract,
   now,
   isLoading,
+  error,
   contentBottomPadding,
   onBack,
   onSupport,
@@ -41,7 +45,7 @@ export function ContractDetailScreen({
 
         {!contract ? (
           <Text className="mt-8 text-center text-sm text-muted">
-            {isLoading ? 'Đang tải…' : 'Không tìm thấy hợp đồng này.'}
+            {isLoading ? 'Đang tải…' : (error ?? 'Không tìm thấy hợp đồng này.')}
           </Text>
         ) : (
           <ContractDetail contract={contract} now={now} onSupport={onSupport} />
@@ -91,15 +95,11 @@ function ContractDetail({
         <Card.Body className="gap-3">
           <InfoRow label="Số hợp đồng" value={contract.contractNo} />
           <InfoRow label="Loại hợp đồng" value={contractKindLabel(contract.kind)} />
-          <InfoRow label="Ngày hiệu lực" value={formatIsoDate(contract.effectiveAt.slice(0, 10))} />
+          <InfoRow label="Ngày hiệu lực" value={formatIsoDate(contractStartIso(contract))} />
           <InfoRow label="Ngày kết thúc" value={formatIsoDate(contractEndIso(contract))} />
           <InfoRow label="Kỳ hạn" value={`${contract.months} tháng`} />
           {daysLeft !== null ? (
-            <InfoRow
-              label="Thời gian còn lại"
-              value={daysLeft > 0 ? `${daysLeft} ngày` : 'Hết hạn hôm nay'}
-              accent
-            />
+            <InfoRow label="Tình trạng" value={contractRemainingLabel(daysLeft)} accent />
           ) : null}
         </Card.Body>
       </Card>

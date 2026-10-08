@@ -2,7 +2,13 @@ import { Button, Card } from 'heroui-native';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { formatArea, formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import type { ApiContract } from '../../types/contract-api';
-import { ContractStatusChip, contractDaysLeft, contractEndIso } from './contract-display';
+import {
+  ContractStatusChip,
+  contractDaysLeft,
+  contractEndIso,
+  contractRemainingLabel,
+  contractStartIso,
+} from './contract-display';
 
 type Props = {
   contracts: ApiContract[];
@@ -124,14 +130,14 @@ function ContractCard({
             <View className="items-end">
               <Text className="text-xs text-muted">Thời hạn</Text>
               <Text className="mt-0.5 text-sm font-semibold text-foreground">
-                {formatIsoDate(contract.effectiveAt.slice(0, 10))} → {formatIsoDate(endIso)}
+                {formatIsoDate(contractStartIso(contract))} → {formatIsoDate(endIso)}
               </Text>
             </View>
           </View>
 
           {daysLeft !== null ? (
             <Text className="text-xs font-medium text-accent">
-              {daysLeft > 0 ? `Còn ${daysLeft} ngày thuê` : 'Hết hạn hôm nay'}
+              {contractRemainingLabel(daysLeft)}
             </Text>
           ) : null}
 

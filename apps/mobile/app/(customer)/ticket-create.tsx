@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../../lib/api';
 import { TicketsApi } from '../../lib/tickets-api';
 import { type PickedFile, UploadsApi } from '../../lib/uploads-api';
@@ -30,6 +30,8 @@ export default function TicketCreateRoute() {
   const [form, setForm] = useState<CreateTicketForm>(EMPTY_FORM);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const preset = useLocalSearchParams<{ facilityId?: string; storageUnitId?: string }>();
+  const appliedPreset = useRef<string | null>(null);
 
   const loadOptions = useCallback(async () => {
     setError(null);
@@ -45,6 +47,19 @@ export default function TicketCreateRoute() {
       void loadOptions();
     }, [loadOptions]),
   );
+
+  // Opened from a contract: preselect its facility/unit once the options confirm the customer can
+  // file against them. Applied once per preset so option reloads never undo a manual change.
+  useEffect(() => {
+    if (!options || !preset.facilityId) return;
+    const key = `${preset.facilityId}:${preset.storageUnitId ?? ''}`;
+    if (appliedPreset.current === key) return;
+    const facility = options.facilities.find((f) => f.id === preset.facilityId);
+    if (!facility) return;
+    appliedPreset.current = key;
+    const unit = facility.units.find((u) => u.id === preset.storageUnitId);
+    setForm((prev) => ({ ...prev, facilityId: facility.id, storageUnitId: unit?.id ?? null }));
+  }, [options, preset.facilityId, preset.storageUnitId]);
 
   const pickPhotos = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({

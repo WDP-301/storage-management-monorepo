@@ -35,7 +35,9 @@ export function ContractDetailScreen({
   return (
     <ScrollView
       contentContainerStyle={{ paddingBottom: contentBottomPadding }}
-      refreshControl={<RefreshControl refreshing={isLoading} onRefresh={onRefresh} />}
+      refreshControl={
+        <RefreshControl refreshing={isLoading && contract !== null} onRefresh={onRefresh} />
+      }
       showsVerticalScrollIndicator={false}
     >
       <View className="px-4 pb-4 pt-5">

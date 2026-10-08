@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { ApiError } from '../../../lib/api';
 import { ContractsApi } from '../../../lib/contracts-api';
 import type { ApiContract } from '../../types/contract-api';
@@ -15,30 +16,33 @@ const INITIAL_STATE: MyContractsState = {
   error: null,
 };
 
-/** Contracts of the signed-in customer — the "Kho của tôi" list. */
+/** Contracts of the signed-in customer — the "Kho của tôi" list, refreshed on every focus. */
 export function useMyContracts() {
   const [state, setState] = useState<MyContractsState>(INITIAL_STATE);
   const [reloadToken, setReloadToken] = useState(0);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    setState((current) => ({ ...current, isLoading: true, error: null }));
+  // Loads whenever the screen gains focus or `refetch` is called; blurring aborts an in-flight load.
+  useFocusEffect(
+    useCallback(() => {
+      const controller = new AbortController();
+      setState((current) => ({ ...current, isLoading: true, error: null }));
 
-    const load = async () => {
-      try {
-        const contracts = await ContractsApi.listMine(controller.signal);
-        if (controller.signal.aborted) return;
-        setState({ contracts, isLoading: false, error: null });
-      } catch (error) {
-        if (controller.signal.aborted) return;
-        setState((current) => ({ ...current, isLoading: false, error: toErrorMessage(error) }));
-      }
-    };
+      const load = async () => {
+        try {
+          const contracts = await ContractsApi.listMine(controller.signal);
+          if (controller.signal.aborted) return;
+          setState({ contracts, isLoading: false, error: null });
+        } catch (error) {
+          if (controller.signal.aborted) return;
+          setState((current) => ({ ...current, isLoading: false, error: toErrorMessage(error) }));
+        }
+      };
 
-    void load();
+      void load();
 
-    return () => controller.abort();
-  }, [reloadToken]);
+      return () => controller.abort();
+    }, [reloadToken]),
+  );
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
 

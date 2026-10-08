@@ -1,17 +1,10 @@
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { useRouter } from 'expo-router';
 import { MyStorageScreen } from '../../src/features/customer/MyStorageScreen';
 import { useMyContracts } from '../../src/features/customer/use-my-contracts';
 
 export default function StorageRoute() {
   const router = useRouter();
   const { contracts, isLoading, error, refetch } = useMyContracts();
-
-  useFocusEffect(
-    useCallback(() => {
-      refetch();
-    }, [refetch]),
-  );
 
   return (
     <MyStorageScreen

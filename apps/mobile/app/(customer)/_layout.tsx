@@ -26,6 +26,9 @@ export default function CustomerTabsLayout() {
       <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
         <StatusBar style="dark" />
         <RouterTabs
+          // Hidden screens (contract detail, payment, tickets) must go back to where they were
+          // opened from, not to the first tab.
+          backBehavior="history"
           screenOptions={{ headerShown: false }}
           tabBar={({ state }) => (
             <CustomerTabBar

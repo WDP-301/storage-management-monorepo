@@ -125,9 +125,9 @@ function ContractDetail({
 function InfoRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <View className="flex-row items-center justify-between gap-3">
-      <Text className="text-sm text-muted">{label}</Text>
+      <Text className="shrink-0 text-sm text-muted">{label}</Text>
       <Text
-        className={`text-sm font-semibold ${accent ? 'text-accent' : 'text-foreground'}`}
+        className={`flex-1 text-right text-sm font-semibold ${accent ? 'text-accent' : 'text-foreground'}`}
         numberOfLines={1}
       >
         {value}

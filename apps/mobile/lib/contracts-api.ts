@@ -36,5 +36,15 @@ function normaliseContract(contract: CustomerContractResponse): ApiContract {
           address: contract.facility.address_line,
         }
       : null,
+    handover: contract.handover
+      ? {
+          id: contract.handover.id,
+          inspectedAt: contract.handover.inspected_at,
+          finalizedAt: contract.handover.finalized_at,
+          inspectorName: contract.handover.inspector_name,
+          conditionNotes: contract.handover.condition_notes,
+          damageCount: contract.handover.damages?.length ?? 0,
+        }
+      : null,
   };
 }

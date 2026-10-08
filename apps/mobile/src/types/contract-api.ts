@@ -19,6 +19,24 @@ export type CustomerContractResponse = {
     type_name: string | null;
   } | null;
   facility: { id: string; name: string; address_line: string } | null;
+  handover: {
+    id: string;
+    inspected_at: string | null;
+    finalized_at: string | null;
+    inspector_name: string | null;
+    condition_notes: string | null;
+    damages: unknown[];
+  } | null;
+};
+
+/** Handover receipt (biên nhận) — signed off once the customer received the unit. */
+export type ApiHandover = {
+  id: string;
+  inspectedAt: string | null;
+  finalizedAt: string | null;
+  inspectorName: string | null;
+  conditionNotes: string | null;
+  damageCount: number;
 };
 
 /** Normalised contract the app renders. */
@@ -41,4 +59,5 @@ export type ApiContract = {
     typeName: string | null;
   } | null;
   facility: { id: string; name: string; address: string } | null;
+  handover: ApiHandover | null;
 };

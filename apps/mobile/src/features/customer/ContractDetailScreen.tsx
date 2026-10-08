@@ -1,7 +1,7 @@
 import { Button, Card } from 'heroui-native';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
-import { formatArea, formatIsoDate, formatMoney } from '../../../lib/format-vi';
-import type { ApiContract } from '../../types/contract-api';
+import { formatArea, formatIsoDate, formatIsoDateTime, formatMoney } from '../../../lib/format-vi';
+import type { ApiContract, ApiHandover } from '../../types/contract-api';
 import {
   ContractStatusChip,
   contractDaysLeft,
@@ -113,12 +113,41 @@ function ContractDetail({
         </Card.Body>
       </Card>
 
+      {contract.handover ? <HandoverCard handover={contract.handover} /> : null}
+
       {contract.status === 'ACTIVE' ? (
         <Button onPress={onSupport}>
           <Button.Label>Báo sự cố / hỗ trợ</Button.Label>
         </Button>
       ) : null}
     </View>
+  );
+}
+
+function HandoverCard({ handover }: { handover: ApiHandover }) {
+  const received = handover.finalizedAt !== null;
+  return (
+    <Card className="border border-border bg-surface">
+      <Card.Body className="gap-3">
+        <Text className="text-base font-semibold text-foreground">Biên nhận kho</Text>
+        <InfoRow label="Trạng thái" value={received ? 'Đã nhận kho' : 'Chờ nhận kho'} accent />
+        {handover.finalizedAt ? (
+          <InfoRow label="Ngày nhận" value={formatIsoDateTime(handover.finalizedAt)} />
+        ) : null}
+        <InfoRow label="Nhân viên bàn giao" value={handover.inspectorName ?? 'Chưa phân công'} />
+        {received ? (
+          <InfoRow
+            label="Hiện trạng"
+            value={
+              handover.damageCount > 0 ? `${handover.damageCount} điểm ghi nhận` : 'Bình thường'
+            }
+          />
+        ) : null}
+        {handover.conditionNotes ? (
+          <Text className="text-sm leading-5 text-muted">{handover.conditionNotes}</Text>
+        ) : null}
+      </Card.Body>
+    </Card>
   );
 }
 

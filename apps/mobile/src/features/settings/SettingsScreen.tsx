@@ -1,5 +1,5 @@
 import { Button, Card, Chip } from 'heroui-native';
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { primaryRoleLabel } from '../../../lib/app-area';
 import type { AuthUser } from '../../types/auth';
 
@@ -7,9 +7,11 @@ type Props = {
   user: AuthUser;
   isLoggingOut: boolean;
   onLogout: () => void;
+  /** Only the customer area wires this — the staff settings screen reuses this component. */
+  onSupport?: () => void;
 };
 
-export function SettingsScreen({ user, isLoggingOut, onLogout }: Props) {
+export function SettingsScreen({ user, isLoggingOut, onLogout, onSupport }: Props) {
   const initial = user.fullName.trim().charAt(0).toUpperCase() || 'S';
 
   return (
@@ -46,7 +48,7 @@ export function SettingsScreen({ user, isLoggingOut, onLogout }: Props) {
           <View className="h-px bg-separator" />
           <SettingItem title="Bảo mật" description="Mật khẩu và phiên đăng nhập" />
           <View className="h-px bg-separator" />
-          <SettingItem title="Hỗ trợ" description="Liên hệ và yêu cầu hỗ trợ" />
+          <SettingItem title="Hỗ trợ" description="Liên hệ và yêu cầu hỗ trợ" onPress={onSupport} />
         </Card.Body>
       </Card>
 
@@ -71,14 +73,24 @@ function SettingValue({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SettingItem({ title, description }: { title: string; description: string }) {
+function SettingItem({
+  title,
+  description,
+  onPress,
+}: {
+  title: string;
+  description: string;
+  onPress?: () => void;
+}) {
   return (
-    <View className="flex-row items-center justify-between py-3">
-      <View className="flex-1">
-        <Text className="font-semibold text-foreground">{title}</Text>
-        <Text className="mt-1 text-xs text-muted">{description}</Text>
+    <Pressable onPress={onPress} disabled={!onPress}>
+      <View className="flex-row items-center justify-between py-3">
+        <View className="flex-1">
+          <Text className="font-semibold text-foreground">{title}</Text>
+          <Text className="mt-1 text-xs text-muted">{description}</Text>
+        </View>
+        <Text className="text-lg text-muted">›</Text>
       </View>
-      <Text className="text-lg text-muted">›</Text>
-    </View>
+    </Pressable>
   );
 }

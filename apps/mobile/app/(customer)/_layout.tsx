@@ -40,6 +40,10 @@ export default function CustomerTabsLayout() {
           <RouterTabs.Screen name="schedule" options={{ title: 'Đặt lịch thuê' }} />
           {/* Deposit payment is reached from a booking, so it has no tab button either. */}
           <RouterTabs.Screen name="payment" options={{ title: 'Thanh toán tiền cọc' }} />
+          {/* Ticket screens are reached from Settings → Hỗ trợ; they highlight the settings tab. */}
+          <RouterTabs.Screen name="tickets" options={{ title: 'Yêu cầu hỗ trợ' }} />
+          <RouterTabs.Screen name="ticket-detail" options={{ title: 'Chi tiết yêu cầu' }} />
+          <RouterTabs.Screen name="ticket-create" options={{ title: 'Tạo yêu cầu' }} />
         </RouterTabs>
       </SafeAreaView>
     </HoldProvider>
@@ -116,5 +120,8 @@ function toCustomerTab(routeName: string | undefined): CustomerTab {
   if (routeName === 'schedule') return 'browse';
   // Paying a deposit belongs to the booking the customer came from, not to browsing.
   if (routeName === 'payment') return 'bookings';
+  if (routeName === 'tickets' || routeName === 'ticket-detail' || routeName === 'ticket-create') {
+    return 'settings';
+  }
   return 'browse';
 }

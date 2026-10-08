@@ -4,7 +4,11 @@ jest.mock('@nestjs/schedule', () => ({
   CronExpression: { EVERY_MINUTE: '* * * * *' },
 }));
 
+import { AppUser } from '@entities/app-user.entity';
 import { Booking } from '@entities/booking.entity';
+import { BookingItem } from '@entities/booking-item.entity';
+import { Contract } from '@entities/contract.entity';
+import { Inspection } from '@entities/inspection.entity';
 import { Payment } from '@entities/payment.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
@@ -13,7 +17,10 @@ import type { PaymentReceivedEvent } from '@modules/payments/types/payment';
 import { HttpStatus, Logger } from '@nestjs/common';
 import {
   BookingStatus,
+  ContractKind,
+  ContractStatus,
   HoldStatus,
+  InspectionType,
   PaymentStatus,
   PaymentType,
   StorageUnitStatus,
@@ -47,10 +54,30 @@ const buildEvent = (overrides: Partial<PaymentReceivedEvent> = {}): PaymentRecei
   ...overrides,
 });
 
+const buildItem = (id: string, storageUnitId: string): BookingItem =>
+  ({
+    id,
+    bookingId: 'booking-1',
+    storageUnitId,
+    requestedStartAt: new Date('2026-10-20T00:00:00Z'),
+    rentalMonths: 3,
+    monthlyPriceSnapshot: '1500000.00',
+  }) as unknown as BookingItem;
+
+const CUSTOMER = {
+  id: 'customer-1',
+  fullName: 'Nguyen Van A',
+  email: 'a@example.com',
+  phone: '0900000000',
+} as AppUser;
+
 describe('BookingsService.handlePaymentReceived', () => {
   let bookingRepo: { find: jest.Mock };
   let em: {
     findOne: jest.Mock;
+    find: jest.Mock;
+    findOneOrFail: jest.Mock;
+    create: jest.Mock;
     update: jest.Mock;
     count: jest.Mock;
     save: jest.Mock;
@@ -71,6 +98,9 @@ describe('BookingsService.handlePaymentReceived', () => {
     };
     em = {
       findOne: jest.fn().mockResolvedValue(buildBooking()),
+      find: jest.fn().mockResolvedValue([]),
+      findOneOrFail: jest.fn().mockResolvedValue(CUSTOMER),
+      create: jest.fn((_entity, data) => ({ ...data })),
       update: jest.fn(),
       count: jest.fn(),
       save: jest.fn(),
@@ -120,6 +150,59 @@ describe('BookingsService.handlePaymentReceived', () => {
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('confirmed via payment'));
   });
 
+  it('creates a DRAFT contract + handover inspection per item and books the units', async () => {
+    bookingRepo.find.mockResolvedValue([buildBooking()]);
+    em.update.mockResolvedValue({ affected: 1 });
+    em.count.mockResolvedValue(0);
+    em.find.mockResolvedValue([buildItem('item-1', 'unit-1'), buildItem('item-2', 'unit-2')]);
+    em.save.mockImplementation(async (entity, data) =>
+      entity === Contract ? { id: `c-${data.bookingItemId}`, ...data } : data,
+    );
+
+    await service.handlePaymentReceived(buildEvent());
+
+    const contracts = em.save.mock.calls.filter(([entity]) => entity === Contract);
+    expect(contracts).toHaveLength(2);
+    expect(contracts[0][1]).toEqual(
+      expect.objectContaining({
+        bookingItemId: 'item-1',
+        customerId: 'customer-1',
+        kind: ContractKind.INITIAL,
+        status: ContractStatus.DRAFT,
+        effectiveAt: new Date('2026-10-20T00:00:00Z'),
+        months: 3,
+        monthlyPriceSnapshot: '1500000.00',
+        customerSnapshot: expect.objectContaining({ fullName: 'Nguyen Van A' }),
+      }),
+    );
+    const inspections = em.save.mock.calls.filter(([entity]) => entity === Inspection);
+    expect(inspections.map(([, data]) => data)).toEqual([
+      { contractId: 'c-item-1', type: InspectionType.PRE_HANDOVER },
+      { contractId: 'c-item-2', type: InspectionType.PRE_HANDOVER },
+    ]);
+    expect(em.update).toHaveBeenCalledWith(
+      StorageUnit,
+      { id: In(['unit-1', 'unit-2']), status: StorageUnitStatus.HELD },
+      { status: StorageUnitStatus.BOOKED },
+    );
+    expect(logSpy).toHaveBeenCalledWith(expect.stringMatching(/contracts=\[CT-.+, CT-.+\]/));
+  });
+
+  it('propagates a contract failure so the whole confirmation rolls back for retry', async () => {
+    bookingRepo.find.mockResolvedValue([buildBooking()]);
+    em.update.mockResolvedValue({ affected: 1 });
+    em.count.mockResolvedValue(0);
+    em.find.mockResolvedValue([buildItem('item-1', 'unit-1')]);
+    em.save.mockImplementation(async (entity, data) => {
+      if (entity === Inspection) throw new Error('db down');
+      return { id: 'c-1', ...data };
+    });
+
+    await expect(service.handlePaymentReceived(buildEvent())).rejects.toThrow('db down');
+    expect(em.update).not.toHaveBeenCalledWith(StorageUnit, expect.anything(), expect.anything());
+    expect(paymentRepo.save).not.toHaveBeenCalled();
+  });
+
   it('rolls back when a hold already expired — late payment goes to manual reconciliation', async () => {
     bookingRepo.find.mockResolvedValue([buildBooking()]);
     em.update.mockResolvedValue({ affected: 1 });
@@ -132,6 +215,7 @@ describe('BookingsService.handlePaymentReceived', () => {
     // …but the money still reached the bank, so a receipt is re-recorded for reconciliation.
     expect(paymentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ providerRef: '42' }));
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('arrived after holds expired'));
+    expect(em.find).not.toHaveBeenCalledWith(BookingItem, expect.anything());
     expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('confirmed'));
   });
 
@@ -162,6 +246,7 @@ describe('BookingsService.handlePaymentReceived', () => {
       expect.objectContaining({ status: BookingStatus.CONFIRMED }),
     );
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('< deposit'));
+    expect(em.find).not.toHaveBeenCalledWith(BookingItem, expect.anything());
   });
 
   it('confirms once cumulative transfers cover the deposit', async () => {
@@ -198,6 +283,7 @@ describe('BookingsService.handlePaymentReceived', () => {
     expect(em.update).toHaveBeenCalledTimes(1);
     expect(paymentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ providerRef: '42' }));
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('status changed concurrently'));
+    expect(em.find).not.toHaveBeenCalledWith(BookingItem, expect.anything());
   });
 
   it('keeps the receipt when the booking is no longer awaiting deposit under the lock', async () => {
@@ -210,6 +296,7 @@ describe('BookingsService.handlePaymentReceived', () => {
     expect(em.update).not.toHaveBeenCalled();
     expect(paymentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ providerRef: '42' }));
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('status changed concurrently'));
+    expect(em.find).not.toHaveBeenCalledWith(BookingItem, expect.anything());
   });
 
   it('treats a unique-violation on provider_ref as a duplicate delivery', async () => {
@@ -221,6 +308,7 @@ describe('BookingsService.handlePaymentReceived', () => {
     expect(paymentRepo.save).not.toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('already recorded'));
     expect(warnSpy).not.toHaveBeenCalled();
+    expect(em.find).not.toHaveBeenCalledWith(BookingItem, expect.anything());
   });
 });
 

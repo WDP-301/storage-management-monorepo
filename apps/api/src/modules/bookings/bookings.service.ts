@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { AppUser } from '@entities/app-user.entity';
 import { Booking } from '@entities/booking.entity';
 import { BookingItem } from '@entities/booking-item.entity';
 import { IdempotencyKey } from '@entities/idempotency-key.entity';
@@ -6,6 +7,7 @@ import { Payment } from '@entities/payment.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { persistContract } from '@modules/contracts/initial-contract.util';
 import { generatePaymentNo } from '@modules/payments/payment-no.util';
 import { PAYMENT_EVENTS, PaymentReceivedEvent } from '@modules/payments/types/payment';
 import { buildVietQrUrl } from '@modules/payments/vietqr.util';
@@ -23,6 +25,7 @@ import { claimIdempotencyKey, releaseIdempotencyKey } from '@shared/utils/idempo
 import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import {
   BookingStatus,
+  ContractStatus,
   HoldStatus,
   IdempotencyStatus,
   PaymentMethod,
@@ -754,6 +757,7 @@ export class BookingsService implements OnApplicationBootstrap {
 
     const now = new Date();
     let outcome: 'confirmed' | 'partial' | 'late' | 'status-changed' | 'already-recorded';
+    const contractNos: string[] = [];
     try {
       outcome = await this.dataSource.transaction(async (em) => {
         // Serialize all webhook deliveries for this booking on its row lock — priorPaid
@@ -806,6 +810,28 @@ export class BookingsService implements OnApplicationBootstrap {
         });
         if (leftoverHolds > 0) throw new LatePaymentError();
 
+        // Deposit settled: each item gets a DRAFT contract + handover inspection and its
+        // unit moves HELD → BOOKED. Any failure rolls back the payment too so the
+        // webhook retry replays the whole confirmation.
+        const items = await em.find(BookingItem, { where: { bookingId: booking.id } });
+        if (items.length > 0) {
+          const customer = await em.findOneOrFail(AppUser, { where: { id: locked.customerId } });
+          for (const item of items) {
+            const contract = await persistContract(em, {
+              item,
+              customer,
+              status: ContractStatus.DRAFT,
+              effectiveAt: item.requestedStartAt,
+            });
+            contractNos.push(contract.contractNo);
+          }
+          await em.update(
+            StorageUnit,
+            { id: In(items.map((i) => i.storageUnitId)), status: StorageUnitStatus.HELD },
+            { status: StorageUnitStatus.BOOKED },
+          );
+        }
+
         return 'confirmed' as const;
       });
     } catch (err) {
@@ -820,7 +846,7 @@ export class BookingsService implements OnApplicationBootstrap {
 
     if (outcome === 'confirmed') {
       this.logger.log(
-        `Booking ${booking.bookingNo} confirmed via payment sepayId=${event.sepayId} amount=${event.amount}`,
+        `Booking ${booking.bookingNo} confirmed via payment sepayId=${event.sepayId} amount=${event.amount} contracts=[${contractNos.join(', ')}]`,
       );
       return;
     }

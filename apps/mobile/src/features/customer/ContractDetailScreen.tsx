@@ -1,15 +1,12 @@
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { Button, Card } from 'heroui-native';
+import { useRef } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
-import { formatArea, formatIsoDate, formatIsoDateTime, formatMoney } from '../../../lib/format-vi';
-import type { ApiContract, ApiHandover } from '../../types/contract-api';
-import {
-  ContractStatusChip,
-  contractDaysLeft,
-  contractEndIso,
-  contractKindLabel,
-  contractRemainingLabel,
-  contractStartIso,
-} from './contract-display';
+import { formatArea } from '../../../lib/format-vi';
+import type { ApiContract } from '../../types/contract-api';
+import { openReturn, StatusPill, storageState } from './contract-display';
+import { ContractSection, HandoverSection, ReturnSection } from './contract-sections';
+import { ReturnRequestSheet } from './ReturnRequestSheet';
 
 type Props = {
   contract: ApiContract | null;
@@ -50,7 +47,12 @@ export function ContractDetailScreen({
             {isLoading ? 'Đang tải…' : (error ?? 'Không tìm thấy hợp đồng này.')}
           </Text>
         ) : (
-          <ContractDetail contract={contract} now={now} onSupport={onSupport} />
+          <ContractDetail
+            contract={contract}
+            now={now}
+            onSupport={onSupport}
+            onReturnRequested={onRefresh}
+          />
         )}
       </View>
     </ScrollView>
@@ -61,12 +63,18 @@ function ContractDetail({
   contract,
   now,
   onSupport,
+  onReturnRequested,
 }: {
   contract: ApiContract;
   now: number;
   onSupport: () => void;
+  onReturnRequested: () => void;
 }) {
-  const daysLeft = contractDaysLeft(contract, now);
+  const returnSheet = useRef<BottomSheetModal>(null);
+  const state = storageState(contract, now);
+  const isActive = contract.status === 'ACTIVE';
+  const canRequestReturn = isActive && !openReturn(contract);
+  const showReturnSection = isActive || contract.status === 'ENDED' || contract.return !== null;
 
   return (
     <View className="mt-2 gap-4">
@@ -80,8 +88,11 @@ function ContractDetail({
               .filter(Boolean)
               .join(' · ')}
           </Text>
+          {state.hint ? (
+            <Text className="mt-1 text-sm font-medium text-accent">{state.hint}</Text>
+          ) : null}
         </View>
-        <ContractStatusChip status={contract.status} />
+        <StatusPill label={state.label} tone={state.tone} />
       </View>
 
       {contract.facility ? (
@@ -93,74 +104,27 @@ function ContractDetail({
         </Card>
       ) : null}
 
-      <Card className="border border-border bg-surface">
-        <Card.Body className="gap-3">
-          <InfoRow label="Số hợp đồng" value={contract.contractNo} />
-          <InfoRow label="Loại hợp đồng" value={contractKindLabel(contract.kind)} />
-          <InfoRow label="Ngày hiệu lực" value={formatIsoDate(contractStartIso(contract))} />
-          <InfoRow label="Ngày kết thúc" value={formatIsoDate(contractEndIso(contract))} />
-          <InfoRow label="Kỳ hạn" value={`${contract.months} tháng`} />
-          {daysLeft !== null ? (
-            <InfoRow label="Tình trạng" value={contractRemainingLabel(daysLeft)} accent />
-          ) : null}
-        </Card.Body>
-      </Card>
+      <ContractSection contract={contract} />
+      <HandoverSection handover={contract.handover} />
+      {showReturnSection ? <ReturnSection inspection={contract.return} /> : null}
 
-      <Card className="border border-border bg-surface">
-        <Card.Body className="gap-3">
-          <InfoRow label="Tiền thuê" value={`${formatMoney(contract.monthlyPrice)}/tháng`} />
-          <InfoRow label="Tiền cọc" value={formatMoney(contract.deposit)} />
-        </Card.Body>
-      </Card>
-
-      {contract.handover ? <HandoverCard handover={contract.handover} /> : null}
-
-      {contract.status === 'ACTIVE' ? (
+      {canRequestReturn ? (
+        <Button variant="secondary" onPress={() => returnSheet.current?.present()}>
+          <Button.Label>Yêu cầu trả kho</Button.Label>
+        </Button>
+      ) : null}
+      {isActive ? (
         <Button onPress={onSupport}>
           <Button.Label>Báo sự cố / hỗ trợ</Button.Label>
         </Button>
       ) : null}
-    </View>
-  );
-}
 
-function HandoverCard({ handover }: { handover: ApiHandover }) {
-  const received = handover.finalizedAt !== null;
-  return (
-    <Card className="border border-border bg-surface">
-      <Card.Body className="gap-3">
-        <Text className="text-base font-semibold text-foreground">Biên nhận kho</Text>
-        <InfoRow label="Trạng thái" value={received ? 'Đã nhận kho' : 'Chờ nhận kho'} accent />
-        {handover.finalizedAt ? (
-          <InfoRow label="Ngày nhận" value={formatIsoDateTime(handover.finalizedAt)} />
-        ) : null}
-        <InfoRow label="Nhân viên bàn giao" value={handover.inspectorName ?? 'Chưa phân công'} />
-        {received ? (
-          <InfoRow
-            label="Hiện trạng"
-            value={
-              handover.damageCount > 0 ? `${handover.damageCount} điểm ghi nhận` : 'Bình thường'
-            }
-          />
-        ) : null}
-        {handover.conditionNotes ? (
-          <Text className="text-sm leading-5 text-muted">{handover.conditionNotes}</Text>
-        ) : null}
-      </Card.Body>
-    </Card>
-  );
-}
-
-function InfoRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <View className="flex-row items-center justify-between gap-3">
-      <Text className="shrink-0 text-sm text-muted">{label}</Text>
-      <Text
-        className={`flex-1 text-right text-sm font-semibold ${accent ? 'text-accent' : 'text-foreground'}`}
-        numberOfLines={1}
-      >
-        {value}
-      </Text>
+      <ReturnRequestSheet
+        sheetRef={returnSheet}
+        contractId={contract.id}
+        unitCode={contract.unit?.code ?? ''}
+        onSubmitted={onReturnRequested}
+      />
     </View>
   );
 }

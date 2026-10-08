@@ -2,13 +2,7 @@ import { Button, Card } from 'heroui-native';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { formatArea, formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import type { ApiContract } from '../../types/contract-api';
-import {
-  ContractStatusChip,
-  contractDaysLeft,
-  contractEndIso,
-  contractRemainingLabel,
-  contractStartIso,
-} from './contract-display';
+import { contractEndIso, contractStartIso, StatusPill, storageState } from './contract-display';
 
 type Props = {
   contracts: ApiContract[];
@@ -89,7 +83,7 @@ function ContractCard({
   onPress: () => void;
 }) {
   const endIso = contractEndIso(contract);
-  const daysLeft = contractDaysLeft(contract, now);
+  const state = storageState(contract, now);
 
   return (
     <Pressable onPress={onPress}>
@@ -106,7 +100,7 @@ function ContractCard({
                   .join(' · ')}
               </Text>
             </View>
-            <ContractStatusChip status={contract.status} />
+            <StatusPill label={state.label} tone={state.tone} />
           </View>
 
           {contract.facility ? (
@@ -135,10 +129,8 @@ function ContractCard({
             </View>
           </View>
 
-          {daysLeft !== null ? (
-            <Text className="text-xs font-medium text-accent">
-              {contractRemainingLabel(daysLeft)}
-            </Text>
+          {state.hint ? (
+            <Text className="text-xs font-medium text-accent">{state.hint}</Text>
           ) : null}
 
           <Text className="text-xs text-muted">Hợp đồng {contract.contractNo}</Text>

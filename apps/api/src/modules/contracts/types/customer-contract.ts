@@ -35,6 +35,7 @@ export interface CustomerContractRecord {
   status: ContractStatus;
   effective_at: string | Date;
   ended_at: string | Date | null;
+  signed_at: string | Date | null;
   months: number;
   monthly_price: number;
   deposit: number;
@@ -72,6 +73,7 @@ export function toCustomerContractRecord(
     status: contract.status,
     effective_at: contract.effectiveAt,
     ended_at: contract.endedAt ?? null,
+    signed_at: contract.signedAt ?? null,
     months: contract.months,
     monthly_price: contract.monthlyPriceSnapshot,
     deposit: contract.bookingItem?.depositSnapshot ?? 0,

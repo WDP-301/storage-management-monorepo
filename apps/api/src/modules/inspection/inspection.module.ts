@@ -6,11 +6,12 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { InspectionController } from './inspection.controller';
 import { InspectionService } from './inspection.service';
+import { InspectionLifecycleService } from './inspection-lifecycle.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Inspection, AppUser, UserRoleAssignment]), AuthModule],
   controllers: [InspectionController],
-  providers: [InspectionService],
+  providers: [InspectionService, InspectionLifecycleService],
   exports: [InspectionService],
 })
 export class InspectionModule {}

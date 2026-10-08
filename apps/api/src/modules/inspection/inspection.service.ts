@@ -16,6 +16,7 @@ import { Repository } from 'typeorm';
 import { AssignInspectionDto } from './dto/assign-inspection.dto';
 import { UpdateInspectionDto } from './dto/update-inspection.dto';
 import { UploadInspectionEvidenceDto } from './dto/upload-inspection-evidence.dto';
+import { assertInspectorOrManager, assertNotFinalized } from './inspection-access.util';
 
 @Injectable()
 export class InspectionService {
@@ -99,6 +100,7 @@ export class InspectionService {
   async assignStaff(id: string, dto: AssignInspectionDto): Promise<Inspection> {
     const inspection = await this.inspections.findOne({ where: { id } });
     if (!inspection) notFound('Inspection', id);
+    assertNotFinalized(inspection);
 
     const assignee = await this.users.findOne({
       where: { id: dto.inspectedBy, status: UserStatus.ACTIVE },
@@ -126,34 +128,25 @@ export class InspectionService {
    * Updates inspection fields. Allowed for the assigned inspector
    * (`inspected_by = actor.id`) and for FACILITY_MANAGER /
    * OPERATIONS_MANAGER; any other staff member gets 403. `inspected_by`
-   * itself can only change through the assign endpoint.
+   * itself can only change through the assign endpoint, and `finalized_at`
+   * only through the finalize endpoint.
    */
   async update(id: string, dto: UpdateInspectionDto, actor: AuthUser): Promise<Inspection> {
     const inspection = await this.inspections.findOne({ where: { id } });
     if (!inspection) notFound('Inspection', id);
 
-    const isAssignee = inspection.inspectedBy === actor.id;
-    const isManager =
-      actor.roles.includes(UserRole.FACILITY_MANAGER) ||
-      actor.roles.includes(UserRole.OPERATIONS_MANAGER);
-    if (!isAssignee && !isManager) {
-      throw new DomainException(
-        ErrorCode.FORBIDDEN,
-        'Only the assigned inspector or a manager can update this inspection',
-        HttpStatus.FORBIDDEN,
-      );
-    }
+    assertInspectorOrManager(
+      inspection,
+      actor,
+      'Only the assigned inspector or a manager can update this inspection',
+    );
+    assertNotFinalized(inspection);
 
     if (dto.conditionNotes !== undefined) {
       inspection.conditionNotes = dto.conditionNotes as string | undefined;
     }
     if (dto.evidence !== undefined) inspection.evidence = dto.evidence as any[];
     if (dto.damages !== undefined) inspection.damages = dto.damages as any[];
-    if (dto.finalizedAt !== undefined) {
-      inspection.finalizedAt = (dto.finalizedAt ? new Date(dto.finalizedAt) : null) as
-        | Date
-        | undefined;
-    }
 
     return this.inspections.save(inspection);
   }
@@ -173,17 +166,12 @@ export class InspectionService {
     const inspection = await this.inspections.findOne({ where: { id } });
     if (!inspection) notFound('Inspection', id);
 
-    const isAssignee = inspection.inspectedBy === actor.id;
-    const isManager =
-      actor.roles.includes(UserRole.FACILITY_MANAGER) ||
-      actor.roles.includes(UserRole.OPERATIONS_MANAGER);
-    if (!isAssignee && !isManager) {
-      throw new DomainException(
-        ErrorCode.FORBIDDEN,
-        'Only the assigned inspector or a manager can upload evidence for this inspection',
-        HttpStatus.FORBIDDEN,
-      );
-    }
+    assertInspectorOrManager(
+      inspection,
+      actor,
+      'Only the assigned inspector or a manager can upload evidence for this inspection',
+    );
+    assertNotFinalized(inspection);
 
     const evidence = Array.isArray(inspection.evidence) ? inspection.evidence : [];
     if (!evidence.includes(dto.evidenceUrl)) {

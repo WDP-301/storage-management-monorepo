@@ -2,8 +2,8 @@ import { AppUser } from '@entities/app-user.entity';
 import { Booking } from '@entities/booking.entity';
 import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
-import { BookingStatus, ContractKind, ContractStatus } from '@storage/types';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { BookingStatus, ContractKind, ContractStatus, InspectionType } from '@storage/types';
+import { DataSource, In, IsNull, Repository } from 'typeorm';
 import { ContractsService } from './contracts.service';
 
 describe('ContractsService', () => {
@@ -50,6 +50,40 @@ describe('ContractsService', () => {
   });
 
   afterEach(() => jest.restoreAllMocks());
+
+  it('attaches each contract its handover receipt in /contracts/mine', async () => {
+    const inspectionRepo = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 'insp-1',
+          contractId: 'contract-1',
+          type: InspectionType.PRE_HANDOVER,
+          finalizedAt: new Date('2026-10-13T03:00:00Z'),
+          inspector: { fullName: 'Staff A' },
+          evidence: [],
+          damages: [],
+        },
+      ]),
+    };
+    service = new ContractsService(
+      repo as unknown as Repository<Contract>,
+      { getRepository: jest.fn(() => inspectionRepo) } as unknown as DataSource,
+    );
+    repo.find.mockResolvedValue([{ id: 'contract-1' }, { id: 'contract-2' }]);
+
+    const [withReceipt, withoutReceipt] = await service.findMine('customer-1');
+
+    expect(inspectionRepo.find).toHaveBeenCalledWith({
+      where: { contractId: In(['contract-1', 'contract-2']), type: InspectionType.PRE_HANDOVER },
+      relations: { inspector: true },
+    });
+    expect(withReceipt.handover).toMatchObject({
+      id: 'insp-1',
+      finalized_at: new Date('2026-10-13T03:00:00Z'),
+      inspector_name: 'Staff A',
+    });
+    expect(withoutReceipt.handover).toBeNull();
+  });
 
   it('allows creation one millisecond before the 7-day deadline', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-12-08T00:00:00+07:00').getTime() - 1);

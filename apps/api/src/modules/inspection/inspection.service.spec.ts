@@ -244,6 +244,26 @@ describe('InspectionService', () => {
     expect(inspections.save).not.toHaveBeenCalled();
   });
 
+  it('rejects edits and reassignment once the inspection is finalized', async () => {
+    inspections.findOne.mockResolvedValue({
+      id: 'inspection-1',
+      inspectedBy: 'staff-1',
+      finalizedAt: new Date('2026-10-12T09:00:00Z'),
+    });
+    const manager = actor('manager-1', [UserRole.FACILITY_MANAGER]);
+
+    await expect(
+      service.update('inspection-1', { conditionNotes: 'x' }, manager),
+    ).rejects.toMatchObject({ status: 409, response: { code: 'CONFLICT' } });
+    await expect(
+      service.assignStaff('inspection-1', { inspectedBy: 'staff-2' }),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(
+      service.uploadEvidence('inspection-1', { evidenceUrl: 'https://x/y.jpg' }, manager),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(inspections.save).not.toHaveBeenCalled();
+  });
+
   it('throws 404 when updating an unknown inspection', async () => {
     inspections.findOne.mockResolvedValue(null);
 

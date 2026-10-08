@@ -1,12 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsArray,
-  IsDateString,
-  IsOptional,
-  IsString,
-  MaxLength,
-  ValidateIf,
-} from 'class-validator';
+import { IsArray, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
 
 export class UpdateInspectionDto {
   @ApiPropertyOptional({ maxLength: 5000, nullable: true })
@@ -24,9 +17,4 @@ export class UpdateInspectionDto {
   @IsOptional()
   @IsArray()
   damages?: unknown[];
-
-  @ApiPropertyOptional({ format: 'date-time', nullable: true })
-  @ValidateIf((_object, value) => value !== undefined)
-  @IsDateString()
-  finalizedAt?: string | null;
 }

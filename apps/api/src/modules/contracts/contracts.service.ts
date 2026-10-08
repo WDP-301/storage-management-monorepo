@@ -2,12 +2,13 @@ import { AppUser } from '@entities/app-user.entity';
 import { Booking } from '@entities/booking.entity';
 import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
+import { Inspection } from '@entities/inspection.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { BookingStatus } from '@storage/types';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { BookingStatus, InspectionType } from '@storage/types';
+import { DataSource, In, IsNull, Repository } from 'typeorm';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
 import { UploadContractEvidenceDto } from './dto/upload-contract-evidence.dto';
 import { persistContract } from './initial-contract.util';
@@ -94,7 +95,14 @@ export class ContractsService {
       relations: { bookingItem: { storageUnit: { facility: true, unitType: true } } },
       order: { effectiveAt: 'DESC' },
     });
-    return contracts.map(toCustomerContractRecord);
+    if (contracts.length === 0) return [];
+
+    const handovers = await this.dataSource.getRepository(Inspection).find({
+      where: { contractId: In(contracts.map((c) => c.id)), type: InspectionType.PRE_HANDOVER },
+      relations: { inspector: true },
+    });
+    const handoverByContract = new Map(handovers.map((i) => [i.contractId, i]));
+    return contracts.map((c) => toCustomerContractRecord(c, handoverByContract.get(c.id)));
   }
 
   async findById(id: string): Promise<Contract> {

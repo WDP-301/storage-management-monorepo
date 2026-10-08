@@ -1,4 +1,5 @@
 import type { Contract } from '@entities/contract.entity';
+import type { Inspection } from '@entities/inspection.entity';
 import type { ContractKind, ContractStatus } from '@storage/types';
 
 export interface CustomerContractUnit {
@@ -15,6 +16,17 @@ export interface CustomerContractFacility {
   address_line: string;
 }
 
+export interface CustomerInspectionSummary {
+  id: string;
+  type: string;
+  inspected_at: string | Date | null;
+  finalized_at: string | Date | null;
+  inspector_name: string | null;
+  condition_notes: string | null;
+  evidence: unknown[];
+  damages: unknown[];
+}
+
 export interface CustomerContractRecord {
   id: string;
   contract_no: string;
@@ -27,9 +39,27 @@ export interface CustomerContractRecord {
   deposit: number;
   unit: CustomerContractUnit | null;
   facility: CustomerContractFacility | null;
+  /** Handover receipt (PRE_HANDOVER inspection); finalized once the customer received the unit. */
+  handover: CustomerInspectionSummary | null;
 }
 
-export function toCustomerContractRecord(contract: Contract): CustomerContractRecord {
+export function toCustomerInspectionSummary(inspection: Inspection): CustomerInspectionSummary {
+  return {
+    id: inspection.id,
+    type: inspection.type,
+    inspected_at: inspection.inspectedAt ?? null,
+    finalized_at: inspection.finalizedAt ?? null,
+    inspector_name: inspection.inspector?.fullName ?? null,
+    condition_notes: inspection.conditionNotes ?? null,
+    evidence: inspection.evidence ?? [],
+    damages: inspection.damages ?? [],
+  };
+}
+
+export function toCustomerContractRecord(
+  contract: Contract,
+  handover?: Inspection,
+): CustomerContractRecord {
   const unit = contract.bookingItem?.storageUnit;
   return {
     id: contract.id,
@@ -57,5 +87,6 @@ export function toCustomerContractRecord(contract: Contract): CustomerContractRe
           address_line: unit.facility.addressLine,
         }
       : null,
+    handover: handover ? toCustomerInspectionSummary(handover) : null,
   };
 }

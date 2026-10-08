@@ -74,7 +74,7 @@ export function contractStatusLabel(status: ApiContract['status']) {
     case 'ACTIVE':
       return 'Đang thuê';
     case 'DRAFT':
-      return 'Chờ hiệu lực';
+      return 'Đã cọc';
     case 'ENDED':
       return 'Đã kết thúc';
     case 'CANCELLED':

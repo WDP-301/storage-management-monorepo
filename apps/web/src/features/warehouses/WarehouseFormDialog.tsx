@@ -159,12 +159,14 @@ export const WarehouseFormDialog: React.FC<Props> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label="Mã kho"
+              className="w-full"
               value={form.code}
               disabled={frozen}
               onChange={(e) => set('code', e.target.value)}
             />
             <Input
               label="Tên kho"
+              className="w-full"
               value={form.name}
               onChange={(e) => set('name', e.target.value)}
             />
@@ -203,6 +205,7 @@ export const WarehouseFormDialog: React.FC<Props> = ({
             />
             <Input
               label="Vĩ độ (latitude)"
+              className="w-full"
               type="number"
               step="any"
               value={form.latitude}
@@ -210,6 +213,7 @@ export const WarehouseFormDialog: React.FC<Props> = ({
             />
             <Input
               label="Kinh độ (longitude)"
+              className="w-full"
               type="number"
               step="any"
               value={form.longitude}
@@ -220,6 +224,7 @@ export const WarehouseFormDialog: React.FC<Props> = ({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Input
               label="Chiều rộng (m)"
+              className="w-full"
               type="number"
               step="any"
               min="0"
@@ -229,6 +234,7 @@ export const WarehouseFormDialog: React.FC<Props> = ({
             />
             <Input
               label="Chiều dài (m)"
+              className="w-full"
               type="number"
               step="any"
               min="0"
@@ -238,6 +244,7 @@ export const WarehouseFormDialog: React.FC<Props> = ({
             />
             <Input
               label="Chiều cao (m)"
+              className="w-full"
               type="number"
               step="any"
               min="0"
@@ -262,6 +269,7 @@ export const WarehouseFormDialog: React.FC<Props> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label="Giá thuê / tháng (VND)"
+              className="w-full"
               type="number"
               min="0"
               value={form.monthlyPrice}

@@ -20,6 +20,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { PlacesModule } from './modules/places/places.module';
 import { ServiceTicketsModule } from './modules/service-tickets/service-tickets.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { TourAppointmentsModule } from './modules/tour-appointments/tour-appointments.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { ENV_KEY } from './shared/constants';
 import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
@@ -68,6 +69,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
     PaymentsModule,
     ServiceTicketsModule,
     SettingsModule,
+    TourAppointmentsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

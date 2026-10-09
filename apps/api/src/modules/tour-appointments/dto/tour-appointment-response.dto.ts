@@ -19,9 +19,6 @@ export class TourAppointmentFacilityInfoDto implements TourAppointmentFacilityIn
 
   @ApiProperty({ example: 'Cơ sở Kho Thủ Đức 1' })
   name: string;
-
-  @ApiProperty({ nullable: true, example: 'Số 123 Đường Song Hành, TP. Thủ Đức, TP. Hồ Chí Minh' })
-  addressLine?: string | null;
 }
 
 export class TourAppointmentStorageUnitInfoDto implements TourAppointmentStorageUnitInfo {
@@ -30,6 +27,12 @@ export class TourAppointmentStorageUnitInfoDto implements TourAppointmentStorage
 
   @ApiProperty({ example: 'U-102' })
   code: string;
+
+  @ApiProperty({ example: 'Kho Thủ Đức 40m²' })
+  name: string;
+
+  @ApiProperty({ example: 'Số 123 Đường Song Hành, TP. Thủ Đức, TP. Hồ Chí Minh' })
+  addressLine: string;
 }
 
 export class TourAppointmentUserInfoDto implements TourAppointmentUserInfo {

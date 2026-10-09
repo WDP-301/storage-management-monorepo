@@ -8,12 +8,17 @@ export interface DemoAccount {
   fullName: string;
   phone: string;
   role: UserRole;
-  /** Facility-scoped roles are assigned to every seeded warehouse. */
-  scopedToWarehouses?: boolean;
+  /** Facility-scoped roles are granted on each of these facilities (by code). */
+  facilityCodes?: string[];
 }
 
 export const DEMO_ACCOUNTS: DemoAccount[] = [
-  { email: 'admin@demo.vn', fullName: 'Quản trị Demo', phone: '0900000001', role: UserRole.ADMIN },
+  {
+    email: 'admin@demo.vn',
+    fullName: 'Quản trị Demo',
+    phone: '0900000001',
+    role: UserRole.ADMIN,
+  },
   {
     email: 'ops@demo.vn',
     fullName: 'Vận hành Demo',
@@ -25,14 +30,14 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     fullName: 'Quản lý kho Demo',
     phone: '0900000003',
     role: UserRole.FACILITY_MANAGER,
-    scopedToWarehouses: true,
+    facilityCodes: ['CN-HCM'],
   },
   {
     email: 'staff@demo.vn',
     fullName: 'Nhân viên kho Demo',
     phone: '0900000004',
     role: UserRole.FACILITY_STAFF,
-    scopedToWarehouses: true,
+    facilityCodes: ['CN-HCM'],
   },
   {
     email: 'customer@demo.vn',
@@ -42,7 +47,23 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
   },
 ];
 
+export interface DemoFacility {
+  code: string;
+  name: string;
+  /** Optional region; informational, not enforced against the warehouses' own provinces. */
+  provinceCode: string;
+}
+
+/** Branches (cơ sở) that own the demo warehouses. */
+export const DEMO_FACILITIES: DemoFacility[] = [
+  { code: 'CN-HCM', name: 'Cơ sở Hồ Chí Minh', provinceCode: '79' },
+  { code: 'CN-HN', name: 'Cơ sở Hà Nội', provinceCode: '01' },
+  { code: 'CN-DN', name: 'Cơ sở Đà Nẵng', provinceCode: '48' },
+];
+
 export interface DemoWarehouse {
+  /** Code of the owning entry in DEMO_FACILITIES. */
+  facilityCode: string;
   code: string;
   name: string;
   addressLine: string;
@@ -58,10 +79,11 @@ export interface DemoWarehouse {
   status?: StorageUnitStatus;
 }
 
-/** Province codes are derived from the wards (post-2025 two-level model). */
+/** Each warehouse's province is derived from its ward (post-2025 two-level model). */
 export const DEMO_WAREHOUSES: DemoWarehouse[] = [
   {
     code: 'HCM-SG-01',
+    facilityCode: 'CN-HCM',
     name: 'Kho mini Sài Gòn 12m²',
     addressLine: '45 Lê Thánh Tôn',
     wardCode: '26740',
@@ -76,6 +98,7 @@ export const DEMO_WAREHOUSES: DemoWarehouse[] = [
   },
   {
     code: 'HCM-TT-01',
+    facilityCode: 'CN-HCM',
     name: 'Kho Tân Thuận 40m²',
     addressLine: '18 Nguyễn Văn Linh',
     wardCode: '27478',
@@ -90,6 +113,7 @@ export const DEMO_WAREHOUSES: DemoWarehouse[] = [
   },
   {
     code: 'HCM-TD-01',
+    facilityCode: 'CN-HCM',
     name: 'Kho xưởng Thủ Đức 120m²',
     addressLine: '210 Xa lộ Hà Nội',
     wardCode: '26824',
@@ -104,6 +128,7 @@ export const DEMO_WAREHOUSES: DemoWarehouse[] = [
   },
   {
     code: 'HCM-GV-01',
+    facilityCode: 'CN-HCM',
     name: 'Kho Gò Vấp 20m²',
     addressLine: '77 Quang Trung',
     wardCode: '26884',
@@ -118,6 +143,7 @@ export const DEMO_WAREHOUSES: DemoWarehouse[] = [
   },
   {
     code: 'HCM-TSN-01',
+    facilityCode: 'CN-HCM',
     name: 'Kho Tân Sơn Nhất 30m²',
     addressLine: '5 Trường Sơn',
     wardCode: '26968',
@@ -132,6 +158,7 @@ export const DEMO_WAREHOUSES: DemoWarehouse[] = [
   },
   {
     code: 'HCM-BT-01',
+    facilityCode: 'CN-HCM',
     name: 'Kho Bình Tân 80m²',
     addressLine: '350 Kinh Dương Vương',
     wardCode: '27442',
@@ -146,6 +173,7 @@ export const DEMO_WAREHOUSES: DemoWarehouse[] = [
   },
   {
     code: 'HCM-BC-01',
+    facilityCode: 'CN-HCM',
     name: 'Kho Bình Chánh 200m²',
     addressLine: 'Lô B2 KCN Vĩnh Lộc',
     wardCode: '27637',
@@ -161,6 +189,7 @@ export const DEMO_WAREHOUSES: DemoWarehouse[] = [
   },
   {
     code: 'BD-TDM-01',
+    facilityCode: 'CN-HCM',
     name: 'Kho Thủ Dầu Một 60m²',
     addressLine: '12 Đại lộ Bình Dương',
     wardCode: '25747',
@@ -175,6 +204,7 @@ export const DEMO_WAREHOUSES: DemoWarehouse[] = [
   },
   {
     code: 'BD-DA-01',
+    facilityCode: 'CN-HCM',
     name: 'Kho Dĩ An 25m²',
     addressLine: '88 Nguyễn An Ninh',
     wardCode: '25942',
@@ -189,6 +219,7 @@ export const DEMO_WAREHOUSES: DemoWarehouse[] = [
   },
   {
     code: 'HN-CG-01',
+    facilityCode: 'CN-HN',
     name: 'Kho Cầu Giấy 15m²',
     addressLine: '102 Trần Duy Hưng',
     wardCode: '00166',
@@ -203,6 +234,7 @@ export const DEMO_WAREHOUSES: DemoWarehouse[] = [
   },
   {
     code: 'HN-LB-01',
+    facilityCode: 'CN-HN',
     name: 'Kho Long Biên 100m²',
     addressLine: '25 Nguyễn Văn Cừ',
     wardCode: '00145',
@@ -217,6 +249,7 @@ export const DEMO_WAREHOUSES: DemoWarehouse[] = [
   },
   {
     code: 'DN-HC-01',
+    facilityCode: 'CN-DN',
     name: 'Kho Hải Châu 35m²',
     addressLine: '60 Nguyễn Văn Linh',
     wardCode: '20242',

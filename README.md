@@ -81,6 +81,27 @@ SEED_ADMIN_EMAIL=admin@example.com SEED_ADMIN_PASSWORD='<min 8 chars>' SEED_ADMI
   pnpm --filter @storage/api seed:admin
 ```
 
+#### Demo data (optional, destructive)
+
+`db:reset-demo` wipes business data (warehouses, bookings, contracts, payments, tickets…),
+applies migrations and seeds 3 facilities (cơ sở: `CN-HCM` Hồ Chí Minh, `CN-HN` Hà Nội, `CN-DN`
+Đà Nẵng) owning 12 demo warehouses, plus demo accounts. It also works on an empty database.
+
+```bash
+pnpm --filter @storage/api db:reset-demo --yes                      # local database only
+pnpm --filter @storage/api db:reset-demo --yes --allow-remote=<db>  # remote: needs DEMO_PASSWORD
+```
+
+| Account | Role | Scope |
+|---|---|---|
+| `admin@demo.vn` | ADMIN | all |
+| `ops@demo.vn` | OPERATIONS_MANAGER | all |
+| `manager@demo.vn` | FACILITY_MANAGER | Cơ sở Hồ Chí Minh (9 warehouses) |
+| `staff@demo.vn` | FACILITY_STAFF | Cơ sở Hồ Chí Minh (9 warehouses) |
+| `customer@demo.vn` | CUSTOMER | – |
+
+The password is `Demo1234!` on a local database; remote targets must set `DEMO_PASSWORD`.
+
 ### 2b. Mobile: dev client (bắt buộc từ khi có bản đồ)
 
 `apps/mobile` có native module (MapLibre) nên **không chạy trên Expo Go**. Lần đầu trên mỗi máy:

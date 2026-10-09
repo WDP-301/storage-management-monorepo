@@ -19,7 +19,12 @@ const buildAssignment = (overrides: Partial<UserRoleAssignment> = {}): UserRoleA
 const buildFacility = (id: string): Facility => ({ id }) as Facility;
 
 describe('FacilitiesService', () => {
-  let facilityRepo: { find: jest.Mock; findOne: jest.Mock };
+  let facilityRepo: {
+    find: jest.Mock;
+    findOne: jest.Mock;
+    createQueryBuilder: jest.Mock;
+    manager: { query: jest.Mock };
+  };
   let roleAssignments: { find: jest.Mock };
   let service: FacilitiesService;
 
@@ -27,10 +32,41 @@ describe('FacilitiesService', () => {
     facilityRepo = {
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue(null),
+      createQueryBuilder: jest.fn(),
+      manager: { query: jest.fn().mockResolvedValue([]) },
     };
     roleAssignments = { find: jest.fn().mockResolvedValue([]) };
 
     service = new FacilitiesService(facilityRepo as never, roleAssignments as never);
+  });
+
+  describe('findForAdmin', () => {
+    it('adds the live warehouse count to each facility, zero when it has none', async () => {
+      const qb = {
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getManyAndCount: jest
+          .fn()
+          .mockResolvedValue([[buildFacility('facility-1'), buildFacility('facility-2')], 2]),
+      };
+      facilityRepo.createQueryBuilder.mockReturnValue(qb);
+      facilityRepo.manager.query.mockResolvedValue([{ facility_id: 'facility-1', count: '3' }]);
+
+      const { facilities, meta } = await service.findForAdmin({});
+
+      expect(facilities.map((f) => [f.id, f.warehouseCount])).toEqual([
+        ['facility-1', 3],
+        ['facility-2', 0],
+      ]);
+      expect(meta.total).toBe(2);
+      expect(facilityRepo.manager.query).toHaveBeenCalledWith(
+        expect.stringContaining('deleted_at IS NULL'),
+        [['facility-1', 'facility-2']],
+      );
+    });
   });
 
   describe('findAssigned', () => {

@@ -1,15 +1,15 @@
 import { AuditWithTimezone } from '@shared/models/audit.model';
 import { StorageUnitStatus } from '@storage/types';
-import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, Unique } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Facility } from './facility.entity';
 
 /**
- * The rentable part of a standalone warehouse. Each facility holds exactly one live unit
- * (`UQ_storage_units_one_per_facility`); the facility carries address and coordinates,
- * the unit carries size, price, deposit and the rental lifecycle status.
+ * A rentable warehouse belonging to a facility (branch). It carries its own name, address,
+ * coordinates, size, price, deposit and rental lifecycle status.
  */
 @Entity('storage_units')
-@Unique('UQ_units_facility_code', ['facilityId', 'code'])
+@Index('UQ_storage_units_code', ['code'], { unique: true, where: '"deleted_at" IS NULL' })
+@Index('IDX_storage_units_facility', ['facilityId'])
 export class StorageUnit extends AuditWithTimezone {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -17,9 +17,29 @@ export class StorageUnit extends AuditWithTimezone {
   @Column({ type: 'uuid', name: 'facility_id' })
   facilityId: string;
 
-  /** Mirrors the warehouse (facility) code. */
+  /** Globally unique among live warehouses. */
   @Column({ length: 50 })
   code: string;
+
+  @Column({ length: 150 })
+  name: string;
+
+  @Column({ length: 255, name: 'address_line' })
+  addressLine: string;
+
+  /** Ward code — FK → wards.code (VN post-2025 two-level model) */
+  @Column({ type: 'varchar', length: 20, nullable: true, name: 'ward_code' })
+  wardCode?: string | null;
+
+  /** Province code — FK → provinces.code */
+  @Column({ type: 'varchar', length: 20, nullable: true, name: 'province_code' })
+  provinceCode?: string | null;
+
+  @Column({ type: 'decimal', precision: 9, scale: 6 })
+  latitude: number;
+
+  @Column({ type: 'decimal', precision: 9, scale: 6 })
+  longitude: number;
 
   @Column({ type: 'decimal', precision: 14, scale: 2, name: 'monthly_price' })
   monthlyPrice: number;

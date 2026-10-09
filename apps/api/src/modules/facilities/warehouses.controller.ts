@@ -58,9 +58,15 @@ export class WarehousesController {
   @Get('mine')
   @UseGuards(SessionGuard, RolesGuard)
   @Roles(UserRole.FACILITY_MANAGER, UserRole.FACILITY_STAFF)
-  @ApiOperation({ summary: 'Warehouses the caller manages or staffs' })
-  listMine(@CurrentUser() user: AuthUser) {
-    return this.queries.listAssigned(user.id);
+  @ApiOperation({
+    summary:
+      'Warehouses of the facilities the caller manages or staffs; optional facilityId narrows',
+  })
+  listMine(
+    @CurrentUser() user: AuthUser,
+    @Query('facilityId', new ParseUUIDPipe({ optional: true })) facilityId?: string,
+  ) {
+    return this.queries.listAssigned(user.id, facilityId);
   }
 
   @Get(':id')
@@ -83,7 +89,10 @@ export class WarehousesController {
   @UseGuards(SessionGuard, RolesGuard)
   @Roles(...BACK_OFFICE)
   @ApiOperation({ summary: '[Admin] Update a warehouse' })
-  @ApiResponse({ status: 409, description: 'Code, size or status of an occupied warehouse' })
+  @ApiResponse({
+    status: 409,
+    description: 'Code, size, status or facility of an occupied warehouse, or move with open tours',
+  })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateWarehouseDto) {
     return this.commands.update(id, dto);
   }
@@ -104,7 +113,7 @@ export class WarehousesController {
   @UseGuards(SessionGuard, RolesGuard)
   @Roles(...BACK_OFFICE)
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: '[Admin] Soft-delete a warehouse' })
+  @ApiOperation({ summary: '[Admin] Soft-delete a warehouse (the facility is kept)' })
   @ApiResponse({ status: 409, description: 'Occupied or open tour appointments remain' })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.commands.softDelete(id);

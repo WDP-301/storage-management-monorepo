@@ -7,6 +7,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FacilitiesController } from './facilities.controller';
 import { FacilitiesService } from './facilities.service';
+import { FacilityCommandService } from './facility-command.service';
 import { WarehouseCommandService } from './warehouse-command.service';
 import { WarehouseQueryService } from './warehouse-query.service';
 import { WarehousesController } from './warehouses.controller';
@@ -18,7 +19,12 @@ import { WarehousesController } from './warehouses.controller';
     SettingsModule,
   ],
   controllers: [FacilitiesController, WarehousesController],
-  providers: [FacilitiesService, WarehouseQueryService, WarehouseCommandService],
+  providers: [
+    FacilitiesService,
+    FacilityCommandService,
+    WarehouseQueryService,
+    WarehouseCommandService,
+  ],
   exports: [FacilitiesService, WarehouseQueryService],
 })
 export class FacilitiesModule {}

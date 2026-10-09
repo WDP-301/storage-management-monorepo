@@ -5,6 +5,8 @@ import type { ContractKind, ContractStatus } from '@storage/types';
 export interface CustomerContractUnit {
   id: string;
   code: string;
+  name: string;
+  address_line: string;
   area_m2: number;
   width_m: number;
   length_m: number;
@@ -15,8 +17,8 @@ export interface CustomerContractUnit {
 
 export interface CustomerContractFacility {
   id: string;
+  code: string;
   name: string;
-  address_line: string;
 }
 
 export interface CustomerInspectionSummary {
@@ -87,6 +89,8 @@ export function toCustomerContractRecord(
       ? {
           id: unit.id,
           code: unit.code,
+          name: unit.name,
+          address_line: unit.addressLine,
           area_m2: Number(unit.areaM2),
           width_m: Number(unit.widthM),
           length_m: Number(unit.lengthM),
@@ -98,8 +102,8 @@ export function toCustomerContractRecord(
     facility: unit?.facility
       ? {
           id: unit.facility.id,
+          code: unit.facility.code,
           name: unit.facility.name,
-          address_line: unit.facility.addressLine,
         }
       : null,
     handover: inspections.handover ? toCustomerInspectionSummary(inspections.handover) : null,

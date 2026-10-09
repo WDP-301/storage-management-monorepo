@@ -46,7 +46,6 @@ const buildAppointment = (overrides: Partial<TourAppointment> = {}): TourAppoint
       id: 'facility-1',
       code: 'F01',
       name: 'Kho Thủ Đức',
-      addressLine: '123 Song Hành',
     } as Facility,
     customer: null,
     storageUnit: null,
@@ -145,6 +144,29 @@ describe('TourAppointmentsService', () => {
         where: { id: 'facility-closed', status: FacilityStatus.ACTIVE },
         lock: { mode: 'pessimistic_read' },
       });
+      expect(appointmentsRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('locks the requested warehouse of the facility, rejecting one that is gone', async () => {
+      facilitiesRepo.findOne.mockResolvedValue({ id: 'facility-1' } as Facility);
+      storageUnitsRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.createContactRequest({
+          facilityId: 'facility-1',
+          storageUnitId: 'unit-gone',
+          fullName: 'Khách',
+          phone: '0987654321',
+          email: 'khach@example.com',
+          preferredDate: '2026-12-01',
+        } as never),
+      ).rejects.toMatchObject({ status: 404 });
+      expect(storageUnitsRepo.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'unit-gone', facilityId: 'facility-1' }),
+          lock: { mode: 'pessimistic_read' },
+        }),
+      );
       expect(appointmentsRepo.save).not.toHaveBeenCalled();
     });
 

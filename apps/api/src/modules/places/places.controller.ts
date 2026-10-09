@@ -26,7 +26,7 @@ export class PlacesController {
   @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
   @ApiOperation({
     summary: '[Admin] Resolve an autocomplete place_id to address + coordinates',
-    description: 'Used by the facility form to fill latitude/longitude from a Goong suggestion.',
+    description: 'Used by the warehouse form to fill latitude/longitude from a Goong suggestion.',
   })
   detail(@Query() query: PlaceDetailQueryDto) {
     return this.placesService.resolvePlace(query.place_id);

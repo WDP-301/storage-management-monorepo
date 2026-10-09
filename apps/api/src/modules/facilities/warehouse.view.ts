@@ -2,13 +2,12 @@ import type { StorageUnit } from '@entities/storage-unit.entity';
 import type { StorageUnitStatus } from '@storage/types';
 
 /**
- * A standalone warehouse as clients see it: the facility (identity, address, coordinates)
- * and its single unit (size, price, deposit, status) flattened into one record.
- * `id` is the facility id; `unitId` is what bookings reference.
+ * A warehouse as clients see it: the storage unit with its owning facility (branch) summary.
+ * `id` is the storage unit id — what bookings, change requests and tours reference.
  */
 export interface WarehouseView {
   id: string;
-  unitId: string;
+  facility: { id: string; code: string; name: string };
   code: string;
   name: string;
   addressLine: string;
@@ -39,15 +38,15 @@ const toNumberOrNull = (value: unknown): number | null =>
 export function toWarehouseView(unit: StorageUnit, effectiveDepositMonths: number): WarehouseView {
   const { facility } = unit;
   return {
-    id: facility.id,
-    unitId: unit.id,
-    code: facility.code,
-    name: facility.name,
-    addressLine: facility.addressLine,
-    wardCode: facility.wardCode ?? null,
-    provinceCode: facility.provinceCode ?? null,
-    latitude: Number(facility.latitude),
-    longitude: Number(facility.longitude),
+    id: unit.id,
+    facility: { id: facility.id, code: facility.code, name: facility.name },
+    code: unit.code,
+    name: unit.name,
+    addressLine: unit.addressLine,
+    wardCode: unit.wardCode ?? null,
+    provinceCode: unit.provinceCode ?? null,
+    latitude: Number(unit.latitude),
+    longitude: Number(unit.longitude),
     widthM: Number(unit.widthM),
     lengthM: Number(unit.lengthM),
     heightM: toNumberOrNull(unit.heightM),
@@ -58,7 +57,7 @@ export function toWarehouseView(unit: StorageUnit, effectiveDepositMonths: numbe
     effectiveDepositMonths,
     status: unit.status,
     notes: unit.notes ?? null,
-    createdAt: facility.createdAt,
-    updatedAt: unit.updatedAt > facility.updatedAt ? unit.updatedAt : facility.updatedAt,
+    createdAt: unit.createdAt,
+    updatedAt: unit.updatedAt,
   };
 }

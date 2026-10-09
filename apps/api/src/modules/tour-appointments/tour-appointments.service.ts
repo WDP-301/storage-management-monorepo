@@ -10,7 +10,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
 import { FacilityStatus, TourAppointmentStatus, UserRole, UserStatus } from '@storage/types';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import type { AssignTourAppointmentDto } from './dto/assign-tour-appointment.dto';
 import type { CancelTourAppointmentDto } from './dto/cancel-tour-appointment.dto';
 import type { CompleteTourAppointmentDto } from './dto/complete-tour-appointment.dto';
@@ -52,7 +52,6 @@ export function toTourAppointmentRecord(apt: TourAppointment): TourAppointmentRe
           id: apt.facility.id,
           code: apt.facility.code,
           name: apt.facility.name,
-          addressLine: apt.facility.addressLine ?? null,
         }
       : null,
     customer: apt.customer
@@ -67,6 +66,8 @@ export function toTourAppointmentRecord(apt: TourAppointment): TourAppointmentRe
       ? {
           id: apt.storageUnit.id,
           code: apt.storageUnit.code,
+          name: apt.storageUnit.name,
+          addressLine: apt.storageUnit.addressLine,
         }
       : null,
     assignee: apt.assignee
@@ -100,8 +101,7 @@ export class TourAppointmentsService {
     customerId?: string | null,
   ): Promise<TourAppointmentResponse> {
     const saved = await this.appointments.manager.transaction(async (manager) => {
-      // FOR SHARE on an open facility: closed sites take no new tours, and a concurrent
-      // facility delete waits until this appointment is visible to its open-tour check.
+      // FOR SHARE on an open facility: closed sites take no new tours.
       const facility = await manager.findOne(Facility, {
         where: { id: dto.facilityId, status: FacilityStatus.ACTIVE },
         lock: { mode: 'pessimistic_read' },
@@ -112,7 +112,9 @@ export class TourAppointmentsService {
 
       if (dto.storageUnitId) {
         const unit = await manager.findOne(StorageUnit, {
-          where: { id: dto.storageUnitId, facilityId: dto.facilityId },
+          where: { id: dto.storageUnitId, facilityId: dto.facilityId, deletedAt: IsNull() },
+          // Serializes against a warehouse delete or move, which count open tours under the write lock.
+          lock: { mode: 'pessimistic_read' },
         });
         if (!unit) {
           throw new DomainException(

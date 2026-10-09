@@ -17,7 +17,7 @@ import type {
 import { toWarehouseView, type WarehouseView } from './warehouse.view';
 
 const SORT_COLUMNS: Record<WarehouseSort, [string, 'ASC' | 'DESC']> = {
-  newest: ['facility.createdAt', 'DESC'],
+  newest: ['unit.createdAt', 'DESC'],
   price_asc: ['unit.monthlyPrice', 'ASC'],
   price_desc: ['unit.monthlyPrice', 'DESC'],
   area_asc: ['unit.areaM2', 'ASC'],
@@ -48,16 +48,19 @@ export class WarehouseQueryService {
   }
 
   /** Warehouses the user staffs or manages through an active facility-scoped assignment. */
-  async listAssigned(userId: string): Promise<WarehouseView[]> {
+  async listAssigned(userId: string, facilityId?: string): Promise<WarehouseView[]> {
     const facilityIds = activeFacilityIds(
       await this.roleAssignments.find({
         where: { userId, role: In([UserRole.FACILITY_MANAGER, UserRole.FACILITY_STAFF]) },
       }),
     );
-    if (facilityIds.length === 0) return [];
+    // facilityId narrows within the caller's assignments, never beyond them.
+    const scope = facilityId ? facilityIds.filter((id) => id === facilityId) : facilityIds;
+    if (scope.length === 0) return [];
     const units = await this.baseQuery()
-      .andWhere('facility.id IN (:...facilityIds)', { facilityIds })
+      .andWhere('unit.facilityId IN (:...scope)', { scope })
       .orderBy('facility.code', 'ASC')
+      .addOrderBy('unit.code', 'ASC')
       .getMany();
     return this.toViews(units);
   }
@@ -68,13 +71,13 @@ export class WarehouseQueryService {
   }
 
   async findOne(id: string): Promise<WarehouseView> {
-    const unit = await this.baseQuery().andWhere('facility.id = :id', { id }).getOne();
+    const unit = await this.baseQuery().andWhere('unit.id = :id', { id }).getOne();
     if (!unit) notFound('Warehouse', id);
     return (await this.toViews([unit]))[0];
   }
 
   private baseQuery(): SelectQueryBuilder<StorageUnit> {
-    // Inner join: a soft-deleted facility hides its unit too.
+    // Inner join: a soft-deleted facility hides its warehouses too.
     return this.units.createQueryBuilder('unit').innerJoinAndSelect('unit.facility', 'facility');
   }
 
@@ -93,7 +96,7 @@ export class WarehouseQueryService {
     const [column, direction] = SORT_COLUMNS[sort];
     const [units, total] = await qb
       .orderBy(column, direction)
-      .addOrderBy('facility.id', 'ASC')
+      .addOrderBy('unit.id', 'ASC')
       .skip((page - 1) * limit)
       .take(limit)
       .getManyAndCount();
@@ -116,14 +119,16 @@ function applyFilters(
   const term = query.search?.trim();
   if (term) {
     qb.andWhere(
-      '(facility.code ILIKE :search OR facility.name ILIKE :search OR facility.addressLine ILIKE :search)',
+      '(unit.code ILIKE :search OR unit.name ILIKE :search OR unit.addressLine ILIKE :search)',
       { search: `%${escapeLikePattern(term)}%` },
     );
   }
+  if (query.facilityId)
+    qb.andWhere('unit.facilityId = :facilityId', { facilityId: query.facilityId });
   if (query.provinceCode) {
-    qb.andWhere('facility.provinceCode = :provinceCode', { provinceCode: query.provinceCode });
+    qb.andWhere('unit.provinceCode = :provinceCode', { provinceCode: query.provinceCode });
   }
-  if (query.wardCode) qb.andWhere('facility.wardCode = :wardCode', { wardCode: query.wardCode });
+  if (query.wardCode) qb.andWhere('unit.wardCode = :wardCode', { wardCode: query.wardCode });
 
   const ranges: [keyof WarehouseListQueryDto, string, '>=' | '<='][] = [
     ['minArea', 'unit.areaM2', '>='],

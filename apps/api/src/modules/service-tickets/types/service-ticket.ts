@@ -16,6 +16,7 @@ export interface TicketFacilityInfo {
 export interface TicketStorageUnitInfo {
   id: string;
   code: string;
+  name: string;
 }
 
 export interface TicketUserInfo {
@@ -85,7 +86,7 @@ export function toServiceTicketRecord(ticket: ServiceTicket): ServiceTicketRecor
       ? { id: ticket.facility.id, code: ticket.facility.code, name: ticket.facility.name }
       : null,
     storage_unit: ticket.storageUnit
-      ? { id: ticket.storageUnit.id, code: ticket.storageUnit.code }
+      ? { id: ticket.storageUnit.id, code: ticket.storageUnit.code, name: ticket.storageUnit.name }
       : null,
     customer: ticket.customer
       ? {

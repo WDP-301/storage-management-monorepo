@@ -11,6 +11,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -23,6 +24,10 @@ const MAX_SIDE_M = 1000;
 const MAX_MONTHLY_PRICE = 100_000_000_000;
 
 export class CreateWarehouseDto {
+  @ApiProperty({ description: 'Owning facility (branch)' })
+  @IsUUID()
+  facilityId: string;
+
   @ApiProperty({ example: 'HCM-Q7-01', description: 'Unique warehouse code' })
   @IsString()
   @IsNotEmpty()
@@ -131,6 +136,11 @@ export const WAREHOUSE_SORTS = [
 export type WarehouseSort = (typeof WAREHOUSE_SORTS)[number];
 
 export class WarehouseListQueryDto {
+  @ApiPropertyOptional({ description: 'Only warehouses of this facility' })
+  @IsUUID()
+  @IsOptional()
+  facilityId?: string;
+
   @ApiPropertyOptional({ description: 'Code, name or address contains (case-insensitive)' })
   @IsString()
   @IsOptional()

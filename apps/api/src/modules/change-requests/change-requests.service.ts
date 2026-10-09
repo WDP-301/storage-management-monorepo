@@ -14,6 +14,7 @@ import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
 import {
   ChangeRequestStatus,
   ContractStatus,
+  FacilityStatus,
   InspectionType,
   StorageUnitStatus,
   UserRole,
@@ -136,6 +137,7 @@ export class ChangeRequestsService {
     const oldUnit = contract.bookingItem.storageUnit;
     const newUnit = await this.storageUnits.findOne({
       where: { id: dto.newUnitId, deletedAt: IsNull() },
+      relations: { facility: true },
     });
     if (!newUnit) {
       throw this.fieldError('newUnitId', 'notFound', 'Storage unit does not exist');
@@ -144,6 +146,9 @@ export class ChangeRequestsService {
       throw this.fieldError('newUnitId', 'sameUnit', 'New unit must differ from the current one');
     }
     if (newUnit.status !== StorageUnitStatus.AVAILABLE) {
+      throw this.fieldError('newUnitId', 'notAvailable', 'New unit is not available');
+    }
+    if (newUnit.facility?.status !== FacilityStatus.ACTIVE) {
       throw this.fieldError('newUnitId', 'notAvailable', 'New unit is not available');
     }
 
@@ -246,16 +251,13 @@ export class ChangeRequestsService {
       );
     }
 
-    const newUnit = request.newUnit;
-    if (!newUnit) {
+    if (!request.newUnit) {
       throw new DomainException(
         ErrorCode.CONFLICT,
         'Target unit no longer exists',
         HttpStatus.CONFLICT,
       );
     }
-    const newPrice = Number(newUnit.monthlyPrice);
-    const newDeposit = newPrice * (await this.settings.getDepositMonthsFor(newUnit));
 
     await this.dataSource.transaction(async (manager) => {
       await this.lockUndecidedRequest(manager, request.id);
@@ -278,6 +280,11 @@ export class ChangeRequestsService {
           HttpStatus.CONFLICT,
         );
       }
+
+      // Read after the claim: the claim row-locks the unit, so the price cannot change underneath.
+      const target = await manager.findOneByOrFail(StorageUnit, { id: request.newUnitId });
+      const newPrice = Number(target.monthlyPrice);
+      const newDeposit = newPrice * (await this.settings.getDepositMonthsFor(target));
 
       // The customer's goods may still be in the old warehouse; it stays out of the
       // catalogue until staff confirm it is empty and put it back in service.

@@ -4,12 +4,13 @@ export interface TourAppointmentFacilityInfo {
   id: string;
   code: string;
   name: string;
-  addressLine?: string | null;
 }
 
 export interface TourAppointmentStorageUnitInfo {
   id: string;
   code: string;
+  name: string;
+  addressLine: string;
 }
 
 export interface TourAppointmentUserInfo {

@@ -3,8 +3,8 @@ import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { DamageSeverity, InspectionType, UserRole } from '@storage/types';
-import { In, IsNull } from 'typeorm';
+import { ContractStatus, DamageSeverity, InspectionType, UserRole } from '@storage/types';
+import { In, IsNull, Not } from 'typeorm';
 import { InspectionService } from './inspection.service';
 import { INSPECTION_RELATIONS } from './inspection-access.util';
 
@@ -74,7 +74,10 @@ describe('InspectionService', () => {
         where: {
           type: InspectionType.RETURN,
           finalizedAt: IsNull(),
-          contract: { bookingItem: { storageUnit: { facilityId: In(['facility-1']) } } },
+          contract: {
+            bookingItem: { storageUnit: { facilityId: In(['facility-1']) } },
+            status: Not(ContractStatus.CANCELLED),
+          },
         },
         relations: INSPECTION_RELATIONS,
         order: { scheduledAt: { direction: 'ASC', nulls: 'LAST' }, createdAt: 'DESC' },
@@ -89,7 +92,10 @@ describe('InspectionService', () => {
     it('lets operations see every facility', async () => {
       await service.findAll(OPS);
 
-      expect(em.find).toHaveBeenCalledWith(Inspection, expect.objectContaining({ where: {} }));
+      expect(em.find).toHaveBeenCalledWith(
+        Inspection,
+        expect.objectContaining({ where: { contract: { status: Not(ContractStatus.CANCELLED) } } }),
+      );
     });
 
     it('lists the staff member’s own inspections', async () => {

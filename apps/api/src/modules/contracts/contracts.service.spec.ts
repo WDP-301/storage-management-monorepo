@@ -17,7 +17,13 @@ describe('ContractsService', () => {
   };
   let booking: { id: string; customerId: string; status: BookingStatus; subtotal: string };
   let service: ContractsService;
-  let manager: { findOne: jest.Mock; create: jest.Mock; save: jest.Mock };
+  let manager: {
+    findOne: jest.Mock;
+    findOneOrFail: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    update: jest.Mock;
+  };
   let repo: { find: jest.Mock; findOne: jest.Mock; update: jest.Mock; softDelete: jest.Mock };
 
   beforeEach(() => {
@@ -39,6 +45,8 @@ describe('ContractsService', () => {
       }),
       create: jest.fn((_entity, data) => data),
       save: jest.fn(async (_entity, data) => ({ id: 'contract-1', ...data })),
+      findOneOrFail: jest.fn(async (entity) => (entity === Contract ? { id: 'contract-1' } : null)),
+      update: jest.fn(async () => ({ affected: 1 })),
     };
     repo = { find: jest.fn(), findOne: jest.fn(), update: jest.fn(), softDelete: jest.fn() };
     service = new ContractsService(
@@ -186,21 +194,56 @@ describe('ContractsService', () => {
   });
 
   it('updates normal contract fields without changing booking/customer links', async () => {
-    repo.findOne.mockResolvedValue({ id: 'contract-1', effectiveAt: item.requestedStartAt });
-    repo.update.mockResolvedValue({ affected: 1 });
+    const contract = { id: 'contract-1', effectiveAt: item.requestedStartAt };
+    manager.findOne.mockResolvedValue(contract);
     await service.update('contract-1', { months: 12 });
-    expect(repo.update).toHaveBeenCalledWith(
+    expect(manager.findOne).toHaveBeenCalledWith(
+      Contract,
+      expect.objectContaining({ lock: { mode: 'pessimistic_write' } }),
+    );
+    expect(manager.update).toHaveBeenCalledWith(
+      Contract,
       { id: 'contract-1', deletedAt: IsNull() },
       { months: 12 },
     );
   });
 
-  it('soft-deletes only live records and returns 404 when already deleted', async () => {
+  it('rejects sealed fields once the contract is signed', async () => {
+    manager.findOne.mockResolvedValue({
+      id: 'contract-1',
+      signedAt: new Date(),
+      effectiveAt: item.requestedStartAt,
+    });
+    await expect(service.update('contract-1', { months: 12 })).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'CONFLICT', details: { sealedFields: ['months'] } },
+    });
+    expect(manager.update).not.toHaveBeenCalled();
+  });
+
+  it('soft-deletes only finished contracts and returns 404 when already deleted', async () => {
     repo.softDelete.mockResolvedValueOnce({ affected: 1 }).mockResolvedValueOnce({ affected: 0 });
     await service.softDelete('contract-1');
-    expect(repo.softDelete).toHaveBeenCalledWith({ id: 'contract-1', deletedAt: IsNull() });
+    expect(repo.softDelete).toHaveBeenCalledWith({
+      id: 'contract-1',
+      status: In([ContractStatus.ENDED, ContractStatus.CANCELLED]),
+      deletedAt: IsNull(),
+    });
+    repo.findOne.mockResolvedValue(null);
     await expect(service.softDelete('contract-1')).rejects.toMatchObject({ status: 404 });
   });
+
+  it.each([ContractStatus.DRAFT, ContractStatus.ACTIVE])(
+    'refuses to soft-delete a %s contract — its unit would stay booked',
+    async (status) => {
+      repo.softDelete.mockResolvedValue({ affected: 0 });
+      repo.findOne.mockResolvedValue({ id: 'contract-1', status });
+      await expect(service.softDelete('contract-1')).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'CONFLICT', details: { status } },
+      });
+    },
+  );
 
   it('sets the contract evidence URL', async () => {
     repo.findOne.mockResolvedValue({ id: 'contract-1' });

@@ -1,4 +1,5 @@
 import { AppUser } from '@entities/app-user.entity';
+import type { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { activeFacilityIds } from '@modules/auth/role-assignment.util';
@@ -10,7 +11,7 @@ import {
   notFound,
 } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { UserRole, UserStatus } from '@storage/types';
+import { ContractStatus, UserRole, UserStatus } from '@storage/types';
 import { DataSource, type FindOptionsWhere, In, IsNull, Not } from 'typeorm';
 import { AssignInspectionDto } from './dto/assign-inspection.dto';
 import { ListInspectionsQueryDto } from './dto/list-inspections-query.dto';
@@ -140,11 +141,17 @@ export class InspectionService {
       assertNotFinalized(inspection);
 
       if (dto.conditionNotes !== undefined) {
-        inspection.conditionNotes = dto.conditionNotes ?? undefined;
+        inspection.conditionNotes = dto.conditionNotes;
       }
       if (dto.evidence !== undefined) inspection.evidence = dto.evidence;
       if (dto.damages !== undefined) inspection.damages = dto.damages;
-      return em.save(Inspection, inspection);
+      await em.save(Inspection, inspection);
+      // Clients re-render from this response, so it carries the same relations as a read.
+      const reloaded = await em.findOne(Inspection, {
+        where: { id },
+        relations: INSPECTION_RELATIONS,
+      });
+      return withPublicInspector(reloaded ?? inspection);
     });
   }
 
@@ -157,8 +164,13 @@ export class InspectionService {
   }
 
   private async list(where: FindOptionsWhere<Inspection>): Promise<Inspection[]> {
+    // A cancelled contract never reaches handover, so its inspection is not work to do.
+    const contract = {
+      ...(where.contract as FindOptionsWhere<Contract> | undefined),
+      status: Not(ContractStatus.CANCELLED),
+    };
     const rows = await this.em.find(Inspection, {
-      where,
+      where: { ...where, contract },
       relations: INSPECTION_RELATIONS,
       order: { scheduledAt: { direction: 'ASC', nulls: 'LAST' }, createdAt: 'DESC' },
     });

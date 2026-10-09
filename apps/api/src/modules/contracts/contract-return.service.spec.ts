@@ -30,7 +30,7 @@ describe('ContractReturnService.requestReturn', () => {
       contractId: 'contract-1',
       type: InspectionType.RETURN,
       scheduledAt: new Date('2027-04-12T00:00:00.000Z'),
-      conditionNotes: 'Trả buổi sáng',
+      requestNote: 'Trả buổi sáng',
     });
     expect(em.findOne).toHaveBeenCalledWith(Inspection, {
       where: { contractId: 'contract-1', type: InspectionType.RETURN, finalizedAt: IsNull() },

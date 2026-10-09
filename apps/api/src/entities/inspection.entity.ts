@@ -25,7 +25,11 @@ export class Inspection {
   inspectedBy?: string;
 
   @Column({ type: 'text', nullable: true, name: 'condition_notes' })
-  conditionNotes?: string;
+  conditionNotes?: string | null;
+
+  /** What the customer asked for when requesting a return; the inspector never edits it. */
+  @Column({ type: 'text', nullable: true, name: 'request_note' })
+  requestNote?: string | null;
 
   @Column({ type: 'jsonb', default: () => "'[]'" })
   evidence: any[];

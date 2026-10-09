@@ -15,6 +15,8 @@ import { UnitHold } from '@entities/unit-hold.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import type { PaymentReceivedEvent } from '@modules/payments/types/payment';
 import { HttpStatus, Logger } from '@nestjs/common';
+import { DomainException } from '@shared/exceptions/domain.exception';
+import { ErrorCode } from '@shared/models/api-response';
 import {
   BookingStatus,
   ContractKind,
@@ -152,7 +154,7 @@ describe('BookingsService.handlePaymentReceived', () => {
 
   it('creates a DRAFT contract + handover inspection per item and books the units', async () => {
     bookingRepo.find.mockResolvedValue([buildBooking()]);
-    em.update.mockResolvedValue({ affected: 1 });
+    em.update.mockResolvedValue({ affected: 2 });
     em.count.mockResolvedValue(0);
     em.find.mockResolvedValue([buildItem('item-1', 'unit-1'), buildItem('item-2', 'unit-2')]);
     em.save.mockImplementation(async (entity, data) =>
@@ -209,6 +211,44 @@ describe('BookingsService.handlePaymentReceived', () => {
     await expect(service.handlePaymentReceived(buildEvent())).rejects.toThrow('db down');
     expect(em.update).not.toHaveBeenCalledWith(StorageUnit, expect.anything(), expect.anything());
     expect(paymentRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('rolls back when not every unit moved to BOOKED — receipt kept for review', async () => {
+    bookingRepo.find.mockResolvedValue([buildBooking()]);
+    em.update
+      .mockResolvedValueOnce({ affected: 1 }) // booking → CONFIRMED
+      .mockResolvedValueOnce({ affected: 1 }) // holds → CONVERTED
+      .mockResolvedValueOnce({ affected: 0 }); // units HELD → BOOKED: nothing moved
+    em.count.mockResolvedValue(0);
+    em.find.mockResolvedValue([buildItem('item-1', 'unit-1')]);
+    em.save.mockImplementation(async (_entity, data) => ({ id: 'c-1', ...data }));
+
+    await service.handlePaymentReceived(buildEvent());
+    expect(paymentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ providerRef: '42' }));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('manual reconciliation needed'));
+    expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('confirmed'));
+  });
+
+  it('keeps the receipt instead of 500ing when the contract insert is refused', async () => {
+    bookingRepo.find.mockResolvedValue([buildBooking()]);
+    em.update.mockResolvedValue({ affected: 1 });
+    em.count.mockResolvedValue(0);
+    em.find.mockResolvedValue([buildItem('item-1', 'unit-1')]);
+    em.save.mockImplementation(async (entity, data) => {
+      if (entity === Contract) {
+        throw new DomainException(
+          ErrorCode.CONFLICT,
+          'An initial contract already exists for this booking item',
+          HttpStatus.CONFLICT,
+        );
+      }
+      return data;
+    });
+
+    await service.handlePaymentReceived(buildEvent());
+
+    expect(paymentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ providerRef: '42' }));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('manual reconciliation needed'));
   });
 
   it('rolls back when a hold already expired — late payment goes to manual reconciliation', async () => {

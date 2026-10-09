@@ -7,7 +7,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { BookingStatus, InspectionType } from '@storage/types';
+import { BookingStatus, ContractStatus, InspectionType } from '@storage/types';
 import { DataSource, In, IsNull, Repository } from 'typeorm';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
 import { UploadContractEvidenceDto } from './dto/upload-contract-evidence.dto';
@@ -122,52 +122,76 @@ export class ContractsService {
   }
 
   async update(id: string, dto: UpdateContractDto): Promise<Contract> {
-    const contract = await this.findById(id);
+    // Row lock: a handover finalize stamping signedAt must commit before this read,
+    // or the sealed-field check would pass against a stale unsigned copy.
+    return this.dataSource.transaction(async (em) => {
+      const contract = await em.findOne(Contract, {
+        where: { id, deletedAt: IsNull() },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!contract) notFound('Contract', id);
 
-    // signedAt seals the commercial terms — only lifecycle fields (status, endedAt)
-    // may change afterwards. There is no SIGNED status; the timestamp is the marker.
-    if (contract.signedAt) {
-      const sealed = (
-        [
-          'kind',
-          'signedAt',
-          'effectiveAt',
-          'termsSnapshot',
-          'months',
-          'monthlyPriceSnapshot',
-        ] as const
-      ).filter((field) => dto[field] !== undefined);
-      if (sealed.length > 0) {
-        throw new DomainException(
-          ErrorCode.CONFLICT,
-          `Contract is signed — these fields can no longer change: ${sealed.join(', ')}`,
-          HttpStatus.CONFLICT,
-          { contractId: id, sealedFields: sealed },
-        );
+      // signedAt seals the commercial terms — only lifecycle fields (status, endedAt)
+      // may change afterwards. There is no SIGNED status; the timestamp is the marker.
+      if (contract.signedAt) {
+        const sealed = (
+          [
+            'kind',
+            'signedAt',
+            'effectiveAt',
+            'termsSnapshot',
+            'months',
+            'monthlyPriceSnapshot',
+          ] as const
+        ).filter((field) => dto[field] !== undefined);
+        if (sealed.length > 0) {
+          throw new DomainException(
+            ErrorCode.CONFLICT,
+            `Contract is signed — these fields can no longer change: ${sealed.join(', ')}`,
+            HttpStatus.CONFLICT,
+            { contractId: id, sealedFields: sealed },
+          );
+        }
       }
-    }
 
-    const { effectiveAt, signedAt, endedAt, ...fields } = dto;
-    const dates = {
-      ...(effectiveAt !== undefined ? { effectiveAt: new Date(effectiveAt) } : {}),
-      ...(signedAt !== undefined ? { signedAt: new Date(signedAt) } : {}),
-      ...(endedAt !== undefined ? { endedAt: new Date(endedAt) } : {}),
-    };
-    this.validateDates(
-      dates.effectiveAt ?? contract.effectiveAt,
-      dates.endedAt ?? contract.endedAt,
-    );
-    const changes = { ...fields, ...dates };
-    if (Object.keys(changes).length > 0) {
-      const result = await this.contracts.update({ id, deletedAt: IsNull() }, changes);
-      if (!result.affected) notFound('Contract', id);
-    }
-    return this.findById(id);
+      const { effectiveAt, signedAt, endedAt, ...fields } = dto;
+      const dates = {
+        ...(effectiveAt !== undefined ? { effectiveAt: new Date(effectiveAt) } : {}),
+        ...(signedAt !== undefined ? { signedAt: new Date(signedAt) } : {}),
+        ...(endedAt !== undefined ? { endedAt: new Date(endedAt) } : {}),
+      };
+      this.validateDates(
+        dates.effectiveAt ?? contract.effectiveAt,
+        dates.endedAt ?? contract.endedAt,
+      );
+      const changes = { ...fields, ...dates };
+      if (Object.keys(changes).length > 0) {
+        await em.update(Contract, { id, deletedAt: IsNull() }, changes);
+      }
+      return em.findOneOrFail(Contract, { where: { id } });
+    });
   }
 
+  /**
+   * Only contracts that no longer hold a unit may go: deleting a DRAFT/ACTIVE one
+   * strands the unit (BOOKED/RENTED) and its open inspections can never finalize —
+   * TypeORM excludes soft-deleted rows, so finalize would 404 on the contract.
+   */
   async softDelete(id: string): Promise<void> {
-    const result = await this.contracts.softDelete({ id, deletedAt: IsNull() });
-    if (!result.affected) notFound('Contract', id);
+    const result = await this.contracts.softDelete({
+      id,
+      status: In([ContractStatus.ENDED, ContractStatus.CANCELLED]),
+      deletedAt: IsNull(),
+    });
+    if (result.affected) return;
+    const contract = await this.contracts.findOne({ where: { id, deletedAt: IsNull() } });
+    if (!contract) notFound('Contract', id);
+    throw new DomainException(
+      ErrorCode.CONFLICT,
+      `Cannot delete a ${contract.status} contract — finalize its inspections first`,
+      HttpStatus.CONFLICT,
+      { contractId: id, status: contract.status },
+    );
   }
 
   /**

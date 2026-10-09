@@ -756,7 +756,14 @@ export class BookingsService implements OnApplicationBootstrap {
     };
 
     const now = new Date();
-    let outcome: 'confirmed' | 'partial' | 'late' | 'status-changed' | 'already-recorded';
+    let outcome:
+      | 'confirmed'
+      | 'partial'
+      | 'late'
+      | 'status-changed'
+      | 'already-recorded'
+      | 'needs-review';
+    let reviewReason = '';
     const contractNos: string[] = [];
     try {
       outcome = await this.dataSource.transaction(async (em) => {
@@ -825,11 +832,21 @@ export class BookingsService implements OnApplicationBootstrap {
             });
             contractNos.push(contract.contractNo);
           }
-          await em.update(
+          // Every item's unit must still be HELD — if one drifted (manual fix, stale
+          // data), a contract pointing at an unbooked unit can never finalize.
+          const booked = await em.update(
             StorageUnit,
             { id: In(items.map((i) => i.storageUnitId)), status: StorageUnitStatus.HELD },
             { status: StorageUnitStatus.BOOKED },
           );
+          if (booked.affected !== items.length) {
+            throw new DomainException(
+              ErrorCode.CONFLICT,
+              'Not all units were HELD for this booking — confirmation rolled back',
+              HttpStatus.CONFLICT,
+              { bookingId: booking.id, expected: items.length, moved: booked.affected },
+            );
+          }
         }
 
         return 'confirmed' as const;
@@ -839,6 +856,12 @@ export class BookingsService implements OnApplicationBootstrap {
         outcome = 'late';
       } else if (isUniqueViolation(err)) {
         outcome = 'already-recorded';
+      } else if (err instanceof DomainException) {
+        // A deliberate refusal inside the transaction (duplicate contract, unit not
+        // HELD) must not 500 — that would make SePay retry a webhook that can never
+        // succeed. Keep the receipt below and flag it for a human.
+        outcome = 'needs-review';
+        reviewReason = err.message;
       } else {
         throw err;
       }
@@ -871,6 +894,10 @@ export class BookingsService implements OnApplicationBootstrap {
     if (outcome === 'late') {
       this.logger.warn(
         `Payment sepayId=${event.sepayId} for booking ${booking.bookingNo} arrived after holds expired — manual reconciliation needed`,
+      );
+    } else if (outcome === 'needs-review') {
+      this.logger.warn(
+        `Payment sepayId=${event.sepayId} for booking ${booking.bookingNo} could not confirm: ${reviewReason} — manual reconciliation needed`,
       );
     } else {
       this.logger.warn(`Booking ${booking.bookingNo} status changed concurrently, skipping`);

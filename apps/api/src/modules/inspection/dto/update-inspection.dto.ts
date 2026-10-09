@@ -13,7 +13,7 @@ import { DamageDto, EvidenceFileDto } from './inspection-evidence.dto';
 
 export class UpdateInspectionDto {
   @ApiPropertyOptional({ maxLength: 5000, nullable: true })
-  @ValidateIf((_object, value) => value !== undefined)
+  @ValidateIf((_object, value) => value != null)
   @IsString()
   @MaxLength(5000)
   conditionNotes?: string | null;

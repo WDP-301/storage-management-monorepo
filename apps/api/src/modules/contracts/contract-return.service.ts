@@ -53,7 +53,7 @@ export class ContractReturnService {
           contractId,
           type: InspectionType.RETURN,
           scheduledAt: new Date(dto.scheduledAt),
-          conditionNotes: dto.note?.trim() || undefined,
+          requestNote: dto.note?.trim() || undefined,
         }),
       );
     });

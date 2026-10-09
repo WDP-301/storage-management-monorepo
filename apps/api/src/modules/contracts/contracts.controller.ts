@@ -20,6 +20,7 @@ import {
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ApiErrorResponseDto } from '@shared/models/api-response';
 import { UserRole } from '@storage/types';
+import { ContractCancelService } from './contract-cancel.service';
 import { ContractReturnService } from './contract-return.service';
 import { ContractsService } from './contracts.service';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
@@ -41,9 +42,14 @@ export class ContractsController {
   constructor(
     private readonly contractsService: ContractsService,
     private readonly contractReturn: ContractReturnService,
+    private readonly contractCancel: ContractCancelService,
   ) {}
 
+  // Contracts carry customer PII (customerSnapshot) and writes can strand units —
+  // system-wide roles only. Facility staff and managers work through the
+  // facility-scoped /inspections endpoints instead.
   @Post()
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
   @ApiOperation({ summary: 'Create a contract from a confirmed booking item' })
   @ApiResponse({
     status: 409,
@@ -55,6 +61,7 @@ export class ContractsController {
   }
 
   @Get()
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
   @ApiOperation({ summary: 'List contracts excluding soft-deleted records' })
   findAll() {
     return this.contractsService.findAll();
@@ -79,7 +86,17 @@ export class ContractsController {
     return this.contractReturn.requestReturn(id, user.id, dto);
   }
 
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER, UserRole.FACILITY_MANAGER)
+  @ApiOperation({ summary: 'Cancel a DRAFT contract the customer never collected' })
+  @ApiResponse({ status: 409, description: 'Contract is not DRAFT' })
+  cancel(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.contractCancel.cancelDraft(id, user);
+  }
+
   @Get(':id')
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
   @ApiOperation({ summary: 'Get a contract by ID' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.contractsService.findById(id);
@@ -94,6 +111,7 @@ export class ContractsController {
   }
 
   @Put(':id/evidence')
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
   @ApiOperation({ summary: 'Set the contract evidence URL (R2 public link)' })
   @ApiResponse({ status: 400, type: ApiErrorResponseDto })
   uploadEvidence(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UploadContractEvidenceDto) {

@@ -23,6 +23,8 @@ export interface CustomerInspectionSummary {
   inspected_at: string | Date | null;
   finalized_at: string | Date | null;
   inspector_name: string | null;
+  /** The customer's own note on a return request. */
+  request_note: string | null;
   condition_notes: string | null;
   evidence: unknown[];
   damages: unknown[];
@@ -55,6 +57,7 @@ export function toCustomerInspectionSummary(inspection: Inspection): CustomerIns
     inspected_at: inspection.inspectedAt ?? null,
     finalized_at: inspection.finalizedAt ?? null,
     inspector_name: inspection.inspector?.fullName ?? null,
+    request_note: inspection.requestNote ?? null,
     condition_notes: inspection.conditionNotes ?? null,
     evidence: inspection.evidence ?? [],
     damages: inspection.damages ?? [],

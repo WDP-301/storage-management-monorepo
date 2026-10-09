@@ -17,7 +17,9 @@
     "migration:generate": "pnpm run build && typeorm migration:generate -d dist/data-source.js",
     "migration:run": "pnpm run build && typeorm migration:run -d dist/data-source.js",
     "migration:revert": "typeorm migration:revert -d dist/data-source.js",
-    "migration:show": "typeorm migration:show -d dist/data-source.js"
+    "migration:show": "typeorm migration:show -d dist/data-source.js",
+    "demo:pay": "pnpm run build && node dist/scripts/demo-pay.js",
+    "backfill:contracts": "pnpm run build && node dist/scripts/backfill-contracts.js"
   },
   "jest": {
     "moduleFileExtensions": [

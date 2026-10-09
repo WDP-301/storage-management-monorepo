@@ -1,5 +1,7 @@
-export type CustomerTab = 'browse' | 'bookings' | 'settings';
+export type CustomerTab = 'browse' | 'bookings' | 'storage' | 'settings';
 export type BrowseMode = 'recommended' | 'manual';
+/** Browse renders either the facility list or the map; both read the same filtered data. */
+export type BrowseView = 'list' | 'map';
 
 export type UnitOffer = {
   id: string;
@@ -30,6 +32,12 @@ export type FacilityOffer = {
   address: string;
   provinceCode: string | null;
   wardCode: string | null;
+  /**
+   * Facility coordinates, lifted off the first mapped unit. Kept here rather than read from
+   * `units[0]` because filtering and pagination rewrite `units`, so the map must not depend on it.
+   */
+  latitude: number;
+  longitude: number;
   units: UnitOffer[];
 };
 

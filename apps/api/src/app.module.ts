@@ -14,11 +14,13 @@ import { ContractsModule } from './modules/contracts/contracts.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { FacilitiesModule } from './modules/facilities/facilities.module';
 import { HealthModule } from './modules/health/health.module';
+import { InspectionModule } from './modules/inspection/inspection.module';
 import { LocationsModule } from './modules/locations/locations.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PlacesModule } from './modules/places/places.module';
 import { ServiceTicketsModule } from './modules/service-tickets/service-tickets.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { TourAppointmentsModule } from './modules/tour-appointments/tour-appointments.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { ENV_KEY } from './shared/constants';
 import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
@@ -58,6 +60,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
     BookingsModule,
     ChangeRequestsModule,
     ContractsModule,
+    InspectionModule,
     HealthModule,
     LocationsModule,
     UploadModule,
@@ -66,6 +69,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
     PaymentsModule,
     ServiceTicketsModule,
     SettingsModule,
+    TourAppointmentsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

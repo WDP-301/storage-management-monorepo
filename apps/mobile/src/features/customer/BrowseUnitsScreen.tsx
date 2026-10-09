@@ -1,25 +1,21 @@
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
-import { Button, Card } from 'heroui-native';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshControl, ScrollView, Text, View } from 'react-native';
-import { formatMoney } from '../../../lib/format-vi';
-import type { BrowseMode, UnitOffer } from '../../types/customer';
-import { ManualFacilityCard, RecommendedFacilityCard } from './BrowseFacilityCards';
+import { Faders, MagnifyingGlass, X } from 'phosphor-react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { hasPlottableCoords } from '../../../lib/goong-map-config';
+import { type PlacePrediction, PlacesApi } from '../../../lib/places-api';
+import type { BrowseMode, BrowseView, FacilityOffer, UnitOffer } from '../../types/customer';
 import { BrowseFiltersBar } from './BrowseFiltersBar';
 import { BrowseFiltersSheet } from './BrowseFiltersSheet';
-import { BrowseListHeader } from './BrowseListHeader';
-import { EmptyState, ErrorState, LoadingState } from './BrowseStates';
-import {
-  applyBrowseFilters,
-  countAreaPresetMatches,
-  countPricePresetMatches,
-  DEFAULT_BROWSE_CRITERIA,
-  pruneStaleLocationCodes,
-} from './browse-filters';
-import { buildProvinceOptions, buildWardOptions } from './location-options';
-import { sumUnitPrices } from './unit-offer-utils';
+import { BrowseBrandHeader, BrowseLocationControls } from './BrowseHeader';
+import { BrowseMapView } from './BrowseMapView';
+import { BrowseResultsList } from './BrowseResultsList';
+import { BrowseSelectionBar } from './BrowseSelectionBar';
+import { ErrorState, LoadingState } from './BrowseStates';
+import { FacilityMapSheet } from './FacilityMapSheet';
+import { MapPlaceSearchSheet } from './MapPlaceSearchSheet';
 import { useAvailableUnits } from './use-available-units';
-import { useWards } from './use-wards';
+import { useBrowseCriteria } from './use-browse-criteria';
 
 type Props = {
   hasHolding: boolean;
@@ -27,55 +23,45 @@ type Props = {
   onHold: (units: UnitOffer[]) => void;
 };
 
+type NearbySearch = {
+  label: string;
+  center: { lat: number; lng: number };
+  facilityIds: string[];
+};
+
 export function BrowseUnitsScreen({ hasHolding, contentBottomPadding, onHold }: Props) {
   const { facilities, provinces, hasMore, isLoading, error, refetch } = useAvailableUnits();
-  const [criteria, setCriteria] = useState(DEFAULT_BROWSE_CRITERIA);
+  const {
+    criteria,
+    setCriteria,
+    provinceOptions,
+    wardOptions,
+    visibleFacilities,
+    areaCounts,
+    priceCounts,
+  } = useBrowseCriteria(facilities, provinces);
   const [mode, setMode] = useState<BrowseMode>('recommended');
+  const [view, setView] = useState<BrowseView>('list');
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [waitlistedFacilityId, setWaitlistedFacilityId] = useState<string | null>(null);
+  const [mapFacilityId, setMapFacilityId] = useState<string | null>(null);
+  const [nearbySearch, setNearbySearch] = useState<NearbySearch | null>(null);
+  const nearbyIds = nearbySearch ? new Set(nearbySearch.facilityIds) : null;
+  const mapFacilities = nearbyIds
+    ? visibleFacilities.filter((facility) => nearbyIds.has(facility.id))
+    : visibleFacilities;
+  const mapFacility = mapFacilities.find((facility) => facility.id === mapFacilityId) ?? null;
   const filtersSheetRef = useRef<BottomSheetModal>(null);
+  const facilitySheetRef = useRef<BottomSheetModal>(null);
+  const pendingMapHoldRef = useRef<UnitOffer[] | null>(null);
+  const placeSearchSheetRef = useRef<BottomSheetModal>(null);
   const scrollRef = useRef<ScrollView>(null);
-
-  const provinceOptions = useMemo(
-    () => buildProvinceOptions(facilities, provinces),
-    [facilities, provinces],
-  );
-
-  // With a single province the picker is hidden, but its wards still need to be filterable —
-  // which is the common case of one city holding every facility.
-  const effectiveProvinceCode =
-    criteria.provinceCode ?? (provinceOptions.length === 1 ? provinceOptions[0].code : null);
-
-  const wardNames = useWards(effectiveProvinceCode);
-  const wardOptions = useMemo(
-    () => buildWardOptions(facilities, effectiveProvinceCode, wardNames),
-    [facilities, effectiveProvinceCode, wardNames],
-  );
-  const visibleFacilities = useMemo(
-    () => applyBrowseFilters(facilities, criteria),
-    [facilities, criteria],
-  );
-  const areaCounts = useMemo(
-    () => countAreaPresetMatches(facilities, criteria),
-    [facilities, criteria],
-  );
-  const priceCounts = useMemo(
-    () => countPricePresetMatches(facilities, criteria),
-    [facilities, criteria],
-  );
 
   // A refresh keeps the current list on screen; only a first load blanks it out.
   const hasData = facilities.length > 0;
   const isInitialLoading = isLoading && !hasData;
   const isRefreshing = isLoading && hasData;
-
-  // Location codes outlive the data they came from, so a reload can leave a filter active with no
-  // chip to switch it off. Re-running on every options change converges: once pruned, the codes
-  // are valid and this returns the criteria untouched.
-  useEffect(() => {
-    setCriteria((current) => pruneStaleLocationCodes(current, provinceOptions, wardOptions));
-  }, [provinceOptions, wardOptions]);
 
   // Drop selections that the current filters hide or that exceed the requested quantity.
   useEffect(() => {
@@ -91,7 +77,6 @@ export function BrowseUnitsScreen({ hasHolding, contentBottomPadding, onHold }: 
   const selectedUnits = visibleFacilities
     .flatMap((facility) => facility.units)
     .filter((unit) => selectedIds.includes(unit.id));
-  const selectedFacilityCount = new Set(selectedUnits.map((unit) => unit.facilityId)).size;
 
   const toggleUnit = (unit: UnitOffer) => {
     setSelectedIds((current) => {
@@ -105,166 +90,213 @@ export function BrowseUnitsScreen({ hasHolding, contentBottomPadding, onHold }: 
     (total, facility) => total + facility.units.length,
     0,
   );
-  const pageSize = mode === 'recommended' ? 5 : 10;
-  const resultCount = mode === 'recommended' ? visibleFacilities.length : visibleUnitCount;
-  const pageCount = Math.max(1, Math.ceil(resultCount / pageSize));
-  const currentPage = Math.min(page, pageCount);
-  const pageStart = (currentPage - 1) * pageSize;
-  const pagedFacilities = useMemo(() => {
-    if (mode === 'recommended') {
-      return visibleFacilities.slice(pageStart, pageStart + pageSize);
-    }
-    // Page individual units, retaining their facility headers and the full selection elsewhere.
-    let offset = 0;
-    return visibleFacilities.flatMap((facility) => {
-      const start = Math.max(0, pageStart - offset);
-      const end = Math.min(facility.units.length, pageStart + pageSize - offset);
-      offset += facility.units.length;
-      return end > start ? [{ ...facility, units: facility.units.slice(start, end) }] : [];
-    });
-  }, [mode, pageStart, pageSize, visibleFacilities]);
+  const plottableCount = visibleFacilities.filter(hasPlottableCoords).length;
 
   const changeCriteria = (next: typeof criteria) => {
     setCriteria(next);
     setPage(1);
+    setMapFacilityId(null);
+    facilitySheetRef.current?.dismiss();
   };
   const changePage = (next: number) => {
-    setPage(Math.max(1, Math.min(next, pageCount)));
+    setPage(next);
     scrollRef.current?.scrollTo({ y: 0, animated: true });
   };
+  const openFacility = (facility: FacilityOffer) => {
+    setMapFacilityId(facility.id);
+  };
+  const continueFromMap = (units: UnitOffer[]) => {
+    if (pendingMapHoldRef.current) return;
+    // Navigate only after the modal is fully gone; it lives above the tab navigator.
+    pendingMapHoldRef.current = units;
+    facilitySheetRef.current?.dismiss();
+  };
+  const dismissFacility = () => {
+    setMapFacilityId(null);
+    const units = pendingMapHoldRef.current;
+    pendingMapHoldRef.current = null;
+    if (units) onHold(units);
+  };
+  useEffect(() => {
+    if (view === 'map' && mapFacilityId && mapFacility) {
+      facilitySheetRef.current?.present();
+    }
+  }, [view, mapFacilityId, mapFacility?.id]);
+  const choosePlace = async (place: PlacePrediction) => {
+    const result = await PlacesApi.nearby(place.place_id);
+    setNearbySearch({
+      label: place.structured_formatting?.main_text ?? place.description,
+      center: result.center,
+      facilityIds: result.facilities.map((facility) => facility.id),
+    });
+    setMapFacilityId(null);
+    facilitySheetRef.current?.dismiss();
+  };
+
+  const location =
+    provinceOptions.find((option) => option.code === criteria.provinceCode)?.name ??
+    (provinceOptions.length === 1 ? provinceOptions[0].name : 'Tất cả cơ sở');
+  const openFilters = () => filtersSheetRef.current?.present();
+
+  // The same operational controls serve both list and map views.
+  const header = (
+    <View className="bg-surface">
+      <BrowseLocationControls
+        location={location}
+        criteria={criteria}
+        facilities={facilities}
+        wards={wardOptions}
+        view={view}
+        plottableCount={plottableCount}
+        onView={setView}
+        onChange={changeCriteria}
+        onOpenFilters={openFilters}
+      />
+      {view === 'list' ? <BrowseFiltersBar criteria={criteria} onChange={changeCriteria} /> : null}
+    </View>
+  );
 
   return (
     <View className="flex-1">
-      <ScrollView
-        ref={scrollRef}
-        className="flex-1"
-        contentContainerStyle={{ paddingBottom: contentBottomPadding }}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refetch} />}
-        showsVerticalScrollIndicator={false}
-      >
-        <View className="px-4 pb-4 pt-5">
-          <Text className="text-2xl font-bold tracking-tight text-foreground">Tìm kho phù hợp</Text>
-          <Text className="mt-1 text-sm leading-5 text-muted">
-            Đặt nhiều kho trong một lượt, ưu tiên đủ kho tại cùng cơ sở.
-          </Text>
-        </View>
-
-        <BrowseFiltersBar
-          criteria={criteria}
-          provinceOptions={provinceOptions}
-          wardOptions={wardOptions}
-          onChange={changeCriteria}
-          onOpenFilters={() => filtersSheetRef.current?.present()}
-        />
-
-        {isInitialLoading ? <LoadingState /> : null}
-        {/* A failed refresh keeps the stale list below, so the error sits above it rather than
-          replacing everything the customer was already looking at. */}
-        {error ? <ErrorState message={error} onRetry={refetch} /> : null}
-
-        {!isInitialLoading && !(error && !hasData) ? (
-          <>
-            <BrowseListHeader
-              facilityCount={visibleFacilities.length}
+      <BrowseBrandHeader location={location} onLocation={openFilters} />
+      {view === 'map' ? (
+        // Outside the ScrollView on purpose: a ScrollView swallows the map's pan and zoom gestures.
+        <>
+          {header}
+          {isInitialLoading ? <LoadingState /> : null}
+          {error ? <ErrorState message={error} onRetry={refetch} /> : null}
+          <View className="mt-3 flex-1">
+            <BrowseMapView
+              facilities={mapFacilities}
+              searchCenter={nearbySearch?.center ?? null}
+              selectedFacilityId={mapFacility?.id ?? null}
+              onSelect={openFacility}
+            />
+            <View className="absolute top-3 right-4 left-4 gap-2" pointerEvents="box-none">
+              <View className="flex-row items-center rounded-full border border-border bg-surface shadow-sm">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Tìm kho gần địa điểm"
+                  className="min-h-11 flex-1 flex-row items-center gap-2 px-3"
+                  onPress={() => placeSearchSheetRef.current?.present()}
+                >
+                  <MagnifyingGlass color="#006398" size={18} weight="bold" />
+                  <Text className="flex-1 font-ui text-body-sm text-foreground" numberOfLines={1}>
+                    {nearbySearch?.label ?? 'Tìm kho gần địa điểm...'}
+                  </Text>
+                </Pressable>
+                {nearbySearch ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Xóa địa điểm tìm kiếm"
+                    className="size-11 items-center justify-center"
+                    onPress={() => {
+                      setNearbySearch(null);
+                      setMapFacilityId(null);
+                    }}
+                  >
+                    <X color="#64748b" size={18} />
+                  </Pressable>
+                ) : null}
+              </View>
+              <View className="flex-row flex-wrap items-center gap-2">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Lọc bản đồ, ${criteria.requestedQuantity} kho, kích thước ${criteria.areaPreset === 'any' ? 'tất cả' : criteria.areaPreset}`}
+                  className="self-start flex-row items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 shadow-sm"
+                  onPress={openFilters}
+                >
+                  <Faders color="#006398" size={17} weight="bold" />
+                  <Text className="font-ui text-body-sm text-foreground">
+                    {criteria.requestedQuantity} kho ·{' '}
+                    {criteria.areaPreset === 'any'
+                      ? 'Mọi kích thước'
+                      : criteria.areaPreset === 'small'
+                        ? 'Nhỏ'
+                        : criteria.areaPreset === 'medium'
+                          ? 'Vừa'
+                          : 'Lớn'}
+                  </Text>
+                </Pressable>
+                {selectedUnits.length > 0 ? (
+                  <Text className="rounded-full bg-foreground px-2.5 py-2 font-ui text-caption text-surface">
+                    Đã chọn {selectedUnits.length}/{criteria.requestedQuantity}
+                  </Text>
+                ) : null}
+                {nearbySearch ? (
+                  <Text className="rounded-full bg-surface px-2.5 py-2 font-ui text-caption text-foreground">
+                    {mapFacilities.length} cơ sở · 5 km
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+            {nearbySearch && mapFacilities.length === 0 ? (
+              <View className="absolute top-28 right-4 left-4 rounded-xl bg-surface p-3">
+                <Text className="font-body text-body-sm text-foreground">
+                  Không có kho trống phù hợp trong 5 km. Thử địa điểm khác hoặc xóa tìm kiếm.
+                </Text>
+              </View>
+            ) : null}
+            <FacilityMapSheet
+              facility={mapFacility}
+              hasHolding={hasHolding}
+              requestedQuantity={criteria.requestedQuantity}
+              selectedIds={selectedIds}
+              allSelectedUnits={selectedUnits}
+              sheetRef={facilitySheetRef}
+              onDismiss={dismissFacility}
+              onHold={continueFromMap}
+              onToggle={(unit) => {
+                setMode('manual');
+                toggleUnit(unit);
+              }}
+            />
+          </View>
+        </>
+      ) : (
+        <ScrollView
+          ref={scrollRef}
+          className="flex-1"
+          contentContainerStyle={{ paddingBottom: contentBottomPadding }}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refetch} />}
+          showsVerticalScrollIndicator={false}
+        >
+          {header}
+          {isInitialLoading ? <LoadingState /> : null}
+          {/* A failed refresh keeps the stale list below, so the error sits above it rather than
+            replacing everything the customer was already looking at. */}
+          {error ? <ErrorState message={error} onRetry={refetch} /> : null}
+          {!isInitialLoading && !(error && !hasData) ? (
+            <BrowseResultsList
+              facilities={visibleFacilities}
+              hasHolding={hasHolding}
               hasMore={hasMore}
               mode={mode}
+              page={page}
+              requestedQuantity={criteria.requestedQuantity}
+              selectedIds={selectedIds}
+              totalFacilityCount={facilities.length}
+              waitlistedFacilityId={waitlistedFacilityId}
+              onHold={onHold}
               onModeChange={(next) => {
                 setMode(next);
                 setPage(1);
               }}
+              onPageChange={changePage}
+              onToggle={toggleUnit}
+              onWaitlist={setWaitlistedFacilityId}
             />
+          ) : null}
+        </ScrollView>
+      )}
 
-            {visibleFacilities.length === 0 ? (
-              <EmptyState isFilteredOut={facilities.length > 0} />
-            ) : (
-              <View className="gap-4 px-4">
-                {pagedFacilities.map((facility) =>
-                  mode === 'recommended' ? (
-                    <RecommendedFacilityCard
-                      key={facility.id}
-                      facility={facility}
-                      hasHolding={hasHolding}
-                      requestedQuantity={criteria.requestedQuantity}
-                      waitlisted={waitlistedFacilityId === facility.id}
-                      onHold={onHold}
-                      onWaitlist={() => setWaitlistedFacilityId(facility.id)}
-                    />
-                  ) : (
-                    <ManualFacilityCard
-                      key={facility.id}
-                      facility={facility}
-                      hasHolding={hasHolding}
-                      requestedQuantity={criteria.requestedQuantity}
-                      selectedIds={selectedIds}
-                      onToggle={toggleUnit}
-                    />
-                  ),
-                )}
-              </View>
-            )}
-            {resultCount > 0 ? (
-              <View className="gap-3 px-4 pt-5">
-                <Text className="text-center text-xs text-muted">
-                  Hiển thị {pageStart + 1}–{Math.min(pageStart + pageSize, resultCount)} /{' '}
-                  {resultCount} {mode === 'recommended' ? 'nhóm cơ sở' : 'kho'}
-                </Text>
-                {pageCount > 1 ? (
-                  <View className="flex-row items-center justify-between gap-3">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      isDisabled={currentPage === 1}
-                      onPress={() => changePage(currentPage - 1)}
-                    >
-                      <Button.Label>Trang trước</Button.Label>
-                    </Button>
-                    <Text className="text-sm font-semibold text-foreground">
-                      {currentPage} / {pageCount}
-                    </Text>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      isDisabled={currentPage === pageCount}
-                      onPress={() => changePage(currentPage + 1)}
-                    >
-                      <Button.Label>Trang sau</Button.Label>
-                    </Button>
-                  </View>
-                ) : null}
-              </View>
-            ) : null}
-          </>
-        ) : null}
-      </ScrollView>
-
-      {mode === 'manual' && selectedUnits.length > 0 && !isInitialLoading ? (
-        <View className="shrink-0 border-t border-border bg-background px-4 py-3">
-          <Card className="border border-accent/30 bg-accent/5">
-            <Card.Body className="gap-3">
-              <View className="flex-row items-center justify-between">
-                <Text className="font-bold text-foreground">
-                  Đã chọn {selectedUnits.length}/{criteria.requestedQuantity} kho
-                </Text>
-                <Text className="text-sm font-semibold text-accent">
-                  {formatMoney(sumUnitPrices(selectedUnits, 'monthlyPrice'))}/tháng
-                </Text>
-              </View>
-              {selectedFacilityCount > 1 ? (
-                <Text className="text-xs leading-5 text-muted">
-                  Các kho thuộc {selectedFacilityCount} cơ sở. Chọn cùng một cơ sở để thuận tiện
-                  hơn.
-                </Text>
-              ) : null}
-
-              <Button
-                isDisabled={selectedUnits.length !== criteria.requestedQuantity || hasHolding}
-                onPress={() => onHold(selectedUnits)}
-              >
-                <Button.Label>Chọn {criteria.requestedQuantity} kho đã chọn</Button.Label>
-              </Button>
-            </Card.Body>
-          </Card>
-        </View>
+      {view === 'list' && mode === 'manual' && selectedUnits.length > 0 && !isInitialLoading ? (
+        <BrowseSelectionBar
+          hasHolding={hasHolding}
+          requestedQuantity={criteria.requestedQuantity}
+          selectedUnits={selectedUnits}
+          onHold={onHold}
+        />
       ) : null}
 
       <BrowseFiltersSheet
@@ -277,6 +309,7 @@ export function BrowseUnitsScreen({ hasHolding, contentBottomPadding, onHold }: 
         wardOptions={wardOptions}
         onChange={changeCriteria}
       />
+      <MapPlaceSearchSheet sheetRef={placeSearchSheetRef} onChoose={choosePlace} />
     </View>
   );
 }

@@ -16,23 +16,6 @@ export const DURATION_OPTIONS: readonly number[] = [6, 12, 18];
 
 export const DEFAULT_DURATION_MONTHS = 6;
 
-/** How far ahead the customer may schedule a handover. */
-export const SCHEDULABLE_DAYS = 30;
-
-const WEEKDAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-
-export type RentalDateOption = {
-  /** ISO day string, the value stored on the booking. */
-  iso: string;
-  /** Vietnamese weekday abbreviation, e.g. `T4`. */
-  weekday: string;
-  /** Zero-padded day of month, e.g. `30`. */
-  day: string;
-  /** Zero-padded month, e.g. `09`. */
-  month: string;
-  isToday: boolean;
-};
-
 export function toIsoDate(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
@@ -49,26 +32,15 @@ export function todayIso(): string {
   return toIsoDate(new Date());
 }
 
-/**
- * The selectable days, starting today. Because the strip starts at today, past dates are
- * unreachable by construction rather than by validation.
- */
-export function buildDateOptions(days: number = SCHEDULABLE_DAYS): RentalDateOption[] {
-  const today = new Date();
-  const todayValue = toIsoDate(today);
-
-  return Array.from({ length: days }, (_, offset) => {
-    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset);
-    const iso = toIsoDate(date);
-
-    return {
-      iso,
-      weekday: WEEKDAY_LABELS[date.getDay()] ?? '',
-      day: String(date.getDate()).padStart(2, '0'),
-      month: String(date.getMonth() + 1).padStart(2, '0'),
-      isToday: iso === todayValue,
-    };
-  });
+/** One calendar month ahead, within the API's current 30-day booking lead limit. */
+export function latestStartIso(today: string = todayIso()): string {
+  const date = fromIsoDate(today);
+  const lastDayOfNextMonth = new Date(date.getFullYear(), date.getMonth() + 2, 0).getDate();
+  const calendarMonthLimit = toIsoDate(
+    new Date(date.getFullYear(), date.getMonth() + 1, Math.min(date.getDate(), lastDayOfNextMonth)),
+  );
+  const apiLimit = toIsoDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() + 30));
+  return calendarMonthLimit < apiLimit ? calendarMonthLimit : apiLimit;
 }
 
 /**
@@ -89,4 +61,40 @@ export function rentalEndIso(startIso: string, durationMonths: number): string {
 
   end.setDate(end.getDate() - 1);
   return toIsoDate(end);
+}
+
+const WEEKDAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+
+export type RentalDateOption = {
+  /** ISO day string, the value stored on the booking. */
+  iso: string;
+  /** Vietnamese weekday abbreviation, e.g. `T4`. */
+  weekday: string;
+  /** Zero-padded day of month, e.g. `30`. */
+  day: string;
+  /** Zero-padded month, e.g. `09`. */
+  month: string;
+  isToday: boolean;
+};
+
+/**
+ * The selectable days for a date strip, starting today. Because the strip starts at today, past
+ * dates are unreachable by construction rather than by validation.
+ */
+export function buildDateOptions(days: number): RentalDateOption[] {
+  const today = new Date();
+  const todayValue = toIsoDate(today);
+
+  return Array.from({ length: days }, (_, offset) => {
+    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset);
+    const iso = toIsoDate(date);
+
+    return {
+      iso,
+      weekday: WEEKDAY_LABELS[date.getDay()] ?? '',
+      day: String(date.getDate()).padStart(2, '0'),
+      month: String(date.getMonth() + 1).padStart(2, '0'),
+      isToday: iso === todayValue,
+    };
+  });
 }

@@ -76,8 +76,9 @@ export class PlacesService {
 
     const json = await res.json();
     // Goong signals business errors via json.status, not HTTP status
-    // (e.g. REQUEST_DENIED on quota exceeded returns 200 with no predictions)
-    if (json?.status !== 'OK') {
+    // (e.g. REQUEST_DENIED on quota exceeded returns 200 with no predictions).
+    // ZERO_RESULTS is a normal "no match" answer, not an outage.
+    if (json?.status !== 'OK' && json?.status !== 'ZERO_RESULTS') {
       throw new DomainException(
         ErrorCode.SERVICE_UNAVAILABLE,
         `Goong autocomplete failed: ${json?.status ?? 'unknown'}`,

@@ -1,146 +1,274 @@
-import { Button, Card } from 'heroui-native';
-import { useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
-import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { Button } from 'heroui-native';
+import {
+  ArrowLeft,
+  CalendarBlank,
+  CaretRight,
+  ShieldCheck,
+  Warehouse,
+} from 'phosphor-react-native';
+import { useRef, useState } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { formatIsoDate, formatMoney, formatNumber } from '../../../lib/format-vi';
 import type { RentalSchedule } from '../../../lib/hold';
 import {
-  buildDateOptions,
   DEFAULT_DURATION_MONTHS,
   DURATION_OPTIONS,
   rentalEndIso,
   todayIso,
 } from '../../../lib/rental-schedule';
 import type { UnitOffer } from '../../types/customer';
-import { ChipButton, FilterRow } from './FilterChips';
-import { RentalDateStrip } from './RentalDateStrip';
+import { RentalDatePickerSheet } from './RentalDatePickerSheet';
 import { sumUnitPrices } from './unit-offer-utils';
 
 type Props = {
   units: UnitOffer[];
   isCreating: boolean;
   error: string | null;
+  onBack: () => void;
   onConfirm: (schedule: RentalSchedule) => void;
 };
 
+/** Mirror the colour tokens in global.css; SVG icons cannot read a Tailwind class. */
+const ACCENT = 'hsl(203 100% 30%)';
+const SUCCESS = 'hsl(160 84% 31%)';
+
 /**
- * Chooses the rental terms before the API creates a booking and starts its 15-minute hold.
+ * Rental terms, as a numbered step between picking rooms and paying.
+ *
+ * The screen is one task per section — when, how long, what it costs — with the cost breakdown
+ * last because it is the consequence of the two choices above it. The total due today is pinned so
+ * it stays visible while the customer changes dates and durations.
  */
-export function ScheduleRentalScreen({ units, isCreating, error, onConfirm }: Props) {
+export function ScheduleRentalScreen({ units, isCreating, error, onBack, onConfirm }: Props) {
   const [startDate, setStartDate] = useState(todayIso);
   const [durationMonths, setDurationMonths] = useState(DEFAULT_DURATION_MONTHS);
-
-  // Rebuilt every render rather than memoised: 30 small objects cost nothing, and a frozen list
-  // would still start at yesterday if the screen stayed mounted across midnight — which would
-  // mislabel "Hôm nay" and offer a past date, the very thing starting the strip at today prevents.
-  const dateOptions = buildDateOptions();
+  const dateSheetRef = useRef<BottomSheetModal>(null);
   const endDate = rentalEndIso(startDate, durationMonths);
 
   const monthlyRent = sumUnitPrices(units, 'monthlyPrice');
   const deposit = sumUnitPrices(units, 'deposit');
   const totalRent = monthlyRent * durationMonths;
+  const totalArea = units.reduce((sum, unit) => sum + unit.areaM2, 0);
 
   const facilityName = units[0]?.facility ?? '';
   const facilityCount = new Set(units.map((unit) => unit.facilityId)).size;
+  const unitCodes = units.map((unit) => unit.code).join(', ');
 
   return (
-    <ScrollView contentContainerClassName="pb-8 pt-5" showsVerticalScrollIndicator={false}>
-      <View className="px-4">
-        <Text className="text-2xl font-bold tracking-tight text-foreground">Đặt lịch thuê kho</Text>
-        <Text className="mt-1 text-sm leading-5 text-muted">
-          {units.length} kho tại {facilityCount === 1 ? facilityName : `${facilityCount} cơ sở`}
-        </Text>
-      </View>
-
-      <Card className="mx-4 mt-4 border border-accent/30 bg-accent/5">
-        <Card.Body>
-          {/* No hold duration named here: it is an admin setting the app cannot read, so any
-            number would go stale the moment it changes. */}
-          <Text className="text-xs leading-5 text-muted">
-            Chọn lịch rồi xác nhận để giữ kho. Giá và tình trạng kho sẽ được kiểm tra lại khi gửi.
+    <View className="flex-1">
+      <View className="flex-row items-center justify-between gap-3 px-4 pt-5 pb-3">
+        <View className="flex-1 flex-row items-center gap-1">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Quay lại chọn kho"
+            disabled={isCreating}
+            hitSlop={8}
+            style={({ pressed }) => ({ opacity: isCreating ? 0.4 : pressed ? 0.6 : 1 })}
+            onPress={onBack}
+          >
+            <View className="size-10 items-center justify-center rounded-full">
+              <ArrowLeft color={ACCENT} size={22} weight="bold" />
+            </View>
+          </Pressable>
+          <Text className="flex-1 font-strong text-foreground text-title-md" numberOfLines={1}>
+            Thời gian & Chi phí
           </Text>
-        </Card.Body>
-      </Card>
-
-      <View className="mt-6">
-        <Text className="px-4 text-sm font-bold text-foreground">Ngày nhận kho</Text>
-        <View className="mt-3">
-          <RentalDateStrip options={dateOptions} selectedIso={startDate} onSelect={setStartDate} />
+        </View>
+        <View className="rounded-full bg-surface-secondary px-2.5 py-1">
+          <Text className="font-ui text-caption text-muted">Bước 2/3</Text>
         </View>
       </View>
 
-      <View className="mt-6 px-4">
-        <FilterRow label="Thời hạn thuê">
+      <ScrollView contentContainerClassName="pb-6" showsVerticalScrollIndicator={false}>
+        {/* What is being booked, restated so the customer never has to go back to check. */}
+        <View className="mx-4 flex-row items-center gap-3 rounded-xl border border-border bg-surface p-3">
+          <View className="size-10 items-center justify-center rounded-lg bg-accent/10">
+            <Warehouse color={ACCENT} size={20} weight="fill" />
+          </View>
+          <View className="flex-1">
+            <Text className="font-strong text-body-md text-foreground" numberOfLines={1}>
+              {facilityCount === 1 ? facilityName : `${facilityCount} cơ sở`}
+            </Text>
+            <Text className="font-body text-body-sm text-muted" numberOfLines={1}>
+              {units.length} kho: {unitCodes}, {formatNumber(totalArea)} m²
+            </Text>
+          </View>
+          <View className="items-end">
+            <Text className="font-numeric text-foreground text-num-md">
+              {formatMoney(monthlyRent)}
+            </Text>
+            <Text className="font-body text-caption text-muted">mỗi tháng</Text>
+          </View>
+        </View>
+
+        <SectionLabel text="Ngày bắt đầu dọn vào" />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Chọn ngày bắt đầu dọn vào, hiện tại ${formatIsoDate(startDate)}`}
+          className="mx-4 flex-row items-center gap-3 rounded-xl border border-border bg-surface px-3 py-3"
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          onPress={() => dateSheetRef.current?.present()}
+        >
+          <View className="size-9 items-center justify-center rounded-lg bg-accent/10">
+            <CalendarBlank color={ACCENT} size={20} weight="bold" />
+          </View>
+          <View className="flex-1">
+            <Text className="font-strong text-body-md text-foreground">
+              {startDate === todayIso() ? 'Hôm nay' : formatIsoDate(startDate)}
+            </Text>
+            <Text className="font-body text-caption text-muted">Chạm để chọn ngày trên lịch</Text>
+          </View>
+          <CaretRight color={ACCENT} size={18} weight="bold" />
+        </Pressable>
+        <View className="mx-4 mt-2 flex-row items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2">
+          <Text className="font-body text-body-sm text-muted">Nhận bàn giao kho</Text>
+          <Text className="font-strong text-body-sm text-foreground">
+            {formatIsoDate(startDate)}
+          </Text>
+        </View>
+
+        <SectionLabel text="Thời hạn thuê dự kiến" />
+        <View className="flex-row flex-wrap gap-2 px-4">
           {DURATION_OPTIONS.map((months) => (
-            <ChipButton
+            <ChoiceChip
               key={months}
               isSelected={durationMonths === months}
               label={`${months} tháng`}
               onPress={() => setDurationMonths(months)}
             />
           ))}
-        </FilterRow>
-        <Text className="mt-3 text-sm text-muted">
-          Thuê từ <Text className="font-semibold text-foreground">{formatIsoDate(startDate)}</Text>{' '}
-          đến <Text className="font-semibold text-foreground">{formatIsoDate(endDate)}</Text>
-        </Text>
-      </View>
-
-      <View className="mt-6 px-4">
-        <Text className="text-sm font-bold text-foreground">Kho đã chọn</Text>
-        <View className="mt-3 gap-2">
-          {units.map((unit) => (
-            <View
-              key={unit.id}
-              className="flex-row items-center justify-between gap-3 rounded-xl border border-border bg-surface p-3"
-            >
-              <View className="flex-1">
-                <Text className="font-bold text-foreground">
-                  {unit.code} · {unit.size}
-                </Text>
-                <Text className="mt-1 text-xs text-muted">
-                  {unit.facility} · {unit.zone}
-                </Text>
-              </View>
-              <Text className="text-sm font-semibold text-foreground">
-                {formatMoney(unit.monthlyPrice)}/tháng
-              </Text>
-            </View>
-          ))}
         </View>
-      </View>
+        <Text className="font-body mt-2 px-4 text-body-sm text-muted">
+          Thuê đến <Text className="font-strong text-foreground">{formatIsoDate(endDate)}</Text>
+        </Text>
 
-      <Card className="mx-4 mt-6 border border-border bg-surface">
-        <Card.Body className="gap-3">
-          <Text className="font-bold text-foreground">Chi phí</Text>
-          <CostRow label={`Tiền thuê ${durationMonths} tháng`} value={totalRent} />
-          <CostRow label="Tiền cọc" value={deposit} />
+        <SectionLabel text="Chi tiết thanh toán" />
+        <View className="mx-4 overflow-hidden rounded-xl border border-border bg-surface">
+          {/* Each line says WHEN it is charged, not just how much. The rent line reading 0 đ is
+              what stops someone believing the whole rental is due up front. */}
+          <CostRow
+            caption="Hoàn lại 100% khi trả kho"
+            label={`Tiền cọc giữ ${units.length} kho`}
+            value={formatMoney(deposit)}
+          />
           <View className="h-px bg-separator" />
-          {/* Only the deposit is due now; rent is invoiced over the rental period. */}
-          <View className="flex-row items-end justify-between gap-3">
-            <View className="flex-1">
-              <Text className="font-semibold text-foreground">Trả hôm nay</Text>
-              <Text className="mt-1 text-xs text-muted">Tiền cọc, hoàn khi trả kho</Text>
-            </View>
-            <Text className="text-lg font-bold text-accent">{formatMoney(deposit)}</Text>
+          <CostRow
+            caption={`Thu khi nhận kho (${formatIsoDate(startDate)})`}
+            label="Tiền thuê tháng đầu"
+            tone="success"
+            value="0 đ"
+          />
+          <View className="h-px bg-separator" />
+          <View className="flex-row items-center justify-between gap-3 bg-surface-secondary px-3 py-3">
+            <Text className="font-strong text-body-md text-foreground">Cần thanh toán ngay</Text>
+            <Text className="font-numeric-strong text-accent text-num-lg">
+              {formatMoney(deposit)}
+            </Text>
           </View>
-        </Card.Body>
-      </Card>
+        </View>
 
-      <View className="mt-6 px-4">
-        {error ? <Text className="mb-3 text-sm text-danger">{error}</Text> : null}
+        <View className="mx-4 mt-3 flex-row items-start gap-2 rounded-lg bg-success-bg px-3 py-2.5">
+          <ShieldCheck color={SUCCESS} size={16} weight="fill" />
+          <Text className="flex-1 font-body text-body-sm text-success">
+            Tiền cọc được giữ an toàn, hoàn lại 100% khi kết thúc hợp đồng.
+          </Text>
+        </View>
+
+        <Text className="font-body mx-4 mt-3 text-body-sm text-muted">
+          Tiền thuê {durationMonths} tháng là {formatMoney(totalRent)}, thu theo từng kỳ sau khi
+          nhận kho.
+        </Text>
+
+        {error ? (
+          <Text className="font-body mx-4 mt-3 text-body-sm text-danger">{error}</Text>
+        ) : null}
+      </ScrollView>
+
+      <View className="shrink-0 flex-row items-center justify-between gap-3 border-border border-t bg-surface px-4 py-3">
+        <View>
+          <Text className="font-body text-caption text-muted">Cọc hôm nay</Text>
+          <Text className="font-numeric-strong text-foreground text-num-lg">
+            {formatMoney(deposit)}
+          </Text>
+        </View>
         <Button isDisabled={isCreating} onPress={() => onConfirm({ startDate, durationMonths })}>
-          <Button.Label>{isCreating ? 'Đang giữ kho...' : 'Xác nhận và giữ kho'}</Button.Label>
+          <Button.Label className="font-ui">
+            {isCreating ? 'Đang giữ kho...' : 'Giữ chỗ & Lấy VietQR'}
+          </Button.Label>
         </Button>
       </View>
-    </ScrollView>
+      <RentalDatePickerSheet
+        sheetRef={dateSheetRef}
+        selectedDate={startDate}
+        onSelect={setStartDate}
+      />
+    </View>
   );
 }
 
-function CostRow({ label, value }: { label: string; value: number }) {
+function SectionLabel({ text }: { text: string }) {
   return (
-    <View className="flex-row items-center justify-between gap-3">
-      <Text className="text-sm text-muted">{label}</Text>
-      <Text className="text-sm font-semibold text-foreground">{formatMoney(value)}</Text>
+    <Text className="font-ui mt-5 mb-2 px-4 text-caption text-muted uppercase tracking-wide">
+      {text}
+    </Text>
+  );
+}
+
+function CostRow({
+  label,
+  caption,
+  value,
+  tone = 'default',
+}: {
+  label: string;
+  caption: string;
+  value: string;
+  tone?: 'default' | 'success';
+}) {
+  return (
+    <View className="flex-row items-start justify-between gap-3 px-3 py-3">
+      <View className="flex-1">
+        <Text className="font-body text-body-md text-foreground">{label}</Text>
+        <Text className="font-body mt-0.5 text-caption text-muted">{caption}</Text>
+      </View>
+      <Text
+        className={`font-numeric text-num-md ${
+          tone === 'success' ? 'text-success' : 'text-foreground'
+        }`}
+      >
+        {value}
+      </Text>
     </View>
+  );
+}
+
+/** Pill choice for rental duration. */
+function ChoiceChip({
+  label,
+  isSelected,
+  onPress,
+}: {
+  label: string;
+  isSelected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: isSelected }}
+      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+      onPress={onPress}
+    >
+      <View
+        className={`rounded-full border px-3.5 py-2 ${
+          isSelected ? 'border-foreground bg-foreground' : 'border-border bg-surface'
+        }`}
+      >
+        <Text className={`font-ui text-body-sm ${isSelected ? 'text-surface' : 'text-subtle'}`}>
+          {label}
+        </Text>
+      </View>
+    </Pressable>
   );
 }

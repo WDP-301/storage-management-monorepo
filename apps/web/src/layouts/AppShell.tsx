@@ -1,5 +1,14 @@
 import { Badge, Button, Select, Sidebar, Text, useSidebar } from '@cloudflare/kumo';
-import { Faders, Lifebuoy, Package, SignOut, User, Users, Warehouse } from '@phosphor-icons/react';
+import {
+  ClipboardText,
+  Faders,
+  Lifebuoy,
+  Package,
+  SignOut,
+  User,
+  Users,
+  Warehouse,
+} from '@phosphor-icons/react';
 import { UserRole } from '@storage/types';
 import React from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -19,11 +28,13 @@ const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { to: '/admin/settings', label: 'Cấu hình tham số', icon: Faders },
     { to: '/facility-manager', label: 'Quản lý cơ sở kho', icon: Warehouse },
     { to: '/facility-manager/tickets', label: 'Vé sự cố', icon: Lifebuoy },
+    { to: '/facility-manager/inspections', label: 'Biên bản', icon: ClipboardText },
   ],
   [UserRole.OPERATIONS_MANAGER]: [],
   [UserRole.FACILITY_MANAGER]: [
     { to: '/facility-manager', label: 'Quản lý cơ sở kho', icon: Warehouse },
     { to: '/facility-manager/tickets', label: 'Vé sự cố', icon: Lifebuoy },
+    { to: '/facility-manager/inspections', label: 'Biên bản', icon: ClipboardText },
   ],
   [UserRole.FACILITY_STAFF]: [],
   [UserRole.CUSTOMER]: [],

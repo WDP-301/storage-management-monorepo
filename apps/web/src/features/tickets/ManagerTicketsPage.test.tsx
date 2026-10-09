@@ -2,7 +2,7 @@ import { TicketPriority, TicketStatus } from '@storage/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as AuthContextModule from '../../context/AuthContext';
-import { TicketsApi } from '../../lib/api';
+import { FacilitiesApi, TicketsApi } from '../../lib/api';
 import type { ServiceTicketRecord, TicketUserInfo } from '../../types/service-tickets';
 import { ManagerTicketsPage } from './ManagerTicketsPage';
 
@@ -134,6 +134,9 @@ describe('ManagerTicketsPage Component', () => {
       assignee: TEST_STAFF[0],
     });
     vi.spyOn(TicketsApi, 'remove').mockResolvedValue({ deleted: true, id: 't-1' });
+    vi.spyOn(FacilitiesApi, 'listStaff').mockResolvedValue([
+      { id: 'staff-tuannv', fullName: 'Nguyễn Văn Tuấn', phone: '0901000001' },
+    ]);
   });
 
   it('renders page header and metric cards', async () => {
@@ -195,7 +198,12 @@ describe('ManagerTicketsPage Component', () => {
 
     expect(await screen.findByText('Phân công kỹ thuật viên phụ trách')).toBeTruthy();
 
-    const select = await screen.findByLabelText(/Chọn nhân viên tiếp nhận ca trực/i);
+    // The dropdown lists the ticket facility's own staff — no UUID typing.
+    const select = await screen.findByRole('combobox', {
+      name: /Chọn nhân viên tiếp nhận ca trực/i,
+    });
+    expect(FacilitiesApi.listStaff).toHaveBeenCalledWith('fac-1');
+    expect(screen.queryByPlaceholderText(/01925b6a/)).toBeNull();
     fireEvent.change(select, { target: { value: 'staff-tuannv' } });
 
     const confirmBtn = screen.getByRole('button', { name: /xác nhận phân công/i });

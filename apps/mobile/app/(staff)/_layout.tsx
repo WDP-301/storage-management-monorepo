@@ -1,11 +1,12 @@
 import { Tabs as RouterTabs, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useThemeColor } from 'heroui-native';
-import { View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { SafeAreaView as RNSafeAreaView } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
 import { BottomTabButton } from '../../src/components/BottomTabButton';
 import { CalendarIcon, RequestIcon, ScanIcon, SettingsIcon } from '../../src/components/TabIcons';
+import { shouldConfirmLeave } from '../../src/features/staff/leave-guard';
 import type { StaffTab } from '../../src/types/staff';
 
 const SafeAreaView = withUniwind(RNSafeAreaView);
@@ -29,7 +30,14 @@ export default function StaffTabsLayout() {
         tabBar={({ state }) => (
           <StaffTabBar
             activeTab={toStaffTab(state.routes[state.index]?.name)}
-            onSelect={(tab) => router.navigate(TAB_HREFS[tab])}
+            onSelect={(tab) => {
+              const go = () => router.navigate(TAB_HREFS[tab]);
+              if (!shouldConfirmLeave()) return go();
+              Alert.alert('Bỏ thay đổi?', 'Biên bản có thay đổi chưa lưu hoặc ảnh đang tải lên.', [
+                { text: 'Ở lại', style: 'cancel' },
+                { text: 'Bỏ thay đổi', style: 'destructive', onPress: go },
+              ]);
+            }}
           />
         )}
       >
@@ -37,6 +45,7 @@ export default function StaffTabsLayout() {
         <RouterTabs.Screen name="scan" options={{ title: 'Quét mã' }} />
         <RouterTabs.Screen name="requests" options={{ title: 'Yêu cầu' }} />
         <RouterTabs.Screen name="settings" options={{ title: 'Cài đặt' }} />
+        <RouterTabs.Screen name="inspection-detail" options={{ title: 'Biên bản' }} />
       </RouterTabs>
     </SafeAreaView>
   );
@@ -83,6 +92,7 @@ function StaffTabBar({
 }
 
 function toStaffTab(routeName: string | undefined): StaffTab {
+  if (routeName === 'inspection-detail') return 'today';
   if (routeName === 'scan' || routeName === 'requests' || routeName === 'settings') {
     return routeName;
   }

@@ -2,8 +2,8 @@ import { AppUser } from '@entities/app-user.entity';
 import { Booking } from '@entities/booking.entity';
 import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
-import { BookingStatus, ContractKind, ContractStatus } from '@storage/types';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { BookingStatus, ContractKind, ContractStatus, InspectionType } from '@storage/types';
+import { DataSource, In, IsNull, Repository } from 'typeorm';
 import { ContractsService } from './contracts.service';
 
 describe('ContractsService', () => {
@@ -17,7 +17,13 @@ describe('ContractsService', () => {
   };
   let booking: { id: string; customerId: string; status: BookingStatus; subtotal: string };
   let service: ContractsService;
-  let manager: { findOne: jest.Mock; create: jest.Mock; save: jest.Mock };
+  let manager: {
+    findOne: jest.Mock;
+    findOneOrFail: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    update: jest.Mock;
+  };
   let repo: { find: jest.Mock; findOne: jest.Mock; update: jest.Mock; softDelete: jest.Mock };
 
   beforeEach(() => {
@@ -39,6 +45,8 @@ describe('ContractsService', () => {
       }),
       create: jest.fn((_entity, data) => data),
       save: jest.fn(async (_entity, data) => ({ id: 'contract-1', ...data })),
+      findOneOrFail: jest.fn(async (entity) => (entity === Contract ? { id: 'contract-1' } : null)),
+      update: jest.fn(async () => ({ affected: 1 })),
     };
     repo = { find: jest.fn(), findOne: jest.fn(), update: jest.fn(), softDelete: jest.fn() };
     service = new ContractsService(
@@ -50,6 +58,54 @@ describe('ContractsService', () => {
   });
 
   afterEach(() => jest.restoreAllMocks());
+
+  it('attaches the handover and the latest return to each contract in /contracts/mine', async () => {
+    const summary = (id: string, type: InspectionType, createdAt: string) => ({
+      id,
+      contractId: 'contract-1',
+      type,
+      scheduledAt: new Date('2026-10-13T00:00:00Z'),
+      finalizedAt: null,
+      inspector: { fullName: 'Staff A' },
+      evidence: [],
+      damages: [],
+      createdAt: new Date(createdAt),
+    });
+    const inspectionRepo = {
+      // Oldest first, as the service requests.
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          summary('handover-1', InspectionType.PRE_HANDOVER, '2026-10-01'),
+          summary('return-old', InspectionType.RETURN, '2026-11-01'),
+          summary('return-new', InspectionType.RETURN, '2026-12-01'),
+        ]),
+    };
+    service = new ContractsService(
+      repo as unknown as Repository<Contract>,
+      { getRepository: jest.fn(() => inspectionRepo) } as unknown as DataSource,
+    );
+    repo.find.mockResolvedValue([{ id: 'contract-1' }, { id: 'contract-2' }]);
+
+    const [withInspections, bare] = await service.findMine('customer-1');
+
+    expect(inspectionRepo.find).toHaveBeenCalledWith({
+      where: {
+        contractId: In(['contract-1', 'contract-2']),
+        type: In([InspectionType.PRE_HANDOVER, InspectionType.RETURN]),
+      },
+      relations: { inspector: true },
+      order: { createdAt: 'ASC' },
+    });
+    expect(withInspections.handover).toMatchObject({
+      id: 'handover-1',
+      scheduled_at: new Date('2026-10-13T00:00:00Z'),
+      inspector_name: 'Staff A',
+    });
+    expect(withInspections.return).toMatchObject({ id: 'return-new' });
+    expect(bare.handover).toBeNull();
+    expect(bare.return).toBeNull();
+  });
 
   it('allows creation one millisecond before the 7-day deadline', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-12-08T00:00:00+07:00').getTime() - 1);
@@ -138,19 +194,74 @@ describe('ContractsService', () => {
   });
 
   it('updates normal contract fields without changing booking/customer links', async () => {
-    repo.findOne.mockResolvedValue({ id: 'contract-1', effectiveAt: item.requestedStartAt });
-    repo.update.mockResolvedValue({ affected: 1 });
-    await service.update('contract-1', { status: ContractStatus.ACTIVE, months: 12 });
-    expect(repo.update).toHaveBeenCalledWith(
+    const contract = { id: 'contract-1', effectiveAt: item.requestedStartAt };
+    manager.findOne.mockResolvedValue(contract);
+    await service.update('contract-1', { months: 12 });
+    expect(manager.findOne).toHaveBeenCalledWith(
+      Contract,
+      expect.objectContaining({ lock: { mode: 'pessimistic_write' } }),
+    );
+    expect(manager.update).toHaveBeenCalledWith(
+      Contract,
       { id: 'contract-1', deletedAt: IsNull() },
-      { status: ContractStatus.ACTIVE, months: 12 },
+      { months: 12 },
     );
   });
 
-  it('soft-deletes only live records and returns 404 when already deleted', async () => {
+  it('rejects sealed fields once the contract is signed', async () => {
+    manager.findOne.mockResolvedValue({
+      id: 'contract-1',
+      signedAt: new Date(),
+      effectiveAt: item.requestedStartAt,
+    });
+    await expect(service.update('contract-1', { months: 12 })).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'CONFLICT', details: { sealedFields: ['months'] } },
+    });
+    expect(manager.update).not.toHaveBeenCalled();
+  });
+
+  it('soft-deletes only finished contracts and returns 404 when already deleted', async () => {
     repo.softDelete.mockResolvedValueOnce({ affected: 1 }).mockResolvedValueOnce({ affected: 0 });
     await service.softDelete('contract-1');
-    expect(repo.softDelete).toHaveBeenCalledWith({ id: 'contract-1', deletedAt: IsNull() });
+    expect(repo.softDelete).toHaveBeenCalledWith({
+      id: 'contract-1',
+      status: In([ContractStatus.ENDED, ContractStatus.CANCELLED]),
+      deletedAt: IsNull(),
+    });
+    repo.findOne.mockResolvedValue(null);
     await expect(service.softDelete('contract-1')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it.each([ContractStatus.DRAFT, ContractStatus.ACTIVE])(
+    'refuses to soft-delete a %s contract — its unit would stay booked',
+    async (status) => {
+      repo.softDelete.mockResolvedValue({ affected: 0 });
+      repo.findOne.mockResolvedValue({ id: 'contract-1', status });
+      await expect(service.softDelete('contract-1')).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'CONFLICT', details: { status } },
+      });
+    },
+  );
+
+  it('sets the contract evidence URL', async () => {
+    repo.findOne.mockResolvedValue({ id: 'contract-1' });
+    repo.update.mockResolvedValue({ affected: 1 });
+    await service.uploadEvidence('contract-1', {
+      evidenceUrl: 'https://r2.example.com/uploads/a.jpg',
+    });
+    expect(repo.update).toHaveBeenCalledWith(
+      { id: 'contract-1', deletedAt: IsNull() },
+      { evidence: 'https://r2.example.com/uploads/a.jpg' },
+    );
+  });
+
+  it('returns 404 when setting evidence on a missing contract', async () => {
+    repo.findOne.mockResolvedValue(null);
+    await expect(
+      service.uploadEvidence('missing', { evidenceUrl: 'https://r2.example.com/uploads/a.jpg' }),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(repo.update).not.toHaveBeenCalled();
   });
 });

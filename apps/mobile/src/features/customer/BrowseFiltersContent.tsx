@@ -1,6 +1,6 @@
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import type { AreaPresetKey, BrowseCriteria } from '../../types/customer';
-import { AREA_PRESETS, PRICE_PRESETS } from './browse-filters';
+import { AREA_PRESETS, MAX_UNITS_PER_BOOKING, PRICE_PRESETS } from './browse-filters';
 import { ChipButton, FilterRow, isNarrowingChipVisible, withCount } from './FilterChips';
 import type { LocationOption } from './location-options';
 
@@ -61,7 +61,26 @@ export function BrowseFiltersContent({
 
   return (
     <View className="gap-5 px-4">
-      {provinceOptions.length > 1 ? (
+      <FilterRow label="Số kho cần thuê đồng thời">
+        {Array.from({ length: MAX_UNITS_PER_BOOKING }, (_, index) => index + 1).map((quantity) => (
+          <ChipButton
+            key={quantity}
+            isSelected={criteria.requestedQuantity === quantity}
+            label={`${quantity} kho`}
+            onPress={() => update({ requestedQuantity: quantity })}
+          />
+        ))}
+      </FilterRow>
+      {provinceOptions.length === 0 ? (
+        <View className="gap-1 rounded-xl bg-surface-secondary p-3">
+          <Text className="font-strong text-body-md text-foreground">Khu vực tìm kho</Text>
+          <Text className="font-body text-body-sm text-muted">
+            Thông tin tỉnh thành và phường/xã của các cơ sở đang được cập nhật. Bạn vẫn có thể lọc
+            theo kích thước và giá bên dưới.
+          </Text>
+        </View>
+      ) : null}
+      {provinceOptions.length > 0 ? (
         <FilterRow label="Khu vực">
           <ChipButton
             isSelected={criteria.provinceCode === null}

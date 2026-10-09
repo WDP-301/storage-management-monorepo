@@ -140,6 +140,13 @@ describe('WarehouseCommandService', () => {
         status: 400,
       });
     });
+
+    it('rejects 0,0 as a location', async () => {
+      await expect(
+        service.create({ ...createDto, latitude: 0, longitude: 0 }),
+      ).rejects.toMatchObject({ status: 400 });
+      expect(manager.save).not.toHaveBeenCalled();
+    });
   });
 
   describe('update', () => {
@@ -274,6 +281,29 @@ describe('WarehouseCommandService', () => {
       stubWarehouse(null, null);
 
       await expect(service.update('unit-x', { notes: 'x' })).rejects.toMatchObject({ status: 404 });
+    });
+
+    it('rejects moving one coordinate so the stored pair becomes 0,0', async () => {
+      stubWarehouse(
+        buildFacility(),
+        buildUnit({ latitude: '10.700000' as never, longitude: '0.000000' as never }),
+      );
+
+      await expect(service.update('unit-1', { latitude: 0 })).rejects.toMatchObject({
+        status: 400,
+      });
+      expect(manager.update).not.toHaveBeenCalled();
+    });
+
+    it('still edits other fields of a warehouse stored at 0,0', async () => {
+      stubWarehouse(
+        buildFacility(),
+        buildUnit({ latitude: '0.000000' as never, longitude: '0.000000' as never }),
+      );
+
+      await service.update('unit-1', { notes: 'x' });
+
+      expect(manager.update).toHaveBeenCalledWith(StorageUnit, 'unit-1', { notes: 'x' });
     });
   });
 

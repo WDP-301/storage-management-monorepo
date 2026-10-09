@@ -17,6 +17,7 @@ import { isIdleUnitStatus } from './unit-status';
 import type { WarehouseView } from './warehouse.view';
 import {
   assertNoNullRequiredFields,
+  assertRealLocation,
   handleDbError,
   pick,
   resolveAddressCodes,
@@ -66,6 +67,7 @@ export class WarehouseCommandService {
   ) {}
 
   async create(dto: CreateWarehouseDto): Promise<WarehouseView> {
+    assertRealLocation(dto.latitude, dto.longitude);
     const id = await this.units.manager.transaction(async (manager) => {
       const address = await resolveAddressCodes(manager, dto.wardCode, dto.provinceCode);
       assertFacilityActive(await lockFacility(manager, dto.facilityId));
@@ -96,6 +98,9 @@ export class WarehouseCommandService {
     await this.units.manager.transaction(async (manager) => {
       const targetFacility = dto.facilityId ? await lockFacility(manager, dto.facilityId) : null;
       const unit = await lockUnit(manager, id);
+      if (dto.latitude !== undefined || dto.longitude !== undefined) {
+        assertRealLocation(dto.latitude ?? unit.latitude, dto.longitude ?? unit.longitude);
+      }
 
       if (!isIdleUnitStatus(unit.status)) {
         const frozen = FROZEN_WHEN_OCCUPIED.filter((field) => changes(dto, field, unit));

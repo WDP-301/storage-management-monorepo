@@ -2,6 +2,8 @@ import { Button, LayerCard, Pagination, Text } from '@cloudflare/kumo';
 import {
   ArrowsClockwise,
   CheckCircle,
+  List,
+  MapTrifold,
   Plus,
   Stack,
   Warehouse as WarehouseIcon,
@@ -25,6 +27,7 @@ import {
   WarehouseFilters,
 } from './WarehouseFilters';
 import { WarehouseFormDialog } from './WarehouseFormDialog';
+import { WarehouseOverviewMap } from './WarehouseOverviewMap';
 import { WarehouseTable } from './WarehouseTable';
 
 const PAGE_SIZE = 20;
@@ -72,6 +75,8 @@ export const WarehouseManagementPage: React.FC = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Warehouse | null>(null);
   const [deleting, setDeleting] = useState<Warehouse | null>(null);
+  const [view, setView] = useState<'list' | 'map'>('list');
+  const [focusedWarehouseId, setFocusedWarehouseId] = useState<string | null>(null);
 
   const headerFacilityId = selectedFacility?.id ?? ALL;
   useEffect(() => {
@@ -89,6 +94,7 @@ export const WarehouseManagementPage: React.FC = () => {
 
   const updateFilters = (patch: Partial<WarehouseFilterState>) => {
     setFilters((prev) => ({ ...prev, ...patch }));
+    setFocusedWarehouseId(null);
     if (!('search' in patch)) setPage(1);
   };
   const facilityId = filters.facility !== ALL ? filters.facility : undefined;
@@ -182,7 +188,22 @@ export const WarehouseManagementPage: React.FC = () => {
 
   const resetFilters = () => {
     setFilters(EMPTY_FILTERS);
+    setFocusedWarehouseId(null);
     setPage(1);
+  };
+
+  useEffect(() => {
+    if (
+      focusedWarehouseId &&
+      !warehouses.some((warehouse) => warehouse.id === focusedWarehouseId)
+    ) {
+      setFocusedWarehouseId(null);
+    }
+  }, [warehouses, focusedWarehouseId]);
+
+  const editWarehouse = (warehouse: Warehouse) => {
+    setEditing(warehouse);
+    setFormOpen(true);
   };
 
   return (
@@ -254,15 +275,45 @@ export const WarehouseManagementPage: React.FC = () => {
         onReset={resetFilters}
       />
 
-      <WarehouseTable
-        warehouses={warehouses}
-        hasFilters={hasFilters}
-        onEdit={(w) => {
-          setEditing(w);
-          setFormOpen(true);
-        }}
-        onDelete={setDeleting}
-      />
+      <div className="flex items-center gap-2">
+        <Button
+          variant={view === 'list' ? 'primary' : 'secondary'}
+          icon={<List className="h-4 w-4" />}
+          onClick={() => setView('list')}
+        >
+          Danh sách
+        </Button>
+        <Button
+          variant={view === 'map' ? 'primary' : 'secondary'}
+          icon={<MapTrifold className="h-4 w-4" />}
+          onClick={() => {
+            setFocusedWarehouseId(null);
+            setView('map');
+          }}
+        >
+          Bản đồ
+        </Button>
+      </div>
+
+      {view === 'list' ? (
+        <WarehouseTable
+          warehouses={warehouses}
+          hasFilters={hasFilters}
+          onEdit={editWarehouse}
+          onViewMap={(warehouse) => {
+            setFocusedWarehouseId(warehouse.id);
+            setView('map');
+          }}
+          onDelete={setDeleting}
+        />
+      ) : (
+        <WarehouseOverviewMap
+          warehouses={warehouses}
+          page={page}
+          focusedWarehouseId={focusedWarehouseId}
+          onEdit={editWarehouse}
+        />
+      )}
 
       {total > 0 && (
         <div className="pt-2 border-t border-kumo-line">

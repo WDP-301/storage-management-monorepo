@@ -106,7 +106,7 @@ export function validateForm(form: WarehouseFormState, frozen = false): string |
   }
   const lat = num(form.latitude);
   const lng = num(form.longitude);
-  if (!(lat >= -90 && lat <= 90) || !(lng >= -180 && lng <= 180)) {
+  if (!(lat >= -90 && lat <= 90) || !(lng >= -180 && lng <= 180) || (lat === 0 && lng === 0)) {
     return 'Vui lòng chọn địa chỉ gợi ý hoặc nhập tọa độ hợp lệ.';
   }
   const price = num(form.monthlyPrice);

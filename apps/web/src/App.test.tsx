@@ -12,6 +12,7 @@ vi.mock('./lib/api', () => ({
   },
   FacilitiesApi: {
     mine: vi.fn().mockResolvedValue([]),
+    listAll: vi.fn().mockResolvedValue([]),
   },
   setUnauthorizedCallback: vi.fn(),
 }));

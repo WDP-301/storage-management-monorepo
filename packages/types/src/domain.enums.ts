@@ -185,6 +185,12 @@ export const InspectionStatus = {
 } as const;
 export type InspectionStatus = (typeof InspectionStatus)[keyof typeof InspectionStatus];
 
+export const DamageSeverity = {
+  MINOR: 'MINOR',
+  MAJOR: 'MAJOR',
+} as const;
+export type DamageSeverity = (typeof DamageSeverity)[keyof typeof DamageSeverity];
+
 export const DamageFeeStatus = {
   PROPOSED: 'PROPOSED',
   CONFIRMED: 'CONFIRMED',

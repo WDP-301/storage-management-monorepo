@@ -1,203 +1,179 @@
 import { AppUser } from '@entities/app-user.entity';
+import type { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
-import { isAssignmentActive } from '@modules/auth/role-assignment.util';
+import { activeFacilityIds } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import {
   DomainException,
   fieldValidationError,
   notFound,
 } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { UserRole, UserStatus } from '@storage/types';
-import { Repository } from 'typeorm';
+import { ContractStatus, UserRole, UserStatus } from '@storage/types';
+import { DataSource, type FindOptionsWhere, In, IsNull, Not } from 'typeorm';
 import { AssignInspectionDto } from './dto/assign-inspection.dto';
+import { ListInspectionsQueryDto } from './dto/list-inspections-query.dto';
 import { UpdateInspectionDto } from './dto/update-inspection.dto';
-import { UploadInspectionEvidenceDto } from './dto/upload-inspection-evidence.dto';
+import {
+  assertInspectorOrManager,
+  assertManagesInspection,
+  assertNotFinalized,
+  INSPECTION_RELATIONS,
+  isGlobalManager,
+  loadInspectionFacilityId,
+  loadManagedFacilityIds,
+  managesInspectionFacility,
+  withPublicInspector,
+} from './inspection-access.util';
 
 @Injectable()
 export class InspectionService {
-  constructor(
-    @InjectRepository(Inspection)
-    private readonly inspections: Repository<Inspection>,
-    @InjectRepository(AppUser)
-    private readonly users: Repository<AppUser>,
-    @InjectRepository(UserRoleAssignment)
-    private readonly roleAssignments: Repository<UserRoleAssignment>,
-  ) {}
+  constructor(private readonly dataSource: DataSource) {}
 
-  /** Unscoped list — the controller restricts it to managers/admin. */
-  findAll(): Promise<Inspection[]> {
-    return this.inspections.find({
-      relations: { contract: true },
-      order: { createdAt: 'DESC' },
+  private get em() {
+    return this.dataSource.manager;
+  }
+
+  /** Manager view; FACILITY_MANAGER only sees the facilities they manage. */
+  async findAll(actor: AuthUser, query: ListInspectionsQueryDto = {}): Promise<Inspection[]> {
+    let facilityIds: string[] | undefined = query.facilityId ? [query.facilityId] : undefined;
+    if (!isGlobalManager(actor)) {
+      const managed = await loadManagedFacilityIds(this.em, actor.id);
+      facilityIds = facilityIds ? facilityIds.filter((id) => managed.includes(id)) : managed;
+      if (facilityIds.length === 0) return [];
+    }
+    return this.list({
+      ...this.filters(query),
+      ...(facilityIds
+        ? { contract: { bookingItem: { storageUnit: { facilityId: In(facilityIds) } } } }
+        : {}),
     });
   }
 
-  /**
-   * Customer view: every inspection whose contract belongs to the caller.
-   * Chain: inspection → contract → customer.
-   */
+  /** Customer view: every inspection whose contract belongs to the caller. */
   findMyInspections(actor: AuthUser): Promise<Inspection[]> {
-    return this.inspections.find({
-      where: { contract: { customerId: actor.id } },
-      relations: { contract: true },
-      order: { createdAt: 'DESC' },
-    });
+    return this.list({ contract: { customerId: actor.id } });
   }
 
   /** Staff view: every inspection assigned to the caller (`inspected_by = me`). */
-  findStaffInspections(actor: AuthUser): Promise<Inspection[]> {
-    return this.inspections.find({
-      where: { inspectedBy: actor.id },
-      relations: { contract: true },
-      order: { createdAt: 'DESC' },
-    });
+  findStaffInspections(
+    actor: AuthUser,
+    query: ListInspectionsQueryDto = {},
+  ): Promise<Inspection[]> {
+    return this.list({ ...this.filters(query), inspectedBy: actor.id });
   }
 
-  /**
-   * Returns an inspection when the actor is privileged (ADMIN /
-   * OPERATIONS_MANAGER / FACILITY_MANAGER) or belongs to it (contract
-   * owner or assigned inspector); anything else is 403.
-   * Ownership chain: inspection → contract → customer.
-   */
+  /** Readable by the contract owner, the assigned inspector and managers of the facility. */
   async findById(id: string, actor: AuthUser): Promise<Inspection> {
-    const inspection = await this.inspections.findOne({
+    const inspection = await this.em.findOne(Inspection, {
       where: { id },
-      relations: { contract: true },
+      relations: INSPECTION_RELATIONS,
     });
     if (!inspection) notFound('Inspection', id);
-    if (!this.isPrivileged(actor) && !this.belongsTo(inspection, actor)) {
+    const ownsOrInspects =
+      inspection.contract?.customerId === actor.id || inspection.inspectedBy === actor.id;
+    if (!ownsOrInspects && !(await managesInspectionFacility(this.em, inspection, actor))) {
       throw new DomainException(
         ErrorCode.FORBIDDEN,
         'You do not have access to this inspection',
         HttpStatus.FORBIDDEN,
       );
     }
-    return inspection;
+    return withPublicInspector(inspection);
   }
 
-  /** inspection → contract → customer, or the assigned inspector. */
-  private belongsTo(inspection: Inspection, actor: AuthUser): boolean {
-    return inspection.contract?.customerId === actor.id || inspection.inspectedBy === actor.id;
-  }
+  /** Assigns an ACTIVE user holding an active FACILITY_STAFF role at the unit's facility. */
+  async assignStaff(id: string, dto: AssignInspectionDto, actor: AuthUser): Promise<Inspection> {
+    return this.dataSource.transaction(async (em) => {
+      const inspection = await em.findOne(Inspection, {
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!inspection) notFound('Inspection', id);
+      await assertManagesInspection(em, inspection, actor);
+      assertNotFinalized(inspection);
 
-  private isPrivileged(actor: AuthUser): boolean {
-    return (
-      actor.roles.includes(UserRole.ADMIN) ||
-      actor.roles.includes(UserRole.OPERATIONS_MANAGER) ||
-      actor.roles.includes(UserRole.FACILITY_MANAGER)
-    );
-  }
+      const assignee = await em.findOne(AppUser, {
+        where: { id: dto.inspectedBy, status: UserStatus.ACTIVE },
+      });
+      if (!assignee) {
+        throw fieldValidationError('inspectedBy', 'notFound', 'Staff user does not exist');
+      }
 
-  /**
-   * Assigns a staff member as the inspector. The assignee must be an ACTIVE
-   * user holding an active FACILITY_STAFF role; arbitrary users are rejected.
-   */
-  async assignStaff(id: string, dto: AssignInspectionDto): Promise<Inspection> {
-    const inspection = await this.inspections.findOne({ where: { id } });
-    if (!inspection) notFound('Inspection', id);
-
-    const assignee = await this.users.findOne({
-      where: { id: dto.inspectedBy, status: UserStatus.ACTIVE },
-    });
-    if (!assignee) {
-      throw fieldValidationError('inspectedBy', 'notFound', 'Staff user does not exist');
-    }
-
-    const staffAssignments = await this.roleAssignments.find({
-      where: { userId: dto.inspectedBy, role: UserRole.FACILITY_STAFF },
-    });
-    if (!staffAssignments.some((assignment) => isAssignmentActive(assignment))) {
-      throw fieldValidationError(
-        'inspectedBy',
-        'notStaff',
-        'User is not an active facility staff member',
-      );
-    }
-
-    inspection.inspectedBy = dto.inspectedBy;
-    return this.inspections.save(inspection);
-  }
-
-  /**
-   * Updates inspection fields. Allowed for the assigned inspector
-   * (`inspected_by = actor.id`) and for FACILITY_MANAGER /
-   * OPERATIONS_MANAGER; any other staff member gets 403. `inspected_by`
-   * itself can only change through the assign endpoint.
-   */
-  async update(id: string, dto: UpdateInspectionDto, actor: AuthUser): Promise<Inspection> {
-    const inspection = await this.inspections.findOne({ where: { id } });
-    if (!inspection) notFound('Inspection', id);
-
-    const isAssignee = inspection.inspectedBy === actor.id;
-    const isManager =
-      actor.roles.includes(UserRole.FACILITY_MANAGER) ||
-      actor.roles.includes(UserRole.OPERATIONS_MANAGER);
-    if (!isAssignee && !isManager) {
-      throw new DomainException(
-        ErrorCode.FORBIDDEN,
-        'Only the assigned inspector or a manager can update this inspection',
-        HttpStatus.FORBIDDEN,
-      );
-    }
-
-    if (dto.conditionNotes !== undefined) {
-      inspection.conditionNotes = dto.conditionNotes as string | undefined;
-    }
-    if (dto.evidence !== undefined) inspection.evidence = dto.evidence as any[];
-    if (dto.damages !== undefined) inspection.damages = dto.damages as any[];
-    if (dto.finalizedAt !== undefined) {
-      inspection.finalizedAt = (dto.finalizedAt ? new Date(dto.finalizedAt) : null) as
-        | Date
-        | undefined;
-    }
-
-    return this.inspections.save(inspection);
-  }
-
-  /**
-   * Appends an R2 public URL to the inspection evidence array (plain strings).
-   * The file itself is uploaded by the client beforehand via
-   * POST /uploads/presigned-url + PUT to R2 — this endpoint only stores the link.
-   * Allowed for the assigned inspector (`inspected_by = actor.id`) and for
-   * FACILITY_MANAGER / OPERATIONS_MANAGER; anything else gets 403.
-   */
-  async uploadEvidence(
-    id: string,
-    dto: UploadInspectionEvidenceDto,
-    actor: AuthUser,
-  ): Promise<Inspection> {
-    const inspection = await this.inspections.findOne({ where: { id } });
-    if (!inspection) notFound('Inspection', id);
-
-    const isAssignee = inspection.inspectedBy === actor.id;
-    const isManager =
-      actor.roles.includes(UserRole.FACILITY_MANAGER) ||
-      actor.roles.includes(UserRole.OPERATIONS_MANAGER);
-    if (!isAssignee && !isManager) {
-      throw new DomainException(
-        ErrorCode.FORBIDDEN,
-        'Only the assigned inspector or a manager can upload evidence for this inspection',
-        HttpStatus.FORBIDDEN,
-      );
-    }
-
-    const evidence = Array.isArray(inspection.evidence) ? inspection.evidence : [];
-    if (!evidence.includes(dto.evidenceUrl)) {
-      if (evidence.length >= 20) {
+      const staffAssignments = await em.find(UserRoleAssignment, {
+        where: { userId: dto.inspectedBy, role: UserRole.FACILITY_STAFF },
+      });
+      const facilityId = await loadInspectionFacilityId(em, inspection);
+      if (!facilityId || !activeFacilityIds(staffAssignments).includes(facilityId)) {
         throw fieldValidationError(
-          'evidenceUrl',
-          'maxItems',
-          'Inspection evidence cannot exceed 20 items',
+          'inspectedBy',
+          'notStaff',
+          'User is not an active staff member of this facility',
         );
       }
-      evidence.push(dto.evidenceUrl);
-    }
-    inspection.evidence = evidence;
 
-    return this.inspections.save(inspection);
+      inspection.inspectedBy = dto.inspectedBy;
+      return em.save(Inspection, inspection);
+    });
+  }
+
+  /**
+   * Updates inspection fields (assigned inspector or a manager of the facility).
+   * `inspected_by` only changes through assign, `finalized_at` only through finalize.
+   */
+  async update(id: string, dto: UpdateInspectionDto, actor: AuthUser): Promise<Inspection> {
+    // Row lock: a save racing a finalize must see the committed finalizedAt (409),
+    // not write its stale copy back and clear it.
+    return this.dataSource.transaction(async (em) => {
+      const inspection = await em.findOne(Inspection, {
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!inspection) notFound('Inspection', id);
+      await assertInspectorOrManager(
+        em,
+        inspection,
+        actor,
+        'Only the assigned inspector or a manager can update this inspection',
+      );
+      assertNotFinalized(inspection);
+
+      if (dto.conditionNotes !== undefined) {
+        inspection.conditionNotes = dto.conditionNotes;
+      }
+      if (dto.evidence !== undefined) inspection.evidence = dto.evidence;
+      if (dto.damages !== undefined) inspection.damages = dto.damages;
+      await em.save(Inspection, inspection);
+      // Clients re-render from this response, so it carries the same relations as a read.
+      const reloaded = await em.findOne(Inspection, {
+        where: { id },
+        relations: INSPECTION_RELATIONS,
+      });
+      return withPublicInspector(reloaded ?? inspection);
+    });
+  }
+
+  private filters(query: ListInspectionsQueryDto): FindOptionsWhere<Inspection> {
+    return {
+      ...(query.type ? { type: query.type } : {}),
+      ...(query.status === 'open' ? { finalizedAt: IsNull() } : {}),
+      ...(query.status === 'done' ? { finalizedAt: Not(IsNull()) } : {}),
+    };
+  }
+
+  private async list(where: FindOptionsWhere<Inspection>): Promise<Inspection[]> {
+    // A cancelled contract never reaches handover, so its inspection is not work to do.
+    const contract = {
+      ...(where.contract as FindOptionsWhere<Contract> | undefined),
+      status: Not(ContractStatus.CANCELLED),
+    };
+    const rows = await this.em.find(Inspection, {
+      where: { ...where, contract },
+      relations: INSPECTION_RELATIONS,
+      order: { scheduledAt: { direction: 'ASC', nulls: 'LAST' }, createdAt: 'DESC' },
+    });
+    return rows.map(withPublicInspector);
   }
 }

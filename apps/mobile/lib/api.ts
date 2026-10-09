@@ -14,12 +14,15 @@ type ApiEnvelope<T> = {
 type ApiErrorEnvelope = {
   message?: string | string[];
   statusCode?: number;
+  code?: string;
 };
 
 export class ApiError extends Error {
   constructor(
     message: string,
     readonly statusCode?: number,
+    /** Machine code from the API error body (e.g. CONFLICT) — stable, unlike message text. */
+    readonly code?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -80,7 +83,8 @@ export async function request<T>(
     if (response.status === 401) {
       unauthorizedHandler?.();
     }
-    throw new ApiError(message, response.status);
+    const code = payload && 'code' in payload ? payload.code : undefined;
+    throw new ApiError(message, response.status, code);
   }
 
   if (payload && 'success' in payload && 'data' in payload) {

@@ -12,7 +12,7 @@ export type PickedFile = {
   uri: string;
   name: string;
   mimeType: string;
-  /** May be 0/undefined from the picker — resolved against the filesystem before presigning. */
+  /** The picker's size hint; the real size is read from the filesystem before presigning. */
   size?: number;
 };
 
@@ -22,8 +22,10 @@ export const UploadsApi = {
    * into the URL, so the declared size must equal the real byte count or S3 rejects the PUT.
    */
   uploadImage: async (file: PickedFile): Promise<TicketAttachment> => {
-    const info = file.size && file.size > 0 ? null : await FileSystem.getInfoAsync(file.uri);
-    const size = file.size && file.size > 0 ? file.size : info?.exists ? info.size : 0;
+    // Measure the file on disk: the picker's `fileSize` can describe the original image rather
+    // than the re-compressed copy (quality < 1), and a mismatch makes S3 reject the signed PUT.
+    const info = await FileSystem.getInfoAsync(file.uri);
+    const size = info.exists && info.size > 0 ? info.size : (file.size ?? 0);
     if (!size) {
       throw new ApiError('Không đọc được kích thước ảnh.');
     }

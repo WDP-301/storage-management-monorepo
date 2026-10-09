@@ -19,7 +19,6 @@ import {
   Eye,
   Lifebuoy,
   MagnifyingGlass,
-  Paperclip,
   Trash,
   UserCheck,
   UserPlus,
@@ -30,9 +29,11 @@ import {
 } from '@phosphor-icons/react';
 import { TicketPriority, TicketStatus, UserRole } from '@storage/types';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { type FileRef, SignedFileLink } from '../../components/SignedFile';
 import { useAuth } from '../../context/AuthContext';
-import { TicketsApi } from '../../lib/api';
+import { FacilitiesApi, TicketsApi } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
+import type { FacilityStaffMember } from '../../types/inspection';
 import type {
   ServiceTicketRecord,
   TicketUserInfo,
@@ -79,29 +80,20 @@ const CANCELLABLE_STATUSES: readonly TicketStatus[] = [
   TicketStatus.IN_PROGRESS,
 ];
 
-const formatFileSize = (bytes: number) =>
-  bytes >= 1048576
-    ? `${(bytes / 1048576).toFixed(1)} MB`
-    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
-
-interface AttachmentView {
-  name: string;
-  url?: string;
-  size?: number;
-}
-
-/** Attachments are free-form file refs ({name, key, url|publicUrl, size} or a bare string). */
-const toAttachmentView = (a: unknown, idx: number): AttachmentView => {
+/** Attachments are free-form file refs ({fileKey|key, name, url|publicUrl, size} or a bare string). */
+const toFileRef = (a: unknown, idx: number): FileRef => {
   if (typeof a === 'string') {
     return { name: a.split('/').pop() || a, url: a };
   }
   if (a && typeof a === 'object') {
     const o = a as Record<string, unknown>;
+    const fileKey = (o.fileKey ?? o.key) as string | undefined;
     const url = (o.url ?? o.publicUrl ?? o.href) as string | undefined;
-    const rawName = o.name ?? o.fileName ?? o.filename ?? o.key ?? url;
+    const rawName = o.name ?? o.fileName ?? o.filename ?? fileKey ?? url;
     const name = String(rawName ?? `Tệp đính kèm ${idx + 1}`);
     return {
       name: name.split('/').pop() || name,
+      fileKey: fileKey ? String(fileKey) : undefined,
       url: url ? String(url) : undefined,
       size: typeof o.size === 'number' ? o.size : undefined,
     };
@@ -136,6 +128,8 @@ export const ManagerTicketsPage: React.FC = () => {
   const [ticketToDelete, setTicketToDelete] = useState<ServiceTicketRecord | null>(null);
   const [ticketToCancel, setTicketToCancel] = useState<ServiceTicketRecord | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
+  /** Staff of the ticket's facility, loaded when the assign dialog opens (null = loading). */
+  const [facilityStaff, setFacilityStaff] = useState<FacilityStaffMember[] | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
 
   // Edit form state (detail modal)
@@ -221,6 +215,10 @@ export const ManagerTicketsPage: React.FC = () => {
   const handleOpenAssignModal = (ticket: ServiceTicketRecord) => {
     setAssignModalTicket(ticket);
     setSelectedStaffId(ticket.assigned_to || '');
+    setFacilityStaff(null);
+    FacilitiesApi.listStaff(ticket.facility_id)
+      .then(setFacilityStaff)
+      .catch(() => setFacilityStaff([]));
   };
 
   const handleConfirmAssign = async () => {
@@ -236,7 +234,7 @@ export const ManagerTicketsPage: React.FC = () => {
 
       const staffName =
         updatedTicket.assignee?.full_name ??
-        availableStaff.find((s) => s.id === selectedStaffId)?.full_name ??
+        facilityStaff?.find((s) => s.id === selectedStaffId)?.fullName ??
         'nhân viên mới';
       const successMsg = `Đã phân công vé ${assignModalTicket.ticket_no} cho nhân viên ${staffName} thành công.`;
       setActionSuccessMessage(successMsg);
@@ -464,13 +462,13 @@ export const ManagerTicketsPage: React.FC = () => {
         );
       case TicketStatus.ASSIGNED:
         return (
-          <Badge variant="primary" appearance="dot">
+          <Badge variant="neutral" appearance="dot">
             {label}
           </Badge>
         );
       case TicketStatus.IN_PROGRESS:
         return (
-          <Badge variant="info" appearance="dot">
+          <Badge variant="neutral" appearance="dot">
             {label}
           </Badge>
         );
@@ -582,7 +580,7 @@ export const ManagerTicketsPage: React.FC = () => {
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-semibold text-kumo-default">{inProgressCount}</span>
-            <Badge variant="info" appearance="dot">
+            <Badge variant="neutral" appearance="dot">
               Kỹ thuật đang làm
             </Badge>
           </div>
@@ -913,7 +911,11 @@ export const ManagerTicketsPage: React.FC = () => {
                   >
                     Chọn nhân viên tiếp nhận ca trực
                   </label>
-                  {availableStaff.length > 0 && (
+                  {facilityStaff === null ? (
+                    <Text variant="secondary">Đang tải danh sách nhân viên…</Text>
+                  ) : facilityStaff.length === 0 ? (
+                    <Text variant="secondary">Cơ sở này chưa có nhân viên đang làm việc.</Text>
+                  ) : (
                     <select
                       id="staff-select"
                       aria-label="Chọn nhân viên tiếp nhận ca trực"
@@ -922,33 +924,16 @@ export const ManagerTicketsPage: React.FC = () => {
                       className="w-full h-10 px-3 text-sm bg-kumo-base border border-kumo-line text-kumo-default rounded-lg focus:outline-none focus:ring-2 focus:ring-kumo-brand/30"
                     >
                       <option value="">
-                        -- Chọn từ danh sách nhân viên kỹ thuật ({availableStaff.length} người) --
+                        -- Chọn nhân viên của cơ sở ({facilityStaff.length} người) --
                       </option>
-                      {availableStaff.map((staff) => (
+                      {facilityStaff.map((staff) => (
                         <option key={staff.id} value={staff.id}>
-                          {staff.full_name} ({staff.email})
+                          {staff.fullName}
+                          {staff.phone ? ` · ${staff.phone}` : ''}
                         </option>
                       ))}
                     </select>
                   )}
-                  <div>
-                    <label
-                      htmlFor="manual-staff-uuid"
-                      className="block text-xs text-kumo-subtle mb-1"
-                    >
-                      {availableStaff.length > 0
-                        ? 'Hoặc nhập trực tiếp mã UUID nhân viên kỹ thuật:'
-                        : 'Nhập mã UUID nhân viên kỹ thuật (Staff User ID):'}
-                    </label>
-                    <input
-                      id="manual-staff-uuid"
-                      type="text"
-                      placeholder="VD: 01925b6a-9b10-7e8c-e001-000000000001"
-                      value={selectedStaffId}
-                      onChange={(e) => setSelectedStaffId(e.target.value.trim())}
-                      className="w-full h-10 px-3 text-xs bg-kumo-base border border-kumo-line text-kumo-default rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-kumo-brand/30"
-                    />
-                  </div>
                 </div>
 
                 {/* Current Assignee Note */}
@@ -1116,36 +1101,9 @@ export const ManagerTicketsPage: React.FC = () => {
                       Tệp đính kèm:
                     </span>
                     <div className="space-y-1.5">
-                      {selectedTicket.attachments.map((a, idx) => {
-                        const att = toAttachmentView(a, idx);
-                        return (
-                          <div
-                            key={idx}
-                            className="flex items-center gap-2 p-2.5 bg-kumo-control rounded-lg border border-kumo-line text-xs"
-                          >
-                            <Paperclip className="w-3.5 h-3.5 text-kumo-subtle shrink-0" />
-                            {att.url ? (
-                              <a
-                                href={att.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="font-medium text-kumo-brand hover:underline truncate"
-                              >
-                                {att.name}
-                              </a>
-                            ) : (
-                              <span className="font-medium text-kumo-default truncate">
-                                {att.name}
-                              </span>
-                            )}
-                            {att.size != null && (
-                              <span className="ml-auto text-kumo-subtle shrink-0">
-                                {formatFileSize(att.size)}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
+                      {selectedTicket.attachments.map((a, idx) => (
+                        <SignedFileLink key={idx} file={toFileRef(a, idx)} />
+                      ))}
                     </div>
                   </div>
                 )}

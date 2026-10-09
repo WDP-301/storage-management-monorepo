@@ -25,13 +25,21 @@ export class Inspection {
   inspectedBy?: string;
 
   @Column({ type: 'text', nullable: true, name: 'condition_notes' })
-  conditionNotes?: string;
+  conditionNotes?: string | null;
+
+  /** What the customer asked for when requesting a return; the inspector never edits it. */
+  @Column({ type: 'text', nullable: true, name: 'request_note' })
+  requestNote?: string | null;
 
   @Column({ type: 'jsonb', default: () => "'[]'" })
   evidence: any[];
 
   @Column({ type: 'jsonb', default: () => "'[]'" })
   damages: any[];
+
+  /** Appointment for the handover/return visit, so staff can plan their schedule. */
+  @Column({ type: 'timestamptz', nullable: true, name: 'scheduled_at' })
+  scheduledAt?: Date;
 
   @Column({ type: 'timestamptz', nullable: true, name: 'inspected_at' })
   inspectedAt?: Date;

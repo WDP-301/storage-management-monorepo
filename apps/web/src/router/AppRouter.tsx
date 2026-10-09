@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { UserManagementPage } from '../features/admin/UserManagementPage';
 import { AuthPage } from '../features/auth/AuthPage';
+import { ManagerInspectionsPage } from '../features/inspections/ManagerInspectionsPage';
 import { FacilityManagerDashboard } from '../features/roles/FacilityManagerDashboard';
 import { RoleLandingPage } from '../features/roles/RoleLandingPage';
 import { UnassignedRolePage } from '../features/roles/UnassignedRolePage';
@@ -97,6 +98,7 @@ export const AppRouter: React.FC = () => {
             >
               <Route path="/facility-manager" element={<FacilityManagerDashboard />} />
               <Route path="/facility-manager/tickets" element={<ManagerTicketsPage />} />
+              <Route path="/facility-manager/inspections" element={<ManagerInspectionsPage />} />
             </Route>
 
             {/* Unassigned role fallback view (accessible to any authenticated user) */}

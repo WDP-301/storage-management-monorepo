@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { AppUser } from '@entities/app-user.entity';
 import { Booking } from '@entities/booking.entity';
 import { BookingItem } from '@entities/booking-item.entity';
 import { IdempotencyKey } from '@entities/idempotency-key.entity';
@@ -6,6 +7,7 @@ import { Payment } from '@entities/payment.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { persistContract } from '@modules/contracts/initial-contract.util';
 import { generatePaymentNo } from '@modules/payments/payment-no.util';
 import { PAYMENT_EVENTS, PaymentReceivedEvent } from '@modules/payments/types/payment';
 import { buildVietQrUrl } from '@modules/payments/vietqr.util';
@@ -23,6 +25,7 @@ import { claimIdempotencyKey, releaseIdempotencyKey } from '@shared/utils/idempo
 import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import {
   BookingStatus,
+  ContractStatus,
   HoldStatus,
   IdempotencyStatus,
   PaymentMethod,
@@ -753,7 +756,15 @@ export class BookingsService implements OnApplicationBootstrap {
     };
 
     const now = new Date();
-    let outcome: 'confirmed' | 'partial' | 'late' | 'status-changed' | 'already-recorded';
+    let outcome:
+      | 'confirmed'
+      | 'partial'
+      | 'late'
+      | 'status-changed'
+      | 'already-recorded'
+      | 'needs-review';
+    let reviewReason = '';
+    const contractNos: string[] = [];
     try {
       outcome = await this.dataSource.transaction(async (em) => {
         // Serialize all webhook deliveries for this booking on its row lock — priorPaid
@@ -806,6 +817,38 @@ export class BookingsService implements OnApplicationBootstrap {
         });
         if (leftoverHolds > 0) throw new LatePaymentError();
 
+        // Deposit settled: each item gets a DRAFT contract + handover inspection and its
+        // unit moves HELD → BOOKED. Any failure rolls back the payment too so the
+        // webhook retry replays the whole confirmation.
+        const items = await em.find(BookingItem, { where: { bookingId: booking.id } });
+        if (items.length > 0) {
+          const customer = await em.findOneOrFail(AppUser, { where: { id: locked.customerId } });
+          for (const item of items) {
+            const contract = await persistContract(em, {
+              item,
+              customer,
+              status: ContractStatus.DRAFT,
+              effectiveAt: item.requestedStartAt,
+            });
+            contractNos.push(contract.contractNo);
+          }
+          // Every item's unit must still be HELD — if one drifted (manual fix, stale
+          // data), a contract pointing at an unbooked unit can never finalize.
+          const booked = await em.update(
+            StorageUnit,
+            { id: In(items.map((i) => i.storageUnitId)), status: StorageUnitStatus.HELD },
+            { status: StorageUnitStatus.BOOKED },
+          );
+          if (booked.affected !== items.length) {
+            throw new DomainException(
+              ErrorCode.CONFLICT,
+              'Not all units were HELD for this booking — confirmation rolled back',
+              HttpStatus.CONFLICT,
+              { bookingId: booking.id, expected: items.length, moved: booked.affected },
+            );
+          }
+        }
+
         return 'confirmed' as const;
       });
     } catch (err) {
@@ -813,6 +856,12 @@ export class BookingsService implements OnApplicationBootstrap {
         outcome = 'late';
       } else if (isUniqueViolation(err)) {
         outcome = 'already-recorded';
+      } else if (err instanceof DomainException) {
+        // A deliberate refusal inside the transaction (duplicate contract, unit not
+        // HELD) must not 500 — that would make SePay retry a webhook that can never
+        // succeed. Keep the receipt below and flag it for a human.
+        outcome = 'needs-review';
+        reviewReason = err.message;
       } else {
         throw err;
       }
@@ -820,7 +869,7 @@ export class BookingsService implements OnApplicationBootstrap {
 
     if (outcome === 'confirmed') {
       this.logger.log(
-        `Booking ${booking.bookingNo} confirmed via payment sepayId=${event.sepayId} amount=${event.amount}`,
+        `Booking ${booking.bookingNo} confirmed via payment sepayId=${event.sepayId} amount=${event.amount} contracts=[${contractNos.join(', ')}]`,
       );
       return;
     }
@@ -845,6 +894,10 @@ export class BookingsService implements OnApplicationBootstrap {
     if (outcome === 'late') {
       this.logger.warn(
         `Payment sepayId=${event.sepayId} for booking ${booking.bookingNo} arrived after holds expired — manual reconciliation needed`,
+      );
+    } else if (outcome === 'needs-review') {
+      this.logger.warn(
+        `Payment sepayId=${event.sepayId} for booking ${booking.bookingNo} could not confirm: ${reviewReason} — manual reconciliation needed`,
       );
     } else {
       this.logger.warn(`Booking ${booking.bookingNo} status changed concurrently, skipping`);

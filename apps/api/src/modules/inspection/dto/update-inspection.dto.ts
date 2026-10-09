@@ -1,32 +1,36 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
-  IsDateString,
   IsOptional,
   IsString,
   MaxLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
+import { DamageDto, EvidenceFileDto } from './inspection-evidence.dto';
 
 export class UpdateInspectionDto {
   @ApiPropertyOptional({ maxLength: 5000, nullable: true })
-  @ValidateIf((_object, value) => value !== undefined)
+  @ValidateIf((_object, value) => value != null)
   @IsString()
   @MaxLength(5000)
   conditionNotes?: string | null;
 
-  @ApiPropertyOptional({ type: [Object] })
+  @ApiPropertyOptional({ type: [EvidenceFileDto], maxItems: 20 })
   @IsOptional()
   @IsArray()
-  evidence?: unknown[];
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => EvidenceFileDto)
+  evidence?: EvidenceFileDto[];
 
-  @ApiPropertyOptional({ type: [Object] })
+  @ApiPropertyOptional({ type: [DamageDto], maxItems: 20 })
   @IsOptional()
   @IsArray()
-  damages?: unknown[];
-
-  @ApiPropertyOptional({ format: 'date-time', nullable: true })
-  @ValidateIf((_object, value) => value !== undefined)
-  @IsDateString()
-  finalizedAt?: string | null;
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => DamageDto)
+  damages?: DamageDto[];
 }

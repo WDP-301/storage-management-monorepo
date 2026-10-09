@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { AppUser } from '@entities/app-user.entity';
 import { Booking } from '@entities/booking.entity';
 import { BookingItem } from '@entities/booking-item.entity';
@@ -8,12 +7,11 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { isUniqueViolation } from '@shared/utils/pg-error.util';
-import { BookingStatus, ContractKind, ContractStatus, InspectionType } from '@storage/types';
-import Decimal from 'decimal.js';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { BookingStatus, ContractStatus, InspectionType } from '@storage/types';
+import { DataSource, In, IsNull, Repository } from 'typeorm';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
 import { UploadContractEvidenceDto } from './dto/upload-contract-evidence.dto';
+import { persistContract } from './initial-contract.util';
 import { type CustomerContractRecord, toCustomerContractRecord } from './types/customer-contract';
 
 const CONTRACT_CREATION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -73,55 +71,16 @@ export class ContractsService {
       const endedAt = dto.endedAt ? new Date(dto.endedAt) : undefined;
       this.validateDates(effectiveAt, endedAt);
 
-      // Each item already stores MONTHLY rent. Its total is monthly rent * rentalMonths;
-      // dividing that item total by rentalMonths yields this snapshot, without using
-      // the whole booking subtotal (which may include other units and rental terms).
-      const monthlyPriceSnapshot = new Decimal(item.monthlyPriceSnapshot).toFixed(2);
-      const contract = manager.create(Contract, {
-        contractNo: `CT-${randomUUID()}`,
-        bookingItemId: item.id,
-        customerId: booking.customerId,
-        kind: dto.kind ?? ContractKind.INITIAL,
-        status: dto.status ?? ContractStatus.DRAFT,
+      return persistContract(manager, {
+        item,
+        customer,
+        kind: dto.kind,
         effectiveAt,
         endedAt,
         signedAt: dto.signedAt ? new Date(dto.signedAt) : undefined,
-        months: item.rentalMonths,
-        monthlyPriceSnapshot: monthlyPriceSnapshot as unknown as number,
-        termsSnapshot: dto.termsSnapshot ?? {},
-        evidence: dto.evidence ?? null,
-        customerSnapshot: {
-          id: customer.id,
-          fullName: customer.fullName,
-          email: customer.email,
-          phone: customer.phone ?? null,
-        },
+        termsSnapshot: dto.termsSnapshot,
+        evidence: dto.evidence,
       });
-      let saved: Contract;
-      try {
-        saved = await manager.save(Contract, contract);
-      } catch (err) {
-        // UQ_contract_initial_item — a second INITIAL contract raced past the item lock.
-        if (isUniqueViolation(err)) {
-          throw new DomainException(
-            ErrorCode.CONFLICT,
-            'An initial contract already exists for this booking item',
-            HttpStatus.CONFLICT,
-            { bookingItemId: item.id },
-          );
-        }
-        throw err;
-      }
-      // Auto-create an empty PRE_HANDOVER inspection for the new contract.
-      // Same transaction: inspection failure rolls back the contract.
-      // Other fields use entity/DB defaults (evidence/damages=[],
-      // inspectedBy/conditionNotes/inspectedAt/finalizedAt=NULL).
-      const inspection = manager.create(Inspection, {
-        contractId: saved.id,
-        type: InspectionType.PRE_HANDOVER,
-      });
-      await manager.save(Inspection, inspection);
-      return saved;
     });
   }
 
@@ -135,7 +94,25 @@ export class ContractsService {
       relations: { bookingItem: { storageUnit: { facility: true, unitType: true } } },
       order: { effectiveAt: 'DESC' },
     });
-    return contracts.map(toCustomerContractRecord);
+    if (contracts.length === 0) return [];
+
+    // Oldest first, so the latest RETURN wins when several exist for one contract.
+    const inspections = await this.dataSource.getRepository(Inspection).find({
+      where: {
+        contractId: In(contracts.map((c) => c.id)),
+        type: In([InspectionType.PRE_HANDOVER, InspectionType.RETURN]),
+      },
+      relations: { inspector: true },
+      order: { createdAt: 'ASC' },
+    });
+    const byContract = new Map<string, { handover?: Inspection; return?: Inspection }>();
+    for (const inspection of inspections) {
+      const entry = byContract.get(inspection.contractId) ?? {};
+      if (inspection.type === InspectionType.PRE_HANDOVER) entry.handover = inspection;
+      else entry.return = inspection;
+      byContract.set(inspection.contractId, entry);
+    }
+    return contracts.map((c) => toCustomerContractRecord(c, byContract.get(c.id)));
   }
 
   async findById(id: string): Promise<Contract> {
@@ -145,52 +122,76 @@ export class ContractsService {
   }
 
   async update(id: string, dto: UpdateContractDto): Promise<Contract> {
-    const contract = await this.findById(id);
+    // Row lock: a handover finalize stamping signedAt must commit before this read,
+    // or the sealed-field check would pass against a stale unsigned copy.
+    return this.dataSource.transaction(async (em) => {
+      const contract = await em.findOne(Contract, {
+        where: { id, deletedAt: IsNull() },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!contract) notFound('Contract', id);
 
-    // signedAt seals the commercial terms — only lifecycle fields (status, endedAt)
-    // may change afterwards. There is no SIGNED status; the timestamp is the marker.
-    if (contract.signedAt) {
-      const sealed = (
-        [
-          'kind',
-          'signedAt',
-          'effectiveAt',
-          'termsSnapshot',
-          'months',
-          'monthlyPriceSnapshot',
-        ] as const
-      ).filter((field) => dto[field] !== undefined);
-      if (sealed.length > 0) {
-        throw new DomainException(
-          ErrorCode.CONFLICT,
-          `Contract is signed — these fields can no longer change: ${sealed.join(', ')}`,
-          HttpStatus.CONFLICT,
-          { contractId: id, sealedFields: sealed },
-        );
+      // signedAt seals the commercial terms — only lifecycle fields (status, endedAt)
+      // may change afterwards. There is no SIGNED status; the timestamp is the marker.
+      if (contract.signedAt) {
+        const sealed = (
+          [
+            'kind',
+            'signedAt',
+            'effectiveAt',
+            'termsSnapshot',
+            'months',
+            'monthlyPriceSnapshot',
+          ] as const
+        ).filter((field) => dto[field] !== undefined);
+        if (sealed.length > 0) {
+          throw new DomainException(
+            ErrorCode.CONFLICT,
+            `Contract is signed — these fields can no longer change: ${sealed.join(', ')}`,
+            HttpStatus.CONFLICT,
+            { contractId: id, sealedFields: sealed },
+          );
+        }
       }
-    }
 
-    const { effectiveAt, signedAt, endedAt, ...fields } = dto;
-    const dates = {
-      ...(effectiveAt !== undefined ? { effectiveAt: new Date(effectiveAt) } : {}),
-      ...(signedAt !== undefined ? { signedAt: new Date(signedAt) } : {}),
-      ...(endedAt !== undefined ? { endedAt: new Date(endedAt) } : {}),
-    };
-    this.validateDates(
-      dates.effectiveAt ?? contract.effectiveAt,
-      dates.endedAt ?? contract.endedAt,
-    );
-    const changes = { ...fields, ...dates };
-    if (Object.keys(changes).length > 0) {
-      const result = await this.contracts.update({ id, deletedAt: IsNull() }, changes);
-      if (!result.affected) notFound('Contract', id);
-    }
-    return this.findById(id);
+      const { effectiveAt, signedAt, endedAt, ...fields } = dto;
+      const dates = {
+        ...(effectiveAt !== undefined ? { effectiveAt: new Date(effectiveAt) } : {}),
+        ...(signedAt !== undefined ? { signedAt: new Date(signedAt) } : {}),
+        ...(endedAt !== undefined ? { endedAt: new Date(endedAt) } : {}),
+      };
+      this.validateDates(
+        dates.effectiveAt ?? contract.effectiveAt,
+        dates.endedAt ?? contract.endedAt,
+      );
+      const changes = { ...fields, ...dates };
+      if (Object.keys(changes).length > 0) {
+        await em.update(Contract, { id, deletedAt: IsNull() }, changes);
+      }
+      return em.findOneOrFail(Contract, { where: { id } });
+    });
   }
 
+  /**
+   * Only contracts that no longer hold a unit may go: deleting a DRAFT/ACTIVE one
+   * strands the unit (BOOKED/RENTED) and its open inspections can never finalize —
+   * TypeORM excludes soft-deleted rows, so finalize would 404 on the contract.
+   */
   async softDelete(id: string): Promise<void> {
-    const result = await this.contracts.softDelete({ id, deletedAt: IsNull() });
-    if (!result.affected) notFound('Contract', id);
+    const result = await this.contracts.softDelete({
+      id,
+      status: In([ContractStatus.ENDED, ContractStatus.CANCELLED]),
+      deletedAt: IsNull(),
+    });
+    if (result.affected) return;
+    const contract = await this.contracts.findOne({ where: { id, deletedAt: IsNull() } });
+    if (!contract) notFound('Contract', id);
+    throw new DomainException(
+      ErrorCode.CONFLICT,
+      `Cannot delete a ${contract.status} contract — finalize its inspections first`,
+      HttpStatus.CONFLICT,
+      { contractId: id, status: contract.status },
+    );
   }
 
   /**

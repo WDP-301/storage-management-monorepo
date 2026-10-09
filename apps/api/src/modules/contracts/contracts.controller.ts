@@ -20,8 +20,11 @@ import {
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ApiErrorResponseDto } from '@shared/models/api-response';
 import { UserRole } from '@storage/types';
+import { ContractCancelService } from './contract-cancel.service';
+import { ContractReturnService } from './contract-return.service';
 import { ContractsService } from './contracts.service';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
+import { ReturnRequestDto } from './dto/return-request.dto';
 import { UploadContractEvidenceDto } from './dto/upload-contract-evidence.dto';
 
 @ApiTags('Contracts')
@@ -36,9 +39,17 @@ import { UploadContractEvidenceDto } from './dto/upload-contract-evidence.dto';
 @ApiResponse({ status: 401, type: ApiErrorResponseDto })
 @ApiResponse({ status: 403, type: ApiErrorResponseDto })
 export class ContractsController {
-  constructor(private readonly contractsService: ContractsService) {}
+  constructor(
+    private readonly contractsService: ContractsService,
+    private readonly contractReturn: ContractReturnService,
+    private readonly contractCancel: ContractCancelService,
+  ) {}
 
+  // Contracts carry customer PII (customerSnapshot) and writes can strand units —
+  // system-wide roles only. Facility staff and managers work through the
+  // facility-scoped /inspections endpoints instead.
   @Post()
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
   @ApiOperation({ summary: 'Create a contract from a confirmed booking item' })
   @ApiResponse({
     status: 409,
@@ -50,6 +61,7 @@ export class ContractsController {
   }
 
   @Get()
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
   @ApiOperation({ summary: 'List contracts excluding soft-deleted records' })
   findAll() {
     return this.contractsService.findAll();
@@ -62,19 +74,44 @@ export class ContractsController {
     return this.contractsService.findMine(user.id);
   }
 
+  @Post(':id/return-request')
+  @Roles(UserRole.CUSTOMER)
+  @ApiOperation({ summary: 'Ask to move out — opens a RETURN inspection on the chosen date' })
+  @ApiResponse({ status: 409, description: 'Contract not ACTIVE or a return is already open' })
+  requestReturn(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReturnRequestDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.contractReturn.requestReturn(id, user.id, dto);
+  }
+
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER, UserRole.FACILITY_MANAGER)
+  @ApiOperation({ summary: 'Cancel a DRAFT contract the customer never collected' })
+  @ApiResponse({ status: 409, description: 'Contract is not DRAFT' })
+  cancel(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.contractCancel.cancelDraft(id, user);
+  }
+
   @Get(':id')
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
   @ApiOperation({ summary: 'Get a contract by ID' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.contractsService.findById(id);
   }
 
+  // Editing or deleting a contract can strand its unit (BOOKED/RENTED) — system-wide roles only.
   @Patch(':id')
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
   @ApiOperation({ summary: 'Update a contract' })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateContractDto) {
     return this.contractsService.update(id, dto);
   }
 
   @Put(':id/evidence')
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
   @ApiOperation({ summary: 'Set the contract evidence URL (R2 public link)' })
   @ApiResponse({ status: 400, type: ApiErrorResponseDto })
   uploadEvidence(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UploadContractEvidenceDto) {
@@ -82,6 +119,7 @@ export class ContractsController {
   }
 
   @Delete(':id')
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Soft-delete a contract' })
   remove(@Param('id', ParseUUIDPipe) id: string) {

@@ -73,8 +73,8 @@ const TERMINAL_STATUSES: readonly TicketStatus[] = [
   TicketStatus.CANCELLED,
 ];
 
-/** Tickets still being worked can be cancelled — mirrors the API's ASSIGNABLE_STATUSES. */
-const CANCELLABLE_STATUSES: readonly TicketStatus[] = [
+/** Tickets still being worked can be assigned or cancelled — mirrors the API's ASSIGNABLE_STATUSES. */
+const ACTIVE_STATUSES: readonly TicketStatus[] = [
   TicketStatus.OPEN,
   TicketStatus.ASSIGNED,
   TicketStatus.IN_PROGRESS,
@@ -788,7 +788,7 @@ export const ManagerTicketsPage: React.FC = () => {
                           >
                             Chi tiết
                           </DropdownMenu.Item>
-                          {canAssign && (
+                          {canAssign && ACTIVE_STATUSES.includes(ticket.status) && (
                             <DropdownMenu.Item
                               icon={UserPlus}
                               onClick={() => handleOpenAssignModal(ticket)}
@@ -1212,7 +1212,7 @@ export const ManagerTicketsPage: React.FC = () => {
               <Button variant="secondary" onClick={() => setSelectedTicket(null)}>
                 Đóng
               </Button>
-              {canAssign && CANCELLABLE_STATUSES.includes(selectedTicket.status) && (
+              {canAssign && ACTIVE_STATUSES.includes(selectedTicket.status) && (
                 <Button
                   variant="secondary-destructive"
                   icon={<XCircle className="w-4 h-4" />}

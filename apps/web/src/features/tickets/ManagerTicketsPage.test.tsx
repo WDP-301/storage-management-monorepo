@@ -214,6 +214,22 @@ describe('ManagerTicketsPage Component', () => {
     });
   });
 
+  it('hides the assign action for tickets in a terminal status', async () => {
+    vi.spyOn(TicketsApi, 'getAll').mockResolvedValue({
+      tickets: [{ ...TEST_TICKETS[0], status: TicketStatus.RESOLVED }],
+      meta: { total: 1, page: 1, limit: 50, totalPages: 1 },
+    });
+    render(<ManagerTicketsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('TK-2026-0001')).toBeTruthy();
+    });
+
+    await openRowMenu();
+    expect(await screen.findByRole('menuitem', { name: /chi tiết/i })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: /phân công|đổi ca trực/i })).toBeNull();
+  });
+
   it('lets a manager update processing fields from the detail dialog', async () => {
     const updateSpy = vi.spyOn(TicketsApi, 'update').mockResolvedValue({
       ...TEST_TICKETS[0],

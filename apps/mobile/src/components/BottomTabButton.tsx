@@ -23,11 +23,16 @@ export function BottomTabButton({ badge, icon, isSelected, label, onPress }: Pro
         {icon}
         {badge ? (
           <View className="absolute -right-3 -top-2 min-w-5 items-center rounded-full bg-accent px-1">
-            <Text className="text-[10px] font-display text-accent-foreground">{badge}</Text>
+            <Text className="text-caption font-display text-accent-foreground">{badge}</Text>
           </View>
         ) : null}
       </View>
-      <Text className={isSelected ? 'text-xs font-display text-accent' : 'text-xs text-muted'}>
+      <Text
+        className={
+          isSelected ? 'text-caption font-display text-accent' : 'font-body text-caption text-muted'
+        }
+        numberOfLines={1}
+      >
         {label}
       </Text>
     </Pressable>

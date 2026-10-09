@@ -10,7 +10,7 @@ export default function PaymentRoute() {
   const { booking, stage, isChecking, error, check } = useDepositPayment(id);
 
   // Reached only via a booking, so a missing id means a stale deep link rather than a real state.
-  if (!id) return <Redirect href="/(customer)/bookings" />;
+  if (!id) return <Redirect href="/(customer)/storage" />;
 
   return (
     <DepositPaymentScreen
@@ -20,8 +20,8 @@ export default function PaymentRoute() {
       error={error}
       contentBottomPadding={32}
       onCheck={() => void check()}
-      onBack={() => router.navigate('/(customer)/bookings')}
-      onDone={() => router.navigate('/(customer)/bookings')}
+      onBack={() => router.navigate('/(customer)/storage')}
+      onDone={() => router.navigate('/(customer)/storage')}
       // No navigation here: the refreshed booking turns the screen into its cancelled state, which
       // is the confirmation. Leaving immediately would drop the customer on the list with no word
       // on whether the cancel actually worked.

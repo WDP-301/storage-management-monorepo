@@ -75,7 +75,7 @@ export function WarehouseMapSheet({
           <View className="gap-3">
             {hasHolding ? (
               <Text className="rounded-lg bg-warning-bg p-3 font-body text-body-sm text-warning">
-                Bạn đang có đơn giữ kho. Hoàn tất hoặc hủy đơn trong Đặt chỗ của tôi để chọn thêm.
+                Bạn đang có đơn giữ kho. Hoàn tất hoặc hủy đơn trong Kho của tôi để chọn thêm.
               </Text>
             ) : null}
             <View className="gap-1.5">

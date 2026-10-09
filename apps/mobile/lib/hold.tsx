@@ -57,7 +57,7 @@ type HoldContextValue = {
 };
 
 /** Two minutes: long enough to finish paying, short enough that the warning still means something. */
-const EXPIRING_SOON_MS = 2 * 60 * 1000;
+export const EXPIRING_SOON_MS = 2 * 60 * 1000;
 
 const HoldContext = createContext<HoldContextValue | null>(null);
 

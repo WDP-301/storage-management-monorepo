@@ -10,7 +10,7 @@ export default function ScheduleRoute() {
   const [error, setError] = useState<string | null>(null);
 
   if (!selectedWarehouses) {
-    return <Redirect href={heldBooking ? '/(customer)/bookings' : '/(customer)/browse'} />;
+    return <Redirect href={heldBooking ? '/(customer)/storage' : '/(customer)/browse'} />;
   }
 
   return (

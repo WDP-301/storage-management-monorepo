@@ -27,6 +27,8 @@ type Props = {
   hasHolding: boolean;
   contentBottomPadding: number;
   onHold: (warehouses: Warehouse[]) => void;
+  /** Changes whenever the customer's set of active holds changes. */
+  holdsKey: string;
 };
 
 type NearbySearch = {
@@ -35,7 +37,12 @@ type NearbySearch = {
   warehouses: NearbyWarehouse[];
 };
 
-export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHold }: Props) {
+export function BrowseWarehousesScreen({
+  hasHolding,
+  holdsKey,
+  contentBottomPadding,
+  onHold,
+}: Props) {
   const { criteria, setCriteria, provinceOptions, wardOptions } = useBrowseCriteria();
   const { warehouses, total, hasMore, isLoading, isLoadingMore, error, loadMore, refetch } =
     useWarehouses(criteria);
@@ -55,6 +62,11 @@ export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHol
     : warehouses;
   const mapWarehouse = mapWarehouses.find((warehouse) => warehouse.id === mapWarehouseId) ?? null;
   const selectedIds = selected.map((warehouse) => warehouse.id);
+
+  // A new hold means the picks were just booked; keeping them would resubmit held warehouses.
+  useEffect(() => {
+    setSelected([]);
+  }, [holdsKey]);
   const activeFilterCount = countActiveFilters(criteria);
 
   // A refresh keeps the current list on screen; only a first load blanks it out.
@@ -215,6 +227,7 @@ export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHol
           hasHolding={hasHolding}
           selected={selected}
           onContinue={() => onHold(selected)}
+          onClear={() => setSelected([])}
         />
       ) : null}
 

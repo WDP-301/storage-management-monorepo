@@ -8,6 +8,7 @@ type Props = {
   selected: readonly Warehouse[];
   hasHolding: boolean;
   onContinue: () => void;
+  onClear: () => void;
 };
 
 /**
@@ -16,7 +17,7 @@ type Props = {
  * Lives outside the scroll area because it is the running answer to "what have I picked" — area,
  * rent and progress — while the customer keeps scrolling through the list.
  */
-export function BrowseSelectionBar({ selected, hasHolding, onContinue }: Props) {
+export function BrowseSelectionBar({ selected, hasHolding, onContinue, onClear }: Props) {
   const totalArea = selected.reduce((sum, warehouse) => sum + warehouse.areaM2, 0);
   const totalRent = selected.reduce((sum, warehouse) => sum + warehouse.monthlyPrice, 0);
 
@@ -36,6 +37,10 @@ export function BrowseSelectionBar({ selected, hasHolding, onContinue }: Props) 
           </View>
         </View>
 
+        {/* Picks hidden by a filter or taken since have no card left to untick. */}
+        <Button variant="ghost" onPress={onClear}>
+          <Button.Label className="font-ui">Bỏ chọn</Button.Label>
+        </Button>
         <Button isDisabled={hasHolding} onPress={onContinue}>
           <Button.Label className="font-ui">Tiếp tục</Button.Label>
         </Button>

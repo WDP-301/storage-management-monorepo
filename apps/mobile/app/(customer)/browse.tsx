@@ -4,12 +4,13 @@ import { BrowseWarehousesScreen } from '../../src/features/customer/BrowseWareho
 
 export default function BrowseRoute() {
   const router = useRouter();
-  const { heldBooking, selectWarehouses } = useHold();
+  const { activeHolds, heldBooking, selectWarehouses } = useHold();
 
   return (
     <BrowseWarehousesScreen
       contentBottomPadding={32}
       hasHolding={Boolean(heldBooking)}
+      holdsKey={activeHolds.map((booking) => booking.id).join(',')}
       onHold={(warehouses) => {
         selectWarehouses(warehouses);
         router.navigate('/(customer)/schedule');

@@ -25,7 +25,9 @@ export const WarehouseFacilityField: React.FC<Props> = ({
       value={value || null}
       disabled={locked}
       onValueChange={(v) => onChange(String(v))}
-      items={facilities.map((f) => ({ value: f.id, label: `${f.name} (${f.code})` }))}
+      items={facilities
+        .filter((f) => f.status === 'ACTIVE' || f.id === value)
+        .map((f) => ({ value: f.id, label: `${f.name} (${f.code})` }))}
     />
     {isEdit && (
       <Text variant="secondary" size="xs">

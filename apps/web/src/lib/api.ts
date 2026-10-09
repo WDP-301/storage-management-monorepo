@@ -198,7 +198,7 @@ export interface UnitChangeRequestRecord {
   id: string;
   status: ChangeRequestStatus;
   reason: string;
-  rent_difference: number;
+  rent_difference: string | number;
   decision_note: string | null;
   facility_id: string | null;
   created_at: string;

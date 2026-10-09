@@ -1,12 +1,19 @@
 import { Facility } from '@entities/facility.entity';
+import { ServiceTicket } from '@entities/service-ticket.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { TourAppointment } from '@entities/tour-appointment.entity';
 import { DomainException } from '@shared/exceptions/domain.exception';
-import { StorageUnitStatus, UserRole } from '@storage/types';
+import { FacilityStatus, StorageUnitStatus, UserRole } from '@storage/types';
 import { WarehouseCommandService } from './warehouse-command.service';
 
 const buildFacility = (overrides: Partial<Facility> = {}): Facility =>
-  ({ id: 'fac-1', code: 'CN-HCM', name: 'Cơ sở HCM', ...overrides }) as Facility;
+  ({
+    id: 'fac-1',
+    code: 'CN-HCM',
+    name: 'Cơ sở HCM',
+    status: FacilityStatus.ACTIVE,
+    ...overrides,
+  }) as Facility;
 
 const buildUnit = (overrides: Partial<StorageUnit> = {}): StorageUnit =>
   ({
@@ -109,6 +116,16 @@ describe('WarehouseCommandService', () => {
       expect(manager.save).not.toHaveBeenCalled();
     });
 
+    it('rejects an inactive facility', async () => {
+      stubWarehouse(buildFacility({ status: FacilityStatus.INACTIVE }), null);
+
+      await expect(service.create(createDto)).rejects.toMatchObject({
+        status: 409,
+        response: { details: { fields: ['facilityId'] } },
+      });
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+
     it('rejects a ward outside the given province', async () => {
       await expect(
         service.create({ ...createDto, wardCode: '26740', provinceCode: '01' }),
@@ -140,6 +157,9 @@ describe('WarehouseCommandService', () => {
       expect(error).toBeInstanceOf(DomainException);
       expect((error as DomainException).getStatus()).toBe(409);
       expect((error as DomainException).message).toContain(field);
+      expect((error as DomainException).getResponse()).toMatchObject({
+        details: { fields: expect.arrayContaining([field]) },
+      });
       expect(manager.update).not.toHaveBeenCalled();
     });
 
@@ -182,6 +202,39 @@ describe('WarehouseCommandService', () => {
         TourAppointment,
         expect.objectContaining({ where: expect.objectContaining({ storageUnitId: 'unit-1' }) }),
       );
+      expect(manager.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses to move a warehouse into an inactive facility', async () => {
+      stubWarehouse(buildFacility({ id: 'fac-2', status: FacilityStatus.INACTIVE }), buildUnit());
+
+      await expect(service.update('unit-1', { facilityId: 'fac-2' })).rejects.toMatchObject({
+        status: 409,
+        response: { details: { fields: ['facilityId'] } },
+      });
+      expect(manager.update).not.toHaveBeenCalled();
+    });
+
+    it('still edits a warehouse that stays in an inactive facility', async () => {
+      stubWarehouse(buildFacility({ status: FacilityStatus.INACTIVE }), buildUnit());
+
+      await service.update('unit-1', { facilityId: 'fac-1', notes: 'x' });
+
+      expect(manager.update).toHaveBeenCalledWith(StorageUnit, 'unit-1', {
+        facilityId: 'fac-1',
+        notes: 'x',
+      });
+    });
+
+    it('refuses to move a warehouse that still has open service tickets', async () => {
+      manager.count.mockImplementation(async (entity: unknown) =>
+        entity === ServiceTicket ? 3 : 0,
+      );
+
+      await expect(service.update('unit-1', { facilityId: 'fac-2' })).rejects.toMatchObject({
+        status: 409,
+        response: { details: { openTickets: 3 } },
+      });
       expect(manager.update).not.toHaveBeenCalled();
     });
 

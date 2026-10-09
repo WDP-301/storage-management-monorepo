@@ -1,4 +1,5 @@
 import { BookingItem } from '@entities/booking-item.entity';
+import { Facility } from '@entities/facility.entity';
 import { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
@@ -75,6 +76,7 @@ function lockedRow(
   requestStatus: ChangeRequestStatus = ChangeRequestStatus.REQUESTED,
 ) {
   if (entity === UnitChangeRequest) return { id: 'req-1', status: requestStatus };
+  if (entity === Facility) return { id: FACILITY_ID, status: FacilityStatus.ACTIVE };
   if (entity === BookingItem) return { id: 'bi-1', storageUnitId: bookedUnitId };
   return { id: 'contract-1', status: ContractStatus.ACTIVE, bookingItemId: 'bi-1' };
 }
@@ -278,6 +280,21 @@ describe('ChangeRequestsService', () => {
     await expect(service.decide('req-1', { decision: 'APPROVED' }, manager)).rejects.toMatchObject({
       status: 409,
     });
+    expect(txManager.save).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['inactive', { id: FACILITY_ID, status: FacilityStatus.INACTIVE }],
+    ['deleted', null],
+  ])('approve fails when the target facility is %s', async (_label, facility) => {
+    txManager.findOne.mockImplementation(async (entity: unknown) =>
+      entity === Facility ? facility : lockedRow(entity, 'unit-old'),
+    );
+
+    await expect(service.decide('req-1', { decision: 'APPROVED' }, manager)).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(txManager.createQueryBuilder).not.toHaveBeenCalled();
     expect(txManager.save).not.toHaveBeenCalled();
   });
 

@@ -30,6 +30,7 @@ describe('FacilityCommandService', () => {
     repo.save.mockRejectedValueOnce({ driverError: { code: '23505' } });
     await expect(service.create({ code: 'CN-HN', name: 'x' })).rejects.toMatchObject({
       status: 409,
+      response: { code: 'CONFLICT' },
     });
 
     repo.save.mockRejectedValueOnce({ driverError: { code: '23503' } });

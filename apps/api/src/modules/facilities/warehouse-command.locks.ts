@@ -1,11 +1,12 @@
 import { Facility } from '@entities/facility.entity';
+import { ServiceTicket } from '@entities/service-ticket.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { TourAppointment } from '@entities/tour-appointment.entity';
 import { HttpStatus } from '@nestjs/common';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { TourAppointmentStatus } from '@storage/types';
-import { type EntityManager, In, IsNull } from 'typeorm';
+import { FacilityStatus, TicketStatus, TourAppointmentStatus } from '@storage/types';
+import { type EntityManager, In, IsNull, Not } from 'typeorm';
 import type { UpdateWarehouseDto } from './dto/warehouse.dto';
 
 /** Tour appointments that still expect someone at the warehouse. */
@@ -13,6 +14,13 @@ const OPEN_TOUR_STATUSES = [
   TourAppointmentStatus.PENDING,
   TourAppointmentStatus.CONFIRMED,
   TourAppointmentStatus.ASSIGNED,
+];
+
+/** Tickets in these states are finished; everything else still concerns the warehouse. */
+const TERMINAL_TICKET_STATUSES = [
+  TicketStatus.RESOLVED,
+  TicketStatus.CLOSED,
+  TicketStatus.CANCELLED,
 ];
 
 /** Physical identity of a warehouse — frozen while a customer is attached. */
@@ -43,6 +51,18 @@ export async function lockFacility(manager: EntityManager, id: string): Promise<
   return facility;
 }
 
+/** A warehouse can only be created in, or moved into, a facility that is open for business. */
+export function assertFacilityActive(facility: Facility): void {
+  if (facility.status !== FacilityStatus.ACTIVE) {
+    throw new DomainException(
+      ErrorCode.CONFLICT,
+      'Facility is not active, cannot add or move a warehouse into it',
+      HttpStatus.CONFLICT,
+      { facilityStatus: facility.status, fields: ['facilityId'] },
+    );
+  }
+}
+
 export async function lockUnit(manager: EntityManager, id: string): Promise<StorageUnit> {
   const unit = await manager.findOne(StorageUnit, {
     where: { id, deletedAt: IsNull() },
@@ -68,6 +88,23 @@ export async function assertNoOpenTours(
       'Cannot move a warehouse that still has open tour appointments',
       HttpStatus.CONFLICT,
       { openTours },
+    );
+  }
+}
+
+export async function assertNoOpenTickets(
+  manager: EntityManager,
+  storageUnitId: string,
+): Promise<void> {
+  const openTickets = await manager.count(ServiceTicket, {
+    where: { storageUnitId, status: Not(In(TERMINAL_TICKET_STATUSES)) },
+  });
+  if (openTickets > 0) {
+    throw new DomainException(
+      ErrorCode.CONFLICT,
+      'Cannot move a warehouse that still has open service tickets',
+      HttpStatus.CONFLICT,
+      { openTickets },
     );
   }
 }

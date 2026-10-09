@@ -75,9 +75,9 @@ export const ChangeRequestsTable: React.FC<Props> = ({ requests, busyId, onDecid
                 {req.new_unit?.code ?? '—'}
               </Table.Cell>
               <Table.Cell className="whitespace-nowrap text-kumo-subtle">
-                {req.rent_difference === 0
+                {Number(req.rent_difference) === 0
                   ? '—'
-                  : `${req.rent_difference > 0 ? '+' : ''}${Number(req.rent_difference).toLocaleString('vi-VN')} đ`}
+                  : `${Number(req.rent_difference) > 0 ? '+' : ''}${Number(req.rent_difference).toLocaleString('vi-VN')} đ`}
               </Table.Cell>
               <Table.Cell className="whitespace-nowrap text-kumo-subtle">{req.reason}</Table.Cell>
               <Table.Cell className="whitespace-nowrap text-kumo-subtle">

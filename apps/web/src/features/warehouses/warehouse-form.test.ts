@@ -99,6 +99,23 @@ describe('warehouse form helpers', () => {
     expect(buildPatch({ ...toFormState(warehouse), facilityId: 'fac-2' }, warehouse)).toEqual({});
   });
 
+  it('maps the inactive-facility and open-ticket 409s to Vietnamese', () => {
+    const inactive = Object.assign(new Error('x'), {
+      status: 409,
+      details: { facilityStatus: 'INACTIVE', fields: ['facilityId'] },
+    }) as ApiError;
+    expect(describeWarehouseError(inactive, 'f')).toBe(
+      'Cơ sở đang ngừng hoạt động, không thể thêm hoặc chuyển kho vào đó.',
+    );
+    const tickets = Object.assign(new Error('x'), {
+      status: 409,
+      details: { openTickets: 2 },
+    }) as ApiError;
+    expect(describeWarehouseError(tickets, 'f')).toBe(
+      'Kho còn yêu cầu hỗ trợ đang mở, hãy xử lý xong trước khi chuyển cơ sở.',
+    );
+  });
+
   it('maps a 409 facility move and 400 validation fields to Vietnamese', () => {
     const move = Object.assign(new Error('x'), {
       status: 409,

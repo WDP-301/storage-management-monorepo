@@ -4,7 +4,6 @@ import { StorageUnit } from '@entities/storage-unit.entity';
 import { TourAppointment } from '@entities/tour-appointment.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { HttpStatus } from '@nestjs/common';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { FacilityStatus, TourAppointmentStatus, UserRole, UserStatus } from '@storage/types';
 import type { Repository } from 'typeorm';

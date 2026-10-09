@@ -22,6 +22,8 @@ import {
   resolveAddressCodes,
 } from './warehouse-command.helpers';
 import {
+  assertFacilityActive,
+  assertNoOpenTickets,
   assertNoOpenTours,
   changes,
   countOpenTours,
@@ -66,7 +68,7 @@ export class WarehouseCommandService {
   async create(dto: CreateWarehouseDto): Promise<WarehouseView> {
     const id = await this.units.manager.transaction(async (manager) => {
       const address = await resolveAddressCodes(manager, dto.wardCode, dto.provinceCode);
-      await lockFacility(manager, dto.facilityId);
+      assertFacilityActive(await lockFacility(manager, dto.facilityId));
       try {
         const unit = await manager.save(
           manager.create(StorageUnit, {
@@ -87,12 +89,12 @@ export class WarehouseCommandService {
   /**
    * Price, deposit, address and notes stay editable — bookings and contracts keep their own
    * snapshots. Code, dimensions, status and facility are frozen while a customer is attached;
-   * moving to another facility also requires that no tour is still expected on site.
+   * moving to another facility also requires an active target facility and no open tour or service ticket.
    */
   async update(id: string, dto: UpdateWarehouseDto): Promise<WarehouseView> {
     assertNoNullRequiredFields(dto);
     await this.units.manager.transaction(async (manager) => {
-      if (dto.facilityId) await lockFacility(manager, dto.facilityId);
+      const targetFacility = dto.facilityId ? await lockFacility(manager, dto.facilityId) : null;
       const unit = await lockUnit(manager, id);
 
       if (!isIdleUnitStatus(unit.status)) {
@@ -106,7 +108,11 @@ export class WarehouseCommandService {
           );
         }
       }
-      if (changes(dto, 'facilityId', unit)) await assertNoOpenTours(manager, unit.id);
+      if (targetFacility && changes(dto, 'facilityId', unit)) {
+        assertFacilityActive(targetFacility);
+        await assertNoOpenTours(manager, unit.id);
+        await assertNoOpenTickets(manager, unit.id);
+      }
 
       const patch: Partial<StorageUnit> = pick(dto, UNIT_FIELDS);
       if (dto.wardCode !== undefined || dto.provinceCode !== undefined) {

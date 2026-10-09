@@ -1,5 +1,6 @@
 import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
+import { Facility } from '@entities/facility.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitChangeRequest } from '@entities/unit-change-request.entity';
@@ -263,15 +264,33 @@ export class ChangeRequestsService {
       await this.lockUndecidedRequest(manager, request.id);
       await this.assertContractStillMovable(manager, contract.id, request.oldUnitId);
 
-      // Claim the target unit atomically — if someone else took it, bail out.
+      // Shared facility lock first (same order as warehouse writes): a concurrent deactivation
+      // waits for this commit, and the unit's facility is pinned in the claim below.
+      const targetFacility = await manager.findOne(Facility, {
+        where: { id: request.newUnit.facilityId },
+        lock: { mode: 'pessimistic_read' },
+      });
+      if (!targetFacility || targetFacility.status !== FacilityStatus.ACTIVE) {
+        throw new DomainException(
+          ErrorCode.CONFLICT,
+          'Target unit facility is not active',
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      // Claim the target unit atomically — if someone else took or moved it, bail out.
       const claimed = await manager
         .createQueryBuilder()
         .update(StorageUnit)
         .set({ status: StorageUnitStatus.RENTED })
-        .where('id = :id AND status = :available AND deleted_at IS NULL', {
-          id: request.newUnitId,
-          available: StorageUnitStatus.AVAILABLE,
-        })
+        .where(
+          'id = :id AND facility_id = :facilityId AND status = :available AND deleted_at IS NULL',
+          {
+            id: request.newUnitId,
+            facilityId: targetFacility.id,
+            available: StorageUnitStatus.AVAILABLE,
+          },
+        )
         .execute();
       if (!claimed.affected) {
         throw new DomainException(

@@ -21,7 +21,8 @@ export class CreateChangeRequestDto {
 
   @ApiProperty({
     format: 'uuid',
-    description: 'Target unit — must be AVAILABLE in the same facility',
+    description:
+      'Target unit — must be AVAILABLE in an active facility (may be a different facility)',
   })
   @IsUUID('all')
   newUnitId: string;

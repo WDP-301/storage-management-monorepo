@@ -63,7 +63,7 @@ function handleDbError(err: unknown): never {
   const code = pgErrorCode(err);
   if (code === PG_UNIQUE_VIOLATION) {
     throw new DomainException(
-      ErrorCode.VALIDATION_FAILED,
+      ErrorCode.CONFLICT,
       'Facility code already exists',
       HttpStatus.CONFLICT,
     );

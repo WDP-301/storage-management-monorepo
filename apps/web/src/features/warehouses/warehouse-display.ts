@@ -87,6 +87,12 @@ export function describeWarehouseError(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) return fallback;
   const { status, details } = err as ApiError;
   if (status === 409 && details) {
+    if (details.facilityStatus) {
+      return 'Cơ sở đang ngừng hoạt động, không thể thêm hoặc chuyển kho vào đó.';
+    }
+    if (Number(details.openTickets ?? 0) > 0) {
+      return 'Kho còn yêu cầu hỗ trợ đang mở, hãy xử lý xong trước khi chuyển cơ sở.';
+    }
     const current = WAREHOUSE_STATUS_LABEL[details.status as WarehouseStatus]?.label;
     if (Array.isArray(details.fields) && details.fields.length > 0) {
       const fields = details.fields.map(fieldLabel).join(', ');

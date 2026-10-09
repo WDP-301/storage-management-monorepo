@@ -75,7 +75,8 @@ cp apps/api/.env.example apps/api/.env
 pnpm --filter @storage/api migration:run
 
 # Create the first administrator (self-registration only ever creates customers).
-# Idempotent: re-running grants ADMIN to an existing user without touching their password.
+# Idempotent. An existing user is only promoted when SEED_ADMIN_PASSWORD matches their
+# password; add --promote-existing once you have confirmed who owns the account.
 SEED_ADMIN_EMAIL=admin@example.com SEED_ADMIN_PASSWORD='<min 8 chars>' SEED_ADMIN_NAME='Admin' \
   pnpm --filter @storage/api seed:admin
 ```

@@ -219,7 +219,10 @@ export class ChangeRequestsService {
           actor.id,
         ),
       ];
-      await this.requests.save(request);
+      await this.dataSource.transaction(async (manager) => {
+        await this.lockUndecidedRequest(manager, request.id);
+        await manager.save(request);
+      });
       return { request: toChangeRequestRecord(request) };
     }
 
@@ -255,6 +258,7 @@ export class ChangeRequestsService {
     const newDeposit = newPrice * (await this.settings.getDepositMonthsFor(newUnit));
 
     await this.dataSource.transaction(async (manager) => {
+      await this.lockUndecidedRequest(manager, request.id);
       await this.assertContractStillMovable(manager, contract.id, request.oldUnitId);
 
       // Claim the target unit atomically — if someone else took it, bail out.
@@ -309,6 +313,24 @@ export class ChangeRequestsService {
     });
 
     return { request: toChangeRequestRecord(request) };
+  }
+
+  /**
+   * The status check in `decide` runs before any lock, so two managers deciding at once both
+   * pass it. Re-checking under the request row lock lets only the first decision commit.
+   */
+  private async lockUndecidedRequest(manager: EntityManager, id: string): Promise<void> {
+    const current = await manager.findOne(UnitChangeRequest, {
+      where: { id },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (current?.status !== ChangeRequestStatus.REQUESTED) {
+      throw new DomainException(
+        ErrorCode.CONFLICT,
+        `Request cannot be decided while its status is ${current?.status ?? 'unknown'}`,
+        HttpStatus.CONFLICT,
+      );
+    }
   }
 
   /**

@@ -1,6 +1,6 @@
 import { StorageUnitStatus, UserRole } from '@storage/types';
 
-/** Every demo account signs in with this password. */
+/** Demo account password on a local database; remote targets must supply DEMO_PASSWORD. */
 export const DEMO_PASSWORD = 'Demo1234!';
 
 export interface DemoAccount {

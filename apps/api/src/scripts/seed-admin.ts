@@ -6,11 +6,14 @@
  * Idempotent: creates the user when the email is unknown, otherwise adds a global ADMIN
  * assignment if missing. An existing user's password is never touched, and a suspended or
  * disabled account is refused — it may have been locked because it was compromised.
+ * Self-registration does not verify email ownership, so an existing account is only promoted
+ * when SEED_ADMIN_PASSWORD matches its password; pass --promote-existing to skip that check
+ * after confirming who owns the account.
  */
 import { AppUser } from '@entities/app-user.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { isAssignmentActive } from '@modules/auth/role-assignment.util';
-import { hashPassword } from '@modules/auth/session.util';
+import { hashPassword, verifyPassword } from '@modules/auth/session.util';
 import { UserRole, UserStatus } from '@storage/types';
 import { IsNull } from 'typeorm';
 import { AppDataSource } from '../data-source';
@@ -57,8 +60,14 @@ async function main(): Promise<void> {
         throw new Error(
           `${email} is ${user.status}; reactivate it deliberately before granting ADMIN`,
         );
-      } else if (!user.passwordHash) {
-        console.warn(`${email} has no password (OAuth-only) and cannot sign in with one`);
+      } else if (
+        !process.argv.includes('--promote-existing') &&
+        !(user.passwordHash && (await verifyPassword(password, user.passwordHash)))
+      ) {
+        throw new Error(
+          `${email} already exists with a different password (or none). Confirm who owns it, ` +
+            'then re-run with --promote-existing to grant ADMIN anyway',
+        );
       }
 
       // (user, role, facility) is unique, so an expired ADMIN row is reopened rather than duplicated.

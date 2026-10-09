@@ -4,8 +4,10 @@
  *   pnpm --filter @storage/api db:reset-demo --yes                       # local database
  *   pnpm --filter @storage/api db:reset-demo --yes --allow-remote=<db>   # any other host
  * Users, sessions, customer profiles, settings, provinces/wards and ticket types survive.
- * Roles are only granted to demo accounts the script created or that still use DEMO_PASSWORD,
- * so an account someone registered under a demo email never gains privileges.
+ * Demo accounts include an ADMIN, so the committed DEMO_PASSWORD is only used on a local
+ * database; any other host needs DEMO_PASSWORD set in the environment, otherwise anyone who
+ * has read this repository could sign in as admin. Roles are only granted to demo accounts the
+ * script created or that already use the demo password.
  */
 import { AppUser } from '@entities/app-user.entity';
 import { Facility } from '@entities/facility.entity';
@@ -16,6 +18,8 @@ import { FacilityStatus, StorageUnitStatus, UserStatus } from '@storage/types';
 import type { EntityManager } from 'typeorm';
 import { AppDataSource } from '../data-source';
 import { DEMO_ACCOUNTS, DEMO_PASSWORD, DEMO_WAREHOUSES } from './demo-seed-data';
+
+const MIN_PASSWORD_LENGTH = 8;
 
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '::1'];
 
@@ -58,7 +62,7 @@ async function wipe(manager: EntityManager): Promise<void> {
   if (exists) await manager.query('DELETE FROM "unit_types"');
 }
 
-async function seed(manager: EntityManager): Promise<void> {
+async function seed(manager: EntityManager, demoPassword: string): Promise<void> {
   const facilityIds: string[] = [];
   for (const warehouse of DEMO_WAREHOUSES) {
     const [{ province_code: provinceCode }] = await manager.query(
@@ -93,7 +97,7 @@ async function seed(manager: EntityManager): Promise<void> {
     facilityIds.push(facility.id);
   }
 
-  const passwordHash = await hashPassword(DEMO_PASSWORD);
+  const passwordHash = await hashPassword(demoPassword);
   for (const account of DEMO_ACCOUNTS) {
     let user = await manager
       .getRepository(AppUser)
@@ -101,7 +105,7 @@ async function seed(manager: EntityManager): Promise<void> {
       .addSelect('user.passwordHash')
       .where('lower(user.email) = :email', { email: account.email })
       .getOne();
-    if (user && !(user.passwordHash && (await verifyPassword(DEMO_PASSWORD, user.passwordHash)))) {
+    if (user && !(user.passwordHash && (await verifyPassword(demoPassword, user.passwordHash)))) {
       console.warn(
         `db:reset-demo: ${account.email} exists with another password — no role granted`,
       );
@@ -139,6 +143,7 @@ async function main(): Promise<void> {
       `This deletes every warehouse, booking, contract and payment in ${target}. Re-run with --yes.`,
     );
   }
+  if (!process.env.DB_DATABASE) throw new Error('DB_DATABASE is not set');
   // apps/api/.env usually points at a shared database; wiping it must be asked for by name.
   const isLocal = LOCAL_HOSTS.includes(process.env.DB_HOST ?? '');
   if (!isLocal && !process.argv.includes(`--allow-remote=${process.env.DB_DATABASE}`)) {
@@ -146,16 +151,26 @@ async function main(): Promise<void> {
       `${target} is not a local database. Re-run with --allow-remote=${process.env.DB_DATABASE} to wipe it.`,
     );
   }
+  const demoPassword = isLocal ? DEMO_PASSWORD : (process.env.DEMO_PASSWORD ?? '');
+  if (demoPassword.length < MIN_PASSWORD_LENGTH) {
+    throw new Error(
+      `${target} is not a local database: set DEMO_PASSWORD (min ${MIN_PASSWORD_LENGTH} ` +
+        'characters, not the one in the repository) for the demo accounts.',
+    );
+  }
+  if (!isLocal && demoPassword === DEMO_PASSWORD) {
+    throw new Error('DEMO_PASSWORD must differ from the password committed in the repository');
+  }
 
   await AppDataSource.initialize();
   try {
     await AppDataSource.transaction(wipe);
     const applied = await AppDataSource.runMigrations({ transaction: 'each' });
-    await AppDataSource.transaction(seed);
+    await AppDataSource.transaction((manager) => seed(manager, demoPassword));
     console.log(
       `db:reset-demo: wiped business data, applied ${applied.length} migration(s), seeded ` +
         `${DEMO_WAREHOUSES.length} warehouses and ${DEMO_ACCOUNTS.length} demo accounts ` +
-        `(password ${DEMO_PASSWORD} for new accounts).`,
+        `(${isLocal ? `password ${DEMO_PASSWORD}` : 'password from DEMO_PASSWORD'} for new accounts).`,
     );
   } finally {
     await AppDataSource.destroy();

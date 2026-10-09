@@ -1,5 +1,5 @@
 import { BookingItem } from '@entities/booking-item.entity';
-import type { UnitChangeRequest } from '@entities/unit-change-request.entity';
+import { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { SettingsService } from '@modules/settings/settings.service';
@@ -63,6 +63,16 @@ const activeAssignment = (overrides: Partial<UserRoleAssignment> = {}): UserRole
     ...overrides,
   }) as UserRoleAssignment;
 
+function lockedRow(
+  entity: unknown,
+  bookedUnitId: string,
+  requestStatus: ChangeRequestStatus = ChangeRequestStatus.REQUESTED,
+) {
+  if (entity === UnitChangeRequest) return { id: 'req-1', status: requestStatus };
+  if (entity === BookingItem) return { id: 'bi-1', storageUnitId: bookedUnitId };
+  return { id: 'contract-1', status: ContractStatus.ACTIVE, bookingItemId: 'bi-1' };
+}
+
 describe('ChangeRequestsService', () => {
   let requests: {
     find: jest.Mock;
@@ -112,12 +122,9 @@ describe('ChangeRequestsService', () => {
       createQueryBuilder: jest.fn(),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       save: jest.fn(async (v) => v),
-      // Locked re-read: the contract is still active and still on the old unit.
-      findOne: jest.fn(async (entity: unknown) =>
-        entity === BookingItem
-          ? { id: 'bi-1', storageUnitId: 'unit-old' }
-          : { id: 'contract-1', status: ContractStatus.ACTIVE, bookingItemId: 'bi-1' },
-      ),
+      // Locked re-reads: the request is still undecided, the contract is still active and
+      // still on the old unit.
+      findOne: jest.fn(async (entity: unknown) => lockedRow(entity, 'unit-old')),
       count: jest.fn().mockResolvedValue(0),
     };
     const claimBuilder = {
@@ -220,9 +227,7 @@ describe('ChangeRequestsService', () => {
 
   it('approve refuses a request made from a unit the contract has already left', async () => {
     txManager.findOne.mockImplementation(async (entity: unknown) =>
-      entity === BookingItem
-        ? { id: 'bi-1', storageUnitId: 'unit-elsewhere' }
-        : { id: 'contract-1', status: ContractStatus.ACTIVE, bookingItemId: 'bi-1' },
+      lockedRow(entity, 'unit-elsewhere'),
     );
 
     await expect(service.decide('req-1', { decision: 'APPROVED' }, manager)).rejects.toMatchObject({
@@ -258,6 +263,21 @@ describe('ChangeRequestsService', () => {
     expect(result.request.status).toBe(ChangeRequestStatus.REJECTED);
     expect(txManager.update).not.toHaveBeenCalled();
   });
+
+  it.each(['APPROVED', 'REJECTED'] as const)(
+    '%s refuses a request another manager decided concurrently',
+    async (decision) => {
+      txManager.findOne.mockImplementation(async (entity: unknown) =>
+        lockedRow(entity, 'unit-old', ChangeRequestStatus.COMPLETED),
+      );
+
+      await expect(service.decide('req-1', { decision }, manager)).rejects.toMatchObject({
+        status: 409,
+      });
+      expect(txManager.save).not.toHaveBeenCalled();
+      expect(txManager.update).not.toHaveBeenCalled();
+    },
+  );
 
   it('denies a manager who is not assigned to the request facility', async () => {
     roleAssignments.find.mockResolvedValue([activeAssignment({ facilityId: 'other-facility' })]);

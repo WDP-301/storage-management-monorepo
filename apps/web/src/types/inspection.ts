@@ -22,6 +22,7 @@ export interface InspectionRecord {
   id: string;
   type: InspectionKind;
   inspectedBy: string | null;
+  requestNote?: string | null;
   conditionNotes: string | null;
   evidence: unknown[] | null;
   damages: unknown[] | null;

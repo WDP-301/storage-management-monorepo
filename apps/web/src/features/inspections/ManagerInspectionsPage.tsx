@@ -10,8 +10,10 @@ import {
   UserPlus,
   WarningCircle,
 } from '@phosphor-icons/react';
+import { UserRole } from '@storage/types';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { useFacility } from '../../context/FacilityContext';
 import { InspectionsApi } from '../../lib/api';
 import type { InspectionKind, InspectionRecord } from '../../types/inspection';
@@ -50,6 +52,7 @@ const STATE_OPTIONS = [
 /** Handover and return records of the selected facility: assign staff, review, finalize. */
 export const ManagerInspectionsPage: React.FC = () => {
   const { selectedFacility } = useFacility();
+  const { activeRole } = useAuth();
   const [rows, setRows] = useState<InspectionRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,17 +62,30 @@ export const ManagerInspectionsPage: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const facilityId = selectedFacility?.id;
+  // A facility manager's list is always one facility: until the selector has resolved,
+  // an unfiltered request would return every managed facility and could land last.
+  const waitingForFacility = activeRole === UserRole.FACILITY_MANAGER && !facilityId;
+  const latestRequest = useRef(0);
   const load = useCallback(async () => {
+    const request = ++latestRequest.current;
+    if (waitingForFacility) {
+      setRows([]);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
-      setRows(await InspectionsApi.list(facilityId ? { facilityId } : {}));
+      const list = await InspectionsApi.list(facilityId ? { facilityId } : {});
+      if (request === latestRequest.current) setRows(list);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không tải được danh sách biên bản.');
+      if (request === latestRequest.current) {
+        setError(err instanceof Error ? err.message : 'Không tải được danh sách biên bản.');
+      }
     } finally {
-      setIsLoading(false);
+      if (request === latestRequest.current) setIsLoading(false);
     }
-  }, [facilityId]);
+  }, [facilityId, waitingForFacility]);
 
   useEffect(() => {
     void load();

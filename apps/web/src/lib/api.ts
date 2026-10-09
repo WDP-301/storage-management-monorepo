@@ -228,6 +228,13 @@ export const InspectionsApi = {
   },
 };
 
+export const ContractsApi = {
+  /** Drops a DRAFT contract the customer never collected and frees its unit. */
+  cancel: async (id: string): Promise<void> => {
+    await apiClient.post(`/contracts/${id}/cancel`);
+  },
+};
+
 export const UploadsApi = {
   /** Presigned GET for a private object; links expire, so resolve right before opening. */
   downloadUrl: async (fileKey: string): Promise<string> => {

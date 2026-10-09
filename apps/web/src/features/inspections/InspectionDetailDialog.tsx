@@ -3,7 +3,7 @@ import { ClipboardText, WarningCircle, X } from '@phosphor-icons/react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { SignedImageThumb } from '../../components/SignedFile';
-import { FacilitiesApi, InspectionsApi } from '../../lib/api';
+import { ContractsApi, FacilitiesApi, InspectionsApi } from '../../lib/api';
 import type { FacilityStaffMember, InspectionRecord } from '../../types/inspection';
 import {
   customerName,
@@ -28,14 +28,16 @@ interface Props {
 export const InspectionDetailDialog: React.FC<Props> = ({ inspection, onClose, onChanged }) => {
   const [staff, setStaff] = useState<FacilityStaffMember[]>([]);
   const [staffId, setStaffId] = useState('');
-  const [busy, setBusy] = useState<'assign' | 'finalize' | null>(null);
+  const [busy, setBusy] = useState<'assign' | 'finalize' | 'cancel' | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const facility = inspection ? facilityId(inspection) : null;
   useEffect(() => {
     setStaffId(inspection?.inspectedBy ?? '');
     setConfirming(false);
+    setConfirmingCancel(false);
     setError(null);
     if (!facility || inspection?.finalizedAt) return;
     FacilitiesApi.listStaff(facility)
@@ -48,7 +50,7 @@ export const InspectionDetailDialog: React.FC<Props> = ({ inspection, onClose, o
   const evidence = toEvidence(inspection.evidence);
   const damages = toDamages(inspection.damages);
 
-  const run = async (kind: 'assign' | 'finalize', action: () => Promise<unknown>) => {
+  const run = async (kind: 'assign' | 'finalize' | 'cancel', action: () => Promise<unknown>) => {
     setBusy(kind);
     setError(null);
     try {
@@ -59,6 +61,7 @@ export const InspectionDetailDialog: React.FC<Props> = ({ inspection, onClose, o
     } finally {
       setBusy(null);
       setConfirming(false);
+      setConfirmingCancel(false);
     }
   };
 
@@ -102,6 +105,17 @@ export const InspectionDetailDialog: React.FC<Props> = ({ inspection, onClose, o
             <Fact label="Phụ trách" value={inspection.inspector?.fullName ?? 'Chưa giao'} />
             <Fact label="Chốt lúc" value={done ? formatDateTime(inspection.finalizedAt) : '—'} />
           </dl>
+
+          {inspection.requestNote && (
+            <section className="space-y-1.5">
+              <span className="text-xs font-semibold text-kumo-default block">
+                Ghi chú của khách
+              </span>
+              <p className="p-3 bg-kumo-control rounded-lg text-sm text-kumo-default whitespace-pre-wrap">
+                {inspection.requestNote}
+              </p>
+            </section>
+          )}
 
           <section className="space-y-1.5">
             <span className="text-xs font-semibold text-kumo-default block">
@@ -212,8 +226,40 @@ export const InspectionDetailDialog: React.FC<Props> = ({ inspection, onClose, o
                     </Button>
                   </div>
                 </div>
+              ) : confirmingCancel ? (
+                <div className="p-3 bg-kumo-warning-tint rounded-lg space-y-3 text-sm">
+                  <p className="text-kumo-default">
+                    Huỷ hợp đồng nháp này? Kho sẽ được trả về trạng thái trống để cho thuê lại.
+                    Không hoàn tác được.
+                  </p>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="secondary" onClick={() => setConfirmingCancel(false)}>
+                      Không huỷ
+                    </Button>
+                    <Button
+                      variant="primary"
+                      loading={busy === 'cancel'}
+                      onClick={() =>
+                        inspection.contract &&
+                        run('cancel', () => ContractsApi.cancel(inspection.contract?.id ?? ''))
+                      }
+                    >
+                      Xác nhận huỷ hợp đồng
+                    </Button>
+                  </div>
+                </div>
               ) : (
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2">
+                  {inspection.type === 'PRE_HANDOVER' &&
+                    inspection.contract?.status === 'DRAFT' && (
+                      <Button
+                        variant="secondary"
+                        disabled={busy !== null}
+                        onClick={() => setConfirmingCancel(true)}
+                      >
+                        Khách không nhận kho
+                      </Button>
+                    )}
                   <Button
                     variant="primary"
                     disabled={!inspection.inspectedBy || busy !== null}

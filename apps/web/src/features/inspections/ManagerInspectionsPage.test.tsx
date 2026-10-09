@@ -1,7 +1,9 @@
+import { UserRole } from '@storage/types';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as AuthContextModule from '../../context/AuthContext';
 import * as FacilityContextModule from '../../context/FacilityContext';
-import { FacilitiesApi, InspectionsApi, UploadsApi } from '../../lib/api';
+import { ContractsApi, FacilitiesApi, InspectionsApi, UploadsApi } from '../../lib/api';
 import type { InspectionRecord } from '../../types/inspection';
 import { finalizeConsequence, inspectionMetrics, matchesSearch } from './inspection-display';
 import { ManagerInspectionsPage } from './ManagerInspectionsPage';
@@ -87,6 +89,9 @@ describe('inspection-display', () => {
 describe('ManagerInspectionsPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
+      activeRole: UserRole.FACILITY_MANAGER,
+    } as never);
     vi.spyOn(FacilityContextModule, 'useFacility').mockReturnValue({
       facilities: [],
       selectedFacility: {
@@ -114,6 +119,31 @@ describe('ManagerInspectionsPage', () => {
     expect(screen.getByText('B-202')).toBeTruthy();
     expect(screen.queryByText('C-303')).toBeNull();
     expect(InspectionsApi.list).toHaveBeenCalledWith({ facilityId: 'fac-1' });
+  });
+
+  it('does not load until the manager facility is selected', async () => {
+    vi.spyOn(FacilityContextModule, 'useFacility').mockReturnValue({
+      facilities: [],
+      selectedFacility: null,
+      selectFacility: vi.fn(),
+      isLoading: true,
+    });
+    render(<ManagerInspectionsPage />);
+
+    await waitFor(() => expect(screen.queryByText('A-101')).toBeNull());
+    expect(InspectionsApi.list).not.toHaveBeenCalled();
+  });
+
+  it('cancels a draft contract the customer never collected', async () => {
+    const cancel = vi.spyOn(ContractsApi, 'cancel').mockResolvedValue();
+    render(<ManagerInspectionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem biên bản A-101' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Khách không nhận kho' }));
+    expect(cancel).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận huỷ hợp đồng' }));
+
+    await waitFor(() => expect(cancel).toHaveBeenCalledWith('c-A-101'));
   });
 
   it('assigns a staff member of the facility', async () => {

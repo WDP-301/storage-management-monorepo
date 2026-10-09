@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as AuthContextModule from '../../context/AuthContext';
+import * as FacilityContextModule from '../../context/FacilityContext';
 import { ChangeRequestsApi, WarehousesApi } from '../../lib/api';
 import type { Warehouse } from '../../types/warehouse';
 import { FacilityManagerDashboard } from './FacilityManagerDashboard';
@@ -17,7 +18,7 @@ vi.mock('../../lib/toast', () => ({ useAppToast: () => toast }));
 
 const wh = (over: Partial<Warehouse>): Warehouse => ({
   id: 'w-1',
-  unitId: 'u-1',
+  facility: { id: 'fac-1', code: 'CN-HCM', name: 'Cơ sở Hồ Chí Minh' },
   code: 'HCM-SG-01',
   name: 'Kho Sài Gòn',
   addressLine: '45 Lê Thánh Tôn',
@@ -60,6 +61,23 @@ const mockAuth = (role: UserRole) =>
     refreshUser: vi.fn(),
   } as unknown as ReturnType<typeof AuthContextModule.useAuth>);
 
+const FAC_HCM = {
+  id: 'fac-1',
+  code: 'CN-HCM',
+  name: 'Cơ sở Hồ Chí Minh',
+  provinceCode: '79',
+  status: 'ACTIVE',
+};
+
+const mockFacility = (selected: typeof FAC_HCM | null, canSelectAll = false) =>
+  vi.spyOn(FacilityContextModule, 'useFacility').mockReturnValue({
+    facilities: selected ? [selected] : [],
+    selectedFacility: selected,
+    selectFacility: vi.fn(),
+    canSelectAll,
+    isLoading: false,
+  });
+
 const renderPage = () =>
   render(
     <MemoryRouter>
@@ -70,6 +88,7 @@ const renderPage = () =>
 describe('FacilityManagerDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockFacility(FAC_HCM);
     vi.spyOn(ChangeRequestsApi, 'list').mockResolvedValue({
       requests: [],
       meta: { page: 1, limit: 50, total: 0, totalPages: 0 },
@@ -97,6 +116,7 @@ describe('FacilityManagerDashboard', () => {
 
   it('uses the admin listing when the active role is ADMIN', async () => {
     mockAuth(UserRole.ADMIN);
+    mockFacility(null, true);
     const listAdmin = vi.spyOn(WarehousesApi, 'listAdmin').mockResolvedValue({
       warehouses: [wh({})],
       meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
@@ -105,14 +125,66 @@ describe('FacilityManagerDashboard', () => {
 
     renderPage();
     await waitFor(() => expect(screen.getByText('Kho Sài Gòn')).toBeTruthy());
-    expect(listAdmin).toHaveBeenCalled();
+    expect(listAdmin).toHaveBeenCalledWith(expect.objectContaining({ facilityId: undefined }));
     expect(listMine).not.toHaveBeenCalled();
+  });
+
+  it('scopes the manager listing to the selected facility', async () => {
+    mockAuth(UserRole.FACILITY_MANAGER);
+    const listMine = vi.spyOn(WarehousesApi, 'listMine').mockResolvedValue([wh({})]);
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Kho Sài Gòn')).toBeTruthy());
+    expect(listMine).toHaveBeenCalledWith({ facilityId: 'fac-1' });
+  });
+
+  it('keeps only change requests leaving the selected facility', async () => {
+    mockAuth(UserRole.FACILITY_MANAGER);
+    vi.spyOn(WarehousesApi, 'listMine').mockResolvedValue([wh({})]);
+    const request = (id: string, facility_id: string) => ({
+      id,
+      status: 'REQUESTED' as const,
+      reason: `lý do ${id}`,
+      rent_difference: 0,
+      decision_note: null,
+      facility_id,
+      created_at: '2026-10-01T00:00:00.000Z',
+      requester: { id: 'c', full_name: `Khách ${id}`, email: 'c@x.vn' },
+      old_unit: { id: 'u1', code: 'A-1' },
+      new_unit: { id: 'u2', code: 'B-1' },
+    });
+    vi.spyOn(ChangeRequestsApi, 'list').mockResolvedValue({
+      requests: [request('mine', 'fac-1'), request('other', 'fac-2')],
+      meta: { page: 1, limit: 50, total: 2, totalPages: 1 },
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Khách mine')).toBeTruthy());
+    expect(screen.queryByText('Khách other')).toBeNull();
+  });
+
+  it('refetches and shows a Vietnamese message when toggling maintenance fails', async () => {
+    mockAuth(UserRole.FACILITY_MANAGER);
+    const listMine = vi.spyOn(WarehousesApi, 'listMine').mockResolvedValue([wh({})]);
+    vi.spyOn(WarehousesApi, 'updateStatus').mockRejectedValue(
+      Object.assign(new Error('Conflict'), { status: 409 }),
+    );
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Kho Sài Gòn')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: /báo bảo trì/i }));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        'Không cập nhật được trạng thái kho',
+        expect.stringContaining('đã được làm mới'),
+      ),
+    );
+    await waitFor(() => expect(listMine).toHaveBeenCalledTimes(2));
   });
 
   it('shows an empty state when no warehouse is assigned', async () => {
     mockAuth(UserRole.FACILITY_MANAGER);
     vi.spyOn(WarehousesApi, 'listMine').mockResolvedValue([]);
     renderPage();
-    await waitFor(() => expect(screen.getByText('Chưa được gán kho')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Cơ sở chưa có kho')).toBeTruthy());
   });
 });

@@ -8,10 +8,16 @@ import {
   Wrench,
 } from '@phosphor-icons/react';
 import { UserRole } from '@storage/types';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { ChangeRequestsApi, type UnitChangeRequestRecord, WarehousesApi } from '../../lib/api';
+import { useFacility } from '../../context/FacilityContext';
+import {
+  type ApiError,
+  ChangeRequestsApi,
+  type UnitChangeRequestRecord,
+  WarehousesApi,
+} from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
 import type { Warehouse } from '../../types/warehouse';
 import { ChangeRequestsTable } from './manager/ChangeRequestsTable';
@@ -35,11 +41,24 @@ const KpiCard: React.FC<{
   </LayerCard>
 );
 
+/** Vietnamese reason for a failed manager action; the list is refreshed afterwards. */
+const describeActionError = (err: unknown): string => {
+  const status = (err as ApiError | undefined)?.status;
+  if (status === 403) return 'Bạn không có quyền thực hiện thao tác này.';
+  if (status === 404) return 'Không tìm thấy dữ liệu. Danh sách đã được làm mới.';
+  if (status === 409) return 'Dữ liệu đã thay đổi hoặc đã được xử lý. Danh sách đã được làm mới.';
+  return 'Không thể thực hiện thao tác. Danh sách đã được làm mới, vui lòng thử lại.';
+};
+
 export const FacilityManagerDashboard: React.FC = () => {
   const navigate = useNavigate();
   const toast = useAppToast();
   const { user, activeRole } = useAuth();
+  const { selectedFacility, isLoading: facilityLoading } = useFacility();
   const isAdmin = (activeRole ?? user?.roles?.[0]) === UserRole.ADMIN;
+  const facilityId = selectedFacility?.id;
+  // A manager always works inside one facility; wait for the picker instead of fetching all.
+  const waitingForFacility = !isAdmin && !facilityId;
 
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [requests, setRequests] = useState<UnitChangeRequestRecord[]>([]);
@@ -48,32 +67,56 @@ export const FacilityManagerDashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const latestRequest = useRef(0);
 
   const fetchWarehouses = useCallback(
     async () =>
-      isAdmin
-        ? (await WarehousesApi.listAdmin({ limit: 100 })).warehouses
-        : WarehousesApi.listMine(),
-    [isAdmin],
+      isAdmin ? WarehousesApi.listAdminAll({ facilityId }) : WarehousesApi.listMine({ facilityId }),
+    [isAdmin, facilityId],
+  );
+
+  /** Reloads warehouses and change requests; stale responses from a previous facility are dropped. */
+  const load = useCallback(
+    async (showSpinner: boolean) => {
+      const request = ++latestRequest.current;
+      if (waitingForFacility) {
+        setWarehouses([]);
+        setRequests([]);
+        setIsLoading(false);
+        return;
+      }
+      if (showSpinner) setIsLoading(true);
+      try {
+        const [list, requestsData] = await Promise.all([
+          fetchWarehouses(),
+          ChangeRequestsApi.list(),
+        ]);
+        if (request !== latestRequest.current) return;
+        // Requests belong to the facility of the warehouse being left.
+        const facilityIds = new Set(list.map((w) => w.facility.id));
+        setWarehouses(list);
+        setRequests(
+          requestsData.requests.filter((r) =>
+            facilityId
+              ? r.facility_id === facilityId
+              : isAdmin || (r.facility_id !== null && facilityIds.has(r.facility_id)),
+          ),
+        );
+        setError(null);
+      } catch (err) {
+        if (request === latestRequest.current) {
+          setError(err instanceof Error ? err.message : 'Không tải được dữ liệu.');
+        }
+      } finally {
+        if (request === latestRequest.current) setIsLoading(false);
+      }
+    },
+    [fetchWarehouses, waitingForFacility, facilityId, isAdmin],
   );
 
   useEffect(() => {
-    setIsLoading(true);
-    Promise.all([fetchWarehouses(), ChangeRequestsApi.list()])
-      .then(([list, requestsData]) => {
-        // Requests are scoped to the caller's warehouses; admins see every request.
-        const ids = new Set(list.map((w) => w.id));
-        setWarehouses(list);
-        setRequests(
-          isAdmin
-            ? requestsData.requests
-            : requestsData.requests.filter((r) => r.facility_id && ids.has(r.facility_id)),
-        );
-        setError(null);
-      })
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setIsLoading(false));
-  }, [fetchWarehouses, isAdmin]);
+    void load(true);
+  }, [load]);
 
   const toggleMaintenance = async (w: Warehouse) => {
     const next = w.status === 'MAINTENANCE' ? 'AVAILABLE' : 'MAINTENANCE';
@@ -86,10 +129,8 @@ export const FacilityManagerDashboard: React.FC = () => {
         `Đã cập nhật kho ${w.code} thành: ${next === 'MAINTENANCE' ? 'Đang bảo trì' : 'Sẵn sàng thuê'}`,
       );
     } catch (err) {
-      toast.error(
-        'Không cập nhật được trạng thái kho',
-        err instanceof Error ? err.message : 'Vui lòng thử lại.',
-      );
+      toast.error('Không cập nhật được trạng thái kho', describeActionError(err));
+      await load(false);
     } finally {
       setBusyId(null);
     }
@@ -100,16 +141,14 @@ export const FacilityManagerDashboard: React.FC = () => {
     try {
       const { request } = await ChangeRequestsApi.decide(requestId, decision);
       setRequests((prev) => prev.map((r) => (r.id === requestId ? request : r)));
-      if (decision === 'APPROVED') setWarehouses(await fetchWarehouses());
       toast.info(
         'Xử lý yêu cầu',
         decision === 'APPROVED' ? 'Đã phê duyệt yêu cầu đổi kho.' : 'Đã từ chối yêu cầu đổi kho.',
       );
+      if (decision === 'APPROVED') await load(false);
     } catch (err) {
-      toast.error(
-        'Không xử lý được yêu cầu',
-        err instanceof Error ? err.message : 'Vui lòng thử lại.',
-      );
+      toast.error('Không xử lý được yêu cầu', describeActionError(err));
+      await load(false);
     } finally {
       setBusyId(null);
     }
@@ -131,19 +170,27 @@ export const FacilityManagerDashboard: React.FC = () => {
     warehouses.length > 0 ? ((occupied / warehouses.length) * 100).toFixed(1) : '0.0';
   const pendingRequests = requests.filter((r) => r.status === 'REQUESTED').length;
 
-  if (isLoading) {
+  if (isLoading || (waitingForFacility && facilityLoading)) {
     return <Text variant="secondary">Đang tải danh sách kho...</Text>;
   }
 
-  if (!error && warehouses.length === 0) {
+  if (waitingForFacility || (!error && warehouses.length === 0)) {
     return (
       <Empty
         icon={<Buildings className="w-8 h-8" />}
-        title={isAdmin ? 'Chưa có kho nào' : 'Chưa được gán kho'}
+        title={
+          isAdmin
+            ? 'Chưa có kho nào'
+            : waitingForFacility
+              ? 'Chưa được gán cơ sở'
+              : 'Cơ sở chưa có kho'
+        }
         description={
           isAdmin
-            ? 'Hệ thống chưa có kho nào. Vui lòng thêm kho mới.'
-            : 'Tài khoản của bạn chưa được gán quản lý kho nào. Liên hệ quản trị viên để được cấp quyền.'
+            ? 'Chưa có kho nào trong phạm vi đã chọn. Vui lòng thêm kho mới.'
+            : waitingForFacility
+              ? 'Tài khoản của bạn chưa được gán phụ trách cơ sở nào. Liên hệ quản trị viên để được cấp quyền.'
+              : 'Cơ sở này chưa có kho nào. Liên hệ quản trị viên để thêm kho.'
         }
       />
     );
@@ -154,10 +201,11 @@ export const FacilityManagerDashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="grid gap-1.5">
           <Text as="h1" variant="heading" size="lg">
-            Quản lý cơ sở kho
+            Kho của cơ sở
           </Text>
           <Text variant="secondary">
-            Theo dõi kho phụ trách, trạng thái bảo trì và duyệt yêu cầu đổi kho của khách hàng.
+            {selectedFacility ? `${selectedFacility.name}: ` : 'Tất cả cơ sở: '}
+            theo dõi kho, trạng thái bảo trì và duyệt yêu cầu đổi kho của khách hàng.
           </Text>
         </div>
         <div className="flex items-center gap-3">

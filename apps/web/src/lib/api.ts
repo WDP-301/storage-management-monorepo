@@ -174,8 +174,24 @@ export interface FacilityRecord {
   id: string;
   code: string;
   name: string;
-  addressLine: string;
+  provinceCode: string | null;
   status: string;
+  /** Live warehouses; present on back-office rows only. */
+  warehouseCount?: number;
+}
+
+export interface FacilityInput {
+  code: string;
+  name: string;
+  provinceCode?: string | null;
+  status?: 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE';
+}
+
+export interface FacilityListQuery {
+  search?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
 }
 
 export interface UnitChangeRequestRecord {
@@ -197,19 +213,46 @@ interface Paged {
   meta: { total: number; page: number; limit: number; totalPages: number };
 }
 
+const LIST_ALL_PAGE_SIZE = 100;
+
 export const FacilitiesApi = {
   mine: async (): Promise<FacilityRecord[]> => {
     const res = await apiClient.get<ApiResponse<FacilityRecord[]>>('/facilities/mine');
     return res.data.data;
   },
 
-  /** Every facility regardless of status — back-office pickers must still reach closed sites. */
-  listAll: async (): Promise<FacilityRecord[]> => {
+  /** One page of facilities for the admin page (ADMIN, OPERATIONS_MANAGER). */
+  listAdmin: async (
+    query: FacilityListQuery = {},
+  ): Promise<{ facilities: FacilityRecord[] } & Paged> => {
     const res = await apiClient.get<ApiResponse<{ facilities: FacilityRecord[] } & Paged>>(
       '/facilities/admin',
-      { params: { limit: 100 } },
+      { params: query },
     );
-    return res.data.data.facilities;
+    return res.data.data;
+  },
+
+  /** Every facility regardless of status; pages through the API so pickers are never truncated. */
+  listAll: async (): Promise<FacilityRecord[]> => {
+    const all: FacilityRecord[] = [];
+    for (let page = 1; ; page += 1) {
+      const { facilities, meta } = await FacilitiesApi.listAdmin({
+        page,
+        limit: LIST_ALL_PAGE_SIZE,
+      });
+      all.push(...facilities);
+      if (page >= meta.totalPages || facilities.length === 0) return all;
+    }
+  },
+
+  create: async (input: FacilityInput): Promise<FacilityRecord> => {
+    const res = await apiClient.post<ApiResponse<FacilityRecord>>('/facilities', input);
+    return res.data.data;
+  },
+
+  update: async (id: string, input: Partial<FacilityInput>): Promise<FacilityRecord> => {
+    const res = await apiClient.patch<ApiResponse<FacilityRecord>>(`/facilities/${id}`, input);
+    return res.data.data;
   },
 
   /** Active staff of a facility — the people a manager can assign work to. */
@@ -274,9 +317,21 @@ export const WarehousesApi = {
     return res.data.data;
   },
 
+  /** Every back-office row matching the query, paging past the API page-size ceiling. */
+  listAdminAll: async (query: WarehouseListQuery = {}): Promise<Warehouse[]> => {
+    const all: Warehouse[] = [];
+    for (let page = 1; ; page += 1) {
+      const res = await WarehousesApi.listAdmin({ ...query, page, limit: LIST_ALL_PAGE_SIZE });
+      all.push(...res.warehouses);
+      if (page >= res.meta.totalPages || res.warehouses.length === 0) return all;
+    }
+  },
+
   /** Warehouses assigned to the calling facility manager / staff. */
-  listMine: async (): Promise<Warehouse[]> => {
-    const res = await apiClient.get<ApiResponse<Warehouse[]>>('/warehouses/mine');
+  listMine: async (query: { facilityId?: string } = {}): Promise<Warehouse[]> => {
+    const res = await apiClient.get<ApiResponse<Warehouse[]>>('/warehouses/mine', {
+      params: query,
+    });
     return res.data.data;
   },
 

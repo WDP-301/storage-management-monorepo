@@ -664,7 +664,7 @@ export const ManagerTicketsPage: React.FC = () => {
           <Table.Header>
             <Table.Row>
               <Table.Head>Mã phiếu</Table.Head>
-              <Table.Head>Sự cố & Đơn vị kho</Table.Head>
+              <Table.Head>Sự cố & Kho</Table.Head>
               <Table.Head>Khách hàng báo</Table.Head>
               <Table.Head>Mức ưu tiên</Table.Head>
               <Table.Head>Trạng thái</Table.Head>

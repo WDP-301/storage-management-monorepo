@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { UserManagementPage } from '../features/admin/UserManagementPage';
 import { AuthPage } from '../features/auth/AuthPage';
+import { FacilityManagementPage } from '../features/facilities/FacilityManagementPage';
 import { ManagerInspectionsPage } from '../features/inspections/ManagerInspectionsPage';
 import { FacilityManagerDashboard } from '../features/roles/FacilityManagerDashboard';
 import { RoleLandingPage } from '../features/roles/RoleLandingPage';
@@ -97,6 +98,7 @@ export const AppRouter: React.FC = () => {
             <Route
               element={<RoleRoute allowedRoles={[UserRole.ADMIN, UserRole.OPERATIONS_MANAGER]} />}
             >
+              <Route path="/admin/facilities" element={<FacilityManagementPage />} />
               <Route path="/admin/warehouses" element={<WarehouseManagementPage />} />
             </Route>
 

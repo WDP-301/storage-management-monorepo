@@ -1,15 +1,14 @@
-import { Button, Input, InputGroup, LayerCard, Pagination, Select, Text } from '@cloudflare/kumo';
+import { Button, LayerCard, Pagination, Text } from '@cloudflare/kumo';
 import {
   ArrowsClockwise,
   CheckCircle,
-  MagnifyingGlass,
   Plus,
   Stack,
   Warehouse as WarehouseIcon,
   Wrench,
-  X,
 } from '@phosphor-icons/react';
 import React, { useCallback, useEffect, useState } from 'react';
+import { useFacility } from '../../context/FacilityContext';
 import { LocationsApi, WarehousesApi } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
 import type {
@@ -19,20 +18,16 @@ import type {
   WarehouseStatus,
 } from '../../types/warehouse';
 import { WarehouseDeleteDialog } from './WarehouseDeleteDialog';
+import {
+  ALL,
+  EMPTY_FILTERS,
+  type WarehouseFilterState,
+  WarehouseFilters,
+} from './WarehouseFilters';
 import { WarehouseFormDialog } from './WarehouseFormDialog';
 import { WarehouseTable } from './WarehouseTable';
-import { WAREHOUSE_STATUS_LABEL } from './warehouse-display';
 
 const PAGE_SIZE = 20;
-const ALL = 'ALL';
-
-const STATUS_ITEMS = [
-  { value: ALL, label: 'Tất cả trạng thái' },
-  ...(Object.keys(WAREHOUSE_STATUS_LABEL) as WarehouseStatus[]).map((s) => ({
-    value: s,
-    label: WAREHOUSE_STATUS_LABEL[s].label,
-  })),
-];
 
 const toPositive = (raw: string): number | undefined => {
   const n = Number(raw);
@@ -67,26 +62,36 @@ export const WarehouseManagementPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const { facilities, selectedFacility } = useFacility();
+  const [filters, setFilters] = useState<WarehouseFilterState>({
+    ...EMPTY_FILTERS,
+    facility: selectedFacility?.id ?? ALL,
+  });
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState(ALL);
-  const [provinceFilter, setProvinceFilter] = useState(ALL);
-  const [minArea, setMinArea] = useState('');
-  const [maxArea, setMaxArea] = useState('');
-  const [minPrice, setMinPrice] = useState('');
-  const [maxPrice, setMaxPrice] = useState('');
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Warehouse | null>(null);
   const [deleting, setDeleting] = useState<Warehouse | null>(null);
 
+  const headerFacilityId = selectedFacility?.id ?? ALL;
+  useEffect(() => {
+    setFilters((prev) => ({ ...prev, facility: headerFacilityId }));
+    setPage(1);
+  }, [headerFacilityId]);
+
   useEffect(() => {
     const handler = setTimeout(() => {
-      setDebouncedSearch(searchQuery.trim());
+      setDebouncedSearch(filters.search.trim());
       setPage(1);
     }, 400);
     return () => clearTimeout(handler);
-  }, [searchQuery]);
+  }, [filters.search]);
+
+  const updateFilters = (patch: Partial<WarehouseFilterState>) => {
+    setFilters((prev) => ({ ...prev, ...patch }));
+    if (!('search' in patch)) setPage(1);
+  };
+  const facilityId = filters.facility !== ALL ? filters.facility : undefined;
 
   useEffect(() => {
     LocationsApi.provinces()
@@ -100,12 +105,13 @@ export const WarehouseManagementPage: React.FC = () => {
       page,
       limit: PAGE_SIZE,
       search: debouncedSearch || undefined,
-      status: statusFilter !== ALL ? (statusFilter as WarehouseStatus) : undefined,
-      provinceCode: provinceFilter !== ALL ? provinceFilter : undefined,
-      minArea: toPositive(minArea),
-      maxArea: toPositive(maxArea),
-      minPrice: toPositive(minPrice),
-      maxPrice: toPositive(maxPrice),
+      facilityId,
+      status: filters.status !== ALL ? (filters.status as WarehouseStatus) : undefined,
+      provinceCode: filters.province !== ALL ? filters.province : undefined,
+      minArea: toPositive(filters.minArea),
+      maxArea: toPositive(filters.maxArea),
+      minPrice: toPositive(filters.minPrice),
+      maxPrice: toPositive(filters.maxPrice),
     };
     try {
       const res = await WarehousesApi.listAdmin(query);
@@ -119,18 +125,19 @@ export const WarehouseManagementPage: React.FC = () => {
   }, [
     page,
     debouncedSearch,
-    statusFilter,
-    provinceFilter,
-    minArea,
-    maxArea,
-    minPrice,
-    maxPrice,
+    facilityId,
+    filters.status,
+    filters.province,
+    filters.minArea,
+    filters.maxArea,
+    filters.minPrice,
+    filters.maxPrice,
     toast,
   ]);
 
   // Status counts ignore filters; capped at the API page ceiling.
   const loadSnapshot = useCallback(() => {
-    WarehousesApi.listAdmin({ limit: 100 })
+    WarehousesApi.listAdmin({ facilityId, limit: 100 })
       .then((res) => {
         setSnapshot(res.warehouses);
         setSnapshotTotal(res.meta.total);
@@ -139,7 +146,7 @@ export const WarehouseManagementPage: React.FC = () => {
         setSnapshot([]);
         setSnapshotTotal(0);
       });
-  }, []);
+  }, [facilityId]);
 
   useEffect(() => {
     load();
@@ -158,26 +165,16 @@ export const WarehouseManagementPage: React.FC = () => {
     snapshot.filter((w) => statuses.includes(w.status)).length;
 
   const hasFilters =
-    searchQuery !== '' ||
-    statusFilter !== ALL ||
-    provinceFilter !== ALL ||
-    [minArea, maxArea, minPrice, maxPrice].some((v) => v !== '');
+    filters.search !== '' ||
+    filters.status !== ALL ||
+    filters.province !== ALL ||
+    filters.facility !== ALL ||
+    [filters.minArea, filters.maxArea, filters.minPrice, filters.maxPrice].some((v) => v !== '');
 
   const resetFilters = () => {
-    setSearchQuery('');
-    setStatusFilter(ALL);
-    setProvinceFilter(ALL);
-    setMinArea('');
-    setMaxArea('');
-    setMinPrice('');
-    setMaxPrice('');
+    setFilters(EMPTY_FILTERS);
     setPage(1);
   };
-
-  const provinceItems = [
-    { value: ALL, label: 'Tất cả tỉnh/thành' },
-    ...provinces.map((p) => ({ value: p.code, label: p.name })),
-  ];
 
   return (
     <div className="space-y-6">
@@ -239,78 +236,14 @@ export const WarehouseManagementPage: React.FC = () => {
         />
       </div>
 
-      <LayerCard className="px-5 py-4 ring ring-kumo-line space-y-3">
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
-          <div className="w-full lg:w-72">
-            <InputGroup size="base">
-              <InputGroup.Addon align="start">
-                <MagnifyingGlass className="w-4 h-4 text-kumo-subtle" />
-              </InputGroup.Addon>
-              <InputGroup.Input
-                type="text"
-                placeholder="Tìm theo mã, tên, địa chỉ..."
-                aria-label="Tìm kiếm kho"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </InputGroup>
-          </div>
-          <div className="w-full lg:w-48">
-            <Select
-              aria-label="Lọc trạng thái kho"
-              value={statusFilter}
-              onValueChange={(v) => {
-                setStatusFilter(String(v));
-                setPage(1);
-              }}
-              items={STATUS_ITEMS}
-            />
-          </div>
-          <div className="w-full lg:w-56">
-            <Select
-              aria-label="Lọc tỉnh thành"
-              value={provinceFilter}
-              onValueChange={(v) => {
-                setProvinceFilter(String(v));
-                setPage(1);
-              }}
-              items={provinceItems}
-            />
-          </div>
-          {hasFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<X className="w-4 h-4" />}
-              onClick={resetFilters}
-            >
-              Xóa bộ lọc
-            </Button>
-          )}
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {(
-            [
-              ['Diện tích từ (m²)', minArea, setMinArea],
-              ['Diện tích đến (m²)', maxArea, setMaxArea],
-              ['Giá từ (đ/tháng)', minPrice, setMinPrice],
-              ['Giá đến (đ/tháng)', maxPrice, setMaxPrice],
-            ] as const
-          ).map(([label, value, setter]) => (
-            <Input
-              key={label}
-              label={label}
-              type="number"
-              min="0"
-              value={value}
-              onChange={(e) => {
-                setter(e.target.value);
-                setPage(1);
-              }}
-            />
-          ))}
-        </div>
-      </LayerCard>
+      <WarehouseFilters
+        filters={filters}
+        facilities={facilities}
+        provinces={provinces}
+        hasFilters={hasFilters}
+        onChange={updateFilters}
+        onReset={resetFilters}
+      />
 
       <WarehouseTable
         warehouses={warehouses}
@@ -334,6 +267,8 @@ export const WarehouseManagementPage: React.FC = () => {
       <WarehouseFormDialog
         open={formOpen}
         warehouse={editing}
+        facilities={facilities}
+        defaultFacilityId={facilityId}
         onClose={() => setFormOpen(false)}
         onSaved={() => {
           setFormOpen(false);

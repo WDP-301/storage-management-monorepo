@@ -246,7 +246,7 @@ export const UserManagementPage: React.FC = () => {
     if (roleRequiresFacility && !newFacilityId) {
       toast.warning(
         'Thiếu thông tin cơ sở',
-        `Vai trò ${getRoleTitle(newRole)} bắt buộc phải chọn cơ sở kho cụ thể.`,
+        `Vai trò ${getRoleTitle(newRole)} bắt buộc phải chọn cơ sở phụ trách.`,
       );
       return;
     }
@@ -353,8 +353,8 @@ export const UserManagementPage: React.FC = () => {
 
   // Role options for Assign Role Dialog
   const assignRoleOptions = [
-    { value: UserRole.FACILITY_STAFF, label: 'Nhân viên cơ sở (Cần chọn kho)' },
-    { value: UserRole.FACILITY_MANAGER, label: 'Quản lý cơ sở (Cần chọn kho)' },
+    { value: UserRole.FACILITY_STAFF, label: 'Nhân viên cơ sở (Cần chọn cơ sở)' },
+    { value: UserRole.FACILITY_MANAGER, label: 'Quản lý cơ sở (Cần chọn cơ sở)' },
     { value: UserRole.OPERATIONS_MANAGER, label: 'Quản lý vận hành (Toàn cục)' },
     { value: UserRole.ADMIN, label: 'Quản trị viên hệ thống (Toàn cục)' },
     { value: UserRole.CUSTOMER, label: 'Khách hàng (Toàn cục)' },
@@ -857,7 +857,8 @@ export const UserManagementPage: React.FC = () => {
                     Cấp thêm vai trò mới cho người dùng
                   </span>
                   <Text variant="secondary" size="xs">
-                    Nhân viên cơ sở hoặc Quản lý cơ sở bắt buộc phải được gắn với một kho cụ thể.
+                    Nhân viên cơ sở hoặc Quản lý cơ sở bắt buộc phải được gắn với một cơ sở và phụ
+                    trách toàn bộ kho của cơ sở đó.
                   </Text>
                 </div>
 

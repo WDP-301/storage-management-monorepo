@@ -40,7 +40,7 @@ export const ManagedWarehousesTable: React.FC<Props> = ({
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div className="grid gap-1">
         <Text as="h3" variant="heading">
-          Danh sách kho phụ trách
+          Danh sách kho của cơ sở
         </Text>
         <Text variant="secondary">Theo dõi hiện trạng kho và chuyển trạng thái bảo trì.</Text>
       </div>
@@ -75,6 +75,7 @@ export const ManagedWarehousesTable: React.FC<Props> = ({
       <Table>
         <Table.Header>
           <Table.Row>
+            <Table.Head>Cơ sở</Table.Head>
             <Table.Head>Mã kho</Table.Head>
             <Table.Head>Tên kho</Table.Head>
             <Table.Head>Địa chỉ</Table.Head>
@@ -87,6 +88,9 @@ export const ManagedWarehousesTable: React.FC<Props> = ({
         <Table.Body>
           {warehouses.map((w) => (
             <Table.Row key={w.id}>
+              <Table.Cell className="whitespace-nowrap text-kumo-default">
+                {w.facility.name}
+              </Table.Cell>
               <Table.Cell className="whitespace-nowrap font-mono font-semibold text-kumo-default">
                 {w.code}
               </Table.Cell>
@@ -120,7 +124,7 @@ export const ManagedWarehousesTable: React.FC<Props> = ({
           ))}
           {warehouses.length === 0 && (
             <Table.Row>
-              <Table.Cell className="p-0" colSpan={7}>
+              <Table.Cell className="p-0" colSpan={8}>
                 <Empty
                   size="sm"
                   title="Không có kho nào"

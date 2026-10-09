@@ -3,6 +3,7 @@ import type { Warehouse, WarehouseIdleStatus, WarehouseInput } from '../../types
 export const DEPOSIT_DEFAULT = 'default';
 
 export interface WarehouseFormState {
+  facilityId: string;
   code: string;
   name: string;
   addressLine: string;
@@ -20,6 +21,7 @@ export interface WarehouseFormState {
 }
 
 export const EMPTY_FORM: WarehouseFormState = {
+  facilityId: '',
   code: '',
   name: '',
   addressLine: '',
@@ -42,6 +44,7 @@ export const isIdleStatus = (status: string): status is WarehouseIdleStatus =>
   (IDLE_STATUSES as string[]).includes(status);
 
 export const toFormState = (w: Warehouse): WarehouseFormState => ({
+  facilityId: w.facility.id,
   code: w.code,
   name: w.name,
   addressLine: w.addressLine,
@@ -70,25 +73,54 @@ export function computeDerived(form: Pick<WarehouseFormState, 'widthM' | 'length
   return { area, volume };
 }
 
-/** Validates the form; returns a Vietnamese message for the first problem found. */
-export function validateForm(form: WarehouseFormState): string | null {
+/** Longest side the API accepts, in metres. */
+export const MAX_SIDE_M = 1000;
+/** Highest monthly rent the API accepts, in VND. */
+export const MAX_MONTHLY_PRICE = 100_000_000_000;
+
+const hasAtMostTwoDecimals = (n: number) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6;
+
+const sideProblem = (label: string, value: string): string | null => {
+  const n = num(value);
+  if (!(n > 0)) return 'Chiều rộng, dài, cao phải là số lớn hơn 0.';
+  if (n > MAX_SIDE_M) return `${label} tối đa ${MAX_SIDE_M} m.`;
+  if (!hasAtMostTwoDecimals(n)) return `${label} chỉ được tối đa 2 chữ số thập phân.`;
+  return null;
+};
+
+/**
+ * Validates the form; returns a Vietnamese message for the first problem found. A warehouse that
+ * is not idle keeps its stored size, so those fields are not checked (the API never receives them).
+ */
+export function validateForm(form: WarehouseFormState, frozen = false): string | null {
+  if (!form.facilityId) return 'Vui lòng chọn cơ sở cho kho.';
   if (!form.code.trim()) return 'Vui lòng nhập mã kho.';
   if (!form.name.trim()) return 'Vui lòng nhập tên kho.';
   if (!form.addressLine.trim()) return 'Vui lòng nhập địa chỉ kho.';
-  if (!(num(form.widthM) > 0) || !(num(form.lengthM) > 0) || !(num(form.heightM) > 0)) {
-    return 'Chiều rộng, dài, cao phải là số lớn hơn 0.';
+  if (!frozen) {
+    const problem =
+      sideProblem('Chiều rộng', form.widthM) ??
+      sideProblem('Chiều dài', form.lengthM) ??
+      sideProblem('Chiều cao', form.heightM);
+    if (problem) return problem;
   }
   const lat = num(form.latitude);
   const lng = num(form.longitude);
   if (!(lat >= -90 && lat <= 90) || !(lng >= -180 && lng <= 180)) {
     return 'Vui lòng chọn địa chỉ gợi ý hoặc nhập tọa độ hợp lệ.';
   }
-  if (!(num(form.monthlyPrice) > 0)) return 'Giá thuê theo tháng phải lớn hơn 0.';
+  const price = num(form.monthlyPrice);
+  if (!(price > 0)) return 'Giá thuê theo tháng phải lớn hơn 0.';
+  if (price > MAX_MONTHLY_PRICE) {
+    return `Giá thuê theo tháng tối đa ${MAX_MONTHLY_PRICE.toLocaleString('vi-VN')} đ.`;
+  }
+  if (!hasAtMostTwoDecimals(price)) return 'Giá thuê chỉ được tối đa 2 chữ số thập phân.';
   return null;
 }
 
 export function buildPayload(form: WarehouseFormState): WarehouseInput {
   return {
+    facilityId: form.facilityId,
     code: form.code.trim(),
     name: form.name.trim(),
     addressLine: form.addressLine.trim(),
@@ -118,6 +150,9 @@ export function buildPatch(form: WarehouseFormState, original: Warehouse): Parti
   // A ward left over from the old province must be cleared explicitly, or the API pairs it
   // with the new province and rejects the mismatch.
   if (!form.wardCode && original.wardCode) patch.wardCode = null;
-  if (!isIdleStatus(original.status)) delete patch.status;
+  if (!isIdleStatus(original.status)) {
+    delete patch.status;
+    delete patch.facilityId;
+  }
   return patch as Partial<WarehouseInput>;
 }

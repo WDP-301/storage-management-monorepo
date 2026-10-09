@@ -23,6 +23,7 @@ export const WarehouseTable: React.FC<Props> = ({ warehouses, hasFilters, onEdit
     <Table>
       <Table.Header>
         <Table.Row>
+          <Table.Head>Cơ sở</Table.Head>
           <Table.Head>Mã kho</Table.Head>
           <Table.Head>Tên kho</Table.Head>
           <Table.Head>Địa chỉ</Table.Head>
@@ -38,7 +39,7 @@ export const WarehouseTable: React.FC<Props> = ({ warehouses, hasFilters, onEdit
       <Table.Body>
         {warehouses.length === 0 && (
           <Table.Row>
-            <Table.Cell className="p-0" colSpan={10}>
+            <Table.Cell className="p-0" colSpan={11}>
               <Empty
                 size="sm"
                 icon={<WarehouseIcon className="w-8 h-8" />}
@@ -54,6 +55,9 @@ export const WarehouseTable: React.FC<Props> = ({ warehouses, hasFilters, onEdit
         )}
         {warehouses.map((w) => (
           <Table.Row key={w.id}>
+            <Table.Cell className="whitespace-nowrap text-kumo-default">
+              {w.facility.name}
+            </Table.Cell>
             <Table.Cell className="whitespace-nowrap font-mono font-semibold text-kumo-default">
               {w.code}
             </Table.Cell>

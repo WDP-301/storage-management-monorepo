@@ -1,10 +1,11 @@
 import { Button, Dialog, Input, InputArea, Select, Text } from '@cloudflare/kumo';
 import { X } from '@phosphor-icons/react';
 import React, { useEffect, useState } from 'react';
-import { LocationsApi, WarehousesApi } from '../../lib/api';
+import { type FacilityRecord, LocationsApi, WarehousesApi } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
 import type { Province, Ward, Warehouse } from '../../types/warehouse';
 import { WarehouseAddressPicker } from './WarehouseAddressPicker';
+import { WarehouseFacilityField } from './WarehouseFacilityField';
 import {
   describeWarehouseError,
   formatArea,
@@ -27,6 +28,9 @@ interface Props {
   open: boolean;
   /** Warehouse being edited; null opens the create form. */
   warehouse: Warehouse | null;
+  /** Facility pre-selected when creating (e.g. the page filter). */
+  defaultFacilityId?: string;
+  facilities: FacilityRecord[];
   onClose: () => void;
   onSaved: () => void;
 }
@@ -41,7 +45,14 @@ const STATUS_ITEMS = (['AVAILABLE', 'MAINTENANCE', 'INACTIVE'] as const).map((s)
   label: WAREHOUSE_STATUS_LABEL[s].label,
 }));
 
-export const WarehouseFormDialog: React.FC<Props> = ({ open, warehouse, onClose, onSaved }) => {
+export const WarehouseFormDialog: React.FC<Props> = ({
+  open,
+  warehouse,
+  defaultFacilityId,
+  facilities,
+  onClose,
+  onSaved,
+}) => {
   const toast = useAppToast();
   const [form, setForm] = useState<WarehouseFormState>(EMPTY_FORM);
   const [provinces, setProvinces] = useState<Province[]>([]);
@@ -53,11 +64,13 @@ export const WarehouseFormDialog: React.FC<Props> = ({ open, warehouse, onClose,
 
   useEffect(() => {
     if (!open) return;
-    setForm(warehouse ? toFormState(warehouse) : EMPTY_FORM);
+    setForm(
+      warehouse ? toFormState(warehouse) : { ...EMPTY_FORM, facilityId: defaultFacilityId ?? '' },
+    );
     LocationsApi.provinces()
       .then(setProvinces)
       .catch(() => toast.error('Lỗi tải dữ liệu', 'Không tải được danh sách tỉnh/thành.'));
-  }, [open, warehouse, toast]);
+  }, [open, warehouse, defaultFacilityId, toast]);
 
   useEffect(() => {
     if (!open || !form.provinceCode) {
@@ -80,7 +93,7 @@ export const WarehouseFormDialog: React.FC<Props> = ({ open, warehouse, onClose,
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const problem = validateForm(form);
+    const problem = validateForm(form, frozen);
     if (problem) {
       toast.warning('Thông tin chưa hợp lệ', problem);
       return;
@@ -130,10 +143,18 @@ export const WarehouseFormDialog: React.FC<Props> = ({ open, warehouse, onClose,
           {frozen && (
             <div className="p-3 bg-kumo-warning-tint text-kumo-warning rounded-lg text-xs">
               Kho đang {WAREHOUSE_STATUS_LABEL[warehouse.status].label.toLowerCase()} nên không thể
-              đổi mã kho, kích thước hay trạng thái. Giá, đặt cọc, địa chỉ và ghi chú vẫn chỉnh
-              được.
+              đổi cơ sở, mã kho, kích thước hay trạng thái. Giá, đặt cọc, địa chỉ và ghi chú vẫn
+              chỉnh được.
             </div>
           )}
+
+          <WarehouseFacilityField
+            facilities={facilities}
+            value={form.facilityId}
+            onChange={(v) => set('facilityId', v)}
+            locked={frozen}
+            isEdit={isEdit}
+          />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input

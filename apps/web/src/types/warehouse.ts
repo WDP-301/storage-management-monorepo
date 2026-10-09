@@ -13,10 +13,15 @@ export type WarehouseStatus = (typeof WAREHOUSE_STATUSES)[number];
 /** Statuses an admin may set directly; the rest are driven by booking/contract flows. */
 export type WarehouseIdleStatus = 'AVAILABLE' | 'MAINTENANCE' | 'INACTIVE';
 
+export interface WarehouseFacility {
+  id: string;
+  code: string;
+  name: string;
+}
+
 export interface Warehouse {
   id: string;
-  /** Hidden storage unit id; referenced by bookings and change requests. */
-  unitId: string;
+  facility: WarehouseFacility;
   code: string;
   name: string;
   addressLine: string;
@@ -39,6 +44,7 @@ export interface Warehouse {
 }
 
 export interface WarehouseListQuery {
+  facilityId?: string;
   search?: string;
   status?: WarehouseStatus;
   provinceCode?: string;
@@ -58,6 +64,7 @@ export interface WarehouseListResponse {
 }
 
 export interface WarehouseInput {
+  facilityId: string;
   code: string;
   name: string;
   addressLine: string;

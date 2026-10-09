@@ -1,60 +1,17 @@
 export type CustomerTab = 'browse' | 'bookings' | 'storage' | 'settings';
-export type BrowseMode = 'recommended' | 'manual';
-/** Browse renders either the facility list or the map; both read the same filtered data. */
+/** Browse renders either the warehouse list or the map; both read the same data. */
 export type BrowseView = 'list' | 'map';
 
-export type UnitOffer = {
-  id: string;
-  facilityId: string;
-  facility: string;
-  address: string;
-  code: string;
-  zone: string;
-  /** Numeric area used for filtering; `size` is its display form. */
-  areaM2: number;
-  size: string;
-  dimensions: string;
-  monthlyPrice: number;
-  deposit: number;
-  unitTypeId: string;
-  unitTypeName: string;
-  provinceCode: string | null;
-  wardCode: string | null;
-  notes: string | null;
-  /** Facility coordinates, kept so distance sorting can be added without touching the fetch layer. */
-  latitude: number;
-  longitude: number;
-};
+export type RangePresetKey = string;
 
-export type FacilityOffer = {
-  id: string;
-  name: string;
-  address: string;
-  provinceCode: string | null;
-  wardCode: string | null;
-  /**
-   * Facility coordinates, lifted off the first mapped unit. Kept here rather than read from
-   * `units[0]` because filtering and pagination rewrite `units`, so the map must not depend on it.
-   */
-  latitude: number;
-  longitude: number;
-  units: UnitOffer[];
-};
+export type WarehouseSort = 'price_asc' | 'price_desc' | 'area_asc' | 'area_desc' | 'newest';
 
-/** Preset area buckets offered in the filter card. */
-export type AreaPresetKey = 'any' | 'small' | 'medium' | 'large';
-
-/**
- * Everything the browse filter sheet edits.
- *
- * All of it narrows the unit list except `requestedQuantity`, which decides how many units each
- * facility card proposes. Rental dates live on the schedule screen instead: the API has no
- * availability-over-time query, so they never belonged among the filters.
- */
+/** Everything the browse filter sheet edits; each field maps onto a `GET /warehouses` query param. */
 export type BrowseCriteria = {
   provinceCode: string | null;
   wardCode: string | null;
-  areaPreset: AreaPresetKey;
-  maxMonthlyPrice: number | null;
-  requestedQuantity: number;
+  areaPreset: RangePresetKey;
+  volumePreset: RangePresetKey;
+  pricePreset: RangePresetKey;
+  sort: WarehouseSort;
 };

@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native';
-import { formatIsoDate } from '../../../lib/format-vi';
+import { formatArea, formatDimensions, formatIsoDate, formatNumber } from '../../../lib/format-vi';
 import { rentalEndIso, toIsoDate } from '../../../lib/rental-schedule';
 import type { ApiContract, ApiInspection } from '../../types/contract-api';
 
@@ -146,4 +146,27 @@ export function contractStatusTone(status: ApiContract['status']): StatusTone {
 
 export function contractKindLabel(kind: ApiContract['kind']) {
   return kind === 'RENEWAL' ? 'Gia hạn' : 'Thuê mới';
+}
+
+/** Warehouse name for a contract; the unit code (= warehouse code) when the facility is missing. */
+export function contractWarehouseName(contract: ApiContract): string {
+  return contract.facility?.name ?? contract.unit?.code ?? contract.contractNo;
+}
+
+/** `KHO-01 · 5 × 8 × 3,5 m · 40 m² · 140 m³` — whichever parts the API provided. */
+export function contractUnitSummary(contract: ApiContract): string {
+  const unit = contract.unit;
+  if (!unit) return '';
+  const dimensions =
+    unit.widthM !== null && unit.lengthM !== null
+      ? formatDimensions(unit.widthM, unit.lengthM, unit.heightM)
+      : null;
+  return [
+    unit.code,
+    dimensions,
+    formatArea(unit.areaM2),
+    unit.volumeM3 !== null ? `${formatNumber(unit.volumeM3)} m³` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }

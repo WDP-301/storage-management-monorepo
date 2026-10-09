@@ -2,9 +2,14 @@ import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { Button, Card } from 'heroui-native';
 import { useRef } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
-import { formatArea } from '../../../lib/format-vi';
 import type { ApiContract } from '../../types/contract-api';
-import { openReturn, StatusPill, storageState } from './contract-display';
+import {
+  contractUnitSummary,
+  contractWarehouseName,
+  openReturn,
+  StatusPill,
+  storageState,
+} from './contract-display';
 import { ContractSection, HandoverSection, ReturnSection } from './contract-sections';
 import { ReturnRequestSheet } from './ReturnRequestSheet';
 
@@ -81,13 +86,9 @@ function ContractDetail({
       <View className="flex-row items-start justify-between gap-3">
         <View className="flex-1">
           <Text className="text-2xl font-bold tracking-tight text-foreground">
-            {contract.unit?.code ?? 'Kho'}
+            {contractWarehouseName(contract)}
           </Text>
-          <Text className="mt-1 text-sm text-muted">
-            {[contract.unit?.typeName, contract.unit ? formatArea(contract.unit.areaM2) : null]
-              .filter(Boolean)
-              .join(' · ')}
-          </Text>
+          <Text className="mt-1 text-sm text-muted">{contractUnitSummary(contract)}</Text>
           {state.hint ? (
             <Text className="mt-1 text-sm font-medium text-accent">{state.hint}</Text>
           ) : null}
@@ -98,7 +99,6 @@ function ContractDetail({
       {contract.facility ? (
         <Card className="border border-border bg-surface">
           <Card.Body className="gap-1">
-            <Text className="text-sm font-semibold text-foreground">{contract.facility.name}</Text>
             <Text className="text-sm leading-5 text-muted">{contract.facility.address}</Text>
           </Card.Body>
         </Card>
@@ -122,7 +122,7 @@ function ContractDetail({
       <ReturnRequestSheet
         sheetRef={returnSheet}
         contractId={contract.id}
-        unitCode={contract.unit?.code ?? ''}
+        warehouseName={contractWarehouseName(contract)}
         onSubmitted={onReturnRequested}
       />
     </View>

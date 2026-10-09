@@ -1,58 +1,44 @@
-import type { FacilityStatus, StorageUnitStatus } from '@storage/types';
-
 /**
- * Raw response shapes from the API, mirroring the TypeORM entities as they arrive over the wire.
+ * Raw response shapes from the warehouse API.
  *
- * Postgres `decimal` columns are serialised as strings because the API declares no numeric
- * transformer, so every dimension/price/coordinate below is typed `string` on purpose. Convert
- * with `Number()` before doing arithmetic or comparisons — see `storage-unit-mapper.ts`.
+ * Unlike the old unit endpoints, `/warehouses` serialises numeric columns as JSON numbers, so no
+ * string-to-number coercion is needed on the client.
  */
 
-export type ApiFacility = {
+export type WarehouseStatus =
+  | 'AVAILABLE'
+  | 'HELD'
+  | 'BOOKED'
+  | 'RENTED'
+  | 'PENDING_INSPECTION'
+  | 'MAINTENANCE'
+  | 'INACTIVE';
+
+/** A standalone warehouse (kho lẻ). `id` is the facility id, `unitId` is what bookings reference. */
+export type Warehouse = {
   id: string;
+  unitId: string;
   code: string;
   name: string;
   addressLine: string;
-  wardCode?: string | null;
-  provinceCode?: string | null;
-  /** decimal */
-  latitude: string;
-  /** decimal */
-  longitude: string;
-  status: FacilityStatus;
+  wardCode: string | null;
+  provinceCode: string | null;
+  latitude: number;
+  longitude: number;
+  widthM: number;
+  lengthM: number;
+  heightM: number | null;
+  areaM2: number;
+  volumeM3: number | null;
+  monthlyPrice: number;
+  depositMonths: number | null;
+  /** Months of rent charged as deposit; deposit in VND is `monthlyPrice × effectiveDepositMonths`. */
+  effectiveDepositMonths: number;
+  status: WarehouseStatus;
+  notes: string | null;
 };
 
-export type ApiUnitType = {
-  id: string;
-  code: string;
-  name: string;
-  /** decimal */
-  widthM: string;
-  /** decimal */
-  lengthM: string;
-  /** decimal */
-  heightM?: string | null;
-  /** decimal */
-  monthlyPrice: string;
-  /** decimal */
-  defaultDepositMonths: string;
-};
-
-export type ApiStorageUnit = {
-  id: string;
-  facilityId: string;
-  unitTypeId: string;
-  code: string;
-  zone?: string | null;
-  /** decimal */
-  areaM2: string;
-  status: StorageUnitStatus;
-  notes?: string | null;
-  /** `null` when the related facility was soft-deleted (left join). */
-  facility: ApiFacility | null;
-  /** `null` when the related unit type was soft-deleted (left join). */
-  unitType: ApiUnitType | null;
-};
+export type NearbyWarehouse = Warehouse & { distanceKm: number };
 
 export type ApiPaginationMeta = {
   page: number;
@@ -61,10 +47,16 @@ export type ApiPaginationMeta = {
   totalPages: number;
 };
 
-/** `GET /storage-units` — the service names the array to avoid double-nesting under `data`. */
-export type ApiStorageUnitsPage = {
-  units: ApiStorageUnit[];
+/** `GET /warehouses` — the array is named to avoid double-nesting under `data`. */
+export type WarehousesPage = {
+  warehouses: Warehouse[];
   meta: ApiPaginationMeta;
+};
+
+/** `GET /places/nearby`. */
+export type NearbyPlacesResult = {
+  center: { lat: number; lng: number };
+  warehouses: NearbyWarehouse[];
 };
 
 /** `GET /locations/provinces` and `/locations/provinces/:code/wards`. */

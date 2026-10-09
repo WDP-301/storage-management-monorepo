@@ -1,158 +1,132 @@
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
-import { Faders, MagnifyingGlass, X } from 'phosphor-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { hasPlottableCoords } from '../../../lib/goong-map-config';
 import { type PlacePrediction, PlacesApi } from '../../../lib/places-api';
-import type { BrowseMode, BrowseView, FacilityOffer, UnitOffer } from '../../types/customer';
-import { BrowseFiltersBar } from './BrowseFiltersBar';
+import {
+  countActiveFilters,
+  MAX_WAREHOUSES_PER_BOOKING,
+  matchesCriteria,
+} from '../../../lib/warehouse-query';
+import type { BrowseView } from '../../types/customer';
+import type { NearbyWarehouse, Warehouse } from '../../types/storage-api';
 import { BrowseFiltersSheet } from './BrowseFiltersSheet';
 import { BrowseBrandHeader, BrowseLocationControls } from './BrowseHeader';
+import { BrowseMapOverlay } from './BrowseMapOverlay';
 import { BrowseMapView } from './BrowseMapView';
+import { BrowseQuickFilters } from './BrowseQuickFilters';
 import { BrowseResultsList } from './BrowseResultsList';
 import { BrowseSelectionBar } from './BrowseSelectionBar';
 import { ErrorState, LoadingState } from './BrowseStates';
-import { FacilityMapSheet } from './FacilityMapSheet';
 import { MapPlaceSearchSheet } from './MapPlaceSearchSheet';
-import { useAvailableUnits } from './use-available-units';
 import { useBrowseCriteria } from './use-browse-criteria';
+import { useWarehouses } from './use-warehouses';
+import { WarehouseMapSheet } from './WarehouseMapSheet';
 
 type Props = {
   hasHolding: boolean;
   contentBottomPadding: number;
-  onHold: (units: UnitOffer[]) => void;
+  onHold: (warehouses: Warehouse[]) => void;
 };
 
 type NearbySearch = {
   label: string;
   center: { lat: number; lng: number };
-  facilityIds: string[];
+  warehouses: NearbyWarehouse[];
 };
 
-export function BrowseUnitsScreen({ hasHolding, contentBottomPadding, onHold }: Props) {
-  const { facilities, provinces, hasMore, isLoading, error, refetch } = useAvailableUnits();
-  const {
-    criteria,
-    setCriteria,
-    provinceOptions,
-    wardOptions,
-    visibleFacilities,
-    areaCounts,
-    priceCounts,
-  } = useBrowseCriteria(facilities, provinces);
-  const [mode, setMode] = useState<BrowseMode>('recommended');
+export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHold }: Props) {
+  const { criteria, setCriteria, provinceOptions, wardOptions } = useBrowseCriteria();
+  const { warehouses, total, hasMore, isLoading, isLoadingMore, error, loadMore, refetch } =
+    useWarehouses(criteria);
   const [view, setView] = useState<BrowseView>('list');
-  const [page, setPage] = useState(1);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [waitlistedFacilityId, setWaitlistedFacilityId] = useState<string | null>(null);
-  const [mapFacilityId, setMapFacilityId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Warehouse[]>([]);
+  const [mapWarehouseId, setMapWarehouseId] = useState<string | null>(null);
   const [nearbySearch, setNearbySearch] = useState<NearbySearch | null>(null);
-  const nearbyIds = nearbySearch ? new Set(nearbySearch.facilityIds) : null;
-  const mapFacilities = nearbyIds
-    ? visibleFacilities.filter((facility) => nearbyIds.has(facility.id))
-    : visibleFacilities;
-  const mapFacility = mapFacilities.find((facility) => facility.id === mapFacilityId) ?? null;
   const filtersSheetRef = useRef<BottomSheetModal>(null);
-  const facilitySheetRef = useRef<BottomSheetModal>(null);
-  const pendingMapHoldRef = useRef<UnitOffer[] | null>(null);
+  const warehouseSheetRef = useRef<BottomSheetModal>(null);
   const placeSearchSheetRef = useRef<BottomSheetModal>(null);
-  const scrollRef = useRef<ScrollView>(null);
+  const pendingContinueRef = useRef(false);
+
+  // A nearby search replaces the paged list on the map; it has no server filters, so the same
+  // criteria are applied here.
+  const mapWarehouses: readonly Warehouse[] = nearbySearch
+    ? nearbySearch.warehouses.filter((warehouse) => matchesCriteria(warehouse, criteria))
+    : warehouses;
+  const mapWarehouse = mapWarehouses.find((warehouse) => warehouse.id === mapWarehouseId) ?? null;
+  const selectedIds = selected.map((warehouse) => warehouse.id);
+  const activeFilterCount = countActiveFilters(criteria);
 
   // A refresh keeps the current list on screen; only a first load blanks it out.
-  const hasData = facilities.length > 0;
+  const hasData = warehouses.length > 0;
   const isInitialLoading = isLoading && !hasData;
   const isRefreshing = isLoading && hasData;
 
-  // Drop selections that the current filters hide or that exceed the requested quantity.
-  useEffect(() => {
-    const visibleIds = new Set(
-      visibleFacilities.flatMap((facility) => facility.units.map((unit) => unit.id)),
-    );
-    setSelectedIds((current) => {
-      const next = current.filter((id) => visibleIds.has(id)).slice(0, criteria.requestedQuantity);
-      return next.length === current.length ? current : next;
-    });
-  }, [visibleFacilities, criteria.requestedQuantity]);
-
-  const selectedUnits = visibleFacilities
-    .flatMap((facility) => facility.units)
-    .filter((unit) => selectedIds.includes(unit.id));
-
-  const toggleUnit = (unit: UnitOffer) => {
-    setSelectedIds((current) => {
-      if (current.includes(unit.id)) return current.filter((id) => id !== unit.id);
-      if (current.length >= criteria.requestedQuantity) return current;
-      return [...current, unit.id];
+  const toggleWarehouse = (warehouse: Warehouse) => {
+    setSelected((current) => {
+      if (current.some((item) => item.id === warehouse.id)) {
+        return current.filter((item) => item.id !== warehouse.id);
+      }
+      return current.length >= MAX_WAREHOUSES_PER_BOOKING ? current : [...current, warehouse];
     });
   };
-
-  const visibleUnitCount = visibleFacilities.reduce(
-    (total, facility) => total + facility.units.length,
-    0,
-  );
-  const plottableCount = visibleFacilities.filter(hasPlottableCoords).length;
 
   const changeCriteria = (next: typeof criteria) => {
     setCriteria(next);
-    setPage(1);
-    setMapFacilityId(null);
-    facilitySheetRef.current?.dismiss();
+    setMapWarehouseId(null);
+    warehouseSheetRef.current?.dismiss();
   };
-  const changePage = (next: number) => {
-    setPage(next);
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
-  };
-  const openFacility = (facility: FacilityOffer) => {
-    setMapFacilityId(facility.id);
-  };
-  const continueFromMap = (units: UnitOffer[]) => {
-    if (pendingMapHoldRef.current) return;
+
+  const continueFromMap = () => {
+    if (pendingContinueRef.current || selected.length === 0) return;
     // Navigate only after the modal is fully gone; it lives above the tab navigator.
-    pendingMapHoldRef.current = units;
-    facilitySheetRef.current?.dismiss();
+    pendingContinueRef.current = true;
+    warehouseSheetRef.current?.dismiss();
   };
-  const dismissFacility = () => {
-    setMapFacilityId(null);
-    const units = pendingMapHoldRef.current;
-    pendingMapHoldRef.current = null;
-    if (units) onHold(units);
+  const dismissWarehouse = () => {
+    setMapWarehouseId(null);
+    if (!pendingContinueRef.current) return;
+    pendingContinueRef.current = false;
+    onHold(selected);
   };
   useEffect(() => {
-    if (view === 'map' && mapFacilityId && mapFacility) {
-      facilitySheetRef.current?.present();
-    }
-  }, [view, mapFacilityId, mapFacility?.id]);
+    if (view === 'map' && mapWarehouse) warehouseSheetRef.current?.present();
+  }, [view, mapWarehouse]);
+
   const choosePlace = async (place: PlacePrediction) => {
     const result = await PlacesApi.nearby(place.place_id);
     setNearbySearch({
       label: place.structured_formatting?.main_text ?? place.description,
       center: result.center,
-      facilityIds: result.facilities.map((facility) => facility.id),
+      warehouses: result.warehouses,
     });
-    setMapFacilityId(null);
-    facilitySheetRef.current?.dismiss();
+    setMapWarehouseId(null);
+    warehouseSheetRef.current?.dismiss();
   };
 
+  const selectedProvince = provinceOptions.find((option) => option.code === criteria.provinceCode);
   const location =
-    provinceOptions.find((option) => option.code === criteria.provinceCode)?.name ??
-    (provinceOptions.length === 1 ? provinceOptions[0].name : 'Tất cả cơ sở');
+    selectedProvince?.name ??
+    (provinceOptions.length === 1 ? provinceOptions[0].name : 'Tất cả kho');
+  const provinceCount = selectedProvince?.count ?? provinceOptions.reduce((n, o) => n + o.count, 0);
   const openFilters = () => filtersSheetRef.current?.present();
 
-  // The same operational controls serve both list and map views.
   const header = (
     <View className="bg-surface">
       <BrowseLocationControls
         location={location}
         criteria={criteria}
-        facilities={facilities}
+        totalInProvince={provinceCount}
         wards={wardOptions}
         view={view}
-        plottableCount={plottableCount}
+        plottableCount={mapWarehouses.filter(hasPlottableCoords).length}
         onView={setView}
         onChange={changeCriteria}
         onOpenFilters={openFilters}
       />
-      {view === 'list' ? <BrowseFiltersBar criteria={criteria} onChange={changeCriteria} /> : null}
+      {view === 'list' ? (
+        <BrowseQuickFilters criteria={criteria} onChange={changeCriteria} />
+      ) : null}
     </View>
   );
 
@@ -167,95 +141,49 @@ export function BrowseUnitsScreen({ hasHolding, contentBottomPadding, onHold }: 
           {error ? <ErrorState message={error} onRetry={refetch} /> : null}
           <View className="mt-3 flex-1">
             <BrowseMapView
-              facilities={mapFacilities}
+              pickedIds={selectedIds}
               searchCenter={nearbySearch?.center ?? null}
-              selectedFacilityId={mapFacility?.id ?? null}
-              onSelect={openFacility}
+              selectedWarehouseId={mapWarehouse?.id ?? null}
+              warehouses={mapWarehouses}
+              onSelect={(warehouse) => setMapWarehouseId(warehouse.id)}
             />
-            <View className="absolute top-3 right-4 left-4 gap-2" pointerEvents="box-none">
-              <View className="flex-row items-center rounded-full border border-border bg-surface shadow-sm">
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Tìm kho gần địa điểm"
-                  className="min-h-11 flex-1 flex-row items-center gap-2 px-3"
-                  onPress={() => placeSearchSheetRef.current?.present()}
-                >
-                  <MagnifyingGlass color="#006398" size={18} weight="bold" />
-                  <Text className="flex-1 font-ui text-body-sm text-foreground" numberOfLines={1}>
-                    {nearbySearch?.label ?? 'Tìm kho gần địa điểm...'}
-                  </Text>
-                </Pressable>
-                {nearbySearch ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Xóa địa điểm tìm kiếm"
-                    className="size-11 items-center justify-center"
-                    onPress={() => {
-                      setNearbySearch(null);
-                      setMapFacilityId(null);
-                    }}
-                  >
-                    <X color="#64748b" size={18} />
-                  </Pressable>
-                ) : null}
-              </View>
-              <View className="flex-row flex-wrap items-center gap-2">
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Lọc bản đồ, ${criteria.requestedQuantity} kho, kích thước ${criteria.areaPreset === 'any' ? 'tất cả' : criteria.areaPreset}`}
-                  className="self-start flex-row items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 shadow-sm"
-                  onPress={openFilters}
-                >
-                  <Faders color="#006398" size={17} weight="bold" />
-                  <Text className="font-ui text-body-sm text-foreground">
-                    {criteria.requestedQuantity} kho ·{' '}
-                    {criteria.areaPreset === 'any'
-                      ? 'Mọi kích thước'
-                      : criteria.areaPreset === 'small'
-                        ? 'Nhỏ'
-                        : criteria.areaPreset === 'medium'
-                          ? 'Vừa'
-                          : 'Lớn'}
-                  </Text>
-                </Pressable>
-                {selectedUnits.length > 0 ? (
-                  <Text className="rounded-full bg-foreground px-2.5 py-2 font-ui text-caption text-surface">
-                    Đã chọn {selectedUnits.length}/{criteria.requestedQuantity}
-                  </Text>
-                ) : null}
-                {nearbySearch ? (
-                  <Text className="rounded-full bg-surface px-2.5 py-2 font-ui text-caption text-foreground">
-                    {mapFacilities.length} cơ sở · 5 km
-                  </Text>
-                ) : null}
-              </View>
-            </View>
-            {nearbySearch && mapFacilities.length === 0 ? (
+            <BrowseMapOverlay
+              activeFilterCount={activeFilterCount}
+              nearbyCount={nearbySearch ? mapWarehouses.length : null}
+              searchLabel={nearbySearch?.label ?? null}
+              selectedCount={selected.length}
+              onClearSearch={() => {
+                setNearbySearch(null);
+                setMapWarehouseId(null);
+              }}
+              onOpenFilters={openFilters}
+              onSearch={() => placeSearchSheetRef.current?.present()}
+            />
+            {nearbySearch && mapWarehouses.length === 0 ? (
               <View className="absolute top-28 right-4 left-4 rounded-xl bg-surface p-3">
                 <Text className="font-body text-body-sm text-foreground">
                   Không có kho trống phù hợp trong 5 km. Thử địa điểm khác hoặc xóa tìm kiếm.
                 </Text>
               </View>
             ) : null}
-            <FacilityMapSheet
-              facility={mapFacility}
+            {!nearbySearch && hasMore ? (
+              <Text className="absolute right-4 bottom-3 left-4 rounded-lg bg-surface/90 px-2 py-1 text-center font-body text-caption text-muted">
+                Bản đồ hiển thị {warehouses.length}/{total} kho. Thu hẹp bộ lọc để xem đủ.
+              </Text>
+            ) : null}
+            <WarehouseMapSheet
               hasHolding={hasHolding}
-              requestedQuantity={criteria.requestedQuantity}
-              selectedIds={selectedIds}
-              allSelectedUnits={selectedUnits}
-              sheetRef={facilitySheetRef}
-              onDismiss={dismissFacility}
-              onHold={continueFromMap}
-              onToggle={(unit) => {
-                setMode('manual');
-                toggleUnit(unit);
-              }}
+              selected={selected}
+              sheetRef={warehouseSheetRef}
+              warehouse={mapWarehouse}
+              onContinue={continueFromMap}
+              onDismiss={dismissWarehouse}
+              onToggle={toggleWarehouse}
             />
           </View>
         </>
       ) : (
         <ScrollView
-          ref={scrollRef}
           className="flex-1"
           contentContainerStyle={{ paddingBottom: contentBottomPadding }}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refetch} />}
@@ -268,43 +196,32 @@ export function BrowseUnitsScreen({ hasHolding, contentBottomPadding, onHold }: 
           {error ? <ErrorState message={error} onRetry={refetch} /> : null}
           {!isInitialLoading && !(error && !hasData) ? (
             <BrowseResultsList
-              facilities={visibleFacilities}
+              hasFilters={activeFilterCount > 0}
               hasHolding={hasHolding}
               hasMore={hasMore}
-              mode={mode}
-              page={page}
-              requestedQuantity={criteria.requestedQuantity}
+              isLoadingMore={isLoadingMore}
               selectedIds={selectedIds}
-              totalFacilityCount={facilities.length}
-              waitlistedFacilityId={waitlistedFacilityId}
-              onHold={onHold}
-              onModeChange={(next) => {
-                setMode(next);
-                setPage(1);
-              }}
-              onPageChange={changePage}
-              onToggle={toggleUnit}
-              onWaitlist={setWaitlistedFacilityId}
+              total={total}
+              warehouses={warehouses}
+              onLoadMore={loadMore}
+              onToggle={toggleWarehouse}
             />
           ) : null}
         </ScrollView>
       )}
 
-      {view === 'list' && mode === 'manual' && selectedUnits.length > 0 && !isInitialLoading ? (
+      {view === 'list' && selected.length > 0 && !isInitialLoading ? (
         <BrowseSelectionBar
           hasHolding={hasHolding}
-          requestedQuantity={criteria.requestedQuantity}
-          selectedUnits={selectedUnits}
-          onHold={onHold}
+          selected={selected}
+          onContinue={() => onHold(selected)}
         />
       ) : null}
 
       <BrowseFiltersSheet
-        areaCounts={areaCounts}
         criteria={criteria}
-        priceCounts={priceCounts}
         provinceOptions={provinceOptions}
-        resultCount={visibleUnitCount}
+        resultCount={nearbySearch && view === 'map' ? mapWarehouses.length : total}
         sheetRef={filtersSheetRef}
         wardOptions={wardOptions}
         onChange={changeCriteria}

@@ -24,7 +24,6 @@ export type ApiBookingItem = BookingItemInput & {
   storageUnit: {
     id: string;
     code: string;
-    zone: string | null;
     areaM2: string;
     facilityId: string;
   } | null;

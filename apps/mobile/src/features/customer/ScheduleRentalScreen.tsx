@@ -5,7 +5,7 @@ import {
   CalendarBlank,
   CaretRight,
   ShieldCheck,
-  Warehouse,
+  Warehouse as WarehouseIcon,
 } from 'phosphor-react-native';
 import { useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -17,12 +17,12 @@ import {
   rentalEndIso,
   todayIso,
 } from '../../../lib/rental-schedule';
-import type { UnitOffer } from '../../types/customer';
+import { warehouseDeposit } from '../../../lib/warehouse-query';
+import type { Warehouse } from '../../types/storage-api';
 import { RentalDatePickerSheet } from './RentalDatePickerSheet';
-import { sumUnitPrices } from './unit-offer-utils';
 
 type Props = {
-  units: UnitOffer[];
+  warehouses: Warehouse[];
   isCreating: boolean;
   error: string | null;
   onBack: () => void;
@@ -34,26 +34,24 @@ const ACCENT = 'hsl(203 100% 30%)';
 const SUCCESS = 'hsl(160 84% 31%)';
 
 /**
- * Rental terms, as a numbered step between picking rooms and paying.
+ * Rental terms, as a numbered step between picking warehouses and paying.
  *
  * The screen is one task per section — when, how long, what it costs — with the cost breakdown
  * last because it is the consequence of the two choices above it. The total due today is pinned so
  * it stays visible while the customer changes dates and durations.
  */
-export function ScheduleRentalScreen({ units, isCreating, error, onBack, onConfirm }: Props) {
+export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, onConfirm }: Props) {
   const [startDate, setStartDate] = useState(todayIso);
   const [durationMonths, setDurationMonths] = useState(DEFAULT_DURATION_MONTHS);
   const dateSheetRef = useRef<BottomSheetModal>(null);
   const endDate = rentalEndIso(startDate, durationMonths);
 
-  const monthlyRent = sumUnitPrices(units, 'monthlyPrice');
-  const deposit = sumUnitPrices(units, 'deposit');
+  const monthlyRent = warehouses.reduce((sum, item) => sum + item.monthlyPrice, 0);
+  const deposit = warehouses.reduce((sum, item) => sum + warehouseDeposit(item), 0);
   const totalRent = monthlyRent * durationMonths;
-  const totalArea = units.reduce((sum, unit) => sum + unit.areaM2, 0);
+  const totalArea = warehouses.reduce((sum, item) => sum + item.areaM2, 0);
 
-  const facilityName = units[0]?.facility ?? '';
-  const facilityCount = new Set(units.map((unit) => unit.facilityId)).size;
-  const unitCodes = units.map((unit) => unit.code).join(', ');
+  const warehouseNames = warehouses.map((item) => item.name).join(', ');
 
   return (
     <View className="flex-1">
@@ -84,14 +82,14 @@ export function ScheduleRentalScreen({ units, isCreating, error, onBack, onConfi
         {/* What is being booked, restated so the customer never has to go back to check. */}
         <View className="mx-4 flex-row items-center gap-3 rounded-xl border border-border bg-surface p-3">
           <View className="size-10 items-center justify-center rounded-lg bg-accent/10">
-            <Warehouse color={ACCENT} size={20} weight="fill" />
+            <WarehouseIcon color={ACCENT} size={20} weight="fill" />
           </View>
           <View className="flex-1">
             <Text className="font-strong text-body-md text-foreground" numberOfLines={1}>
-              {facilityCount === 1 ? facilityName : `${facilityCount} cơ sở`}
+              {warehouseNames}
             </Text>
             <Text className="font-body text-body-sm text-muted" numberOfLines={1}>
-              {units.length} kho: {unitCodes}, {formatNumber(totalArea)} m²
+              {warehouses.length} kho, tổng {formatNumber(totalArea)} m²
             </Text>
           </View>
           <View className="items-end">
@@ -149,7 +147,7 @@ export function ScheduleRentalScreen({ units, isCreating, error, onBack, onConfi
               what stops someone believing the whole rental is due up front. */}
           <CostRow
             caption="Hoàn lại 100% khi trả kho"
-            label={`Tiền cọc giữ ${units.length} kho`}
+            label={`Tiền cọc giữ ${warehouses.length} kho`}
             value={formatMoney(deposit)}
           />
           <View className="h-px bg-separator" />

@@ -40,8 +40,11 @@ function normaliseContract(contract: CustomerContractResponse): ApiContract {
           id: contract.unit.id,
           code: contract.unit.code,
           areaM2: Number(contract.unit.area_m2),
+          widthM: toOptionalNumber(contract.unit.width_m),
+          lengthM: toOptionalNumber(contract.unit.length_m),
+          heightM: toOptionalNumber(contract.unit.height_m),
+          volumeM3: toOptionalNumber(contract.unit.volume_m3),
           status: contract.unit.status,
-          typeName: contract.unit.type_name,
         }
       : null,
     facility: contract.facility
@@ -54,6 +57,12 @@ function normaliseContract(contract: CustomerContractResponse): ApiContract {
     handover: contract.handover ? normaliseInspection(contract.handover) : null,
     return: contract.return ? normaliseInspection(contract.return) : null,
   };
+}
+
+function toOptionalNumber(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function normaliseInspection(inspection: InspectionSummaryResponse): ApiInspection {

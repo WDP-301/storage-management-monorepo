@@ -1,8 +1,15 @@
 import { Button, Card } from 'heroui-native';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { formatArea, formatIsoDate, formatMoney } from '../../../lib/format-vi';
+import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import type { ApiContract } from '../../types/contract-api';
-import { contractEndIso, contractStartIso, StatusPill, storageState } from './contract-display';
+import {
+  contractEndIso,
+  contractStartIso,
+  contractUnitSummary,
+  contractWarehouseName,
+  StatusPill,
+  storageState,
+} from './contract-display';
 
 type Props = {
   contracts: ApiContract[];
@@ -92,26 +99,17 @@ function ContractCard({
           <View className="flex-row items-start justify-between gap-3">
             <View className="flex-1">
               <Text className="text-lg font-bold text-foreground" numberOfLines={1}>
-                {contract.unit?.code ?? contract.contractNo}
+                {contractWarehouseName(contract)}
               </Text>
-              <Text className="mt-1 text-sm text-muted">
-                {[contract.unit?.typeName, contract.unit ? formatArea(contract.unit.areaM2) : null]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </Text>
+              <Text className="mt-1 text-sm text-muted">{contractUnitSummary(contract)}</Text>
             </View>
             <StatusPill label={state.label} tone={state.tone} />
           </View>
 
           {contract.facility ? (
-            <View>
-              <Text className="text-sm font-semibold text-foreground">
-                {contract.facility.name}
-              </Text>
-              <Text className="mt-0.5 text-sm text-muted" numberOfLines={2}>
-                {contract.facility.address}
-              </Text>
-            </View>
+            <Text className="text-sm text-muted" numberOfLines={2}>
+              {contract.facility.address}
+            </Text>
           ) : null}
 
           <View className="flex-row items-end justify-between gap-3">

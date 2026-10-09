@@ -1,14 +1,10 @@
+import type { NearbyPlacesResult } from '../src/types/storage-api';
 import { request } from './api';
 
 export type PlacePrediction = {
   place_id: string;
   description: string;
   structured_formatting?: { main_text?: string; secondary_text?: string };
-};
-
-export type NearbyPlacesResult = {
-  center: { lat: number; lng: number };
-  facilities: Array<{ id: string; distanceKm: number }>;
 };
 
 export const PlacesApi = {

@@ -39,6 +39,7 @@ import {
 } from '../../../lib/save-image-to-library';
 import { CheckIcon, DownloadIcon } from '../../components/ActionIcons';
 import type { ApiBooking } from '../../types/booking-api';
+import { useBookingWarehouses } from './use-booking-warehouses';
 
 /** VietQR's "compact2" template is taller than it is wide; locking the ratio stops it stretching. */
 const QR_WIDTH = 220;
@@ -360,13 +361,7 @@ function AwaitingTransfer({
   const bankSheetRef = useRef<BottomSheetModal>(null);
   const { now } = useHold();
 
-  const unitCodes = booking.items
-    .map((item) => item.storageUnit?.code ?? item.storageUnitId)
-    .join(', ');
-  const totalArea = booking.items.reduce(
-    (sum, item) => sum + Number(item.storageUnit?.areaM2 ?? 0),
-    0,
-  );
+  const { names: warehouseNames, totalArea } = useBookingWarehouses(booking);
   const firstItem = booking.items[0];
 
   return (
@@ -385,13 +380,13 @@ function AwaitingTransfer({
             </Text>
           </View>
           <Text className="font-body text-body-sm text-danger">
-            {booking.items.length} kho {unitCodes} đang được khoá tạm cho bạn. Hết thời gian trên,
-            mã giữ chỗ sẽ tự huỷ.
+            {booking.items.length} kho {warehouseNames} đang được khoá tạm cho bạn. Hết thời gian
+            trên, mã giữ chỗ sẽ tự huỷ.
           </Text>
         </View>
       ) : null}
 
-      {/* What is being held, restated with the codes the customer will see on the doors. */}
+      {/* What is being held, restated by warehouse name. */}
       <View className="gap-2.5 rounded-xl border border-border bg-surface p-3">
         <View className="flex-row items-center justify-between gap-3">
           <View className="flex-1">
@@ -403,7 +398,7 @@ function AwaitingTransfer({
           <CopyChip label="Chép mã" value={booking.bookingNo} />
         </View>
         <View className="h-px bg-separator" />
-        <LedgerRow label="Kho chỉ định" value={`${booking.items.length} kho: ${unitCodes}`} />
+        <LedgerRow label="Kho đã chọn" value={`${booking.items.length} kho: ${warehouseNames}`} />
         <LedgerRow label="Tổng diện tích" value={`${formatNumber(totalArea)} m²`} />
         {firstItem ? (
           <LedgerRow

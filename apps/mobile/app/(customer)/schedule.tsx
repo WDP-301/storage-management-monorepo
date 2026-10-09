@@ -5,17 +5,17 @@ import { ScheduleRentalScreen } from '../../src/features/customer/ScheduleRental
 
 export default function ScheduleRoute() {
   const router = useRouter();
-  const { selectedUnits, heldBooking, createBooking, isCreating } = useHold();
+  const { selectedWarehouses, heldBooking, createBooking, isCreating } = useHold();
   const [error, setError] = useState<string | null>(null);
 
-  if (!selectedUnits) {
+  if (!selectedWarehouses) {
     return <Redirect href={heldBooking ? '/(customer)/bookings' : '/(customer)/browse'} />;
   }
 
   return (
     <ScheduleRentalScreen
-      key={selectedUnits.map((unit) => unit.id).join(',')}
-      units={selectedUnits}
+      key={selectedWarehouses.map((warehouse) => warehouse.id).join(',')}
+      warehouses={selectedWarehouses}
       isCreating={isCreating}
       error={error}
       onBack={() => router.navigate('/(customer)/browse')}

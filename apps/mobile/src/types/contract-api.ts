@@ -44,8 +44,11 @@ export type CustomerContractResponse = {
     id: string;
     code: string;
     area_m2: string;
+    width_m: string | null;
+    length_m: string | null;
+    height_m: string | null;
+    volume_m3: string | null;
     status: string;
-    type_name: string | null;
   } | null;
   facility: { id: string; name: string; address_line: string } | null;
   handover: InspectionSummaryResponse | null;
@@ -83,8 +86,11 @@ export type ApiContract = {
     id: string;
     code: string;
     areaM2: number;
+    widthM: number | null;
+    lengthM: number | null;
+    heightM: number | null;
+    volumeM3: number | null;
     status: string;
-    typeName: string | null;
   } | null;
   facility: { id: string; name: string; address: string } | null;
   handover: ApiInspection | null;

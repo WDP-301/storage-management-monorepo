@@ -5,7 +5,22 @@ import { FakeMap, FakeMarker, pointFeature } from '../../test-utils/fake-maplibr
 import type { Warehouse } from '../../types/warehouse';
 import { WarehouseOverviewMap } from './WarehouseOverviewMap';
 
-const goong = vi.hoisted(() => ({ map: null as unknown, error: null as string | null }));
+const goong = vi.hoisted(() => ({
+  map: null as unknown,
+  error: null as string | null,
+  styleUrl: '',
+}));
+
+// The tiles key comes from the build env; tests must not depend on a local .env.
+vi.mock('./goong-map', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./goong-map')>();
+  return {
+    ...actual,
+    get GOONG_STYLE_URL() {
+      return goong.styleUrl;
+    },
+  };
+});
 
 vi.mock('./useGoongMap', () => ({
   useGoongMap: () => ({ containerRef: { current: null }, map: goong.map, error: goong.error }),
@@ -40,6 +55,7 @@ describe('WarehouseOverviewMap', () => {
     map = new FakeMap();
     goong.map = map;
     goong.error = null;
+    goong.styleUrl = 'https://tiles.example/style.json';
     FakeMarker.instances = [];
   });
 
@@ -176,6 +192,15 @@ describe('WarehouseOverviewMap', () => {
     expect(screen.getByText('0/1 kho có tọa độ')).toBeTruthy();
     expect(screen.getByText('Không có kho nào có tọa độ hợp lệ.')).toBeTruthy();
     expect(screen.queryByRole('list', { name: 'Chú thích màu trạng thái kho' })).toBeNull();
+  });
+
+  it('asks for the tiles key when the build has none', () => {
+    goong.styleUrl = '';
+    renderMap();
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Chưa cấu hình VITE_GOONG_MAPTILES_KEY cho web.',
+    );
+    expect(screen.queryByRole('region', { name: 'Bản đồ vị trí kho' })).toBeNull();
   });
 
   it('shows the map loading error instead of the map', () => {

@@ -64,6 +64,7 @@ const mockFacility = (selectedFacility: (typeof FACILITIES)[number] | null) =>
     facilities: FACILITIES,
     selectedFacility,
     selectFacility: vi.fn(),
+    refreshFacilities: vi.fn(),
     canSelectAll: true,
     isLoading: false,
   });

@@ -74,6 +74,7 @@ const mockFacility = (selected: typeof FAC_HCM | null, canSelectAll = false) =>
     facilities: selected ? [selected] : [],
     selectedFacility: selected,
     selectFacility: vi.fn(),
+    refreshFacilities: vi.fn(),
     canSelectAll,
     isLoading: false,
   });

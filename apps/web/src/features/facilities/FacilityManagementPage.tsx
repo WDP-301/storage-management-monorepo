@@ -1,6 +1,7 @@
 import { Button, InputGroup, Pagination, Select, Text } from '@cloudflare/kumo';
 import { ArrowsClockwise, MagnifyingGlass, Plus } from '@phosphor-icons/react';
 import React, { useCallback, useEffect, useState } from 'react';
+import { useFacility } from '../../context/FacilityContext';
 import { FacilitiesApi, type FacilityRecord, LocationsApi } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
 import type { Province } from '../../types/warehouse';
@@ -69,12 +70,19 @@ export const FacilityManagementPage: React.FC = () => {
     load();
   }, [load]);
 
+  // The header picker and warehouse forms read facilities from context, so refresh it too.
+  const { refreshFacilities } = useFacility();
+  const reloadAll = useCallback(async () => {
+    refreshFacilities();
+    await load();
+  }, [load, refreshFacilities]);
+
   const activate = async (f: FacilityRecord) => {
     setBusyId(f.id);
     try {
       await FacilitiesApi.update(f.id, { status: 'ACTIVE' });
       toast.info('Kích hoạt cơ sở', `Đã kích hoạt lại cơ sở ${f.code}.`);
-      await load();
+      await reloadAll();
     } catch (err) {
       toast.error('Không thể kích hoạt cơ sở', describeFacilityError(err, 'Vui lòng thử lại.'));
     } finally {
@@ -174,7 +182,7 @@ export const FacilityManagementPage: React.FC = () => {
         onClose={() => setFormOpen(false)}
         onSaved={() => {
           setFormOpen(false);
-          load();
+          reloadAll();
         }}
       />
       <FacilityDeactivateDialog
@@ -182,7 +190,7 @@ export const FacilityManagementPage: React.FC = () => {
         onClose={() => setDeactivating(null)}
         onDone={() => {
           setDeactivating(null);
-          load();
+          reloadAll();
         }}
       />
     </div>

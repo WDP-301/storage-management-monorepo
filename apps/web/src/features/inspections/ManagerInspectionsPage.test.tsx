@@ -102,6 +102,7 @@ describe('ManagerInspectionsPage', () => {
         status: 'ACTIVE',
       },
       selectFacility: vi.fn(),
+      refreshFacilities: vi.fn(),
       canSelectAll: false,
       isLoading: false,
     });
@@ -127,6 +128,7 @@ describe('ManagerInspectionsPage', () => {
       facilities: [],
       selectedFacility: null,
       selectFacility: vi.fn(),
+      refreshFacilities: vi.fn(),
       canSelectAll: false,
       isLoading: true,
     });
@@ -144,6 +146,7 @@ describe('ManagerInspectionsPage', () => {
       facilities: [],
       selectedFacility: null,
       selectFacility: vi.fn(),
+      refreshFacilities: vi.fn(),
       canSelectAll: true,
       isLoading: false,
     });

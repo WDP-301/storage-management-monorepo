@@ -15,6 +15,8 @@ interface FacilityContextValue {
   selectFacility: (id: string | null) => void;
   canSelectAll: boolean;
   isLoading: boolean;
+  /** Re-fetches the list, e.g. after a facility is created, renamed or (de)activated. */
+  refreshFacilities: () => void;
 }
 
 const FacilityContext = createContext<FacilityContextValue | undefined>(undefined);
@@ -24,6 +26,7 @@ export const FacilityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [facilities, setFacilities] = useState<FacilityRecord[]>([]);
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const shouldFetchAll = Boolean(activeRole && ALL_FACILITY_ROLES.includes(activeRole));
   const shouldFetchAssigned = Boolean(activeRole && ASSIGNED_FACILITY_ROLES.includes(activeRole));
@@ -36,11 +39,14 @@ export const FacilityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return;
     }
 
+    // A role switch or refresh can overlap a slower earlier fetch; only the latest may land.
+    let cancelled = false;
     setIsLoading(true);
     const fetchPromise = shouldFetchAll ? FacilitiesApi.listAll() : FacilitiesApi.mine();
 
     fetchPromise
       .then((list) => {
+        if (cancelled) return;
         const facilityList = list || [];
         setFacilities(facilityList);
         const saved = localStorage.getItem(STORAGE_KEY);
@@ -50,11 +56,19 @@ export const FacilityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         );
       })
       .catch(() => {
+        if (cancelled) return;
         setFacilities([]);
         setSelectedFacilityId(null);
       })
-      .finally(() => setIsLoading(false));
-  }, [user, shouldFetchAll, shouldFetchAssigned]);
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, shouldFetchAll, shouldFetchAssigned, reloadKey]);
+
+  const refreshFacilities = useCallback(() => setReloadKey((key) => key + 1), []);
 
   const selectFacility = useCallback(
     (id: string | null) => {
@@ -73,8 +87,9 @@ export const FacilityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       selectFacility,
       canSelectAll: shouldFetchAll,
       isLoading,
+      refreshFacilities,
     }),
-    [facilities, selectedFacilityId, isLoading, selectFacility, shouldFetchAll],
+    [facilities, selectedFacilityId, isLoading, selectFacility, shouldFetchAll, refreshFacilities],
   );
 
   return <FacilityContext.Provider value={value}>{children}</FacilityContext.Provider>;

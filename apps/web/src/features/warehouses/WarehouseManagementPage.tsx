@@ -7,7 +7,7 @@ import {
   Warehouse as WarehouseIcon,
   Wrench,
 } from '@phosphor-icons/react';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useFacility } from '../../context/FacilityContext';
 import { LocationsApi, WarehousesApi } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
@@ -99,7 +99,11 @@ export const WarehouseManagementPage: React.FC = () => {
       .catch(() => setProvinces([]));
   }, []);
 
+  // Filter or facility changes can overlap; only the latest request may update the page.
+  const latestLoad = useRef(0);
+  const latestSnapshot = useRef(0);
   const load = useCallback(async () => {
+    const request = ++latestLoad.current;
     setIsLoading(true);
     const query: WarehouseListQuery = {
       page,
@@ -115,12 +119,14 @@ export const WarehouseManagementPage: React.FC = () => {
     };
     try {
       const res = await WarehousesApi.listAdmin(query);
+      if (request !== latestLoad.current) return;
       setWarehouses(res.warehouses);
       setTotal(res.meta.total);
     } catch (err) {
+      if (request !== latestLoad.current) return;
       toast.error('Lỗi tải dữ liệu', err instanceof Error ? err.message : 'Không tải được kho.');
     } finally {
-      setIsLoading(false);
+      if (request === latestLoad.current) setIsLoading(false);
     }
   }, [
     page,
@@ -137,12 +143,15 @@ export const WarehouseManagementPage: React.FC = () => {
 
   // Status counts ignore filters; capped at the API page ceiling.
   const loadSnapshot = useCallback(() => {
+    const request = ++latestSnapshot.current;
     WarehousesApi.listAdmin({ facilityId, limit: 100 })
       .then((res) => {
+        if (request !== latestSnapshot.current) return;
         setSnapshot(res.warehouses);
         setSnapshotTotal(res.meta.total);
       })
       .catch(() => {
+        if (request !== latestSnapshot.current) return;
         setSnapshot([]);
         setSnapshotTotal(0);
       });

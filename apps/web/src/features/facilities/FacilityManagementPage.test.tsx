@@ -14,6 +14,11 @@ const toast = vi.hoisted(() => ({
 }));
 vi.mock('../../lib/toast', () => ({ useAppToast: () => toast }));
 
+const refreshFacilities = vi.hoisted(() => vi.fn());
+vi.mock('../../context/FacilityContext', () => ({
+  useFacility: () => ({ refreshFacilities }),
+}));
+
 const HCM: FacilityRecord = {
   id: 'f1',
   code: 'CN-HCM',
@@ -67,6 +72,8 @@ describe('FacilityManagementPage', () => {
     await waitFor(() =>
       expect(create).toHaveBeenCalledWith({ code: 'CN-DN', name: 'Cơ sở Đà Nẵng' }),
     );
+    // The header picker and warehouse forms must see the new facility without a reload.
+    await waitFor(() => expect(refreshFacilities).toHaveBeenCalled());
     expect(toast.notifyCreated).toHaveBeenCalledWith('cơ sở', 'CN-DN');
   });
 

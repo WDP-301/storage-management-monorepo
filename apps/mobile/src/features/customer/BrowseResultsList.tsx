@@ -1,6 +1,7 @@
 import { Button } from 'heroui-native';
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
+import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import type { BrowseMode, FacilityOffer, UnitOffer } from '../../types/customer';
 import { ManualFacilityCard, RecommendedFacilityCard } from './BrowseFacilityCards';
 import { BrowseListHeader } from './BrowseListHeader';
@@ -47,6 +48,7 @@ export function BrowseResultsList({
   waitlistedFacilityId,
   onWaitlist,
 }: Props) {
+  const prefersReducedMotion = useReducedMotion();
   const unitCount = facilities.reduce((total, facility) => total + facility.units.length, 0);
   const pageSize = mode === 'recommended' ? 5 : 10;
   const resultCount = mode === 'recommended' ? facilities.length : unitCount;
@@ -73,6 +75,7 @@ export function BrowseResultsList({
   return (
     <>
       <BrowseListHeader
+        requestedQuantity={requestedQuantity}
         facilityCount={facilities.length}
         hasMore={hasMore}
         mode={mode}
@@ -83,34 +86,44 @@ export function BrowseResultsList({
         <EmptyState isFilteredOut={totalFacilityCount > 0} />
       ) : (
         <View className="gap-4 px-4">
-          {pagedFacilities.map((facility) =>
-            mode === 'recommended' ? (
-              <RecommendedFacilityCard
-                key={facility.id}
-                facility={facility}
-                hasHolding={hasHolding}
-                requestedQuantity={requestedQuantity}
-                waitlisted={waitlistedFacilityId === facility.id}
-                onHold={onHold}
-                onWaitlist={() => onWaitlist(facility.id)}
-              />
-            ) : (
-              <ManualFacilityCard
-                key={facility.id}
-                facility={facility}
-                hasHolding={hasHolding}
-                requestedQuantity={requestedQuantity}
-                selectedIds={selectedIds}
-                onToggle={onToggle}
-              />
-            ),
-          )}
+          {pagedFacilities.map((facility, index) => (
+            // Staggered fade tells the customer the list actually changed after a filter edit.
+            // Without it, swapping ward or price repaints in place and reads as "nothing happened".
+            // Capped at six steps so a full page never feels like it is loading slowly.
+            <Animated.View
+              key={facility.id}
+              entering={
+                prefersReducedMotion
+                  ? undefined
+                  : FadeInDown.duration(220).delay(Math.min(index, 5) * 45)
+              }
+            >
+              {mode === 'recommended' ? (
+                <RecommendedFacilityCard
+                  facility={facility}
+                  hasHolding={hasHolding}
+                  requestedQuantity={requestedQuantity}
+                  waitlisted={waitlistedFacilityId === facility.id}
+                  onHold={onHold}
+                  onWaitlist={() => onWaitlist(facility.id)}
+                />
+              ) : (
+                <ManualFacilityCard
+                  facility={facility}
+                  hasHolding={hasHolding}
+                  requestedQuantity={requestedQuantity}
+                  selectedIds={selectedIds}
+                  onToggle={onToggle}
+                />
+              )}
+            </Animated.View>
+          ))}
         </View>
       )}
 
       {resultCount > 0 ? (
         <View className="gap-3 px-4 pt-5">
-          <Text className="text-center text-muted text-xs">
+          <Text className="font-body text-center text-muted text-xs">
             Hiển thị {pageStart + 1}–{Math.min(pageStart + pageSize, resultCount)} / {resultCount}{' '}
             {mode === 'recommended' ? 'nhóm cơ sở' : 'kho'}
           </Text>
@@ -122,9 +135,9 @@ export function BrowseResultsList({
                 variant="secondary"
                 onPress={() => goToPage(currentPage - 1)}
               >
-                <Button.Label>Trang trước</Button.Label>
+                <Button.Label className="font-ui">Trang trước</Button.Label>
               </Button>
-              <Text className="font-semibold text-foreground text-sm">
+              <Text className="font-strong text-foreground text-sm">
                 {currentPage} / {pageCount}
               </Text>
               <Button
@@ -133,7 +146,7 @@ export function BrowseResultsList({
                 variant="secondary"
                 onPress={() => goToPage(currentPage + 1)}
               >
-                <Button.Label>Trang sau</Button.Label>
+                <Button.Label className="font-ui">Trang sau</Button.Label>
               </Button>
             </View>
           ) : null}

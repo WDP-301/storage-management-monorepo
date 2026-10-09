@@ -1,16 +1,19 @@
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { Faders, MagnifyingGlass, X } from 'phosphor-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { hasPlottableCoords } from '../../../lib/goong-map-config';
+import { type PlacePrediction, PlacesApi } from '../../../lib/places-api';
 import type { BrowseMode, BrowseView, FacilityOffer, UnitOffer } from '../../types/customer';
 import { BrowseFiltersBar } from './BrowseFiltersBar';
 import { BrowseFiltersSheet } from './BrowseFiltersSheet';
+import { BrowseBrandHeader, BrowseLocationControls } from './BrowseHeader';
 import { BrowseMapView } from './BrowseMapView';
 import { BrowseResultsList } from './BrowseResultsList';
 import { BrowseSelectionBar } from './BrowseSelectionBar';
 import { ErrorState, LoadingState } from './BrowseStates';
-import { BrowseViewToggle } from './BrowseViewToggle';
 import { FacilityMapSheet } from './FacilityMapSheet';
+import { MapPlaceSearchSheet } from './MapPlaceSearchSheet';
 import { useAvailableUnits } from './use-available-units';
 import { useBrowseCriteria } from './use-browse-criteria';
 
@@ -18,6 +21,12 @@ type Props = {
   hasHolding: boolean;
   contentBottomPadding: number;
   onHold: (units: UnitOffer[]) => void;
+};
+
+type NearbySearch = {
+  label: string;
+  center: { lat: number; lng: number };
+  facilityIds: string[];
 };
 
 export function BrowseUnitsScreen({ hasHolding, contentBottomPadding, onHold }: Props) {
@@ -36,11 +45,17 @@ export function BrowseUnitsScreen({ hasHolding, contentBottomPadding, onHold }: 
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [waitlistedFacilityId, setWaitlistedFacilityId] = useState<string | null>(null);
-  // Kept separate from the sheet ref: the sheet needs data while animating out, so it reads the
-  // last tapped facility rather than being unmounted on dismiss.
-  const [mapFacility, setMapFacility] = useState<FacilityOffer | null>(null);
+  const [mapFacilityId, setMapFacilityId] = useState<string | null>(null);
+  const [nearbySearch, setNearbySearch] = useState<NearbySearch | null>(null);
+  const nearbyIds = nearbySearch ? new Set(nearbySearch.facilityIds) : null;
+  const mapFacilities = nearbyIds
+    ? visibleFacilities.filter((facility) => nearbyIds.has(facility.id))
+    : visibleFacilities;
+  const mapFacility = mapFacilities.find((facility) => facility.id === mapFacilityId) ?? null;
   const filtersSheetRef = useRef<BottomSheetModal>(null);
   const facilitySheetRef = useRef<BottomSheetModal>(null);
+  const pendingMapHoldRef = useRef<UnitOffer[] | null>(null);
+  const placeSearchSheetRef = useRef<BottomSheetModal>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   // A refresh keeps the current list on screen; only a first load blanks it out.
@@ -80,9 +95,7 @@ export function BrowseUnitsScreen({ hasHolding, contentBottomPadding, onHold }: 
   const changeCriteria = (next: typeof criteria) => {
     setCriteria(next);
     setPage(1);
-    // The tapped facility can fall outside the new filters, so close the sheet instead of
-    // leaving stale details on screen.
-    setMapFacility(null);
+    setMapFacilityId(null);
     facilitySheetRef.current?.dismiss();
   };
   const changePage = (next: number) => {
@@ -90,41 +103,153 @@ export function BrowseUnitsScreen({ hasHolding, contentBottomPadding, onHold }: 
     scrollRef.current?.scrollTo({ y: 0, animated: true });
   };
   const openFacility = (facility: FacilityOffer) => {
-    setMapFacility(facility);
-    facilitySheetRef.current?.present();
+    setMapFacilityId(facility.id);
+  };
+  const continueFromMap = (units: UnitOffer[]) => {
+    if (pendingMapHoldRef.current) return;
+    // Navigate only after the modal is fully gone; it lives above the tab navigator.
+    pendingMapHoldRef.current = units;
+    facilitySheetRef.current?.dismiss();
+  };
+  const dismissFacility = () => {
+    setMapFacilityId(null);
+    const units = pendingMapHoldRef.current;
+    pendingMapHoldRef.current = null;
+    if (units) onHold(units);
+  };
+  useEffect(() => {
+    if (view === 'map' && mapFacilityId && mapFacility) {
+      facilitySheetRef.current?.present();
+    }
+  }, [view, mapFacilityId, mapFacility?.id]);
+  const choosePlace = async (place: PlacePrediction) => {
+    const result = await PlacesApi.nearby(place.place_id);
+    setNearbySearch({
+      label: place.structured_formatting?.main_text ?? place.description,
+      center: result.center,
+      facilityIds: result.facilities.map((facility) => facility.id),
+    });
+    setMapFacilityId(null);
+    facilitySheetRef.current?.dismiss();
   };
 
-  // Shared by both views so the title, filters and the switch itself never diverge between them.
+  const location =
+    provinceOptions.find((option) => option.code === criteria.provinceCode)?.name ??
+    (provinceOptions.length === 1 ? provinceOptions[0].name : 'Tất cả cơ sở');
+  const openFilters = () => filtersSheetRef.current?.present();
+
+  // The same operational controls serve both list and map views.
   const header = (
-    <>
-      <View className="px-4 pt-5 pb-4">
-        <Text className="font-bold text-2xl text-foreground tracking-tight">Tìm kho phù hợp</Text>
-        <Text className="mt-1 text-muted text-sm leading-5">
-          Đặt nhiều kho trong một lượt, ưu tiên đủ kho tại cùng cơ sở.
-        </Text>
-      </View>
-      <BrowseFiltersBar
+    <View className="bg-surface">
+      <BrowseLocationControls
+        location={location}
         criteria={criteria}
-        provinceOptions={provinceOptions}
-        wardOptions={wardOptions}
+        facilities={facilities}
+        wards={wardOptions}
+        view={view}
+        plottableCount={plottableCount}
+        onView={setView}
         onChange={changeCriteria}
-        onOpenFilters={() => filtersSheetRef.current?.present()}
+        onOpenFilters={openFilters}
       />
-      <BrowseViewToggle plottableCount={plottableCount} view={view} onChange={setView} />
-    </>
+      {view === 'list' ? <BrowseFiltersBar criteria={criteria} onChange={changeCriteria} /> : null}
+    </View>
   );
 
   return (
     <View className="flex-1">
+      <BrowseBrandHeader location={location} onLocation={openFilters} />
       {view === 'map' ? (
         // Outside the ScrollView on purpose: a ScrollView swallows the map's pan and zoom gestures.
         <>
           {header}
+          {isInitialLoading ? <LoadingState /> : null}
+          {error ? <ErrorState message={error} onRetry={refetch} /> : null}
           <View className="mt-3 flex-1">
             <BrowseMapView
-              facilities={visibleFacilities}
+              facilities={mapFacilities}
+              searchCenter={nearbySearch?.center ?? null}
               selectedFacilityId={mapFacility?.id ?? null}
               onSelect={openFacility}
+            />
+            <View className="absolute top-3 right-4 left-4 gap-2" pointerEvents="box-none">
+              <View className="flex-row items-center rounded-full border border-border bg-surface shadow-sm">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Tìm kho gần địa điểm"
+                  className="min-h-11 flex-1 flex-row items-center gap-2 px-3"
+                  onPress={() => placeSearchSheetRef.current?.present()}
+                >
+                  <MagnifyingGlass color="#006398" size={18} weight="bold" />
+                  <Text className="flex-1 font-ui text-body-sm text-foreground" numberOfLines={1}>
+                    {nearbySearch?.label ?? 'Tìm kho gần địa điểm...'}
+                  </Text>
+                </Pressable>
+                {nearbySearch ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Xóa địa điểm tìm kiếm"
+                    className="size-11 items-center justify-center"
+                    onPress={() => {
+                      setNearbySearch(null);
+                      setMapFacilityId(null);
+                    }}
+                  >
+                    <X color="#64748b" size={18} />
+                  </Pressable>
+                ) : null}
+              </View>
+              <View className="flex-row flex-wrap items-center gap-2">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Lọc bản đồ, ${criteria.requestedQuantity} kho, kích thước ${criteria.areaPreset === 'any' ? 'tất cả' : criteria.areaPreset}`}
+                  className="self-start flex-row items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 shadow-sm"
+                  onPress={openFilters}
+                >
+                  <Faders color="#006398" size={17} weight="bold" />
+                  <Text className="font-ui text-body-sm text-foreground">
+                    {criteria.requestedQuantity} kho ·{' '}
+                    {criteria.areaPreset === 'any'
+                      ? 'Mọi kích thước'
+                      : criteria.areaPreset === 'small'
+                        ? 'Nhỏ'
+                        : criteria.areaPreset === 'medium'
+                          ? 'Vừa'
+                          : 'Lớn'}
+                  </Text>
+                </Pressable>
+                {selectedUnits.length > 0 ? (
+                  <Text className="rounded-full bg-foreground px-2.5 py-2 font-ui text-caption text-surface">
+                    Đã chọn {selectedUnits.length}/{criteria.requestedQuantity}
+                  </Text>
+                ) : null}
+                {nearbySearch ? (
+                  <Text className="rounded-full bg-surface px-2.5 py-2 font-ui text-caption text-foreground">
+                    {mapFacilities.length} cơ sở · 5 km
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+            {nearbySearch && mapFacilities.length === 0 ? (
+              <View className="absolute top-28 right-4 left-4 rounded-xl bg-surface p-3">
+                <Text className="font-body text-body-sm text-foreground">
+                  Không có kho trống phù hợp trong 5 km. Thử địa điểm khác hoặc xóa tìm kiếm.
+                </Text>
+              </View>
+            ) : null}
+            <FacilityMapSheet
+              facility={mapFacility}
+              hasHolding={hasHolding}
+              requestedQuantity={criteria.requestedQuantity}
+              selectedIds={selectedIds}
+              allSelectedUnits={selectedUnits}
+              sheetRef={facilitySheetRef}
+              onDismiss={dismissFacility}
+              onHold={continueFromMap}
+              onToggle={(unit) => {
+                setMode('manual');
+                toggleUnit(unit);
+              }}
             />
           </View>
         </>
@@ -184,13 +309,7 @@ export function BrowseUnitsScreen({ hasHolding, contentBottomPadding, onHold }: 
         wardOptions={wardOptions}
         onChange={changeCriteria}
       />
-      <FacilityMapSheet
-        facility={mapFacility}
-        hasHolding={hasHolding}
-        requestedQuantity={criteria.requestedQuantity}
-        sheetRef={facilitySheetRef}
-        onHold={onHold}
-      />
+      <MapPlaceSearchSheet sheetRef={placeSearchSheetRef} onChoose={choosePlace} />
     </View>
   );
 }

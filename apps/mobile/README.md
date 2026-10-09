@@ -98,5 +98,5 @@ Goong **không có** cơ chế khoá key theo package name / bundle id như Goog
 hạn chế key chỉ dùng cho app này. Biện pháp thực tế duy nhất: theo dõi quota trên dashboard Goong và
 xoay key nếu thấy lưu lượng bất thường. Đừng giả định key đang được bảo vệ.
 
-**Không** đưa REST key (`GOONG_API_KEY` của `apps/api`) vào mobile. Nếu sau này cần autocomplete,
-`apps/api` đã có sẵn `GET /places/*` dạng public proxy.
+**Không** đưa REST key (`GOONG_API_KEY` của `apps/api`) vào mobile. Tìm địa điểm và kho gần đó
+gọi qua `GET /places/autocomplete` và `GET /places/nearby` của `apps/api`.

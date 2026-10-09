@@ -1,41 +1,51 @@
 import { Text, View } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import { formatMoney, formatMoneyShort } from '../../lib/format-vi';
 
 type Props = {
-  /** Available units at this facility, shown inside the pin head. */
+  /** Cheapest monthly price at this facility — the figure a customer compares across the map. */
+  fromPrice: number;
+  /** Available units at this facility. */
   count: number;
-  color: string;
   isSelected: boolean;
 };
 
 /**
- * Teardrop pin drawn in SVG rather than loaded as a sprite image: `<Marker>` takes any RN view, so
- * the pin can carry a live unit count and a selected state that a style sprite could not.
+ * Map marker showing a facility's starting price.
  *
- * The viewBox is 32x40 with the tip at the bottom, so the marker must anchor at "bottom" for the
- * tip — not the middle of the pin — to sit on the facility's coordinates.
+ * Price, not unit count. Someone scanning a map is deciding where to look next, and "550k" answers
+ * that; "7 rooms" does not, because a facility with seven rooms they cannot afford is noise. The
+ * unit count appears on every pin so availability can be compared too.
+ *
+ * Drawn as a pill rather than a teardrop so the number sits inside the shape at a readable size.
+ * The pointer underneath keeps the marker anchored to a spot — `<Marker anchor="bottom">` puts that
+ * tip on the coordinates.
  */
-export function FacilityPin({ count, color, isSelected }: Props) {
-  const width = isSelected ? 36 : 29;
-  const height = width * 1.25;
-
+export function FacilityPin({ fromPrice, count, isSelected }: Props) {
   return (
-    <View className="items-center justify-center">
-      <Svg height={height} viewBox="0 0 32 40" width={width}>
-        <Path
-          d="M16 1c8.3 0 15 6.7 15 15 0 10-15 23-15 23S1 26 1 16C1 7.7 7.7 1 16 1Z"
-          fill={color}
-          stroke="#ffffff"
-          strokeWidth={2}
-        />
-        <Circle cx={16} cy={15} fill="#ffffff" r={8.5} />
-      </Svg>
-      {/* Absolute so the number sits on the pin head without a second SVG text node. */}
-      <View className="absolute" style={{ top: height * 0.13 }}>
-        <Text className="font-bold text-[11px]" style={{ color }}>
-          {count > 99 ? '99+' : count}
+    <View className="items-center">
+      <View
+        className={`flex-row items-center gap-1.5 rounded-full border px-2.5 py-1.5 ${
+          isSelected ? 'border-accent bg-foreground' : 'border-border bg-surface'
+        }`}
+      >
+        <View className="size-2 rounded-full bg-success" />
+        <Text
+          className={`font-numeric-strong text-num-sm ${
+            isSelected ? 'text-accent-foreground' : 'text-foreground'
+          }`}
+        >
+          {/* The selected pin has room for the exact figure; the rest stay abbreviated so a cluster
+              of pins does not turn into a wall of digits. */}
+          {isSelected ? formatMoney(fromPrice) : formatMoneyShort(fromPrice)}
+        </Text>
+        <Text
+          className={`font-ui text-caption ${isSelected ? 'text-accent-foreground' : 'text-muted'}`}
+        >
+          {count} kho
         </Text>
       </View>
+      {/* Small stem so the pill reads as pinned to a point rather than floating over the map. */}
+      <View className={`h-2 w-0.5 ${isSelected ? 'bg-accent' : 'bg-border-strong'}`} />
     </View>
   );
 }

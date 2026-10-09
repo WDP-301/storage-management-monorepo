@@ -1,6 +1,6 @@
-import { Button, Card } from 'heroui-native';
+import { Button } from 'heroui-native';
 import { Text, View } from 'react-native';
-import { formatMoney } from '../../../lib/format-vi';
+import { formatMoney, formatNumber } from '../../../lib/format-vi';
 import type { UnitOffer } from '../../types/customer';
 import { sumUnitPrices } from './unit-offer-utils';
 
@@ -12,8 +12,11 @@ type Props = {
 };
 
 /**
- * Pinned summary of a manual selection. Lives outside the scroll area so the running total and the
- * confirm button stay reachable while the customer keeps browsing.
+ * Pinned summary of a manual selection.
+ *
+ * Lives outside the scroll area because it is the running answer to "what have I picked so far" —
+ * area, money and progress — and the customer needs it while still scrolling through rooms. The
+ * progress count on the button is the part that tells them how far from done they are.
  */
 export function BrowseSelectionBar({
   selectedUnits,
@@ -21,34 +24,40 @@ export function BrowseSelectionBar({
   hasHolding,
   onHold,
 }: Props) {
-  const selectedFacilityCount = new Set(selectedUnits.map((unit) => unit.facilityId)).size;
+  const facilityNames = new Set(selectedUnits.map((unit) => unit.facility));
+  const totalArea = selectedUnits.reduce((sum, unit) => sum + unit.areaM2, 0);
+  const isComplete = selectedUnits.length === requestedQuantity;
+  const singleFacility = facilityNames.size === 1 ? [...facilityNames][0] : null;
 
   return (
-    <View className="shrink-0 border-border border-t bg-background px-4 py-3">
-      <Card className="border border-accent/30 bg-accent/5">
-        <Card.Body className="gap-3">
-          <View className="flex-row items-center justify-between">
-            <Text className="font-bold text-foreground">
-              Đã chọn {selectedUnits.length}/{requestedQuantity} kho
-            </Text>
-            <Text className="font-semibold text-accent text-sm">
-              {formatMoney(sumUnitPrices(selectedUnits, 'monthlyPrice'))}/tháng
+    <View className="shrink-0 border-border border-t bg-surface px-4 py-3">
+      <View className="flex-row items-center justify-between gap-3">
+        <View className="flex-1 gap-1">
+          <View className="flex-row items-center gap-1.5">
+            <View className={`size-2 rounded-full ${isComplete ? 'bg-success' : 'bg-warning'}`} />
+            <Text className="flex-1 font-strong text-body-sm text-foreground" numberOfLines={1}>
+              {singleFacility
+                ? `Đã chọn ${selectedUnits.length} kho tại ${singleFacility}`
+                : `Đã chọn ${selectedUnits.length} kho tại ${facilityNames.size} cơ sở`}
             </Text>
           </View>
-          {selectedFacilityCount > 1 ? (
-            <Text className="text-muted text-xs leading-5">
-              Các kho thuộc {selectedFacilityCount} cơ sở. Chọn cùng một cơ sở để thuận tiện hơn.
+          <View className="flex-row items-baseline gap-1">
+            <Text className="font-body text-caption text-muted">
+              Tổng {formatNumber(totalArea)} m²
             </Text>
-          ) : null}
+            <Text className="font-numeric text-accent text-num-sm">
+              {formatMoney(sumUnitPrices(selectedUnits, 'monthlyPrice'))}
+            </Text>
+            <Text className="font-body text-caption text-muted">/tháng</Text>
+          </View>
+        </View>
 
-          <Button
-            isDisabled={selectedUnits.length !== requestedQuantity || hasHolding}
-            onPress={() => onHold([...selectedUnits])}
-          >
-            <Button.Label>Chọn {requestedQuantity} kho đã chọn</Button.Label>
-          </Button>
-        </Card.Body>
-      </Card>
+        <Button isDisabled={!isComplete || hasHolding} onPress={() => onHold([...selectedUnits])}>
+          <Button.Label className="font-ui">
+            Tiếp tục ({selectedUnits.length}/{requestedQuantity})
+          </Button.Label>
+        </Button>
+      </View>
     </View>
   );
 }

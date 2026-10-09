@@ -1,35 +1,38 @@
-import { Button } from 'heroui-native';
-import { View } from 'react-native';
+﻿import { ListBullets, MapTrifold } from 'phosphor-react-native';
+import { Pressable, Text, View } from 'react-native';
 import type { BrowseView } from '../../types/customer';
 
-type Props = {
-  view: BrowseView;
-  onChange: (view: BrowseView) => void;
-  /** Facilities that actually have coordinates; 0 disables the map tab rather than showing an empty one. */
-  plottableCount: number;
-};
+type Props = { view: BrowseView; onChange: (view: BrowseView) => void; plottableCount: number };
 
-/** List/map switch. Sits next to the filter bar so both views share one filter state. */
 export function BrowseViewToggle({ view, onChange, plottableCount }: Props) {
   return (
-    <View className="mt-3 flex-row gap-2 px-4">
-      <Button
-        className="flex-1"
-        size="sm"
-        variant={view === 'list' ? 'primary' : 'secondary'}
-        onPress={() => onChange('list')}
-      >
-        <Button.Label>Danh sách</Button.Label>
-      </Button>
-      <Button
-        className="flex-1"
-        isDisabled={plottableCount === 0}
-        size="sm"
-        variant={view === 'map' ? 'primary' : 'secondary'}
-        onPress={() => onChange('map')}
-      >
-        <Button.Label>Bản đồ{plottableCount > 0 ? ` (${plottableCount})` : ''}</Button.Label>
-      </Button>
+    <View className="flex-row rounded-full bg-surface-secondary p-0.5">
+      {(['list', 'map'] as const).map((value) => {
+        const selected = view === value;
+        const disabled = value === 'map' && plottableCount === 0;
+        const Icon = value === 'list' ? ListBullets : MapTrifold;
+        return (
+          <Pressable
+            key={value}
+            accessibilityRole="tab"
+            accessibilityState={{ selected, disabled }}
+            disabled={disabled}
+            onPress={() => onChange(value)}
+            style={({ pressed }) => ({ opacity: disabled ? 0.4 : pressed ? 0.7 : 1 })}
+          >
+            <View
+              className={`min-h-9 flex-row items-center justify-center gap-1 rounded-full px-2.5 py-1.5 ${selected ? 'bg-surface' : ''}`}
+            >
+              <Icon size={14} color={selected ? '#0f172a' : '#64748b'} />
+              <Text
+                className={`font-ui text-caption ${selected ? 'text-foreground' : 'text-muted'}`}
+              >
+                {value === 'list' ? 'Danh sách' : 'Bản đồ'}
+              </Text>
+            </View>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

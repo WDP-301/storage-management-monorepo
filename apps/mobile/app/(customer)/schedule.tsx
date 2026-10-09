@@ -18,6 +18,7 @@ export default function ScheduleRoute() {
       units={selectedUnits}
       isCreating={isCreating}
       error={error}
+      onBack={() => router.navigate('/(customer)/browse')}
       onConfirm={async (schedule) => {
         setError(null);
         try {

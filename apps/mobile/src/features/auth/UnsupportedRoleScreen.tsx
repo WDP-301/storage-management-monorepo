@@ -15,19 +15,21 @@ export function UnsupportedRoleScreen({ user, isLoggingOut, onLogout }: Props) {
     <View className="flex-1 justify-between px-5 pb-8 pt-10">
       <View>
         <View className="size-12 items-center justify-center rounded-2xl bg-warning/15">
-          <Text className="text-lg font-black text-warning">!</Text>
+          <Text className="font-body text-lg font-black text-warning">!</Text>
         </View>
-        <Text className="mt-7 text-2xl font-bold tracking-tight text-foreground">
+        <Text className="mt-7 text-2xl font-display tracking-tight text-foreground">
           Tài khoản chưa hỗ trợ trên ứng dụng di động
         </Text>
-        <Text className="mt-3 text-base leading-6 text-muted">
+        <Text className="font-body mt-3 text-base leading-6 text-muted">
           Tài khoản {user.email} có vai trò {primaryRoleLabel(user.roles)}. Vai trò này làm việc
           trên trang quản trị web. Vui lòng đăng nhập bằng trình duyệt để tiếp tục.
         </Text>
       </View>
 
       <Button className="w-full" isDisabled={isLoggingOut} size="lg" onPress={onLogout}>
-        <Button.Label>{isLoggingOut ? 'Đang đăng xuất...' : 'Đăng xuất'}</Button.Label>
+        <Button.Label className="font-ui">
+          {isLoggingOut ? 'Đang đăng xuất...' : 'Đăng xuất'}
+        </Button.Label>
       </Button>
     </View>
   );

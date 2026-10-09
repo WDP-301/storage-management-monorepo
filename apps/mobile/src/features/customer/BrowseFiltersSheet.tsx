@@ -76,10 +76,10 @@ export function BrowseFiltersSheet({
             variant="tertiary"
             onPress={() => onChange(clearFilters(criteria))}
           >
-            <Button.Label>Đặt lại</Button.Label>
+            <Button.Label className="font-ui">Đặt lại</Button.Label>
           </Button>
           <Button className="flex-[2]" onPress={() => sheetRef.current?.dismiss()}>
-            <Button.Label>Xem {resultCount} kho</Button.Label>
+            <Button.Label className="font-ui">Xem {resultCount} kho</Button.Label>
           </Button>
         </View>
       </BottomSheetFooter>
@@ -96,14 +96,14 @@ export function BrowseFiltersSheet({
       enablePanDownToClose
       footerComponent={renderFooter}
       handleIndicatorStyle={{ backgroundColor: mutedColor }}
-      snapPoints={['80%']}
+      snapPoints={['70%']}
     >
       <BottomSheetScrollView
         contentContainerStyle={{ paddingBottom: FOOTER_HEIGHT + insets.bottom }}
       >
         <View className="mb-4 px-4">
-          <Text className="text-xl font-bold tracking-tight text-foreground">Bộ lọc</Text>
-          <Text className="mt-1 text-xs leading-5 text-muted">
+          <Text className="text-xl font-display tracking-tight text-foreground">Bộ lọc</Text>
+          <Text className="font-body mt-1 text-xs leading-5 text-muted">
             Thay đổi được áp dụng ngay, số kho khớp hiện ở nút bên dưới.
           </Text>
         </View>

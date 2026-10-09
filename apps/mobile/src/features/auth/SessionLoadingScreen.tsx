@@ -13,11 +13,9 @@ export function SessionLoadingScreen() {
     >
       <StatusBar style="dark" />
       <View className="size-12 items-center justify-center rounded-2xl bg-accent">
-        <Text className="text-lg font-black text-accent-foreground">S</Text>
+        <Text className="font-body text-lg font-black text-accent-foreground">S</Text>
       </View>
-      <Text className="mt-4 text-sm font-semibold text-muted">
-        Đang kiểm tra phiên đăng nhập...
-      </Text>
+      <Text className="mt-4 text-sm font-strong text-muted">Đang kiểm tra phiên đăng nhập...</Text>
     </SafeAreaView>
   );
 }

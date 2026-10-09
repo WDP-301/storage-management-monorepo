@@ -8,6 +8,7 @@ import {
 import { BookingStatus } from '@storage/types';
 import * as Clipboard from 'expo-clipboard';
 import { Button, Card, useThemeColor } from 'heroui-native';
+import { ArrowLeft, Copy, Timer } from 'phosphor-react-native';
 import { type RefObject, useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -22,8 +23,15 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError } from '../../../lib/api';
+import { formatRemaining, holdDeadline } from '../../../lib/booking-hold-state';
 import { type DepositStage } from '../../../lib/booking-payment-state';
-import { formatIsoDateTime, formatMoney } from '../../../lib/format-vi';
+import {
+  formatIsoDate,
+  formatIsoDateTime,
+  formatMoney,
+  formatNumber,
+} from '../../../lib/format-vi';
+import { useHold } from '../../../lib/hold';
 import {
   type SaveImageOutcome,
   saveRemoteImage,
@@ -38,6 +46,10 @@ const QR_ASPECT_RATIO = 0.84;
 
 /** Sits on the filled `bg-success` disc; mirrors `--color-accent-foreground` in global.css. */
 const CHECK_MARK_COLOR = 'hsl(0 0% 100%)';
+
+/** Mirror the colour tokens in global.css; SVG icons cannot read a Tailwind class. */
+const DANGER = 'hsl(0 72% 51%)';
+const MUTED = 'hsl(215 16% 47%)';
 
 /** A banking app entry from VietQR's deeplink registry. */
 type BankApp = {
@@ -123,6 +135,7 @@ type Props = {
   error: string | null;
   contentBottomPadding: number;
   onCheck: () => void;
+  onBack: () => void;
   onDone: () => void;
   /** Resolves once the booking is cancelled; rejects with the API's reason when it cannot be. */
   onCancel: () => Promise<void>;
@@ -139,6 +152,7 @@ export function DepositPaymentScreen({
   error,
   contentBottomPadding,
   onCheck,
+  onBack,
   onDone,
   onCancel,
 }: Props) {
@@ -156,11 +170,23 @@ export function DepositPaymentScreen({
       showsVerticalScrollIndicator={false}
     >
       <View className="px-4 pb-4 pt-5">
-        <Text className="text-2xl font-bold tracking-tight text-foreground">
-          Thanh toán tiền cọc
-        </Text>
-        <Text className="mt-1 text-sm leading-5 text-muted">
-          Booking {booking.bookingNo} · {booking.items.length} kho
+        <View className="flex-row items-center gap-1">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Quay lại trang trước"
+            hitSlop={8}
+            className="size-10 items-center justify-center rounded-full"
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            onPress={onBack}
+          >
+            <ArrowLeft color="hsl(203 100% 30%)" size={22} weight="bold" />
+          </Pressable>
+          <Text className="flex-1 font-display text-foreground text-title-md" numberOfLines={1}>
+            Thanh toán tiền cọc
+          </Text>
+        </View>
+        <Text className="font-body mt-1 text-sm leading-5 text-muted">
+          Booking {booking.bookingNo}, {booking.items.length} kho
         </Text>
       </View>
 
@@ -170,9 +196,11 @@ export function DepositPaymentScreen({
           they cannot. When polling itself fails, though, they need a way out of the dead end. */}
         {error ? (
           <View className="gap-3 rounded-xl border border-danger/30 bg-danger/5 p-3">
-            <Text className="text-sm text-danger">{error}</Text>
+            <Text className="font-body text-sm text-danger">{error}</Text>
             <Button size="sm" variant="secondary" isDisabled={isChecking} onPress={onCheck}>
-              <Button.Label>{isChecking ? 'Đang kiểm tra...' : 'Thử lại'}</Button.Label>
+              <Button.Label className="font-ui">
+                {isChecking ? 'Đang kiểm tra...' : 'Thử lại'}
+              </Button.Label>
             </Button>
           </View>
         ) : null}
@@ -186,15 +214,15 @@ export function DepositPaymentScreen({
         {stage === 'unavailable' ? (
           <Card className="border border-border bg-surface">
             <Card.Body className="gap-3 py-6">
-              <Text className="text-center font-bold text-foreground">
+              <Text className="text-center font-display text-foreground">
                 Chưa thanh toán online được
               </Text>
-              <Text className="text-center text-sm leading-5 text-muted">
+              <Text className="font-body text-center text-sm leading-5 text-muted">
                 Hệ thống chưa cấu hình tài khoản nhận tiền. Vui lòng liên hệ hỗ trợ kèm mã{' '}
                 {booking.bookingNo} để được hướng dẫn thanh toán.
               </Text>
               <Button className="mt-2" variant="secondary" onPress={onDone}>
-                <Button.Label>Về booking của tôi</Button.Label>
+                <Button.Label className="font-ui">Về booking của tôi</Button.Label>
               </Button>
             </Card.Body>
           </Card>
@@ -224,12 +252,14 @@ function PaymentSucceeded({ booking, onDone }: { booking: ApiBooking; onDone: ()
         </View>
 
         <View className="items-center gap-2">
-          <Text className="text-base font-semibold text-foreground">Thanh toán thành công</Text>
+          <Text className="text-base font-strong text-foreground">Thanh toán thành công</Text>
           {/* The amount is what the customer scans for first, so it gets the largest type. */}
-          <Text className="text-3xl font-bold text-accent">
+          <Text className="text-3xl font-display text-accent">
             {formatMoney(Number(booking.depositTotal))}
           </Text>
-          <Text className="text-sm text-muted">{formatIsoDateTime(booking.updatedAt)}</Text>
+          <Text className="font-body text-sm text-muted">
+            {formatIsoDateTime(booking.updatedAt)}
+          </Text>
         </View>
 
         <View className="w-full gap-3 rounded-xl border border-border bg-surface px-4 py-3">
@@ -242,7 +272,7 @@ function PaymentSucceeded({ booking, onDone }: { booking: ApiBooking; onDone: ()
       <View className="gap-3">
         <SaveImageButton label="Lưu ảnh" onSave={() => saveViewAsImage(receipt)} />
         <Button onPress={onDone}>
-          <Button.Label>Xem booking của tôi</Button.Label>
+          <Button.Label className="font-ui">Xem booking của tôi</Button.Label>
         </Button>
       </View>
     </View>
@@ -270,13 +300,13 @@ function BookingClosed({ booking, onDone }: { booking: ApiBooking; onDone: () =>
         </View>
 
         <View className="items-center gap-2">
-          <Text className="text-base font-semibold text-foreground">
+          <Text className="text-base font-strong text-foreground">
             {isCancelled ? 'Đã hủy booking' : 'Hết hạn giữ chỗ'}
           </Text>
           {/* Where the paid state puts the amount: what the customer got back, not what they paid. */}
-          <Text className="text-3xl font-bold text-foreground">{booking.items.length} kho</Text>
-          <Text className="text-sm text-muted">
-            đã được trả lại · {formatIsoDateTime(booking.updatedAt)}
+          <Text className="text-3xl font-display text-foreground">{booking.items.length} kho</Text>
+          <Text className="font-body text-sm text-muted">
+            đã được trả lại {formatIsoDateTime(booking.updatedAt)}
           </Text>
         </View>
 
@@ -293,13 +323,13 @@ function BookingClosed({ booking, onDone }: { booking: ApiBooking; onDone: () =>
       <View className="gap-3">
         {/* Money already transferred cannot confirm a booking that is no longer awaiting a
           deposit — the API records the payment and leaves it for manual reconciliation. */}
-        <Text className="text-center text-xs leading-5 text-muted">
+        <Text className="font-body text-center text-xs leading-5 text-muted">
           {isCancelled
             ? `Nếu bạn đã chuyển khoản cho booking này, vui lòng liên hệ hỗ trợ kèm mã ${booking.bookingNo}.`
             : `Nếu bạn vừa chuyển khoản, tiền đã được ghi nhận nhưng cần đối soát thủ công — vui lòng liên hệ hỗ trợ kèm mã ${booking.bookingNo}.`}
         </Text>
         <Button onPress={onDone}>
-          <Button.Label>Về booking của tôi</Button.Label>
+          <Button.Label className="font-ui">Về booking của tôi</Button.Label>
         </Button>
       </View>
     </View>
@@ -309,8 +339,8 @@ function BookingClosed({ booking, onDone }: { booking: ApiBooking; onDone: () =>
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
     <View className="flex-row items-center justify-between gap-3">
-      <Text className="text-sm text-muted">{label}</Text>
-      <Text className="flex-1 text-right text-sm font-semibold text-foreground" numberOfLines={1}>
+      <Text className="font-body text-sm text-muted">{label}</Text>
+      <Text className="flex-1 text-right text-sm font-strong text-foreground" numberOfLines={1}>
         {value}
       </Text>
     </View>
@@ -328,13 +358,61 @@ function AwaitingTransfer({
   // Bound once so the save callback keeps the narrowed non-null type the JSX guard established.
   const qrUrl = booking.paymentQrUrl;
   const bankSheetRef = useRef<BottomSheetModal>(null);
+  const { now } = useHold();
+
+  const unitCodes = booking.items
+    .map((item) => item.storageUnit?.code ?? item.storageUnitId)
+    .join(', ');
+  const totalArea = booking.items.reduce(
+    (sum, item) => sum + Number(item.storageUnit?.areaM2 ?? 0),
+    0,
+  );
+  const firstItem = booking.items[0];
 
   return (
     <>
-      {/* One panel, not three cards: the QR, the amount and the transfer note are a single task,
-        and splitting them pushed the note below the fold on a 6" screen. Dividers separate them
-        more cheaply than nested cards, which stacked padding and rounding at every level.
-        No countdown either — the tab bar already counts the same hold down. */}
+      {/* The countdown leads: it is the only thing on this screen that runs out, and everything
+        below is pointless once it does. */}
+      {booking.expiresAt ? (
+        <View className="gap-2 rounded-xl border border-danger/30 bg-danger-bg px-3.5 py-3">
+          <View className="flex-row items-center justify-between gap-3">
+            <View className="flex-row items-center gap-1.5">
+              <Timer color={DANGER} size={16} weight="fill" />
+              <Text className="font-ui text-body-sm text-danger">Thời gian giữ chỗ còn lại</Text>
+            </View>
+            <Text className="font-numeric-strong text-danger text-num-lg">
+              {formatRemaining(holdDeadline(booking) - now)}
+            </Text>
+          </View>
+          <Text className="font-body text-body-sm text-danger">
+            {booking.items.length} kho {unitCodes} đang được khoá tạm cho bạn. Hết thời gian trên,
+            mã giữ chỗ sẽ tự huỷ.
+          </Text>
+        </View>
+      ) : null}
+
+      {/* What is being held, restated with the codes the customer will see on the doors. */}
+      <View className="gap-2.5 rounded-xl border border-border bg-surface p-3">
+        <View className="flex-row items-center justify-between gap-3">
+          <View className="flex-1">
+            <Text className="font-body text-caption text-muted">Mã đơn giữ chỗ</Text>
+            <Text className="font-numeric text-foreground text-num-md" numberOfLines={1}>
+              {booking.bookingNo}
+            </Text>
+          </View>
+          <CopyChip label="Chép mã" value={booking.bookingNo} />
+        </View>
+        <View className="h-px bg-separator" />
+        <LedgerRow label="Kho chỉ định" value={`${booking.items.length} kho: ${unitCodes}`} />
+        <LedgerRow label="Tổng diện tích" value={`${formatNumber(totalArea)} m²`} />
+        {firstItem ? (
+          <LedgerRow
+            label="Ngày bắt đầu tính phí"
+            value={`${formatIsoDate(firstItem.requestedStartAt.slice(0, 10))} (${firstItem.rentalMonths} tháng)`}
+          />
+        ) : null}
+      </View>
+
       <View className="overflow-hidden rounded-xl border border-border bg-surface">
         <View className="items-center gap-3 px-4 pb-4 pt-4">
           {qrUrl ? (
@@ -355,23 +433,38 @@ function AwaitingTransfer({
                 deeplink scheme directly. The saved-QR path stays as the fallback for apps not in
                 the registry. */}
               <Button size="sm" variant="secondary" onPress={() => bankSheetRef.current?.present()}>
-                <Button.Label>Mở app ngân hàng</Button.Label>
+                <Button.Label className="font-ui">Mở app ngân hàng</Button.Label>
               </Button>
             </>
           ) : null}
         </View>
 
-        <View className="h-px bg-separator" />
+        {/* The warning sits ABOVE the two fields it protects, not at the end of the screen. Read
+          after the transfer it is just an explanation of what went wrong. */}
+        <View className="border-warning/30 border-y bg-warning-bg px-4 py-3">
+          <Text className="font-strong text-body-sm text-warning">
+            Chuyển đúng số tiền và nội dung bên dưới
+          </Text>
+          <Text className="font-body mt-1 text-body-sm text-warning">
+            Hệ thống đối chiếu khoản tiền bằng nội dung chuyển khoản. Sửa nội dung thì tiền vẫn tới
+            nhưng không tự khớp được với booking này.
+          </Text>
+        </View>
 
         <View className="flex-row items-center justify-between gap-3 px-4 py-3">
-          <Text className="text-sm text-muted">Số tiền cọc</Text>
-          <Text className="text-lg font-bold text-accent">{deposit}</Text>
+          <Text className="font-body text-body-md text-muted">Số tiền cọc</Text>
+          <Text className="font-numeric-strong text-accent text-num-lg">{deposit}</Text>
         </View>
 
         <View className="h-px bg-separator" />
 
-        <View className="gap-2 px-4 pb-4 pt-3">
-          <Text className="text-sm text-muted">Nội dung chuyển khoản</Text>
+        <View className="gap-2 px-4 pt-3 pb-4">
+          <View className="flex-row items-center justify-between gap-2">
+            <Text className="font-body text-body-md text-muted">Nội dung chuyển khoản</Text>
+            <View className="rounded-full bg-warning-bg px-2 py-0.5">
+              <Text className="font-ui text-caption text-warning">Không chỉnh sửa</Text>
+            </View>
+          </View>
           <CopyableCode value={booking.bookingNo} />
         </View>
       </View>
@@ -379,24 +472,16 @@ function AwaitingTransfer({
       {/* Numbered steps rather than one grey paragraph: this is a procedure the customer carries
         out on a second app, and a wall of text is the one thing nobody reads before paying. */}
       <View className="gap-3">
-        <Text className="text-sm font-bold text-foreground">Cách thanh toán</Text>
+        <Text className="font-strong text-foreground text-body-lg">Cách thanh toán</Text>
         <PaymentStep index={1} text="Mở app ngân hàng và quét mã QR ở trên." />
         <PaymentStep index={2} text="Kiểm tra số tiền và giữ nguyên nội dung chuyển khoản." />
         <PaymentStep index={3} text="Chuyển khoản trước khi hết giờ giữ chỗ." />
       </View>
 
-      {/* The webhook finds the booking by parsing the code out of the transfer content, so an
-        edited note means the money arrives with nothing to match it to. */}
-      <View className="rounded-lg border border-border bg-surface-secondary px-3 py-2.5">
-        <Text className="text-xs leading-5 text-muted">
-          Nếu sửa nội dung chuyển khoản, hệ thống sẽ không tự nhận ra khoản thanh toán của bạn.
-        </Text>
-      </View>
-
       {/* Nothing to press and no spinner. Polling runs for as long as the hold lasts, so an
         indicator that never resolves would read as a stuck screen, and a button would suggest the
         customer can hurry along a confirmation that only the bank's webhook can deliver. */}
-      <Text className="text-center text-xs leading-5 text-muted">
+      <Text className="font-body text-center text-xs leading-5 text-muted">
         Hệ thống tự cập nhật khi nhận được tiền, bạn không cần chờ ở màn hình này.
       </Text>
 
@@ -468,11 +553,11 @@ function BankAppsSheet({ sheetRef }: { sheetRef: RefObject<BottomSheetModal | nu
       }}
     >
       <View className="mb-2 px-4">
-        <Text className="text-lg font-bold text-foreground">Chọn app ngân hàng</Text>
+        <Text className="text-lg font-display text-foreground">Chọn app ngân hàng</Text>
       </View>
       {loadFailed ? (
         <View className="items-center gap-3 px-4 py-8">
-          <Text className="text-sm text-muted">Không tải được danh sách ngân hàng.</Text>
+          <Text className="font-body text-sm text-muted">Không tải được danh sách ngân hàng.</Text>
           <Button
             size="sm"
             variant="secondary"
@@ -483,7 +568,7 @@ function BankAppsSheet({ sheetRef }: { sheetRef: RefObject<BottomSheetModal | nu
                 .catch(() => setLoadFailed(true));
             }}
           >
-            <Button.Label>Thử lại</Button.Label>
+            <Button.Label className="font-ui">Thử lại</Button.Label>
           </Button>
         </View>
       ) : apps === null ? (
@@ -508,8 +593,8 @@ function BankAppsSheet({ sheetRef }: { sheetRef: RefObject<BottomSheetModal | nu
               >
                 <Image source={{ uri: item.appLogo }} className="h-9 w-9 rounded-lg" />
                 <View className="flex-1">
-                  <Text className="text-sm font-semibold text-foreground">{item.appName}</Text>
-                  <Text className="text-xs text-muted" numberOfLines={1}>
+                  <Text className="text-sm font-strong text-foreground">{item.appName}</Text>
+                  <Text className="font-body text-xs text-muted" numberOfLines={1}>
                     {item.bankName}
                   </Text>
                 </View>
@@ -566,7 +651,7 @@ function CancelBookingButton({ onCancel }: { onCancel: () => Promise<void> }) {
 
   return (
     <Button variant="ghost" isDisabled={isCancelling} onPress={confirm}>
-      <Button.Label className="text-danger">
+      <Button.Label className="font-ui text-danger">
         {isCancelling ? 'Đang hủy...' : 'Hủy booking'}
       </Button.Label>
     </Button>
@@ -578,9 +663,9 @@ function PaymentStep({ index, text }: { index: number; text: string }) {
   return (
     <View className="flex-row items-start gap-3">
       <View className="h-6 w-6 items-center justify-center rounded-full bg-accent/10">
-        <Text className="text-xs font-bold text-accent">{index}</Text>
+        <Text className="text-xs font-display text-accent">{index}</Text>
       </View>
-      <Text className="flex-1 text-sm leading-6 text-foreground">{text}</Text>
+      <Text className="font-body flex-1 text-sm leading-6 text-foreground">{text}</Text>
     </View>
   );
 }
@@ -625,12 +710,12 @@ function SaveImageButton({
         }}
       >
         <DownloadIcon color={mutedColor} />
-        <Button.Label>
+        <Button.Label className="font-ui">
           {isSaving ? 'Đang lưu...' : outcome ? SAVE_IMAGE_LABELS[outcome] : label}
         </Button.Label>
       </Button>
       {outcome === 'denied' ? (
-        <Text className="text-center text-xs leading-5 text-muted">
+        <Text className="font-body text-center text-xs leading-5 text-muted">
           Cấp quyền ảnh cho ứng dụng trong Cài đặt để lưu được ảnh.
         </Text>
       ) : null}
@@ -644,7 +729,7 @@ function CopyableCode({ value }: { value: string }) {
 
   return (
     <View className="flex-row items-center justify-between gap-3 rounded-lg border border-border bg-surface-secondary py-2 pl-3 pr-2">
-      <Text className="flex-1 font-mono text-base font-bold text-foreground" numberOfLines={1}>
+      <Text className="flex-1 font-numeric text-base text-foreground" numberOfLines={1}>
         {value}
       </Text>
       <Button
@@ -655,8 +740,50 @@ function CopyableCode({ value }: { value: string }) {
           setIsCopied(true);
         }}
       >
-        <Button.Label>{isCopied ? 'Đã chép' : 'Chép'}</Button.Label>
+        <Button.Label className="font-ui">{isCopied ? 'Đã chép' : 'Chép'}</Button.Label>
       </Button>
     </View>
+  );
+}
+
+/** Label/value line inside the booking ledger card. */
+function LedgerRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="flex-row items-center justify-between gap-3">
+      <Text className="font-body text-body-sm text-muted">{label}</Text>
+      <Text
+        className="flex-1 text-right font-strong text-body-sm text-foreground"
+        numberOfLines={1}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * Small copy affordance beside a value the customer must reproduce exactly.
+ *
+ * Separate from `CopyableCode` below, which owns the full-width transfer-note field; this one sits
+ * inline next to a label where a full field would dominate the row.
+ */
+function CopyChip({ label, value }: { label: string; value: string }) {
+  const [isCopied, setIsCopied] = useState(false);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+      onPress={() => {
+        Clipboard.setStringAsync(value);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 1500);
+      }}
+    >
+      <View className="flex-row items-center gap-1 rounded-full bg-surface-secondary px-2.5 py-1.5">
+        <Copy color={MUTED} size={13} weight="bold" />
+        <Text className="font-ui text-caption text-subtle">{isCopied ? 'Đã chép' : label}</Text>
+      </View>
+    </Pressable>
   );
 }

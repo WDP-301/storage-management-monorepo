@@ -60,6 +60,26 @@ const ASSIGNABLE_STATUSES: readonly TicketStatus[] = [
   TicketStatus.IN_PROGRESS,
 ];
 
+/** Types only a current or past renter can file — a pre-move-in customer has no unit to report on. */
+const RENTAL_ONLY_TYPE_CODES: readonly string[] = ['MAINTENANCE'];
+
+// Contract predicates shared by create validation and the form options so both agree.
+// Params: :activeStatus, :endedStatus, :draftStatus, :now.
+const IN_WINDOW_SQL =
+  '(c.status = :activeStatus AND c.effectiveAt <= :now AND (c.endedAt IS NULL OR c.endedAt >= :now))';
+/** Currently renting in the window, or moved out (post-moveout complaints, deposit refunds). */
+const RENTED_SQL = `(c.status = :endedStatus OR ${IN_WINDOW_SQL})`;
+/** Deposit paid (DRAFT contract) or contract signed but not started yet. */
+const PRE_MOVE_IN_SQL =
+  '(c.status = :draftStatus OR (c.status = :activeStatus AND c.effectiveAt > :now))';
+
+const contractParams = (now: Date) => ({
+  activeStatus: ContractStatus.ACTIVE,
+  endedStatus: ContractStatus.ENDED,
+  draftStatus: ContractStatus.DRAFT,
+  now,
+});
+
 const TICKET_RELATIONS = {
   type: true,
   facility: true,
@@ -114,8 +134,8 @@ export class ServiceTicketsService {
 
     let isCommitted = false;
     try {
-      await this.validateTicketReferences(dto);
-      await this.assertCustomerRents(actor.id, dto);
+      const type = await this.validateTicketReferences(dto);
+      await this.assertCustomerCanFile(actor.id, dto, type);
 
       // Ticket insert and the DONE marker commit in one transaction; each ticket_no
       // retry runs a fresh transaction because a failed statement aborts the current one.
@@ -224,9 +244,10 @@ export class ServiceTicketsService {
 
   /**
    * Options backing the customer create-ticket form: active ticket types plus the
-   * facilities and units the customer may file against. Mirrors the rental rules in
-   * `assertCustomerRents` — a unit needs an ACTIVE in-window contract, a facility also
-   * accepts an ENDED one — so an option offered here always survives create validation.
+   * facilities and units the customer may file against. Mirrors the rules in
+   * `assertCustomerCanFile` — a unit needs an ACTIVE in-window contract, a facility
+   * accepts any type when rented (in-window or ENDED) and non-maintenance types when the
+   * customer only paid a deposit — so an option offered here always survives create.
    */
   async formOptions(actor: AuthUser): Promise<TicketFormOptionsResponse> {
     const now = new Date();
@@ -235,22 +256,28 @@ export class ServiceTicketsService {
       where: { isActive: true, deletedAt: IsNull() },
       order: { code: 'ASC' },
     });
+    const allTypeIds = types.map((t) => t.id);
+    const preMoveInTypeIds = types
+      .filter((t) => !RENTAL_ONLY_TYPE_CODES.includes(t.code))
+      .map((t) => t.id);
 
     const facilityRows = await this.contracts
       .createQueryBuilder('c')
       .innerJoin('c.bookingItem', 'bi')
       .innerJoin('bi.storageUnit', 'su')
       .innerJoin('su.facility', 'f')
-      .select(['f.id AS "id"', 'f.code AS "code"', 'f.name AS "name"'])
-      .distinct(true)
+      .select([
+        'f.id AS "id"',
+        'f.code AS "code"',
+        'f.name AS "name"',
+        `bool_or(${RENTED_SQL}) AS "isRented"`,
+      ])
       .where('c.customerId = :customerId', { customerId: actor.id })
       .andWhere('f.deletedAt IS NULL')
-      .andWhere(
-        '(c.status = :endedStatus OR (c.status = :activeStatus AND c.effectiveAt <= :now AND (c.endedAt IS NULL OR c.endedAt >= :now)))',
-        { endedStatus: ContractStatus.ENDED, activeStatus: ContractStatus.ACTIVE, now },
-      )
+      .andWhere(`(${RENTED_SQL} OR ${PRE_MOVE_IN_SQL})`, contractParams(now))
+      .groupBy('f.id')
       .orderBy('f.name', 'ASC')
-      .getRawMany<TicketFacilityInfo>();
+      .getRawMany<TicketFacilityInfo & { isRented: boolean }>();
 
     const unitRows = await this.contracts
       .createQueryBuilder('c')
@@ -265,9 +292,7 @@ export class ServiceTicketsService {
       .distinct(true)
       .where('c.customerId = :customerId', { customerId: actor.id })
       .andWhere('su.deletedAt IS NULL')
-      .andWhere('c.status = :activeStatus', { activeStatus: ContractStatus.ACTIVE })
-      .andWhere('c.effectiveAt <= :now', { now })
-      .andWhere('(c.endedAt IS NULL OR c.endedAt >= :now)', { now })
+      .andWhere(IN_WINDOW_SQL, { activeStatus: ContractStatus.ACTIVE, now })
       .orderBy('su.code', 'ASC')
       .getRawMany<TicketStorageUnitInfo & { facilityId: string }>();
 
@@ -281,9 +306,10 @@ export class ServiceTicketsService {
     return {
       options: {
         types: types.map(({ id, code, name }) => ({ id, code, name })),
-        facilities: facilityRows.map((f) => ({
+        facilities: facilityRows.map(({ isRented, ...f }) => ({
           ...f,
           units: unitsByFacility.get(f.id) ?? [],
+          typeIds: isRented ? allTypeIds : preMoveInTypeIds,
         })),
       },
     };
@@ -488,14 +514,18 @@ export class ServiceTicketsService {
 
   /**
    * Blocks ticket creation when the customer has no contract covering the target:
-   * a unit-scoped ticket needs an ACTIVE contract on that unit, while a facility-level
-   * ticket also accepts an ENDED contract (post-moveout complaints, deposit disputes).
+   * a unit-scoped ticket needs an ACTIVE in-window contract on that unit. A facility-level
+   * ticket accepts a rented (in-window or ENDED) contract for any type, and — except for
+   * rental-only types like MAINTENANCE — also a pre-move-in one, so a customer who just
+   * paid the deposit can still raise billing/support issues before handover.
    */
-  private async assertCustomerRents(
+  private async assertCustomerCanFile(
     customerId: string,
     dto: Pick<CreateTicketDto, 'facilityId' | 'storageUnitId'>,
+    type: TicketType,
   ): Promise<void> {
     const now = new Date();
+    const isRentalOnly = RENTAL_ONLY_TYPE_CODES.includes(type.code);
 
     const builder = this.contracts
       .createQueryBuilder('c')
@@ -505,17 +535,15 @@ export class ServiceTicketsService {
     if (dto.storageUnitId) {
       builder
         .andWhere('bi.storageUnitId = :unitId', { unitId: dto.storageUnitId })
-        .andWhere('c.status = :contractStatus', { contractStatus: ContractStatus.ACTIVE })
-        .andWhere('c.effectiveAt <= :now', { now })
-        .andWhere('(c.endedAt IS NULL OR c.endedAt >= :now)', { now });
+        .andWhere(IN_WINDOW_SQL, { activeStatus: ContractStatus.ACTIVE, now });
     } else {
       // ponytail: any ENDED contract qualifies regardless of age; add a grace window if abused
       builder
         .innerJoin('bi.storageUnit', 'su')
         .andWhere('su.facilityId = :facilityId', { facilityId: dto.facilityId })
         .andWhere(
-          '(c.status = :endedStatus OR (c.status = :activeStatus AND c.effectiveAt <= :now AND (c.endedAt IS NULL OR c.endedAt >= :now)))',
-          { endedStatus: ContractStatus.ENDED, activeStatus: ContractStatus.ACTIVE, now },
+          isRentalOnly ? RENTED_SQL : `(${RENTED_SQL} OR ${PRE_MOVE_IN_SQL})`,
+          contractParams(now),
         );
     }
 
@@ -524,7 +552,9 @@ export class ServiceTicketsService {
         ErrorCode.FORBIDDEN,
         dto.storageUnitId
           ? 'You can only create tickets for units you are actively renting'
-          : 'You can only create tickets for facilities where you are actively renting',
+          : isRentalOnly
+            ? 'This ticket type requires renting at the facility'
+            : 'You can only create tickets for facilities where you rent or have paid a deposit',
         HttpStatus.FORBIDDEN,
       );
     }
@@ -589,7 +619,7 @@ export class ServiceTicketsService {
       .map((assignment) => assignment.facilityId as string);
   }
 
-  private async validateTicketReferences(dto: CreateTicketDto): Promise<void> {
+  private async validateTicketReferences(dto: CreateTicketDto): Promise<TicketType> {
     const facility = await this.facilities.findOne({
       where: { id: dto.facilityId, deletedAt: IsNull() },
     });
@@ -620,6 +650,8 @@ export class ServiceTicketsService {
         );
       }
     }
+
+    return type;
   }
 
   /**

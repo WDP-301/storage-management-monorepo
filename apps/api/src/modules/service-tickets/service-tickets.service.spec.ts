@@ -96,6 +96,7 @@ const buildRawRowsBuilder = (rows: unknown[]) => ({
   distinct: jest.fn().mockReturnThis(),
   where: jest.fn().mockReturnThis(),
   andWhere: jest.fn().mockReturnThis(),
+  groupBy: jest.fn().mockReturnThis(),
   orderBy: jest.fn().mockReturnThis(),
   getRawMany: jest.fn().mockResolvedValue(rows),
 });
@@ -407,6 +408,58 @@ describe('ServiceTicketsService', () => {
       expect(tickets.create).toHaveBeenCalled();
     });
 
+    it('lets a customer who only paid the deposit file a facility-level billing ticket', async () => {
+      facilities.findOne.mockResolvedValue({ id: 'facility-1' });
+      ticketTypes.findOne.mockResolvedValue({ id: 'type-1', code: 'BILLING', isActive: true });
+      const builder = buildRentCheckBuilder(true);
+      contracts.createQueryBuilder.mockReturnValue(builder);
+      em.findOneOrFail.mockResolvedValue(buildTicket({ customerId: 'customer-1' }));
+
+      await service.create(dto, buildActor({ id: 'customer-1' }), 'key-1');
+
+      expect(builder.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining(':draftStatus'),
+        expect.objectContaining({ draftStatus: ContractStatus.DRAFT }),
+      );
+      expect(tickets.create).toHaveBeenCalled();
+    });
+
+    it('requires a rented contract for a facility-level maintenance ticket', async () => {
+      facilities.findOne.mockResolvedValue({ id: 'facility-1' });
+      ticketTypes.findOne.mockResolvedValue({ id: 'type-1', code: 'MAINTENANCE', isActive: true });
+      const builder = buildRentCheckBuilder(false);
+      contracts.createQueryBuilder.mockReturnValue(builder);
+
+      await expect(service.create(dto, buildActor(), 'key-1')).rejects.toMatchObject({
+        status: 403,
+        response: {
+          code: 'FORBIDDEN',
+          message: 'This ticket type requires renting at the facility',
+        },
+      });
+
+      const contractFilters = builder.andWhere.mock.calls.map(([sql]) => sql as string);
+      expect(contractFilters.some((sql) => sql.includes(':endedStatus'))).toBe(true);
+      expect(contractFilters.some((sql) => sql.includes(':draftStatus'))).toBe(false);
+      expect(tickets.create).not.toHaveBeenCalled();
+    });
+
+    it('never lets a pre-move-in contract unlock a unit-scoped ticket', async () => {
+      facilities.findOne.mockResolvedValue({ id: 'facility-1' });
+      ticketTypes.findOne.mockResolvedValue({ id: 'type-1', code: 'SUPPORT', isActive: true });
+      storageUnits.findOne.mockResolvedValue({ id: 'unit-1', facilityId: 'facility-1' });
+      const builder = buildRentCheckBuilder(false);
+      contracts.createQueryBuilder.mockReturnValue(builder);
+
+      await expect(
+        service.create({ ...dto, storageUnitId: 'unit-1' }, buildActor(), 'key-1'),
+      ).rejects.toMatchObject({ status: 403, response: { code: 'FORBIDDEN' } });
+
+      const contractFilters = builder.andWhere.mock.calls.map(([sql]) => sql as string);
+      expect(contractFilters.some((sql) => sql.includes(':draftStatus'))).toBe(false);
+      expect(contractFilters.some((sql) => sql.includes('c.effectiveAt <= :now'))).toBe(true);
+    });
+
     it('lets a customer with an active contract on the unit create a ticket', async () => {
       facilities.findOne.mockResolvedValue({ id: 'facility-1' });
       ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
@@ -626,8 +679,8 @@ describe('ServiceTicketsService', () => {
       contracts.createQueryBuilder
         .mockReturnValueOnce(
           buildRawRowsBuilder([
-            { id: 'facility-1', code: 'F001', name: 'Facility One' },
-            { id: 'facility-2', code: 'F002', name: 'Facility Two' },
+            { id: 'facility-1', code: 'F001', name: 'Facility One', isRented: true },
+            { id: 'facility-2', code: 'F002', name: 'Facility Two', isRented: true },
           ]),
         )
         .mockReturnValueOnce(
@@ -648,8 +701,47 @@ describe('ServiceTicketsService', () => {
             { id: 'unit-1', code: 'A-108' },
             { id: 'unit-2', code: 'A-109' },
           ],
+          typeIds: [],
         },
-        { id: 'facility-2', code: 'F002', name: 'Facility Two', units: [] },
+        { id: 'facility-2', code: 'F002', name: 'Facility Two', units: [], typeIds: [] },
+      ]);
+    });
+
+    it('offers deposit-only facilities every type except rental-only ones', async () => {
+      ticketTypes.find.mockResolvedValue([
+        { id: 'type-billing', code: 'BILLING', name: 'Thanh toán / Đặt cọc', isActive: true },
+        { id: 'type-maint', code: 'MAINTENANCE', name: 'Bảo trì kho', isActive: true },
+        { id: 'type-support', code: 'SUPPORT', name: 'Hỗ trợ khách hàng', isActive: true },
+      ]);
+      const facilityBuilder = buildRawRowsBuilder([
+        { id: 'facility-1', code: 'F001', name: 'Rented', isRented: true },
+        { id: 'facility-2', code: 'F002', name: 'Deposit only', isRented: false },
+      ]);
+      contracts.createQueryBuilder
+        .mockReturnValueOnce(facilityBuilder)
+        .mockReturnValueOnce(buildRawRowsBuilder([]));
+
+      const result = await service.formOptions(buildActor({ id: 'customer-1' }));
+
+      expect(facilityBuilder.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining(':draftStatus'),
+        expect.objectContaining({ draftStatus: ContractStatus.DRAFT }),
+      );
+      expect(result.options.facilities).toEqual([
+        {
+          id: 'facility-1',
+          code: 'F001',
+          name: 'Rented',
+          units: [],
+          typeIds: ['type-billing', 'type-maint', 'type-support'],
+        },
+        {
+          id: 'facility-2',
+          code: 'F002',
+          name: 'Deposit only',
+          units: [],
+          typeIds: ['type-billing', 'type-support'],
+        },
       ]);
     });
 

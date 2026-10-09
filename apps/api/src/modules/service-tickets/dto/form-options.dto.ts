@@ -10,9 +10,17 @@ export class TicketFacilityOptionDto extends TicketFacilityInfoDto {
   @ApiProperty({
     type: [TicketStorageUnitInfoDto],
     description:
-      'Units the customer actively rents in this facility — empty for ENDED-only contracts',
+      'Units the customer actively rents in this facility — empty for ENDED or deposit-only contracts',
   })
   units: TicketStorageUnitInfoDto[];
+
+  @ApiProperty({
+    type: [String],
+    format: 'uuid',
+    description:
+      'Ticket type ids allowed in this facility — deposit-only customers cannot file MAINTENANCE',
+  })
+  typeIds: string[];
 }
 
 export class TicketFormOptionsDto implements TicketFormOptions {

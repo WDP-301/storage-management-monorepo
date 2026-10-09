@@ -112,6 +112,8 @@ export interface ServiceTicketResponse {
 /** A facility the customer may file against, with the units they actively rent there. */
 export interface TicketFacilityOption extends TicketFacilityInfo {
   units: TicketStorageUnitInfo[];
+  /** Ticket types the customer may file here — pre-move-in customers get no rental-only types. */
+  typeIds: string[];
 }
 
 /** Options backing the customer create-ticket form. */

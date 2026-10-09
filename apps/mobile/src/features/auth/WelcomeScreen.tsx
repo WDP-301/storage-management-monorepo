@@ -1,6 +1,7 @@
 import { Button } from 'heroui-native';
 import { ArrowRight, QrCode, Ruler, SquaresFour } from 'phosphor-react-native';
 import { ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Props = {
   onLogin: () => void;
@@ -32,14 +33,15 @@ const FEATURES = [
 ] as const;
 
 export function WelcomeScreen({ onLogin, onRegister }: Props) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <ScrollView
-      className="flex-1"
-      contentContainerClassName="flex-grow justify-between px-4 pb-5 pt-3"
-      showsVerticalScrollIndicator={false}
-    >
-      <View>
-        <View className="mb-4 h-1 w-4 rounded-full bg-border" />
+    <View className="flex-1 bg-background">
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="px-4 pb-4 pt-3"
+        showsVerticalScrollIndicator={false}
+      >
         <View className="rounded-2xl border border-border/40 bg-surface p-4 shadow-sm">
           <Text className="font-numeric text-caption text-muted uppercase tracking-widest">
             Giải pháp kho tự quản cá nhân
@@ -53,7 +55,7 @@ export function WelcomeScreen({ onLogin, onRegister }: Props) {
           </Text>
         </View>
 
-        <View className="mt-4 gap-2">
+        <View className="mt-3 gap-2">
           {FEATURES.map(({ icon: Icon, title, badge, badgeClass, description }) => (
             <View
               key={title}
@@ -62,25 +64,24 @@ export function WelcomeScreen({ onLogin, onRegister }: Props) {
               <View className="size-9 items-center justify-center rounded-lg bg-surface-secondary">
                 <Icon color="#334155" size={20} weight="bold" />
               </View>
-              <View className="flex-1">
-                <View className="flex-row flex-wrap items-start justify-between gap-1">
-                  <Text className="max-w-[65%] font-strong text-body-md text-foreground">
-                    {title}
-                  </Text>
-                  <Text
-                    className={`max-w-[35%] rounded-md px-1.5 py-1 font-ui text-caption ${badgeClass}`}
-                  >
-                    {badge}
-                  </Text>
-                </View>
-                <Text className="font-body mt-1 text-body-sm text-muted">{description}</Text>
+              <View className="flex-1 items-start">
+                <Text className="font-strong text-body-md text-foreground">{title}</Text>
+                <Text className="font-body mt-0.5 text-body-sm text-muted">{description}</Text>
+                <Text
+                  className={`mt-2 overflow-hidden rounded-full px-2 py-0.5 font-ui text-caption ${badgeClass}`}
+                >
+                  {badge}
+                </Text>
               </View>
             </View>
           ))}
         </View>
-      </View>
+      </ScrollView>
 
-      <View className="mt-5 gap-2">
+      <View
+        className="gap-2 border-t border-border/40 bg-background px-4 pt-3"
+        style={{ paddingBottom: Math.max(insets.bottom, 12) + 8 }}
+      >
         <Button className="w-full bg-foreground" size="lg" onPress={onRegister}>
           <Button.Label className="font-ui text-surface">Đăng ký tài khoản mới</Button.Label>
           <ArrowRight color="white" size={18} weight="bold" />
@@ -89,6 +90,6 @@ export function WelcomeScreen({ onLogin, onRegister }: Props) {
           <Button.Label className="font-ui">Đăng nhập</Button.Label>
         </Button>
       </View>
-    </ScrollView>
+    </View>
   );
 }

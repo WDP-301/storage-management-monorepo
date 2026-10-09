@@ -9,7 +9,7 @@ import {
   useState,
 } from 'react';
 import type { ApiBooking, BookingItemInput, CreatedBooking } from '../src/types/booking-api';
-import type { UnitOffer } from '../src/types/customer';
+import type { Warehouse } from '../src/types/storage-api';
 import {
   countHeldUnits,
   earliestLapsedDeadline,
@@ -18,6 +18,7 @@ import {
   selectActiveHolds,
 } from './booking-hold-state';
 import { BookingsApi } from './bookings-api';
+import { buildBookingItems, warehouseDeposit } from './warehouse-query';
 
 export type RentalSchedule = {
   startDate: string;
@@ -25,7 +26,7 @@ export type RentalSchedule = {
 };
 
 type HoldContextValue = {
-  selectedUnits: UnitOffer[] | null;
+  selectedWarehouses: Warehouse[] | null;
   bookings: ApiBooking[];
   /** Every booking still holding units, soonest deadline first. */
   activeHolds: ApiBooking[];
@@ -44,7 +45,7 @@ type HoldContextValue = {
   isLoading: boolean;
   isCreating: boolean;
   error: string | null;
-  selectUnits: (units: UnitOffer[]) => void;
+  selectWarehouses: (warehouses: Warehouse[]) => void;
   clearSelection: () => void;
   /** Resolves to the created booking so the caller can send the customer straight to its deposit. */
   createBooking: (schedule: RentalSchedule) => Promise<ApiBooking | null>;
@@ -61,7 +62,7 @@ const EXPIRING_SOON_MS = 2 * 60 * 1000;
 const HoldContext = createContext<HoldContextValue | null>(null);
 
 export function HoldProvider({ children }: { children: ReactNode }) {
-  const [selectedUnits, setSelectedUnits] = useState<UnitOffer[] | null>(null);
+  const [selectedWarehouses, setSelectedWarehouses] = useState<Warehouse[] | null>(null);
   const [bookings, setBookings] = useState<ApiBooking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -121,32 +122,31 @@ export function HoldProvider({ children }: { children: ReactNode }) {
     void refreshBookings().catch(() => undefined);
   }, [lapsedDeadline, refreshBookings]);
 
-  const selectUnits = useCallback((units: UnitOffer[]) => {
+  const selectWarehouses = useCallback((warehouses: Warehouse[]) => {
     if (submitting.current) return;
     selectionKey.current = BookingsApi.newIdempotencyKey();
-    setSelectedUnits(units);
+    setSelectedWarehouses(warehouses);
   }, []);
   const clearSelection = useCallback(() => {
-    setSelectedUnits(null);
+    setSelectedWarehouses(null);
     selectionKey.current = null;
   }, []);
 
   const createBooking = useCallback(
     async (schedule: RentalSchedule) => {
-      if (!selectedUnits?.length || !selectionKey.current || submitting.current) return null;
-      const items: BookingItemInput[] = selectedUnits.map((unit) => ({
-        storageUnitId: unit.id,
-        // Noon UTC keeps the selected calendar day stable for the API's date validation.
-        requestedStartAt: `${schedule.startDate}T12:00:00.000Z`,
-        rentalMonths: schedule.durationMonths,
-      }));
+      if (!selectedWarehouses?.length || !selectionKey.current || submitting.current) return null;
+      const items: BookingItemInput[] = buildBookingItems(
+        selectedWarehouses,
+        schedule.startDate,
+        schedule.durationMonths,
+      );
       submitting.current = true;
       setIsCreating(true);
       try {
         // A lost response may still represent a committed booking. Keep the selection's key
         // even if the schedule changes, so retries cannot accidentally create a new request.
         const created = await BookingsApi.create(items, selectionKey.current);
-        const booking = toBooking(created, selectedUnits);
+        const booking = toBooking(created, selectedWarehouses);
         requestSequence.current += 1;
         setBookings((current) => [booking, ...current.filter((b) => b.id !== created.id)]);
         setNow(Date.now());
@@ -158,7 +158,7 @@ export function HoldProvider({ children }: { children: ReactNode }) {
         setIsCreating(false);
       }
     },
-    [clearSelection, refreshBookings, selectedUnits],
+    [clearSelection, refreshBookings, selectedWarehouses],
   );
 
   const applyBooking = useCallback((booking: ApiBooking) => {
@@ -195,7 +195,7 @@ export function HoldProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<HoldContextValue>(
     () => ({
-      selectedUnits,
+      selectedWarehouses,
       bookings,
       activeHolds,
       heldBooking,
@@ -206,7 +206,7 @@ export function HoldProvider({ children }: { children: ReactNode }) {
       isLoading,
       isCreating,
       error,
-      selectUnits,
+      selectWarehouses,
       clearSelection,
       createBooking,
       refreshBookings,
@@ -214,7 +214,7 @@ export function HoldProvider({ children }: { children: ReactNode }) {
       cancelBooking,
     }),
     [
-      selectedUnits,
+      selectedWarehouses,
       bookings,
       activeHolds,
       heldBooking,
@@ -225,7 +225,7 @@ export function HoldProvider({ children }: { children: ReactNode }) {
       isLoading,
       isCreating,
       error,
-      selectUnits,
+      selectWarehouses,
       clearSelection,
       createBooking,
       refreshBookings,
@@ -243,7 +243,7 @@ export function useHold() {
   return context;
 }
 
-function toBooking(created: CreatedBooking, units: UnitOffer[]): ApiBooking {
+function toBooking(created: CreatedBooking, warehouses: Warehouse[]): ApiBooking {
   // A booking this fresh has never been updated, so both stamps are "now". The deposit receipt
   // only reads `updatedAt` once the server has confirmed the booking and sent its own copy back.
   const now = new Date().toISOString();
@@ -253,18 +253,18 @@ function toBooking(created: CreatedBooking, units: UnitOffer[]): ApiBooking {
     createdAt: now,
     updatedAt: now,
     items: created.items.map((item, index) => {
-      const unit = units.find((candidate) => candidate.id === item.storageUnitId) ?? units[index];
+      const warehouse =
+        warehouses.find((candidate) => candidate.id === item.storageUnitId) ?? warehouses[index];
       return {
         ...item,
         id: `${created.id}-${item.storageUnitId}`,
-        monthlyPriceSnapshot: String(unit?.monthlyPrice ?? 0),
-        depositSnapshot: String(unit?.deposit ?? 0),
+        monthlyPriceSnapshot: String(warehouse?.monthlyPrice ?? 0),
+        depositSnapshot: String(warehouse ? warehouseDeposit(warehouse) : 0),
         storageUnit: {
           id: item.storageUnitId,
-          code: unit?.code ?? item.storageUnitId,
-          zone: unit?.zone ?? null,
-          areaM2: String(unit?.areaM2 ?? 0),
-          facilityId: unit?.facilityId ?? '',
+          code: warehouse?.code ?? item.storageUnitId,
+          areaM2: String(warehouse?.areaM2 ?? 0),
+          facilityId: warehouse?.facility.id ?? '',
         },
       };
     }),

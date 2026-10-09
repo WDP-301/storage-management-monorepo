@@ -5,22 +5,11 @@ import type { AuthUser } from '@modules/auth/types/auth-user';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
-import { ErrorCode } from '@shared/models/api-response';
-import { isUniqueViolation } from '@shared/utils/pg-error.util';
+import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
+import { escapeLikePattern } from '@shared/utils/like-pattern.util';
 import { UserRole, UserStatus } from '@storage/types';
 import { In, IsNull, Repository } from 'typeorm';
-import { CreateFacilityDto, UpdateFacilityDto } from './dto/facility.dto';
-
-function handleDbError(err: unknown): never {
-  if (isUniqueViolation(err)) {
-    throw new DomainException(
-      ErrorCode.VALIDATION_FAILED,
-      'Facility code already exists',
-      HttpStatus.CONFLICT,
-    );
-  }
-  throw err;
-}
+import { AdminFacilitiesQueryDto } from './dto/facility.dto';
 
 export interface FacilityStaffMember {
   id: string;
@@ -71,11 +60,47 @@ export class FacilitiesService {
     return [...staff.values()].sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'));
   }
 
-  findAll() {
-    return this.facilityRepo.find({
-      where: { deletedAt: IsNull() },
-      order: { createdAt: 'DESC' },
-    });
+  /** Back-office listing: every status, searchable by code or name. */
+  async findForAdmin(query: AdminFacilitiesQueryDto) {
+    const { status, page = 1, limit = 20 } = query;
+    const qb = this.facilityRepo.createQueryBuilder('facility');
+
+    if (status) {
+      qb.andWhere('facility.status = :status', { status });
+    }
+    const term = query.search?.trim();
+    if (term) {
+      qb.andWhere('(facility.code ILIKE :search OR facility.name ILIKE :search)', {
+        search: `%${escapeLikePattern(term)}%`,
+      });
+    }
+
+    const [facilities, total] = await qb
+      .orderBy('facility.createdAt', 'DESC')
+      .addOrderBy('facility.id', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    const counts = await this.warehouseCounts(facilities.map((facility) => facility.id));
+    return {
+      facilities: facilities.map((facility) => ({
+        ...facility,
+        warehouseCount: counts.get(facility.id) ?? 0,
+      })),
+      meta: buildPaginationMeta(page, limit, total),
+    };
+  }
+
+  /** Live (not soft-deleted) warehouses per facility. */
+  private async warehouseCounts(facilityIds: string[]): Promise<Map<string, number>> {
+    if (facilityIds.length === 0) return new Map();
+    const rows: { facility_id: string; count: string }[] = await this.facilityRepo.manager.query(
+      `SELECT facility_id, count(*) AS count FROM storage_units
+       WHERE deleted_at IS NULL AND facility_id = ANY($1) GROUP BY facility_id`,
+      [facilityIds],
+    );
+    return new Map(rows.map((row) => [row.facility_id, Number(row.count)]));
   }
 
   /**
@@ -111,29 +136,5 @@ export class FacilitiesService {
     if (!facility) notFound('Facility', id);
 
     return facility;
-  }
-
-  async create(dto: CreateFacilityDto): Promise<Facility> {
-    const facility = this.facilityRepo.create(dto);
-    try {
-      return await this.facilityRepo.save(facility);
-    } catch (err) {
-      handleDbError(err);
-    }
-  }
-
-  async update(id: string, dto: UpdateFacilityDto): Promise<Facility> {
-    await this.findById(id);
-    try {
-      await this.facilityRepo.update(id, dto);
-    } catch (err) {
-      handleDbError(err);
-    }
-    return this.findById(id);
-  }
-
-  async softDelete(id: string): Promise<void> {
-    await this.findById(id);
-    await this.facilityRepo.softDelete(id);
   }
 }

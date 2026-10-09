@@ -95,7 +95,7 @@ const SETTINGS_METADATA: Record<string, SettingMetadata> = {
   'booking.search_radius_km': {
     label: 'Bán kính tìm kiếm cơ sở lân cận',
     description:
-      'Khoảng cách địa lý tối đa theo tọa độ (kinh độ, vĩ độ) để tự động đề xuất các cơ sở kho gần nhau khi thuê nhiều kho.',
+      'Khoảng cách địa lý tối đa theo tọa độ (kinh độ, vĩ độ) để tự động đề xuất các kho gần nhau khi thuê nhiều kho.',
     unit: 'km',
     group: 'booking',
   },
@@ -129,7 +129,7 @@ const SETTINGS_METADATA: Record<string, SettingMetadata> = {
   'deposit.default_months': {
     label: 'Tỷ lệ tiền đặt cọc tối thiểu (Tháng thuê)',
     description:
-      'Mức cọc chuẩn khi tạo hợp đồng thuê kho mới (Quy định chuẩn bằng 1 tháng giá thuê kho).',
+      'Áp dụng cho kho chưa cấu hình số tháng cọc riêng; kho đã cấu hình sẽ dùng số tháng của nó.',
     unit: 'tháng thuê',
     group: 'deposit',
   },
@@ -310,7 +310,7 @@ const INITIAL_SETTINGS: SystemSettingRecord[] = [
     key: 'deposit.default_months',
     label: 'Tỷ lệ tiền đặt cọc tối thiểu (Tháng thuê)',
     description:
-      'Mức cọc chuẩn khi tạo hợp đồng thuê kho mới (Quy định chuẩn bằng 1 tháng giá thuê kho).',
+      'Áp dụng cho kho chưa cấu hình số tháng cọc riêng; kho đã cấu hình sẽ dùng số tháng của nó.',
     value_type: 'float',
     value: 1,
     default: 1,

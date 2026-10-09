@@ -1,3 +1,4 @@
+import type { StorageUnit } from '@entities/storage-unit.entity';
 import { SystemSetting } from '@entities/system-setting.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { HttpStatus, Injectable } from '@nestjs/common';
@@ -89,6 +90,11 @@ export class SettingsService {
 
   async getDepositDefaultMonths(): Promise<number> {
     return this.getNumber('deposit.default_months');
+  }
+
+  /** A unit's own deposit level wins; units without one follow the system-wide setting. */
+  async getDepositMonthsFor(unit: Pick<StorageUnit, 'depositMonths'>): Promise<number> {
+    return unit.depositMonths ?? this.getDepositDefaultMonths();
   }
 
   /** Lists every setting with its stored metadata (label, bounds, default). */

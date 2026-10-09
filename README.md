@@ -73,7 +73,34 @@ cp apps/api/.env.example apps/api/.env
 ```bash
 # Apply DB migrations (creates tables on first run):
 pnpm --filter @storage/api migration:run
+
+# Create the first administrator (self-registration only ever creates customers).
+# Idempotent. An existing user is only promoted when SEED_ADMIN_PASSWORD matches their
+# password; add --promote-existing once you have confirmed who owns the account.
+SEED_ADMIN_EMAIL=admin@example.com SEED_ADMIN_PASSWORD='<min 8 chars>' SEED_ADMIN_NAME='Admin' \
+  pnpm --filter @storage/api seed:admin
 ```
+
+#### Demo data (optional, destructive)
+
+`db:reset-demo` wipes business data (warehouses, bookings, contracts, payments, tickets…),
+applies migrations and seeds 3 facilities (cơ sở: `CN-HCM` Hồ Chí Minh, `CN-HN` Hà Nội, `CN-DN`
+Đà Nẵng) owning 12 demo warehouses, plus demo accounts. It also works on an empty database.
+
+```bash
+pnpm --filter @storage/api db:reset-demo --yes                      # local database only
+pnpm --filter @storage/api db:reset-demo --yes --allow-remote=<db>  # remote: needs DEMO_PASSWORD
+```
+
+| Account | Role | Scope |
+|---|---|---|
+| `admin@demo.vn` | ADMIN | all |
+| `ops@demo.vn` | OPERATIONS_MANAGER | all |
+| `manager@demo.vn` | FACILITY_MANAGER | Cơ sở Hồ Chí Minh (9 warehouses) |
+| `staff@demo.vn` | FACILITY_STAFF | Cơ sở Hồ Chí Minh (9 warehouses) |
+| `customer@demo.vn` | CUSTOMER | – |
+
+The password is `Demo1234!` on a local database; remote targets must set `DEMO_PASSWORD`.
 
 ### 2b. Mobile: dev client (bắt buộc từ khi có bản đồ)
 
@@ -123,4 +150,5 @@ pnpm dev:mobile  # Expo SDK 54 Metro bundler (--dev-client; cần build một l�
 | `pnpm format` | Auto-format all code with Biome |
 | `pnpm clean` | Clean all `dist`, `build`, and `.turbo` caches |
 | `pnpm --filter @storage/api migration:run` | Apply pending DB migrations |
+| `pnpm --filter @storage/api seed:admin` | Create or promote an administrator (`SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`) |
 | `pnpm --filter @storage/api migration:generate src/migrations/<Name>` | Generate migration from entity changes |

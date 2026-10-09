@@ -10,9 +10,9 @@ import { Button, useThemeColor } from 'heroui-native';
 import { type RefObject, useCallback } from 'react';
 import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { AreaPresetKey, BrowseCriteria } from '../../types/customer';
+import { clearFilters, countActiveFilters } from '../../../lib/warehouse-query';
+import type { BrowseCriteria } from '../../types/customer';
 import { BrowseFiltersContent } from './BrowseFiltersContent';
-import { clearFilters, countActiveFilters } from './browse-filters';
 import type { LocationOption } from './location-options';
 
 /** Space reserved under the scroll content so the pinned footer never covers the last row. */
@@ -24,14 +24,12 @@ type Props = {
   onChange: (criteria: BrowseCriteria) => void;
   provinceOptions: readonly LocationOption[];
   wardOptions: readonly LocationOption[];
-  areaCounts: ReadonlyMap<AreaPresetKey, number>;
-  priceCounts: ReadonlyMap<number | null, number>;
-  /** Units matching the current criteria, shown on the confirm button. */
+  /** Warehouses matching the current criteria, shown on the confirm button. */
   resultCount: number;
 };
 
 /**
- * Filters as a bottom sheet instead of an inline card, so the facility list owns the screen.
+ * Filters as a bottom sheet instead of an inline card, so the warehouse list owns the screen.
  *
  * Changes apply live rather than being staged behind an "apply" step — the sheet covers the list,
  * so the running match count on the footer button is what gives the customer feedback. Swiping the
@@ -43,8 +41,6 @@ export function BrowseFiltersSheet({
   onChange,
   provinceOptions,
   wardOptions,
-  areaCounts,
-  priceCounts,
   resultCount,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -96,7 +92,7 @@ export function BrowseFiltersSheet({
       enablePanDownToClose
       footerComponent={renderFooter}
       handleIndicatorStyle={{ backgroundColor: mutedColor }}
-      snapPoints={['70%']}
+      snapPoints={['75%']}
     >
       <BottomSheetScrollView
         contentContainerStyle={{ paddingBottom: FOOTER_HEIGHT + insets.bottom }}
@@ -109,9 +105,7 @@ export function BrowseFiltersSheet({
         </View>
 
         <BrowseFiltersContent
-          areaCounts={areaCounts}
           criteria={criteria}
-          priceCounts={priceCounts}
           provinceOptions={provinceOptions}
           wardOptions={wardOptions}
           onChange={onChange}

@@ -15,6 +15,7 @@ export type TicketFacilityInfo = {
 export type TicketStorageUnitInfo = {
   id: string;
   code: string;
+  name: string;
 };
 
 export type TicketUserInfo = {

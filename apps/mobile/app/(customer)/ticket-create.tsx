@@ -51,10 +51,14 @@ export default function TicketCreateRoute() {
   // Opened from a contract: preselect its facility/unit once the options confirm the customer can
   // file against them. Applied once per preset so option reloads never undo a manual change.
   useEffect(() => {
-    if (!options || !preset.facilityId) return;
-    const key = `${preset.facilityId}:${preset.storageUnitId ?? ''}`;
+    if (!options || (!preset.facilityId && !preset.storageUnitId)) return;
+    const key = `${preset.facilityId ?? ''}:${preset.storageUnitId ?? ''}`;
     if (appliedPreset.current === key) return;
-    const facility = options.facilities.find((f) => f.id === preset.facilityId);
+    const facility = options.facilities.find((f) =>
+      preset.facilityId
+        ? f.id === preset.facilityId
+        : f.units.some((u) => u.id === preset.storageUnitId),
+    );
     if (!facility) return;
     appliedPreset.current = key;
     const unit = facility.units.find((u) => u.id === preset.storageUnitId);

@@ -28,14 +28,14 @@ describe('FacilityContext', () => {
       id: 'fac-1',
       code: 'KHO-HN1',
       name: 'Kho Hà Nội 1',
-      addressLine: '123 Cầu Giấy',
+      provinceCode: '01',
       status: 'ACTIVE',
     },
     {
       id: 'fac-2',
       code: 'KHO-HCM1',
       name: 'Kho Hồ Chí Minh 1',
-      addressLine: '456 Quận 1',
+      provinceCode: '79',
       status: 'ACTIVE',
     },
   ];
@@ -70,7 +70,8 @@ describe('FacilityContext', () => {
 
     expect(FacilitiesApi.listAll).toHaveBeenCalledTimes(1);
     expect(FacilitiesApi.mine).not.toHaveBeenCalled();
-    expect(result.current.selectedFacility).toEqual(mockFacilities[0]);
+    expect(result.current.selectedFacility).toBeNull();
+    expect(result.current.canSelectAll).toBe(true);
   });
 
   it('fetches assigned facilities via mine() when user is FACILITY_MANAGER', async () => {
@@ -104,6 +105,7 @@ describe('FacilityContext', () => {
     expect(FacilitiesApi.mine).toHaveBeenCalledTimes(1);
     expect(FacilitiesApi.listAll).not.toHaveBeenCalled();
     expect(result.current.selectedFacility).toEqual(mockFacilities[0]);
+    expect(result.current.canSelectAll).toBe(false);
   });
 
   it('does not fetch facilities for CUSTOMER and leaves list empty', async () => {
@@ -168,5 +170,61 @@ describe('FacilityContext', () => {
 
     expect(result.current.selectedFacility).toEqual(mockFacilities[1]);
     expect(localStorage.getItem('storage:selectedFacilityId')).toBe('fac-2');
+  });
+
+  const mockRole = (role: UserRole) =>
+    vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
+      user: {
+        id: 'usr',
+        email: 'u@example.com',
+        fullName: 'User',
+        status: 'ACTIVE',
+        roles: [role],
+        createdAt: '',
+        updatedAt: '',
+      },
+      activeRole: role,
+      isAuthenticated: true,
+      isLoading: false,
+      login: vi.fn(),
+      register: vi.fn(),
+      logout: vi.fn(),
+      refreshUser: vi.fn(),
+    });
+
+  it('lets an admin switch to all facilities and forgets the saved choice', async () => {
+    mockRole(UserRole.ADMIN);
+    localStorage.setItem('storage:selectedFacilityId', 'fac-2');
+    vi.mocked(FacilitiesApi.listAll).mockResolvedValueOnce(mockFacilities);
+
+    const { result } = renderHook(() => useFacility(), { wrapper });
+    await waitFor(() => expect(result.current.selectedFacility?.id).toBe('fac-2'));
+
+    act(() => result.current.selectFacility(null));
+
+    expect(result.current.selectedFacility).toBeNull();
+    expect(localStorage.getItem('storage:selectedFacilityId')).toBeNull();
+  });
+
+  it('keeps a facility manager inside an assigned facility', async () => {
+    mockRole(UserRole.FACILITY_MANAGER);
+    localStorage.setItem('storage:selectedFacilityId', 'stale-id');
+    vi.mocked(FacilitiesApi.mine).mockResolvedValueOnce(mockFacilities);
+
+    const { result } = renderHook(() => useFacility(), { wrapper });
+    await waitFor(() => expect(result.current.facilities).toHaveLength(2));
+    expect(result.current.selectedFacility?.id).toBe('fac-1');
+
+    act(() => result.current.selectFacility(null));
+    expect(result.current.selectedFacility?.id).toBe('fac-1');
+  });
+
+  it('is loading until the first facility fetch settles', async () => {
+    mockRole(UserRole.FACILITY_MANAGER);
+    vi.mocked(FacilitiesApi.mine).mockResolvedValueOnce(mockFacilities);
+
+    const { result } = renderHook(() => useFacility(), { wrapper });
+    expect(result.current.isLoading).toBe(true);
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
   });
 });

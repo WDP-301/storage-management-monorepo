@@ -15,7 +15,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
   [UserRole.OPERATIONS_MANAGER]: {
     role: UserRole.OPERATIONS_MANAGER,
     title: 'Quản lý vận hành',
-    defaultPath: '/unassigned-role',
+    defaultPath: '/admin/warehouses',
   },
   [UserRole.FACILITY_MANAGER]: {
     role: UserRole.FACILITY_MANAGER,

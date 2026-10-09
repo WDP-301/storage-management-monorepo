@@ -256,7 +256,12 @@ export class ServiceTicketsService {
       .createQueryBuilder('c')
       .innerJoin('c.bookingItem', 'bi')
       .innerJoin('bi.storageUnit', 'su')
-      .select(['su.id AS "id"', 'su.code AS "code"', 'su.facilityId AS "facilityId"'])
+      .select([
+        'su.id AS "id"',
+        'su.code AS "code"',
+        'su.name AS "name"',
+        'su.facilityId AS "facilityId"',
+      ])
       .distinct(true)
       .where('c.customerId = :customerId', { customerId: actor.id })
       .andWhere('su.deletedAt IS NULL')

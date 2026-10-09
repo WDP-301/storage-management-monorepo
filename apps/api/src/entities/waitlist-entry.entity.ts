@@ -1,6 +1,5 @@
 import { AppUser } from '@entities/app-user.entity';
 import { Facility } from '@entities/facility.entity';
-import { UnitType } from '@entities/unit-type.entity';
 import { WaitlistStatus } from '@storage/types';
 import {
   Column,
@@ -26,9 +25,6 @@ export class WaitlistEntry {
 
   @Column({ type: 'uuid', name: 'facility_id' })
   facilityId: string;
-
-  @Column({ type: 'uuid', nullable: true, name: 'unit_type_id' })
-  unitTypeId?: string;
 
   @Column({ type: 'int', default: 1 })
   quantity: number;
@@ -65,8 +61,4 @@ export class WaitlistEntry {
   @ManyToOne(() => Facility)
   @JoinColumn({ name: 'facility_id' })
   facility: Facility;
-
-  @ManyToOne(() => UnitType, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'unit_type_id' })
-  unitType?: UnitType;
 }

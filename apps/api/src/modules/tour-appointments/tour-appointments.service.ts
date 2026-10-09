@@ -9,8 +9,8 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
-import { TourAppointmentStatus, UserRole, UserStatus } from '@storage/types';
-import { Repository } from 'typeorm';
+import { FacilityStatus, TourAppointmentStatus, UserRole, UserStatus } from '@storage/types';
+import { IsNull, Repository } from 'typeorm';
 import type { AssignTourAppointmentDto } from './dto/assign-tour-appointment.dto';
 import type { CancelTourAppointmentDto } from './dto/cancel-tour-appointment.dto';
 import type { CompleteTourAppointmentDto } from './dto/complete-tour-appointment.dto';
@@ -52,7 +52,6 @@ export function toTourAppointmentRecord(apt: TourAppointment): TourAppointmentRe
           id: apt.facility.id,
           code: apt.facility.code,
           name: apt.facility.name,
-          addressLine: apt.facility.addressLine ?? null,
         }
       : null,
     customer: apt.customer
@@ -67,6 +66,8 @@ export function toTourAppointmentRecord(apt: TourAppointment): TourAppointmentRe
       ? {
           id: apt.storageUnit.id,
           code: apt.storageUnit.code,
+          name: apt.storageUnit.name,
+          addressLine: apt.storageUnit.addressLine,
         }
       : null,
     assignee: apt.assignee
@@ -85,10 +86,6 @@ export class TourAppointmentsService {
   constructor(
     @InjectRepository(TourAppointment)
     private readonly appointments: Repository<TourAppointment>,
-    @InjectRepository(Facility)
-    private readonly facilities: Repository<Facility>,
-    @InjectRepository(StorageUnit)
-    private readonly storageUnits: Repository<StorageUnit>,
     @InjectRepository(AppUser)
     private readonly users: Repository<AppUser>,
     @InjectRepository(UserRoleAssignment)
@@ -103,38 +100,47 @@ export class TourAppointmentsService {
     dto: CreateContactTourDto,
     customerId?: string | null,
   ): Promise<TourAppointmentResponse> {
-    const facility = await this.facilities.findOne({ where: { id: dto.facilityId } });
-    if (!facility) {
-      notFound('Facility');
-    }
-
-    if (dto.storageUnitId) {
-      const unit = await this.storageUnits.findOne({
-        where: { id: dto.storageUnitId, facilityId: dto.facilityId },
+    const saved = await this.appointments.manager.transaction(async (manager) => {
+      // FOR SHARE on an open facility: closed sites take no new tours.
+      const facility = await manager.findOne(Facility, {
+        where: { id: dto.facilityId, status: FacilityStatus.ACTIVE },
+        lock: { mode: 'pessimistic_read' },
       });
-      if (!unit) {
-        throw new DomainException(
-          ErrorCode.RESOURCE_NOT_FOUND,
-          'Storage unit does not exist in the requested facility',
-          HttpStatus.NOT_FOUND,
-        );
+      if (!facility) {
+        notFound('Facility');
       }
-    }
 
-    const appointment = this.appointments.create({
-      facilityId: dto.facilityId,
-      customerId: customerId ?? null,
-      fullName: dto.fullName.trim(),
-      phone: dto.phone.trim(),
-      email: dto.email.trim().toLowerCase(),
-      storageUnitId: dto.storageUnitId ?? null,
-      preferredDate: dto.preferredDate,
-      preferredTimeSlot: dto.preferredTimeSlot?.trim() ?? null,
-      customerNotes: dto.customerNotes?.trim() ?? null,
-      status: TourAppointmentStatus.PENDING,
+      if (dto.storageUnitId) {
+        const unit = await manager.findOne(StorageUnit, {
+          where: { id: dto.storageUnitId, facilityId: dto.facilityId, deletedAt: IsNull() },
+          // Serializes against a warehouse delete or move, which count open tours under the write lock.
+          lock: { mode: 'pessimistic_read' },
+        });
+        if (!unit) {
+          throw new DomainException(
+            ErrorCode.RESOURCE_NOT_FOUND,
+            'Storage unit does not exist in the requested facility',
+            HttpStatus.NOT_FOUND,
+          );
+        }
+      }
+
+      return manager.save(
+        manager.create(TourAppointment, {
+          facilityId: dto.facilityId,
+          customerId: customerId ?? null,
+          fullName: dto.fullName.trim(),
+          phone: dto.phone.trim(),
+          email: dto.email.trim().toLowerCase(),
+          storageUnitId: dto.storageUnitId ?? null,
+          preferredDate: dto.preferredDate,
+          preferredTimeSlot: dto.preferredTimeSlot?.trim() ?? null,
+          customerNotes: dto.customerNotes?.trim() ?? null,
+          status: TourAppointmentStatus.PENDING,
+        }),
+      );
     });
 
-    const saved = await this.appointments.save(appointment);
     return {
       appointment: toTourAppointmentRecord(await this.findAppointmentOrFail(saved.id)),
     };

@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { CaretDown, Faders, MapPin, User } from 'phosphor-react-native';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import type { BrowseCriteria, BrowseView, FacilityOffer } from '../../types/customer';
+import type { BrowseCriteria, BrowseView } from '../../types/customer';
 import { BrowseViewToggle } from './BrowseViewToggle';
 import type { LocationOption } from './location-options';
 
@@ -61,7 +61,8 @@ export function BrowseBrandHeader({
 type Props = {
   location: string;
   criteria: BrowseCriteria;
-  facilities: readonly FacilityOffer[];
+  /** Warehouses with stock in the selected province, the denominator of the ward counts. */
+  totalInProvince: number;
   wards: readonly LocationOption[];
   view: BrowseView;
   plottableCount: number;
@@ -73,7 +74,7 @@ type Props = {
 export function BrowseLocationControls({
   location,
   criteria,
-  facilities,
+  totalInProvince,
   wards,
   view,
   plottableCount,
@@ -82,15 +83,9 @@ export function BrowseLocationControls({
   onOpenFilters,
 }: Props) {
   const selectedWard = wards.find((ward) => ward.code === criteria.wardCode);
-  const inProvince = facilities.filter(
-    (facility) => !criteria.provinceCode || facility.provinceCode === criteria.provinceCode,
-  );
   const options = [
-    { code: null, name: 'Tất cả', count: inProvince.length },
-    ...wards.map((ward) => ({
-      ...ward,
-      count: inProvince.filter((facility) => facility.wardCode === ward.code).length,
-    })),
+    { code: null, name: 'Tất cả', count: totalInProvince },
+    ...wards.map((ward) => ({ code: ward.code, name: ward.name, count: ward.count })),
   ];
   return (
     <View className="gap-2 px-4 pt-3">
@@ -143,7 +138,7 @@ export function BrowseLocationControls({
                   <Text
                     className={`font-body text-caption ${selected ? 'text-accent-foreground' : 'text-muted'}`}
                   >
-                    {option.count} cơ sở
+                    {option.count} kho
                   </Text>
                 </View>
               </Pressable>

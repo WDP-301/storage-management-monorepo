@@ -51,3 +51,9 @@ export const formatIsoDateTime = (iso: string) => {
   const pad = (value: number) => String(value).padStart(2, '0');
   return `${pad(at.getHours())}:${pad(at.getMinutes())}, ${pad(at.getDate())}/${pad(at.getMonth() + 1)}/${at.getFullYear()}`;
 };
+
+/** Warehouse footprint as `5 × 8 × 3,5 m` (width × length × height); height is omitted when unknown. */
+export const formatDimensions = (widthM: number, lengthM: number, heightM: number | null) => {
+  const sides = [widthM, lengthM, heightM].filter((side): side is number => side !== null);
+  return `${sides.map(formatNumber).join(' × ')} m`;
+};

@@ -26,6 +26,7 @@ import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import {
   BookingStatus,
   ContractStatus,
+  FacilityStatus,
   HoldStatus,
   IdempotencyStatus,
   PaymentMethod,
@@ -195,7 +196,7 @@ export class BookingsService implements OnApplicationBootstrap {
         const units = await em
           .getRepository(StorageUnit)
           .createQueryBuilder('unit')
-          .innerJoinAndSelect('unit.unitType', 'unitType')
+          .innerJoinAndSelect('unit.facility', 'facility')
           .whereInIds(sortedUnitIds)
           .orderBy('unit.id', 'ASC')
           .setLock('pessimistic_write', undefined, ['unit'])
@@ -221,6 +222,20 @@ export class BookingsService implements OnApplicationBootstrap {
           );
         }
 
+        // A facility closed for maintenance or retired keeps its units AVAILABLE, so the unit
+        // status alone does not prove the unit can be rented right now.
+        const closedFacilityUnits = units.filter(
+          (u) => u.facility.status !== FacilityStatus.ACTIVE,
+        );
+        if (closedFacilityUnits.length > 0) {
+          throw new DomainException(
+            ErrorCode.UNIT_NOT_AVAILABLE,
+            'Cơ sở của một hoặc nhiều storage unit đang tạm ngừng hoạt động',
+            HttpStatus.CONFLICT,
+            { unavailableUnitIds: closedFacilityUnits.map((u) => u.id) },
+          );
+        }
+
         const unitMap = new Map(units.map((u) => [u.id, u]));
 
         // Resolve per-item pricing in a single pass & accumulate totals using Decimal.js
@@ -236,16 +251,8 @@ export class BookingsService implements OnApplicationBootstrap {
               HttpStatus.NOT_FOUND,
             );
           }
-          if (unit.unitType?.monthlyPrice == null) {
-            throw new DomainException(
-              ErrorCode.INTERNAL_ERROR,
-              `Storage unit ${item.storageUnitId} thiếu cấu hình monthlyPrice`,
-              HttpStatus.INTERNAL_SERVER_ERROR,
-            );
-          }
-
-          const monthlyDec = new Decimal(unit.unitType.monthlyPrice);
-          const depositMonthsDec = new Decimal(unit.unitType.defaultDepositMonths ?? depositMonths);
+          const monthlyDec = new Decimal(unit.monthlyPrice);
+          const depositMonthsDec = new Decimal(unit.depositMonths ?? depositMonths);
           const depositSnapshot = monthlyDec.times(depositMonthsDec).toFixed(2);
           const monthlyPriceSnapshot = monthlyDec.toFixed(2);
 

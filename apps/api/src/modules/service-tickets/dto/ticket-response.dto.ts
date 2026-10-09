@@ -41,6 +41,9 @@ export class TicketStorageUnitInfoDto implements TicketStorageUnitInfo {
 
   @ApiProperty({ example: 'A-108' })
   code: string;
+
+  @ApiProperty({ example: 'Kho Thủ Đức 40m²' })
+  name: string;
 }
 
 export class TicketUserInfoDto implements TicketUserInfo {

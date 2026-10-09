@@ -1,58 +1,74 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { FacilityStatus } from '@storage/types';
+import { Type } from 'class-transformer';
 import {
   IsEnum,
-  IsLatitude,
-  IsLongitude,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
 } from 'class-validator';
 
+export class AdminFacilitiesQueryDto {
+  @ApiPropertyOptional({ example: 'Q1', description: 'Code or name contains (case-insensitive)' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(150)
+  search?: string;
+
+  @ApiPropertyOptional({ enum: FacilityStatus })
+  @IsEnum(FacilityStatus)
+  @IsOptional()
+  status?: FacilityStatus;
+
+  @ApiPropertyOptional({ default: 1, minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  @Min(1)
+  page?: number = 1;
+
+  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  @Min(1)
+  @Max(100)
+  limit?: number = 20;
+}
+
 export class CreateFacilityDto {
-  @ApiProperty({ example: 'HCM-Q1-01', description: 'Unique facility code' })
+  @ApiProperty({ example: 'CN-HCM', description: 'Unique facility code' })
   @IsString()
   @IsNotEmpty()
   @MaxLength(50)
   code: string;
 
-  @ApiProperty({ example: 'Kho Q1 - Nguyễn Huệ', description: 'Facility display name' })
+  @ApiProperty({ example: 'Cơ sở Hồ Chí Minh' })
   @IsString()
   @IsNotEmpty()
   @MaxLength(150)
   name: string;
 
-  @ApiProperty({ example: '12 Nguyễn Huệ', description: 'Street address' })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(255)
-  addressLine: string;
-
-  @ApiPropertyOptional({ example: '00001', description: 'Ward code (FK → wards.code)' })
-  @IsString()
-  @MaxLength(20)
-  @IsOptional()
-  wardCode?: string;
-
-  @ApiPropertyOptional({ example: '01', description: 'Province code (FK → provinces.code)' })
+  @ApiPropertyOptional({ example: '79', description: 'Optional region (province code)' })
   @IsString()
   @MaxLength(20)
   @IsOptional()
   provinceCode?: string;
+}
 
-  @ApiProperty({ example: 10.7769, description: 'Latitude (-90 to 90)' })
-  @IsLatitude()
-  latitude: number;
+export class UpdateFacilityDto extends PartialType(CreateFacilityDto) {
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Send null to clear the region',
+  })
+  declare provinceCode?: string | null;
 
-  @ApiProperty({ example: 106.7009, description: 'Longitude (-180 to 180)' })
-  @IsLongitude()
-  longitude: number;
-
-  @ApiPropertyOptional({ enum: FacilityStatus, default: FacilityStatus.ACTIVE })
+  @ApiPropertyOptional({ enum: FacilityStatus })
   @IsEnum(FacilityStatus)
   @IsOptional()
   status?: FacilityStatus;
 }
-
-export class UpdateFacilityDto extends PartialType(CreateFacilityDto) {}

@@ -13,6 +13,7 @@ import { depositStage } from '../../../lib/booking-payment-state';
 import { formatIsoDate, formatMoney, formatNumber } from '../../../lib/format-vi';
 import { rentalEndIso } from '../../../lib/rental-schedule';
 import type { ApiBooking } from '../../types/booking-api';
+import { useBookingWarehouses } from './use-booking-warehouses';
 
 type Props = {
   bookings: ApiBooking[];
@@ -255,13 +256,7 @@ function BookingCard({
   const styles = STATE_STYLES[state];
   const first = booking.items[0];
   const firstDate = first?.requestedStartAt.slice(0, 10);
-  const unitCodes = booking.items
-    .map((item) => item.storageUnit?.code ?? item.storageUnitId)
-    .join(', ');
-  const totalArea = booking.items.reduce(
-    (sum, item) => sum + Number(item.storageUnit?.areaM2 ?? 0),
-    0,
-  );
+  const { names: warehouseNames, totalArea } = useBookingWarehouses(booking);
   const isPayable = depositStage(booking, now) === 'awaiting';
   const daysLeft =
     state === 'active' && firstDate && first
@@ -304,7 +299,7 @@ function BookingCard({
 
         <View className="h-px bg-separator" />
 
-        <LedgerRow label="Số lượng kho" value={`${booking.items.length} kho (${unitCodes})`} />
+        <LedgerRow label="Số lượng kho" value={`${booking.items.length} kho (${warehouseNames})`} />
         <LedgerRow label="Tổng diện tích" value={`${formatNumber(totalArea)} m²`} />
         {firstDate && first ? (
           <LedgerRow

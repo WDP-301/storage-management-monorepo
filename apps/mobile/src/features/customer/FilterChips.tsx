@@ -33,19 +33,3 @@ export function ChipButton({
     </Button>
   );
 }
-
-/**
- * A narrowing option earns its place only when it actually narrows: it must match something, and
- * match less than the unfiltered total. A bucket equal to the total is a no-op — showing it makes
- * the customer read a number that buys them nothing.
- *
- * The selected option always stays visible, otherwise choosing a bucket that turns out useless
- * would remove the very chip needed to undo it.
- */
-export function isNarrowingChipVisible(count: number, total: number, isSelected: boolean): boolean {
-  return isSelected || (count > 0 && count < total);
-}
-
-export function withCount(label: string, count: number): string {
-  return `${label} (${count})`;
-}

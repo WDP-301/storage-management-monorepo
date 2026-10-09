@@ -20,14 +20,15 @@ import {
   toLngLat,
   toLngLatBounds,
 } from '../../../lib/goong-map-config';
-import { FacilityPin } from '../../components/FacilityPin';
-import type { FacilityOffer } from '../../types/customer';
+import { WarehousePin } from '../../components/WarehousePin';
+import type { Warehouse } from '../../types/storage-api';
 
 type Props = {
-  /** Already filtered by `applyBrowseFilters` — the map never filters on its own. */
-  facilities: readonly FacilityOffer[];
-  selectedFacilityId: string | null;
-  onSelect: (facility: FacilityOffer) => void;
+  /** Already filtered — the map never filters on its own. */
+  warehouses: readonly Warehouse[];
+  selectedWarehouseId: string | null;
+  pickedIds: readonly string[];
+  onSelect: (warehouse: Warehouse) => void;
   searchCenter: { lat: number; lng: number } | null;
 };
 
@@ -39,7 +40,13 @@ const FIT_INSETS = {
   left: FIT_PADDING,
 };
 
-export function BrowseMapView({ facilities, selectedFacilityId, onSelect, searchCenter }: Props) {
+export function BrowseMapView({
+  warehouses,
+  selectedWarehouseId,
+  pickedIds,
+  onSelect,
+  searchCenter,
+}: Props) {
   const cameraRef = useRef<CameraRef>(null);
   const [mapHeight, setMapHeight] = useState(0);
   // `fitBounds` is ignored while the style is still loading, which would strand the camera on the
@@ -47,14 +54,14 @@ export function BrowseMapView({ facilities, selectedFacilityId, onSelect, search
   // rather than guessing with a timeout.
   const [isMapReady, setIsMapReady] = useState(false);
 
-  const plottable = useMemo(() => facilities.filter(hasPlottableCoords), [facilities]);
-  // Render the selected pin last so a nearby facility does not cover its exact price.
+  const plottable = useMemo(() => warehouses.filter(hasPlottableCoords), [warehouses]);
+  // Render the selected pin last so a nearby warehouse does not cover its exact price.
   const orderedPins = useMemo(
     () =>
       [...plottable].sort(
-        (a, b) => Number(a.id === selectedFacilityId) - Number(b.id === selectedFacilityId),
+        (a, b) => Number(a.id === selectedWarehouseId) - Number(b.id === selectedWarehouseId),
       ),
-    [plottable, selectedFacilityId],
+    [plottable, selectedWarehouseId],
   );
   const bounds = useMemo(() => toLngLatBounds(plottable), [plottable]);
   // Comparing the box rather than the array keeps the camera still when filtering changed nothing
@@ -81,7 +88,7 @@ export function BrowseMapView({ facilities, selectedFacilityId, onSelect, search
 
   if (!hasMapTilesKey) return <MapUnavailable />;
 
-  const missingCount = facilities.length - plottable.length;
+  const missingCount = warehouses.length - plottable.length;
 
   return (
     <View
@@ -99,26 +106,24 @@ export function BrowseMapView({ facilities, selectedFacilityId, onSelect, search
           initialViewState={{ center: HCM_CENTER, zoom: DEFAULT_ZOOM }}
           maxZoom={MAX_ZOOM}
         />
-        {orderedPins.map((facility) => (
+        {orderedPins.map((warehouse) => (
           <Marker
-            key={facility.id}
+            key={warehouse.id}
             // The pin's tip is at the bottom of its viewBox; the default "center" anchor would
-            // float every pin half its height north of the facility it marks.
+            // float every pin half its height north of the warehouse it marks.
             anchor="bottom"
-            id={facility.id}
-            lngLat={toLngLat(facility)}
+            id={warehouse.id}
+            lngLat={toLngLat(warehouse)}
             style={{
-              zIndex: facility.id === selectedFacilityId ? 1 : 0,
-              elevation: facility.id === selectedFacilityId ? 1 : 0,
+              zIndex: warehouse.id === selectedWarehouseId ? 1 : 0,
+              elevation: warehouse.id === selectedWarehouseId ? 1 : 0,
             }}
-            onPress={() => onSelect(facility)}
+            onPress={() => onSelect(warehouse)}
           >
-            <FacilityPin
-              count={facility.units.length}
-              // Units arrive cheapest-first from the mapper, so the head of the list is the
-              // "from" price without sorting again here.
-              fromPrice={facility.units[0]?.monthlyPrice ?? 0}
-              isSelected={selectedFacilityId === facility.id}
+            <WarehousePin
+              isPicked={pickedIds.includes(warehouse.id)}
+              isSelected={selectedWarehouseId === warehouse.id}
+              monthlyPrice={warehouse.monthlyPrice}
             />
           </Marker>
         ))}
@@ -131,10 +136,10 @@ export function BrowseMapView({ facilities, selectedFacilityId, onSelect, search
         ) : null}
       </MapLibreMap>
       {/* Confirmed in validation: say how many pins are missing AND where to find them, so the
-          map's facility count never silently disagrees with the list's. */}
+          map's warehouse count never silently disagrees with the list's. */}
       {missingCount > 0 ? (
         <Text className="font-body absolute top-2 left-3 right-3 rounded-lg bg-surface/90 px-2 py-1 text-[11px] text-muted">
-          {missingCount} cơ sở chưa có toạ độ, xem ở danh sách
+          {missingCount} kho chưa có toạ độ, xem ở danh sách
         </Text>
       ) : null}
     </View>

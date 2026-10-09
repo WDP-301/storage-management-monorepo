@@ -9,9 +9,14 @@ const ASSIGNED_FACILITY_ROLES: UserRole[] = [UserRole.FACILITY_MANAGER, UserRole
 
 interface FacilityContextValue {
   facilities: FacilityRecord[];
+  /** Null means "all facilities"; only offered to ADMIN / OPERATIONS_MANAGER (see canSelectAll). */
   selectedFacility: FacilityRecord | null;
-  selectFacility: (id: string) => void;
+  /** Pass null to select every facility; ignored when the role cannot span facilities. */
+  selectFacility: (id: string | null) => void;
+  canSelectAll: boolean;
   isLoading: boolean;
+  /** Re-fetches the list, e.g. after a facility is created, renamed or (de)activated. */
+  refreshFacilities: () => void;
 }
 
 const FacilityContext = createContext<FacilityContextValue | undefined>(undefined);
@@ -20,7 +25,8 @@ export const FacilityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const { user, activeRole } = useAuth();
   const [facilities, setFacilities] = useState<FacilityRecord[]>([]);
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const shouldFetchAll = Boolean(activeRole && ALL_FACILITY_ROLES.includes(activeRole));
   const shouldFetchAssigned = Boolean(activeRole && ASSIGNED_FACILITY_ROLES.includes(activeRole));
@@ -33,37 +39,57 @@ export const FacilityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return;
     }
 
+    // A role switch or refresh can overlap a slower earlier fetch; only the latest may land.
+    let cancelled = false;
     setIsLoading(true);
     const fetchPromise = shouldFetchAll ? FacilitiesApi.listAll() : FacilitiesApi.mine();
 
     fetchPromise
       .then((list) => {
+        if (cancelled) return;
         const facilityList = list || [];
         setFacilities(facilityList);
         const saved = localStorage.getItem(STORAGE_KEY);
         const valid = facilityList.find((f) => f.id === saved);
-        setSelectedFacilityId((valid ?? facilityList[0])?.id ?? null);
+        setSelectedFacilityId(
+          valid ? valid.id : shouldFetchAll ? null : (facilityList[0]?.id ?? null),
+        );
       })
       .catch(() => {
+        if (cancelled) return;
         setFacilities([]);
         setSelectedFacilityId(null);
       })
-      .finally(() => setIsLoading(false));
-  }, [user, shouldFetchAll, shouldFetchAssigned]);
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, shouldFetchAll, shouldFetchAssigned, reloadKey]);
 
-  const selectFacility = useCallback((id: string) => {
-    setSelectedFacilityId(id);
-    localStorage.setItem(STORAGE_KEY, id);
-  }, []);
+  const refreshFacilities = useCallback(() => setReloadKey((key) => key + 1), []);
+
+  const selectFacility = useCallback(
+    (id: string | null) => {
+      if (id === null && !shouldFetchAll) return;
+      setSelectedFacilityId(id);
+      if (id === null) localStorage.removeItem(STORAGE_KEY);
+      else localStorage.setItem(STORAGE_KEY, id);
+    },
+    [shouldFetchAll],
+  );
 
   const value = useMemo<FacilityContextValue>(
     () => ({
       facilities,
       selectedFacility: facilities.find((f) => f.id === selectedFacilityId) ?? null,
       selectFacility,
+      canSelectAll: shouldFetchAll,
       isLoading,
+      refreshFacilities,
     }),
-    [facilities, selectedFacilityId, isLoading, selectFacility],
+    [facilities, selectedFacilityId, isLoading, selectFacility, shouldFetchAll, refreshFacilities],
   );
 
   return <FacilityContext.Provider value={value}>{children}</FacilityContext.Provider>;

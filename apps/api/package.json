@@ -19,7 +19,9 @@
     "migration:revert": "typeorm migration:revert -d dist/data-source.js",
     "migration:show": "typeorm migration:show -d dist/data-source.js",
     "demo:pay": "pnpm run build && node dist/scripts/demo-pay.js",
-    "backfill:contracts": "pnpm run build && node dist/scripts/backfill-contracts.js"
+    "backfill:contracts": "pnpm run build && node dist/scripts/backfill-contracts.js",
+    "seed:admin": "pnpm run build && node dist/scripts/seed-admin.js",
+    "db:reset-demo": "pnpm run build && node dist/scripts/reset-demo-data.js"
   },
   "jest": {
     "moduleFileExtensions": [

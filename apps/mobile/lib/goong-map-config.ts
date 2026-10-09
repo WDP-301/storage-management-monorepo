@@ -11,7 +11,7 @@
 
 import type { LngLat, LngLatBounds } from '@maplibre/maplibre-react-native';
 
-/** Anything carrying facility coordinates: `FacilityOffer` and `UnitOffer` both match. */
+/** Anything carrying warehouse coordinates. */
 type Located = { latitude: number; longitude: number };
 
 const STYLE_URL = 'https://tiles.goong.io/assets/goong_map_web.json';

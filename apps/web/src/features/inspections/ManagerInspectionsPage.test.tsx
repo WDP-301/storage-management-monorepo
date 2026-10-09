@@ -98,10 +98,12 @@ describe('ManagerInspectionsPage', () => {
         id: 'fac-1',
         code: 'Q7',
         name: 'Kho Quận 7',
-        addressLine: '',
+        provinceCode: null,
         status: 'ACTIVE',
       },
       selectFacility: vi.fn(),
+      refreshFacilities: vi.fn(),
+      canSelectAll: false,
       isLoading: false,
     });
     vi.spyOn(InspectionsApi, 'list').mockResolvedValue([UNASSIGNED, ASSIGNED_RETURN, DONE]);
@@ -126,12 +128,32 @@ describe('ManagerInspectionsPage', () => {
       facilities: [],
       selectedFacility: null,
       selectFacility: vi.fn(),
+      refreshFacilities: vi.fn(),
+      canSelectAll: false,
       isLoading: true,
     });
     render(<ManagerInspectionsPage />);
 
     await waitFor(() => expect(screen.queryByText('A-101')).toBeNull());
     expect(InspectionsApi.list).not.toHaveBeenCalled();
+  });
+
+  it('lets an admin on "all facilities" see every facility without a filter', async () => {
+    vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
+      activeRole: UserRole.ADMIN,
+    } as never);
+    vi.spyOn(FacilityContextModule, 'useFacility').mockReturnValue({
+      facilities: [],
+      selectedFacility: null,
+      selectFacility: vi.fn(),
+      refreshFacilities: vi.fn(),
+      canSelectAll: true,
+      isLoading: false,
+    });
+    render(<ManagerInspectionsPage />);
+
+    expect(await screen.findByText('A-101')).toBeTruthy();
+    expect(InspectionsApi.list).toHaveBeenCalledWith({});
   });
 
   it('cancels a draft contract the customer never collected', async () => {

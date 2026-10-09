@@ -1,10 +1,12 @@
 import { Badge, Button, Select, Sidebar, Text, useSidebar } from '@cloudflare/kumo';
 import {
+  Buildings,
   ClipboardText,
   Faders,
   Lifebuoy,
   Package,
   SignOut,
+  Storefront,
   User,
   Users,
   Warehouse,
@@ -22,17 +24,24 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
 }
 
+const ALL_FACILITIES = 'ALL';
+
 const ROLE_NAV: Record<UserRole, NavItem[]> = {
   [UserRole.ADMIN]: [
     { to: '/admin/users', label: 'Quản lý người dùng', icon: Users },
+    { to: '/admin/facilities', label: 'Quản lý cơ sở', icon: Storefront },
+    { to: '/admin/warehouses', label: 'Quản lý kho', icon: Buildings },
     { to: '/admin/settings', label: 'Cấu hình tham số', icon: Faders },
-    { to: '/facility-manager', label: 'Quản lý cơ sở kho', icon: Warehouse },
+    { to: '/facility-manager', label: 'Kho của cơ sở', icon: Warehouse },
     { to: '/facility-manager/tickets', label: 'Vé sự cố', icon: Lifebuoy },
     { to: '/facility-manager/inspections', label: 'Biên bản', icon: ClipboardText },
   ],
-  [UserRole.OPERATIONS_MANAGER]: [],
+  [UserRole.OPERATIONS_MANAGER]: [
+    { to: '/admin/facilities', label: 'Quản lý cơ sở', icon: Storefront },
+    { to: '/admin/warehouses', label: 'Quản lý kho', icon: Buildings },
+  ],
   [UserRole.FACILITY_MANAGER]: [
-    { to: '/facility-manager', label: 'Quản lý cơ sở kho', icon: Warehouse },
+    { to: '/facility-manager', label: 'Kho của cơ sở', icon: Warehouse },
     { to: '/facility-manager/tickets', label: 'Vé sự cố', icon: Lifebuoy },
     { to: '/facility-manager/inspections', label: 'Biên bản', icon: ClipboardText },
   ],
@@ -154,7 +163,11 @@ const AppSidebar: React.FC = () => {
 
 export const AppShell: React.FC = () => {
   const { user } = useAuth();
-  const { facilities, selectedFacility, selectFacility } = useFacility();
+  const { facilities, selectedFacility, selectFacility, canSelectAll } = useFacility();
+  const pickerItems = [
+    ...(canSelectAll ? [{ value: ALL_FACILITIES, label: 'Tất cả cơ sở' }] : []),
+    ...facilities.map((f) => ({ value: f.id, label: `${f.name} (${f.code})` })),
+  ];
 
   return (
     <Sidebar.Provider defaultOpen className="h-svh bg-kumo-canvas text-kumo-default">
@@ -169,12 +182,9 @@ export const AppShell: React.FC = () => {
               <Select
                 aria-label="Cơ sở đang quản lý"
                 size="sm"
-                value={selectedFacility?.id ?? ''}
-                onValueChange={(val) => selectFacility(val as string)}
-                items={facilities.map((f) => ({
-                  value: f.id,
-                  label: `${f.name} (${f.code})`,
-                }))}
+                value={selectedFacility?.id ?? (canSelectAll ? ALL_FACILITIES : '')}
+                onValueChange={(val) => selectFacility(val === ALL_FACILITIES ? null : String(val))}
+                items={pickerItems}
               />
             </div>
           )}

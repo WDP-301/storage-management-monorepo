@@ -1,5 +1,11 @@
 /** PostgreSQL SQLSTATE for unique-constraint violations. */
 export const PG_UNIQUE_VIOLATION = '23505';
+/** PostgreSQL SQLSTATE for foreign-key violations. */
+export const PG_FK_VIOLATION = '23503';
+/** PostgreSQL SQLSTATE for check-constraint violations. */
+export const PG_CHECK_VIOLATION = '23514';
+/** PostgreSQL SQLSTATE for a value out of range for its numeric column. */
+export const PG_NUMERIC_OVERFLOW = '22003';
 
 /**
  * Extracts the Postgres SQLSTATE from a thrown error. Driver errors surface `code`

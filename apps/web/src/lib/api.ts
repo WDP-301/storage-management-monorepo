@@ -1,7 +1,6 @@
 import {
   ApiResponse,
   ChangeRequestStatus,
-  StorageUnitStatus,
   SystemSettingRecord,
   SystemSettingsResponse,
   UpdateSettingsResponse,
@@ -31,8 +30,25 @@ import type {
   ServiceTicketResponse,
   UpdateTicketDto,
 } from '../types/service-tickets';
+import type {
+  PlaceDetail,
+  PlacePrediction,
+  Province,
+  Ward,
+  Warehouse,
+  WarehouseInput,
+  WarehouseListQuery,
+  WarehouseListResponse,
+} from '../types/warehouse';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+
+/** Error surfaced by every Api call: server message plus machine-readable context. */
+export type ApiError = Error & {
+  status?: number;
+  code?: string;
+  details?: Record<string, unknown>;
+};
 
 // Callback hook for 401 unauthenticated events (e.g. session expired)
 let unauthorizedHandler: (() => void) | null = null;
@@ -71,7 +87,14 @@ apiClient.interceptors.response.use(
   (response) => {
     return response;
   },
-  (error: AxiosError<{ message?: string | string[]; statusCode?: number }>) => {
+  (
+    error: AxiosError<{
+      message?: string | string[];
+      statusCode?: number;
+      code?: string;
+      details?: Record<string, unknown>;
+    }>,
+  ) => {
     const status = error.response?.status;
     const requestUrl = error.config?.url || '';
 
@@ -90,8 +113,10 @@ apiClient.interceptors.response.use(
       errorMessage = error.message;
     }
 
-    const err = new Error(errorMessage) as Error & { status?: number };
+    const err = new Error(errorMessage) as ApiError;
     err.status = status;
+    err.code = error.response?.data?.code;
+    err.details = error.response?.data?.details;
     return Promise.reject(err);
   },
 );
@@ -149,24 +174,31 @@ export interface FacilityRecord {
   id: string;
   code: string;
   name: string;
-  addressLine: string;
+  provinceCode: string | null;
   status: string;
+  /** Live warehouses; present on back-office rows only. */
+  warehouseCount?: number;
 }
 
-export interface ManagedUnit {
-  id: string;
+export interface FacilityInput {
   code: string;
-  zone?: string | null;
-  areaM2: string;
-  status: StorageUnitStatus;
-  unitType: { id: string; code: string; name: string; monthlyPrice: string };
+  name: string;
+  provinceCode?: string | null;
+  status?: 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE';
+}
+
+export interface FacilityListQuery {
+  search?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
 }
 
 export interface UnitChangeRequestRecord {
   id: string;
   status: ChangeRequestStatus;
   reason: string;
-  rent_difference: number;
+  rent_difference: string | number;
   decision_note: string | null;
   facility_id: string | null;
   created_at: string;
@@ -181,14 +213,45 @@ interface Paged {
   meta: { total: number; page: number; limit: number; totalPages: number };
 }
 
+const LIST_ALL_PAGE_SIZE = 100;
+
 export const FacilitiesApi = {
   mine: async (): Promise<FacilityRecord[]> => {
     const res = await apiClient.get<ApiResponse<FacilityRecord[]>>('/facilities/mine');
     return res.data.data;
   },
 
+  /** One page of facilities for the admin page (ADMIN, OPERATIONS_MANAGER). */
+  listAdmin: async (
+    query: FacilityListQuery = {},
+  ): Promise<{ facilities: FacilityRecord[] } & Paged> => {
+    const res = await apiClient.get<ApiResponse<{ facilities: FacilityRecord[] } & Paged>>(
+      '/facilities/admin',
+      { params: query },
+    );
+    return res.data.data;
+  },
+
+  /** Every facility regardless of status; pages through the API so pickers are never truncated. */
   listAll: async (): Promise<FacilityRecord[]> => {
-    const res = await apiClient.get<ApiResponse<FacilityRecord[]>>('/facilities');
+    const all: FacilityRecord[] = [];
+    for (let page = 1; ; page += 1) {
+      const { facilities, meta } = await FacilitiesApi.listAdmin({
+        page,
+        limit: LIST_ALL_PAGE_SIZE,
+      });
+      all.push(...facilities);
+      if (page >= meta.totalPages || facilities.length === 0) return all;
+    }
+  },
+
+  create: async (input: FacilityInput): Promise<FacilityRecord> => {
+    const res = await apiClient.post<ApiResponse<FacilityRecord>>('/facilities', input);
+    return res.data.data;
+  },
+
+  update: async (id: string, input: Partial<FacilityInput>): Promise<FacilityRecord> => {
+    const res = await apiClient.patch<ApiResponse<FacilityRecord>>(`/facilities/${id}`, input);
     return res.data.data;
   },
 
@@ -245,22 +308,86 @@ export const UploadsApi = {
   },
 };
 
-export const UnitsApi = {
-  managed: async (
-    facilityId: string,
-    params?: { page?: number; limit?: number; status?: StorageUnitStatus },
-  ) => {
-    const res = await apiClient.get<ApiResponse<{ units: ManagedUnit[] } & Paged>>(
-      '/storage-units/managed',
-      { params: { facilityId, ...params } },
-    );
+export const WarehousesApi = {
+  /** Back-office list over every status (ADMIN, OPERATIONS_MANAGER). */
+  listAdmin: async (query: WarehouseListQuery = {}): Promise<WarehouseListResponse> => {
+    const res = await apiClient.get<ApiResponse<WarehouseListResponse>>('/warehouses/admin', {
+      params: query,
+    });
     return res.data.data;
   },
 
-  updateStatus: async (id: string, status: 'AVAILABLE' | 'MAINTENANCE') => {
-    const res = await apiClient.patch<ApiResponse<ManagedUnit>>(`/storage-units/${id}/status`, {
+  /** Every back-office row matching the query, paging past the API page-size ceiling. */
+  listAdminAll: async (query: WarehouseListQuery = {}): Promise<Warehouse[]> => {
+    const all: Warehouse[] = [];
+    for (let page = 1; ; page += 1) {
+      const res = await WarehousesApi.listAdmin({ ...query, page, limit: LIST_ALL_PAGE_SIZE });
+      all.push(...res.warehouses);
+      if (page >= res.meta.totalPages || res.warehouses.length === 0) return all;
+    }
+  },
+
+  /** Warehouses assigned to the calling facility manager / staff. */
+  listMine: async (query: { facilityId?: string } = {}): Promise<Warehouse[]> => {
+    const res = await apiClient.get<ApiResponse<Warehouse[]>>('/warehouses/mine', {
+      params: query,
+    });
+    return res.data.data;
+  },
+
+  get: async (id: string): Promise<Warehouse> => {
+    const res = await apiClient.get<ApiResponse<Warehouse>>(`/warehouses/${id}`);
+    return res.data.data;
+  },
+
+  create: async (input: WarehouseInput): Promise<Warehouse> => {
+    const res = await apiClient.post<ApiResponse<Warehouse>>('/warehouses', input);
+    return res.data.data;
+  },
+
+  update: async (id: string, input: Partial<WarehouseInput>): Promise<Warehouse> => {
+    const res = await apiClient.patch<ApiResponse<Warehouse>>(`/warehouses/${id}`, input);
+    return res.data.data;
+  },
+
+  updateStatus: async (id: string, status: 'AVAILABLE' | 'MAINTENANCE'): Promise<Warehouse> => {
+    const res = await apiClient.patch<ApiResponse<Warehouse>>(`/warehouses/${id}/status`, {
       status,
     });
+    return res.data.data;
+  },
+
+  remove: async (id: string): Promise<void> => {
+    await apiClient.delete(`/warehouses/${id}`);
+  },
+};
+
+export const PlacesApi = {
+  autocomplete: async (input: string): Promise<PlacePrediction[]> => {
+    const res = await apiClient.get<ApiResponse<PlacePrediction[]>>('/places/autocomplete', {
+      params: { input },
+    });
+    return res.data.data;
+  },
+
+  detail: async (placeId: string): Promise<PlaceDetail> => {
+    const res = await apiClient.get<ApiResponse<PlaceDetail>>('/places/detail', {
+      params: { place_id: placeId },
+    });
+    return res.data.data;
+  },
+};
+
+export const LocationsApi = {
+  provinces: async (): Promise<Province[]> => {
+    const res = await apiClient.get<ApiResponse<Province[]>>('/locations/provinces');
+    return res.data.data;
+  },
+
+  wards: async (provinceCode: string): Promise<Ward[]> => {
+    const res = await apiClient.get<ApiResponse<Ward[]>>(
+      `/locations/provinces/${provinceCode}/wards`,
+    );
     return res.data.data;
   },
 };

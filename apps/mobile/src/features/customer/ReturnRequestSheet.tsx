@@ -20,11 +20,11 @@ const RETURN_WINDOW_DAYS = 30;
 type Props = {
   sheetRef: RefObject<BottomSheetModal | null>;
   contractId: string;
-  unitCode: string;
+  warehouseName: string;
   onSubmitted: () => void;
 };
 
-export function ReturnRequestSheet({ sheetRef, contractId, unitCode, onSubmitted }: Props) {
+export function ReturnRequestSheet({ sheetRef, contractId, warehouseName, onSubmitted }: Props) {
   const insets = useSafeAreaInsets();
   const [surfaceColor, mutedColor] = useThemeColor(['surface', 'muted']);
   const options = useMemo(() => buildDateOptions(RETURN_WINDOW_DAYS), []);
@@ -74,7 +74,7 @@ export function ReturnRequestSheet({ sheetRef, contractId, unitCode, onSubmitted
       <BottomSheetView style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
         <View className="mb-4 px-4">
           <Text className="text-xl font-bold tracking-tight text-foreground">
-            Yêu cầu trả kho {unitCode}
+            Yêu cầu trả kho {warehouseName}
           </Text>
           <Text className="mt-1 text-xs leading-5 text-muted">
             Chọn ngày bạn qua dọn đồ. Nhân viên sẽ kiểm tra kho cùng bạn và lập biên trả.

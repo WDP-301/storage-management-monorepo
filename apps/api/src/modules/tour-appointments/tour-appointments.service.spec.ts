@@ -4,9 +4,8 @@ import { StorageUnit } from '@entities/storage-unit.entity';
 import { TourAppointment } from '@entities/tour-appointment.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { HttpStatus } from '@nestjs/common';
 import { DomainException } from '@shared/exceptions/domain.exception';
-import { TourAppointmentStatus, UserRole, UserStatus } from '@storage/types';
+import { FacilityStatus, TourAppointmentStatus, UserRole, UserStatus } from '@storage/types';
 import type { Repository } from 'typeorm';
 import { TourAppointmentsService } from './tour-appointments.service';
 
@@ -46,7 +45,6 @@ const buildAppointment = (overrides: Partial<TourAppointment> = {}): TourAppoint
       id: 'facility-1',
       code: 'F01',
       name: 'Kho Thủ Đức',
-      addressLine: '123 Song Hành',
     } as Facility,
     customer: null,
     storageUnit: null,
@@ -91,6 +89,22 @@ describe('TourAppointmentsService', () => {
       findOne: jest.fn() as any,
       createQueryBuilder: jest.fn() as any,
     } as any;
+    // Transactional writes route back to the per-entity repo mocks so assertions stay on them.
+    const repoFor = (entity: unknown): any =>
+      entity === Facility
+        ? facilitiesRepo
+        : entity === StorageUnit
+          ? storageUnitsRepo
+          : appointmentsRepo;
+    (appointmentsRepo as any).manager = {
+      transaction: jest.fn((work: (manager: unknown) => unknown) =>
+        work({
+          findOne: (entity: unknown, options: unknown) => repoFor(entity).findOne(options),
+          create: (_entity: unknown, data: unknown) => appointmentsRepo.create(data as any),
+          save: (data: unknown) => appointmentsRepo.save(data as any),
+        }),
+      ),
+    };
 
     facilitiesRepo = {
       findOne: jest.fn() as any,
@@ -109,16 +123,52 @@ describe('TourAppointmentsService', () => {
       findOne: jest.fn() as any,
     } as any;
 
-    service = new TourAppointmentsService(
-      appointmentsRepo,
-      facilitiesRepo,
-      storageUnitsRepo,
-      usersRepo,
-      roleAssignmentsRepo,
-    );
+    service = new TourAppointmentsService(appointmentsRepo, usersRepo, roleAssignmentsRepo);
   });
 
   describe('createContactRequest', () => {
+    it('only accepts open facilities, locked against a concurrent delete', async () => {
+      facilitiesRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.createContactRequest({
+          facilityId: 'facility-closed',
+          fullName: 'Khách',
+          phone: '0987654321',
+          email: 'khach@example.com',
+          preferredDate: '2026-12-01',
+        } as never),
+      ).rejects.toMatchObject({ status: 404 });
+      expect(facilitiesRepo.findOne).toHaveBeenCalledWith({
+        where: { id: 'facility-closed', status: FacilityStatus.ACTIVE },
+        lock: { mode: 'pessimistic_read' },
+      });
+      expect(appointmentsRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('locks the requested warehouse of the facility, rejecting one that is gone', async () => {
+      facilitiesRepo.findOne.mockResolvedValue({ id: 'facility-1' } as Facility);
+      storageUnitsRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.createContactRequest({
+          facilityId: 'facility-1',
+          storageUnitId: 'unit-gone',
+          fullName: 'Khách',
+          phone: '0987654321',
+          email: 'khach@example.com',
+          preferredDate: '2026-12-01',
+        } as never),
+      ).rejects.toMatchObject({ status: 404 });
+      expect(storageUnitsRepo.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'unit-gone', facilityId: 'facility-1' }),
+          lock: { mode: 'pessimistic_read' },
+        }),
+      );
+      expect(appointmentsRepo.save).not.toHaveBeenCalled();
+    });
+
     it('creates a new tour appointment in PENDING status for guest', async () => {
       facilitiesRepo.findOne.mockResolvedValue({ id: 'facility-1', name: 'Kho 1' } as Facility);
       appointmentsRepo.findOne.mockResolvedValue(buildAppointment({ id: 'apt-created' }));
@@ -132,7 +182,10 @@ describe('TourAppointmentsService', () => {
         preferredTimeSlot: 'Chiều',
       });
 
-      expect(facilitiesRepo.findOne).toHaveBeenCalledWith({ where: { id: 'facility-1' } });
+      expect(facilitiesRepo.findOne).toHaveBeenCalledWith({
+        where: { id: 'facility-1', status: FacilityStatus.ACTIVE },
+        lock: { mode: 'pessimistic_read' },
+      });
       expect(appointmentsRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           facilityId: 'facility-1',

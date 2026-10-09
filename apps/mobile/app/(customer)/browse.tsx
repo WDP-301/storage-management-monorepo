@@ -1,17 +1,18 @@
 import { useRouter } from 'expo-router';
 import { useHold } from '../../lib/hold';
-import { BrowseUnitsScreen } from '../../src/features/customer/BrowseUnitsScreen';
+import { BrowseWarehousesScreen } from '../../src/features/customer/BrowseWarehousesScreen';
 
 export default function BrowseRoute() {
   const router = useRouter();
-  const { heldBooking, selectUnits } = useHold();
+  const { activeHolds, heldBooking, selectWarehouses } = useHold();
 
   return (
-    <BrowseUnitsScreen
+    <BrowseWarehousesScreen
       contentBottomPadding={32}
       hasHolding={Boolean(heldBooking)}
-      onHold={(units) => {
-        selectUnits(units);
+      holdsKey={activeHolds.map((booking) => booking.id).join(',')}
+      onHold={(warehouses) => {
+        selectWarehouses(warehouses);
         router.navigate('/(customer)/schedule');
       }}
     />

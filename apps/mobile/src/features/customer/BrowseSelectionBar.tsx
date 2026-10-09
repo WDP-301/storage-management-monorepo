@@ -1,61 +1,48 @@
 import { Button } from 'heroui-native';
 import { Text, View } from 'react-native';
 import { formatMoney, formatNumber } from '../../../lib/format-vi';
-import type { UnitOffer } from '../../types/customer';
-import { sumUnitPrices } from './unit-offer-utils';
+import { MAX_WAREHOUSES_PER_BOOKING } from '../../../lib/warehouse-query';
+import type { Warehouse } from '../../types/storage-api';
 
 type Props = {
-  selectedUnits: readonly UnitOffer[];
-  requestedQuantity: number;
+  selected: readonly Warehouse[];
   hasHolding: boolean;
-  onHold: (units: UnitOffer[]) => void;
+  onContinue: () => void;
+  onClear: () => void;
 };
 
 /**
- * Pinned summary of a manual selection.
+ * Pinned summary of the warehouses picked so far.
  *
- * Lives outside the scroll area because it is the running answer to "what have I picked so far" —
- * area, money and progress — and the customer needs it while still scrolling through rooms. The
- * progress count on the button is the part that tells them how far from done they are.
+ * Lives outside the scroll area because it is the running answer to "what have I picked" — area,
+ * rent and progress — while the customer keeps scrolling through the list.
  */
-export function BrowseSelectionBar({
-  selectedUnits,
-  requestedQuantity,
-  hasHolding,
-  onHold,
-}: Props) {
-  const facilityNames = new Set(selectedUnits.map((unit) => unit.facility));
-  const totalArea = selectedUnits.reduce((sum, unit) => sum + unit.areaM2, 0);
-  const isComplete = selectedUnits.length === requestedQuantity;
-  const singleFacility = facilityNames.size === 1 ? [...facilityNames][0] : null;
+export function BrowseSelectionBar({ selected, hasHolding, onContinue, onClear }: Props) {
+  const totalArea = selected.reduce((sum, warehouse) => sum + warehouse.areaM2, 0);
+  const totalRent = selected.reduce((sum, warehouse) => sum + warehouse.monthlyPrice, 0);
 
   return (
     <View className="shrink-0 border-border border-t bg-surface px-4 py-3">
       <View className="flex-row items-center justify-between gap-3">
         <View className="flex-1 gap-1">
-          <View className="flex-row items-center gap-1.5">
-            <View className={`size-2 rounded-full ${isComplete ? 'bg-success' : 'bg-warning'}`} />
-            <Text className="flex-1 font-strong text-body-sm text-foreground" numberOfLines={1}>
-              {singleFacility
-                ? `Đã chọn ${selectedUnits.length} kho tại ${singleFacility}`
-                : `Đã chọn ${selectedUnits.length} kho tại ${facilityNames.size} cơ sở`}
-            </Text>
-          </View>
+          <Text className="font-strong text-body-sm text-foreground" numberOfLines={1}>
+            Đã chọn {selected.length}/{MAX_WAREHOUSES_PER_BOOKING} kho
+          </Text>
           <View className="flex-row items-baseline gap-1">
             <Text className="font-body text-caption text-muted">
               Tổng {formatNumber(totalArea)} m²
             </Text>
-            <Text className="font-numeric text-accent text-num-sm">
-              {formatMoney(sumUnitPrices(selectedUnits, 'monthlyPrice'))}
-            </Text>
+            <Text className="font-numeric text-accent text-num-sm">{formatMoney(totalRent)}</Text>
             <Text className="font-body text-caption text-muted">/tháng</Text>
           </View>
         </View>
 
-        <Button isDisabled={!isComplete || hasHolding} onPress={() => onHold([...selectedUnits])}>
-          <Button.Label className="font-ui">
-            Tiếp tục ({selectedUnits.length}/{requestedQuantity})
-          </Button.Label>
+        {/* Picks hidden by a filter or taken since have no card left to untick. */}
+        <Button variant="ghost" onPress={onClear}>
+          <Button.Label className="font-ui">Bỏ chọn</Button.Label>
+        </Button>
+        <Button isDisabled={hasHolding} onPress={onContinue}>
+          <Button.Label className="font-ui">Tiếp tục</Button.Label>
         </Button>
       </View>
     </View>

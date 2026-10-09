@@ -10,10 +10,10 @@ type Props = {
 const FEATURES = [
   {
     icon: SquaresFour,
-    title: 'Thuê nhiều kho cùng một cơ sở',
+    title: 'Thuê nhiều kho trong một lần đặt',
     badge: 'Tiện lợi gom kho',
     badgeClass: 'bg-accent/10 text-accent',
-    description: 'Chọn nhiều kho trong một lượt và xem rõ vị trí của từng cơ sở.',
+    description: 'Chọn nhiều kho trong một lượt và xem rõ vị trí của từng kho trên bản đồ.',
   },
   {
     icon: Ruler,

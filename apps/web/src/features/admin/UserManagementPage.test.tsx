@@ -95,14 +95,14 @@ const MOCK_FACILITIES = [
     id: 'fac-tb',
     code: 'TB-01',
     name: 'Kho Tân Bình',
-    addressLine: '123 Hoàng Văn Thụ, P.4, Q. Tân Bình',
+    provinceCode: '79',
     status: 'ACTIVE',
   },
   {
     id: 'fac-q7',
     code: 'Q7-01',
     name: 'Kho Quận 7',
-    addressLine: '456 Nguyễn Thị Thập, P. Tân Phú, Q.7',
+    provinceCode: '79',
     status: 'ACTIVE',
   },
 ];

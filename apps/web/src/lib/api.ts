@@ -15,7 +15,7 @@ import type {
   ListUsersQuery,
   RevokeRoleResponse,
 } from '../types/admin-user';
-import { AuthUser, LoginInput, LoginResponse, RegisterInput } from '../types/auth';
+import { AuthUser, LoginInput, LoginResponse } from '../types/auth';
 import type {
   FacilityStaffMember,
   InspectionRecord,
@@ -141,18 +141,6 @@ export const AuthApi = {
     await apiClient.post<ApiResponse<LoginResponse>>('/auth/login', credentials);
     // After session cookie is set, fetch the full user profile
     return await AuthApi.me();
-  },
-
-  /**
-   * Register a new customer account.
-   */
-  register: async (data: RegisterInput): Promise<AuthUser> => {
-    await apiClient.post<ApiResponse<{ user: AuthUser }>>('/auth/register', data);
-    // Automatically log in to establish the session cookie
-    return await AuthApi.login({
-      email: data.email,
-      password: data.password,
-    });
   },
 
   /**

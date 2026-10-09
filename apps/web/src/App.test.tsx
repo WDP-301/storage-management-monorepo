@@ -7,7 +7,6 @@ vi.mock('./lib/api', () => ({
   AuthApi: {
     me: vi.fn(),
     login: vi.fn(),
-    register: vi.fn(),
     logout: vi.fn(),
   },
   FacilitiesApi: {

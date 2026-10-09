@@ -56,7 +56,6 @@ const mockAuth = (role: UserRole) =>
     isAuthenticated: true,
     isLoading: false,
     login: vi.fn(),
-    register: vi.fn(),
     logout: vi.fn(),
     refreshUser: vi.fn(),
   } as unknown as ReturnType<typeof AuthContextModule.useAuth>);

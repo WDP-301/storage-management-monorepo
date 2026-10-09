@@ -1,7 +1,7 @@
 import { UserRole } from '@storage/types';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { AuthApi, setUnauthorizedCallback } from '../lib/api';
-import { AuthContextType, AuthUser, LoginInput, RegisterInput } from '../types/auth';
+import { AuthContextType, AuthUser, LoginInput } from '../types/auth';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -71,31 +71,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (data: RegisterInput): Promise<AuthUser> => {
-    setIsLoading(true);
-    try {
-      const registeredUser = await AuthApi.register(data);
-      setUser(registeredUser);
-      setActiveRole(registeredUser.roles?.[0] || null);
-      return registeredUser;
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : '';
-      const isConnectionError =
-        errorMsg.includes('kết nối') ||
-        errorMsg.includes('Network Error') ||
-        errorMsg.includes('Failed to fetch') ||
-        errorMsg.includes('ECONNREFUSED');
-
-      if (isConnectionError) {
-        throw new Error('Không thể kết nối đến máy chủ. Vui lòng thử lại sau.');
-      }
-
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const logout = async (): Promise<void> => {
     setIsLoading(true);
     try {
@@ -133,7 +108,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         activeRole,
         switchRole,
         login,
-        register,
         logout,
         refreshUser,
       }}

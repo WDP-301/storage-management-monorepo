@@ -24,7 +24,6 @@ describe('RoleRoute RBAC Protection', () => {
       isAuthenticated: true,
       isLoading: false,
       login: vi.fn(),
-      register: vi.fn(),
       logout: vi.fn(),
       refreshUser: vi.fn(),
     });
@@ -56,7 +55,6 @@ describe('RoleRoute RBAC Protection', () => {
       isAuthenticated: true,
       isLoading: false,
       login: vi.fn(),
-      register: vi.fn(),
       logout: vi.fn(),
       refreshUser: vi.fn(),
     });
@@ -91,7 +89,6 @@ describe('RoleRoute RBAC Protection', () => {
       isAuthenticated: true,
       isLoading: false,
       login: vi.fn(),
-      register: vi.fn(),
       logout: vi.fn(),
       refreshUser: vi.fn(),
     });
@@ -127,7 +124,6 @@ describe('RoleRoute RBAC Protection', () => {
       isAuthenticated: true,
       isLoading: false,
       login: vi.fn(),
-      register: vi.fn(),
       logout: vi.fn(),
       refreshUser: vi.fn(),
     });
@@ -160,7 +156,6 @@ describe('RoleRoute RBAC Protection', () => {
       isAuthenticated: true,
       isLoading: false,
       login: vi.fn(),
-      register: vi.fn(),
       logout: vi.fn(),
       refreshUser: vi.fn(),
     });

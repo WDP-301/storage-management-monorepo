@@ -54,7 +54,7 @@ export const ProtectedRoute: React.FC = () => {
 };
 
 /**
- * Route guard redirecting already authenticated users away from login/register.
+ * Route guard redirecting already authenticated users away from the login page.
  */
 export const PublicOnlyRoute: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -81,8 +81,7 @@ export const AppRouter: React.FC = () => {
         {/* Public Authentication Routes */}
         <Route element={<PublicOnlyRoute />}>
           <Route element={<AuthLayout />}>
-            <Route path="/login" element={<AuthPage initialMode="login" />} />
-            <Route path="/register" element={<AuthPage initialMode="register" />} />
+            <Route path="/login" element={<AuthPage />} />
           </Route>
         </Route>
 

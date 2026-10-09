@@ -5,7 +5,6 @@ import { AuthContextType } from '../../types/auth';
 import { AuthPage } from './AuthPage';
 
 const mockLogin = vi.fn();
-const mockRegister = vi.fn();
 const mockLogout = vi.fn();
 const mockRefreshUser = vi.fn();
 
@@ -14,7 +13,6 @@ const defaultAuthContext: AuthContextType = {
   isAuthenticated: false,
   isLoading: false,
   login: mockLogin,
-  register: mockRegister,
   logout: mockLogout,
   refreshUser: mockRefreshUser,
 };
@@ -33,8 +31,7 @@ describe('AuthPage Form Validation and Interaction', () => {
     return render(
       <MemoryRouter initialEntries={[initialPath]}>
         <Routes>
-          <Route path="/login" element={<AuthPage initialMode="login" />} />
-          <Route path="/register" element={<AuthPage initialMode="register" />} />
+          <Route path="/login" element={<AuthPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -64,26 +61,6 @@ describe('AuthPage Form Validation and Interaction', () => {
       await screen.findByText('Định dạng email không hợp lệ (ví dụ: user@example.com).'),
     ).toBeTruthy();
     expect(mockLogin).not.toHaveBeenCalled();
-  });
-
-  it('validates password length in registration mode', async () => {
-    renderComponent('/register');
-
-    const nameInput = screen.getByPlaceholderText('Nguyễn Văn A');
-    const phoneInput = screen.getByPlaceholderText('0912345678');
-    const emailInput = screen.getByLabelText(/email/i);
-    const passwordInput = screen.getByPlaceholderText('Tối thiểu 8 ký tự');
-
-    fireEvent.change(nameInput, { target: { value: 'Trần Thị B' } });
-    fireEvent.change(phoneInput, { target: { value: '0987654321' } });
-    fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
-    fireEvent.change(passwordInput, { target: { value: 'short' } });
-
-    const submitBtn = screen.getByRole('button', { name: /tạo tài khoản/i });
-    fireEvent.click(submitBtn);
-
-    expect(await screen.findByText('Mật khẩu phải từ 8 đến 72 ký tự.')).toBeTruthy();
-    expect(mockRegister).not.toHaveBeenCalled();
   });
 
   it('calls login when valid credentials are submitted', async () => {
@@ -154,7 +131,7 @@ describe('AuthPage Form Validation and Interaction', () => {
         ]}
       >
         <Routes>
-          <Route path="/login" element={<AuthPage initialMode="login" />} />
+          <Route path="/login" element={<AuthPage />} />
           <Route path="/operations" element={<div>Operations Target Screen</div>} />
         </Routes>
       </MemoryRouter>,

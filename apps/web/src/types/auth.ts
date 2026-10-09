@@ -18,13 +18,6 @@ export interface LoginInput {
   password: string;
 }
 
-export interface RegisterInput {
-  email: string;
-  password: string;
-  fullName: string;
-  phone: string;
-}
-
 export interface LoginResponse {
   expiresAt: string;
 }
@@ -36,7 +29,6 @@ export interface AuthContextType {
   activeRole?: UserRole | null;
   switchRole?: (role: UserRole) => void;
   login: (credentials: LoginInput) => Promise<AuthUser>;
-  register: (data: RegisterInput) => Promise<AuthUser>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<AuthUser | null>;
 }

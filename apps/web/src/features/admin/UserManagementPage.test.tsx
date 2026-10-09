@@ -116,7 +116,6 @@ describe('UserManagementPage Component', () => {
       isAuthenticated: true,
       isLoading: false,
       login: vi.fn(),
-      register: vi.fn(),
       logout: vi.fn(),
       refreshUser: vi.fn(),
     });

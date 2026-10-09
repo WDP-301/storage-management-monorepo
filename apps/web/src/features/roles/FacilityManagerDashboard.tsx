@@ -20,7 +20,9 @@ import {
 } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
 import type { Warehouse } from '../../types/warehouse';
+import { WarehouseOverviewMap } from '../warehouses/WarehouseOverviewMap';
 import { ChangeRequestsTable } from './manager/ChangeRequestsTable';
+import { MaintenanceToggleButton } from './manager/MaintenanceToggleButton';
 import { ManagedWarehousesTable } from './manager/ManagedWarehousesTable';
 
 const KpiCard: React.FC<{
@@ -67,6 +69,15 @@ export const FacilityManagerDashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [view, setView] = useState<'list' | 'map'>('list');
+  // Once opened, the map stays mounted (hidden in list view) so toggling does not reload it.
+  const [mapOpened, setMapOpened] = useState(false);
+  const [focusedWarehouseId, setFocusedWarehouseId] = useState<string | null>(null);
+
+  // Switching facility rebuilds the map; an old focus must not pull the camera back.
+  useEffect(() => {
+    setFocusedWarehouseId(null);
+  }, [facilityId]);
   const latestRequest = useRef(0);
 
   const fetchWarehouses = useCallback(
@@ -124,9 +135,11 @@ export const FacilityManagerDashboard: React.FC = () => {
     try {
       const updated = await WarehousesApi.updateStatus(w.id, next);
       setWarehouses((prev) => prev.map((x) => (x.id === w.id ? updated : x)));
+      // A status filter can now exclude the warehouse; say why it vanished from the list/map.
+      const hidden = statusFilter !== 'ALL' && statusFilter !== updated.status;
       toast.info(
         'Cập nhật trạng thái kho',
-        `Đã cập nhật kho ${w.code} thành: ${next === 'MAINTENANCE' ? 'Đang bảo trì' : 'Sẵn sàng thuê'}`,
+        `Đã cập nhật kho ${w.code} thành: ${next === 'MAINTENANCE' ? 'Đang bảo trì' : 'Sẵn sàng thuê'}${hidden ? '. Kho không còn khớp bộ lọc trạng thái nên đã được ẩn.' : ''}`,
       );
     } catch (err) {
       toast.error('Không cập nhật được trạng thái kho', describeActionError(err));
@@ -162,6 +175,19 @@ export const FacilityManagerDashboard: React.FC = () => {
         (term === '' || w.code.toLowerCase().includes(term) || w.name.toLowerCase().includes(term)),
     );
   }, [warehouses, searchTerm, statusFilter]);
+
+  const changeView = (next: 'list' | 'map') => {
+    // Clearing the focus lets the same warehouse be focused again from the table.
+    setFocusedWarehouseId(null);
+    if (next === 'map') setMapOpened(true);
+    setView(next);
+  };
+
+  const viewOnMap = (w: Warehouse) => {
+    setFocusedWarehouseId(w.id);
+    setMapOpened(true);
+    setView('map');
+  };
 
   const count = (...s: Warehouse['status'][]) =>
     warehouses.filter((w) => s.includes(w.status)).length;
@@ -266,6 +292,27 @@ export const FacilityManagerDashboard: React.FC = () => {
         onStatusFilterChange={setStatusFilter}
         busyId={busyId}
         onToggleMaintenance={toggleMaintenance}
+        view={view}
+        onViewChange={changeView}
+        onViewMap={viewOnMap}
+        mapPanel={
+          mapOpened && (
+            <div hidden={view !== 'map'}>
+              <WarehouseOverviewMap
+                warehouses={filtered}
+                visible={view === 'map'}
+                focusedWarehouseId={focusedWarehouseId}
+                renderActions={(w) => (
+                  <MaintenanceToggleButton
+                    warehouse={w}
+                    busy={busyId === w.id}
+                    onToggle={toggleMaintenance}
+                  />
+                )}
+              />
+            </div>
+          )
+        }
       />
     </div>
   );

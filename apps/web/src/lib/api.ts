@@ -305,13 +305,16 @@ export const WarehousesApi = {
     return res.data.data;
   },
 
-  /** Every back-office row matching the query, paging past the API page-size ceiling. */
+  /**
+   * Every back-office row matching the query, paging past the API page-size ceiling. Offset
+   * pages can shift when a warehouse is added mid-download, so rows are de-duplicated by id.
+   */
   listAdminAll: async (query: WarehouseListQuery = {}): Promise<Warehouse[]> => {
-    const all: Warehouse[] = [];
+    const all = new Map<string, Warehouse>();
     for (let page = 1; ; page += 1) {
       const res = await WarehousesApi.listAdmin({ ...query, page, limit: LIST_ALL_PAGE_SIZE });
-      all.push(...res.warehouses);
-      if (page >= res.meta.totalPages || res.warehouses.length === 0) return all;
+      for (const warehouse of res.warehouses) all.set(warehouse.id, warehouse);
+      if (page >= res.meta.totalPages || res.warehouses.length === 0) return [...all.values()];
     }
   },
 

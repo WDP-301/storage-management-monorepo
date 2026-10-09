@@ -156,3 +156,15 @@ export function buildPatch(form: WarehouseFormState, original: Warehouse): Parti
   }
   return patch as Partial<WarehouseInput>;
 }
+
+/** Text to geocode: the typed street plus the chosen ward and province, most specific first. */
+export function buildLocateQuery(
+  addressLine: string,
+  wardName?: string,
+  provinceName?: string,
+): string {
+  return [addressLine, wardName, provinceName]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(', ');
+}

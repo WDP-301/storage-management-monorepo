@@ -1,5 +1,6 @@
 import { UserRole } from '@storage/types';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as AuthContextModule from '../../context/AuthContext';
@@ -15,6 +16,29 @@ const toast = vi.hoisted(() => ({
   info: vi.fn(),
 }));
 vi.mock('../../lib/toast', () => ({ useAppToast: () => toast }));
+
+// MapLibre needs WebGL; the stub exposes what the page passes to the map.
+vi.mock('../warehouses/WarehouseOverviewMap', () => ({
+  WarehouseOverviewMap: ({
+    warehouses,
+    focusedWarehouseId,
+    renderActions,
+  }: {
+    warehouses: Warehouse[];
+    focusedWarehouseId: string | null;
+    renderActions: (w: Warehouse) => React.ReactNode;
+  }) => {
+    const focused = warehouses.find((w) => w.id === focusedWarehouseId);
+    return (
+      <section aria-label="Bản đồ kho (stub)">
+        {warehouses.map((w) => (
+          <span key={w.id}>{`ghim ${w.code}`}</span>
+        ))}
+        {focused && renderActions(focused)}
+      </section>
+    );
+  },
+}));
 
 const wh = (over: Partial<Warehouse>): Warehouse => ({
   id: 'w-1',
@@ -112,6 +136,118 @@ describe('FacilityManagerDashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: /báo bảo trì/i }));
     await waitFor(() => expect(updateStatus).toHaveBeenCalledWith('w-1', 'MAINTENANCE'));
     await waitFor(() => expect(screen.getAllByText('Đang bảo trì').length).toBe(2));
+  });
+
+  it('shows the facility warehouses on the map with the maintenance action', async () => {
+    mockAuth(UserRole.FACILITY_MANAGER);
+    vi.spyOn(WarehousesApi, 'listMine').mockResolvedValue([
+      wh({}),
+      wh({ id: 'w-2', code: 'HCM-BC-01', name: 'Kho Bình Chánh', status: 'RENTED' }),
+    ]);
+    const updateStatus = vi
+      .spyOn(WarehousesApi, 'updateStatus')
+      .mockResolvedValue(wh({ status: 'MAINTENANCE' }));
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Kho Sài Gòn')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Xem kho HCM-SG-01 trên bản đồ' }));
+    const map = screen.getByRole('region', { name: 'Bản đồ kho (stub)' });
+    expect(screen.queryByText('Kho Sài Gòn')).toBeNull();
+    expect(map.textContent).toContain('ghim HCM-SG-01');
+    expect(map.textContent).toContain('ghim HCM-BC-01');
+
+    fireEvent.click(within(map).getByRole('button', { name: /báo bảo trì/i }));
+    await waitFor(() => expect(updateStatus).toHaveBeenCalledWith('w-1', 'MAINTENANCE'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Danh sách' }));
+    expect(screen.getByText('Kho Sài Gòn')).toBeTruthy();
+  });
+
+  it('applies the search filter to the map as well', async () => {
+    mockAuth(UserRole.FACILITY_MANAGER);
+    vi.spyOn(WarehousesApi, 'listMine').mockResolvedValue([
+      wh({}),
+      wh({ id: 'w-2', code: 'HCM-BC-01', name: 'Kho Bình Chánh' }),
+    ]);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Kho Sài Gòn')).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('Tìm mã kho hoặc tên kho'), {
+      target: { value: 'BC' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Bản đồ' }));
+
+    const map = screen.getByRole('region', { name: 'Bản đồ kho (stub)' });
+    expect(map.textContent).toContain('ghim HCM-BC-01');
+    expect(map.textContent).not.toContain('ghim HCM-SG-01');
+  });
+
+  it('explains that a warehouse toggled out of the status filter is now hidden', async () => {
+    mockAuth(UserRole.FACILITY_MANAGER);
+    vi.spyOn(WarehousesApi, 'listMine').mockResolvedValue([
+      wh({}),
+      wh({ id: 'w-2', code: 'HCM-BC-01', name: 'Kho Bình Chánh', status: 'RENTED' }),
+    ]);
+    vi.spyOn(WarehousesApi, 'updateStatus').mockResolvedValue(wh({ status: 'MAINTENANCE' }));
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Kho Sài Gòn')).toBeTruthy());
+    fireEvent.click(screen.getByRole('combobox', { name: 'Lọc trạng thái kho' }));
+    // The select commits an option on a pointer press/release, not on a bare click.
+    const option = await screen.findByRole('option', { name: 'Còn trống' });
+    fireEvent.pointerDown(option, { pointerType: 'mouse' });
+    fireEvent.pointerUp(option, { pointerType: 'mouse' });
+    fireEvent.click(option);
+    await waitFor(() => expect(screen.queryByText('Kho Bình Chánh')).toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: /báo bảo trì/i }));
+    await waitFor(() =>
+      expect(toast.info).toHaveBeenCalledWith(
+        'Cập nhật trạng thái kho',
+        'Đã cập nhật kho HCM-SG-01 thành: Đang bảo trì. Kho không còn khớp bộ lọc trạng thái nên đã được ẩn.',
+      ),
+    );
+    await waitFor(() => expect(screen.queryByText('Kho Sài Gòn')).toBeNull());
+  });
+
+  it('keeps the plain message when the toggled warehouse still matches the filter', async () => {
+    mockAuth(UserRole.FACILITY_MANAGER);
+    vi.spyOn(WarehousesApi, 'listMine').mockResolvedValue([wh({})]);
+    vi.spyOn(WarehousesApi, 'updateStatus').mockResolvedValue(wh({ status: 'MAINTENANCE' }));
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Kho Sài Gòn')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /báo bảo trì/i }));
+    await waitFor(() =>
+      expect(toast.info).toHaveBeenCalledWith(
+        'Cập nhật trạng thái kho',
+        'Đã cập nhật kho HCM-SG-01 thành: Đang bảo trì',
+      ),
+    );
+  });
+
+  it('forgets the focused warehouse when the manager switches facility', async () => {
+    mockAuth(UserRole.FACILITY_MANAGER);
+    vi.spyOn(WarehousesApi, 'listMine').mockResolvedValue([wh({})]);
+
+    const view = renderPage();
+    await waitFor(() => expect(screen.getByText('Kho Sài Gòn')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Xem kho HCM-SG-01 trên bản đồ' }));
+    const map = screen.getByRole('region', { name: 'Bản đồ kho (stub)' });
+    expect(within(map).getByRole('button', { name: /báo bảo trì/i })).toBeTruthy();
+
+    mockFacility({ ...FAC_HCM, id: 'fac-2', name: 'Cơ sở Đà Nẵng' });
+    view.rerender(
+      <MemoryRouter>
+        <FacilityManagerDashboard />
+      </MemoryRouter>,
+    );
+    await waitFor(() =>
+      expect(vi.mocked(WarehousesApi.listMine)).toHaveBeenLastCalledWith({ facilityId: 'fac-2' }),
+    );
+    const reloaded = await screen.findByRole('region', { name: 'Bản đồ kho (stub)' });
+    expect(within(reloaded).queryByRole('button', { name: /báo bảo trì/i })).toBeNull();
   });
 
   it('uses the admin listing when the active role is ADMIN', async () => {

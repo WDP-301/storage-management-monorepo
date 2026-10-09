@@ -4,12 +4,13 @@ import {
   CheckCircle,
   List,
   MapTrifold,
+  PencilSimple,
   Plus,
   Stack,
   Warehouse as WarehouseIcon,
   Wrench,
 } from '@phosphor-icons/react';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFacility } from '../../context/FacilityContext';
 import { LocationsApi, WarehousesApi } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
@@ -79,6 +80,14 @@ export const WarehouseManagementPage: React.FC = () => {
   // Once opened, the map stays mounted (hidden in list view) so toggling does not reload it.
   const [mapOpened, setMapOpened] = useState(false);
   const [focusedWarehouseId, setFocusedWarehouseId] = useState<string | null>(null);
+  // A warehouse just created and opened on the map; tells why it may not appear there.
+  const justCreatedId = useRef<string | null>(null);
+  // The map plots every warehouse matching the filters, not just the table page.
+  const [mapWarehouses, setMapWarehouses] = useState<Warehouse[]>([]);
+  // The filters `mapWarehouses` was fetched for; null while it does not match any.
+  const [mapDataQuery, setMapDataQuery] = useState<WarehouseListQuery | null>(null);
+  // Starts true: nothing is loaded yet, so a focus requested from the table must survive.
+  const [mapLoading, setMapLoading] = useState(true);
 
   const headerFacilityId = selectedFacility?.id ?? ALL;
   useEffect(() => {
@@ -107,15 +116,8 @@ export const WarehouseManagementPage: React.FC = () => {
       .catch(() => setProvinces([]));
   }, []);
 
-  // Filter or facility changes can overlap; only the latest request may update the page.
-  const latestLoad = useRef(0);
-  const latestSnapshot = useRef(0);
-  const load = useCallback(async () => {
-    const request = ++latestLoad.current;
-    setIsLoading(true);
-    const query: WarehouseListQuery = {
-      page,
-      limit: PAGE_SIZE,
+  const filterQuery = useMemo<WarehouseListQuery>(
+    () => ({
       search: debouncedSearch || undefined,
       facilityId,
       status: filters.status !== ALL ? (filters.status as WarehouseStatus) : undefined,
@@ -124,9 +126,30 @@ export const WarehouseManagementPage: React.FC = () => {
       maxArea: toPositive(filters.maxArea),
       minPrice: toPositive(filters.minPrice),
       maxPrice: toPositive(filters.maxPrice),
-    };
+    }),
+    [
+      debouncedSearch,
+      facilityId,
+      filters.status,
+      filters.province,
+      filters.minArea,
+      filters.maxArea,
+      filters.minPrice,
+      filters.maxPrice,
+    ],
+  );
+
+  // Filter or facility changes can overlap; only the latest request may update the page.
+  const latestLoad = useRef(0);
+  const latestSnapshot = useRef(0);
+  const latestMapLoad = useRef(0);
+  // The filters the last map request was sent for; null forces the next showing to refetch.
+  const mapQueryRequested = useRef<WarehouseListQuery | null>(null);
+  const load = useCallback(async () => {
+    const request = ++latestLoad.current;
+    setIsLoading(true);
     try {
-      const res = await WarehousesApi.listAdmin(query);
+      const res = await WarehousesApi.listAdmin({ ...filterQuery, page, limit: PAGE_SIZE });
       if (request !== latestLoad.current) return;
       setWarehouses(res.warehouses);
       setTotal(res.meta.total);
@@ -136,18 +159,29 @@ export const WarehouseManagementPage: React.FC = () => {
     } finally {
       if (request === latestLoad.current) setIsLoading(false);
     }
-  }, [
-    page,
-    debouncedSearch,
-    facilityId,
-    filters.status,
-    filters.province,
-    filters.minArea,
-    filters.maxArea,
-    filters.minPrice,
-    filters.maxPrice,
-    toast,
-  ]);
+  }, [page, filterQuery, toast]);
+
+  const loadMap = useCallback(async () => {
+    const request = ++latestMapLoad.current;
+    mapQueryRequested.current = filterQuery;
+    setMapLoading(true);
+    try {
+      const all = await WarehousesApi.listAdminAll(filterQuery);
+      if (request !== latestMapLoad.current) return;
+      setMapWarehouses(all);
+      setMapDataQuery(filterQuery);
+    } catch (err) {
+      if (request !== latestMapLoad.current) return;
+      setMapWarehouses([]);
+      setMapDataQuery(filterQuery);
+      toast.error(
+        'Lỗi tải bản đồ',
+        err instanceof Error ? err.message : 'Không tải được vị trí kho.',
+      );
+    } finally {
+      if (request === latestMapLoad.current) setMapLoading(false);
+    }
+  }, [filterQuery, toast]);
 
   // Status counts ignore filters; capped at the API page ceiling.
   const loadSnapshot = useCallback(() => {
@@ -173,9 +207,19 @@ export const WarehouseManagementPage: React.FC = () => {
     loadSnapshot();
   }, [loadSnapshot]);
 
+  // A hidden map is not refetched on every filter change; it catches up when shown again.
+  useEffect(() => {
+    if (view === 'map' && mapQueryRequested.current !== filterQuery) loadMap();
+  }, [view, filterQuery, loadMap]);
+
   const refreshAll = () => {
     load();
     loadSnapshot();
+    if (view === 'map') loadMap();
+    else {
+      mapQueryRequested.current = null;
+      setMapDataQuery(null);
+    }
   };
 
   const count = (...statuses: WarehouseStatus[]) =>
@@ -194,14 +238,23 @@ export const WarehouseManagementPage: React.FC = () => {
     setPage(1);
   };
 
+  // Map data still loading, or fetched for other filters, must not drive selection or camera.
+  const mapPending = mapLoading || mapDataQuery !== filterQuery;
+
+  // The map plots every filtered warehouse, so a focus is dropped only when it leaves that set.
   useEffect(() => {
-    if (
-      focusedWarehouseId &&
-      !warehouses.some((warehouse) => warehouse.id === focusedWarehouseId)
-    ) {
-      setFocusedWarehouseId(null);
+    if (mapPending || !focusedWarehouseId) return;
+    const justCreated = focusedWarehouseId === justCreatedId.current;
+    if (justCreated) justCreatedId.current = null;
+    if (mapWarehouses.some((warehouse) => warehouse.id === focusedWarehouseId)) return;
+    setFocusedWarehouseId(null);
+    if (justCreated) {
+      toast.info(
+        'Kho mới không hiện trên bản đồ',
+        'Kho vừa thêm không khớp bộ lọc hiện tại. Hãy xóa bộ lọc để xem vị trí kho.',
+      );
     }
-  }, [warehouses, focusedWarehouseId]);
+  }, [mapPending, mapWarehouses, focusedWarehouseId, toast]);
 
   const openMap = (focusId: string | null) => {
     setFocusedWarehouseId(focusId);
@@ -316,16 +369,25 @@ export const WarehouseManagementPage: React.FC = () => {
       {mapOpened && (
         <div hidden={view !== 'map'}>
           <WarehouseOverviewMap
-            warehouses={warehouses}
-            page={page}
+            warehouses={mapWarehouses}
+            isLoading={mapPending}
             visible={view === 'map'}
             focusedWarehouseId={focusedWarehouseId}
-            onEdit={editWarehouse}
+            renderActions={(warehouse) => (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<PencilSimple className="h-3.5 w-3.5" />}
+                onClick={() => editWarehouse(warehouse)}
+              >
+                Sửa kho
+              </Button>
+            )}
           />
         </div>
       )}
 
-      {total > 0 && (
+      {view === 'list' && total > 0 && (
         <div className="pt-2 border-t border-kumo-line">
           <Pagination page={page} setPage={setPage} perPage={PAGE_SIZE} totalCount={total}>
             <Pagination.Info />
@@ -340,9 +402,14 @@ export const WarehouseManagementPage: React.FC = () => {
         facilities={facilities}
         defaultFacilityId={facilityId}
         onClose={() => setFormOpen(false)}
-        onSaved={() => {
+        onSaved={(saved, created) => {
           setFormOpen(false);
           refreshAll();
+          // A new warehouse opens on the overview map so its pin can be checked among the rest.
+          if (created) {
+            justCreatedId.current = saved.id;
+            openMap(saved.id);
+          }
         }}
       />
       <WarehouseDeleteDialog

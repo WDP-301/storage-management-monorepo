@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { ApiError } from '../../lib/api';
 import type { Warehouse } from '../../types/warehouse';
 import { describeWarehouseError } from './warehouse-display';
-import { buildPatch, computeDerived, toFormState, validateForm } from './warehouse-form';
+import {
+  buildLocateQuery,
+  buildPatch,
+  computeDerived,
+  toFormState,
+  validateForm,
+} from './warehouse-form';
 
 const warehouse: Warehouse = {
   id: 'w',
@@ -29,6 +35,16 @@ const warehouse: Warehouse = {
 };
 
 describe('warehouse form helpers', () => {
+  it('builds the geocoding text from the street, ward and province that are set', () => {
+    expect(buildLocateQuery(' 45 Lê Thánh Tôn ', 'Phường Sài Gòn', 'Thành phố Hồ Chí Minh')).toBe(
+      '45 Lê Thánh Tôn, Phường Sài Gòn, Thành phố Hồ Chí Minh',
+    );
+    expect(buildLocateQuery('45 Lê Thánh Tôn', undefined, 'Thành phố Đà Nẵng')).toBe(
+      '45 Lê Thánh Tôn, Thành phố Đà Nẵng',
+    );
+    expect(buildLocateQuery('45 Lê Thánh Tôn', ' ', undefined)).toBe('45 Lê Thánh Tôn');
+  });
+
   it('computes area and volume only from valid dimensions', () => {
     expect(computeDerived({ widthM: '3', lengthM: '4', heightM: '2' })).toEqual({
       area: 12,

@@ -14,6 +14,7 @@ import {
   WAREHOUSE_STATUS_LABEL,
 } from './warehouse-display';
 import {
+  buildLocateQuery,
   buildPatch,
   buildPayload,
   computeDerived,
@@ -33,7 +34,8 @@ interface Props {
   defaultFacilityId?: string;
   facilities: FacilityRecord[];
   onClose: () => void;
-  onSaved: () => void;
+  /** `created` is true for a new warehouse, false for an edit. */
+  onSaved: (saved: Warehouse, created: boolean) => void;
 }
 
 const DEPOSIT_ITEMS = [
@@ -121,13 +123,14 @@ export const WarehouseFormDialog: React.FC<Props> = ({
     setIsSaving(true);
     try {
       if (warehouse) {
-        await WarehousesApi.update(warehouse.id, buildPatch(form, warehouse));
+        const saved = await WarehousesApi.update(warehouse.id, buildPatch(form, warehouse));
         toast.notifyUpdated('kho', warehouse.code);
+        onSaved(saved, false);
       } else {
-        await WarehousesApi.create(buildPayload(form));
+        const saved = await WarehousesApi.create(buildPayload(form));
         toast.notifyCreated('kho', form.code.trim());
+        onSaved(saved, true);
       }
-      onSaved();
     } catch (err) {
       toast.error(
         isEdit ? 'Lỗi cập nhật kho' : 'Lỗi tạo kho',
@@ -203,6 +206,15 @@ export const WarehouseFormDialog: React.FC<Props> = ({
                 latitude: String(p.lat),
                 longitude: String(p.lng),
               }));
+            }}
+            locateQuery={buildLocateQuery(
+              form.addressLine,
+              wards.find((w) => w.code === form.wardCode)?.name,
+              provinces.find((p) => p.code === form.provinceCode)?.name,
+            )}
+            onLocated={(p) => {
+              setPinMoved(false);
+              setForm((prev) => ({ ...prev, latitude: String(p.lat), longitude: String(p.lng) }));
             }}
           />
 

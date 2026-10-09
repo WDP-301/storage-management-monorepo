@@ -71,7 +71,12 @@ export class InspectionController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.FACILITY_STAFF, UserRole.FACILITY_MANAGER, UserRole.OPERATIONS_MANAGER)
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.FACILITY_STAFF,
+    UserRole.FACILITY_MANAGER,
+    UserRole.OPERATIONS_MANAGER,
+  )
   @ApiOperation({ summary: 'Update an inspection (assigned inspector or manager)' })
   @ApiResponse({ status: 400, type: ApiErrorResponseDto })
   update(

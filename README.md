@@ -90,15 +90,18 @@ applies migrations and seeds 3 facilities (cơ sở: `CN-HCM` Hồ Chí Minh, `C
 ```bash
 pnpm --filter @storage/api db:reset-demo --yes                      # local database only
 pnpm --filter @storage/api db:reset-demo --yes --allow-remote=<db>  # remote: needs DEMO_PASSWORD
+# add --wipe-users to also delete every account (sessions, audit logs) before seeding
 ```
 
 | Account | Role | Scope |
 |---|---|---|
-| `admin@demo.vn` | ADMIN | all |
-| `ops@demo.vn` | OPERATIONS_MANAGER | all |
-| `manager@demo.vn` | FACILITY_MANAGER | Cơ sở Hồ Chí Minh (9 warehouses) |
-| `staff@demo.vn` | FACILITY_STAFF | Cơ sở Hồ Chí Minh (9 warehouses) |
-| `customer@demo.vn` | CUSTOMER | – |
+| `admin@gmail.com` | ADMIN | all |
+| `ops@gmail.com` | OPERATIONS_MANAGER | all |
+| `manager.hcm@gmail.com` | FACILITY_MANAGER | Cơ sở Hồ Chí Minh (9 warehouses) |
+| `manager.hn@gmail.com` | FACILITY_MANAGER | Cơ sở Hà Nội (2 warehouses) |
+| `manager.dn@gmail.com` | FACILITY_MANAGER | Cơ sở Đà Nẵng (1 warehouse) |
+| `staff@gmail.com` | FACILITY_STAFF | Cơ sở Hồ Chí Minh (9 warehouses) |
+| `customer@gmail.com` | CUSTOMER | – |
 
 The password is `Demo1234!` on a local database; remote targets must set `DEMO_PASSWORD`.
 

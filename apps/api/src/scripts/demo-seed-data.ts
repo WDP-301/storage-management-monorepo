@@ -14,33 +14,47 @@ export interface DemoAccount {
 
 export const DEMO_ACCOUNTS: DemoAccount[] = [
   {
-    email: 'admin@demo.vn',
+    email: 'admin@gmail.com',
     fullName: 'Quản trị Demo',
     phone: '0900000001',
     role: UserRole.ADMIN,
   },
   {
-    email: 'ops@demo.vn',
+    email: 'ops@gmail.com',
     fullName: 'Vận hành Demo',
     phone: '0900000002',
     role: UserRole.OPERATIONS_MANAGER,
   },
   {
-    email: 'manager@demo.vn',
-    fullName: 'Quản lý kho Demo',
+    email: 'manager.hcm@gmail.com',
+    fullName: 'Quản lý Cơ sở Hồ Chí Minh',
     phone: '0900000003',
     role: UserRole.FACILITY_MANAGER,
     facilityCodes: ['CN-HCM'],
   },
   {
-    email: 'staff@demo.vn',
+    email: 'manager.hn@gmail.com',
+    fullName: 'Quản lý Cơ sở Hà Nội',
+    phone: '0900000006',
+    role: UserRole.FACILITY_MANAGER,
+    facilityCodes: ['CN-HN'],
+  },
+  {
+    email: 'manager.dn@gmail.com',
+    fullName: 'Quản lý Cơ sở Đà Nẵng',
+    phone: '0900000007',
+    role: UserRole.FACILITY_MANAGER,
+    facilityCodes: ['CN-DN'],
+  },
+  {
+    email: 'staff@gmail.com',
     fullName: 'Nhân viên kho Demo',
     phone: '0900000004',
     role: UserRole.FACILITY_STAFF,
     facilityCodes: ['CN-HCM'],
   },
   {
-    email: 'customer@demo.vn',
+    email: 'customer@gmail.com',
     fullName: 'Khách hàng Demo',
     phone: '0900000005',
     role: UserRole.CUSTOMER,

@@ -5,6 +5,7 @@
  *   pnpm --filter @storage/api db:reset-demo --yes                       # local database
  *   pnpm --filter @storage/api db:reset-demo --yes --allow-remote=<db>   # any other host
  *     (add --allow-committed-password to give remote demo accounts the committed password)
+ *   add --wipe-users to also delete every account, session and audit log before seeding
  * Facility-scoped demo roles (manager@, staff@) are granted per facility, see DEMO_ACCOUNTS.
  * Users, sessions, customer profiles, settings, provinces/wards and ticket types survive.
  * Demo accounts include an ADMIN, so the committed DEMO_PASSWORD is only used on a local
@@ -62,12 +63,27 @@ const WIPE_STEPS: { table: string; sql: string }[] = [
   { table: 'unit_types', sql: 'DELETE FROM "unit_types"' },
 ];
 
+/** Accounts and everything hanging off them; reference data (provinces, wards, settings) stays. */
+const USER_WIPE_STEPS: { table: string; sql: string }[] = [
+  { table: 'audit_logs', sql: 'DELETE FROM "audit_logs"' },
+  { table: 'documents', sql: 'DELETE FROM "documents"' },
+  {
+    table: 'system_settings',
+    sql: 'UPDATE "system_settings" SET "updated_by" = NULL WHERE "updated_by" IS NOT NULL',
+  },
+  // Sessions, role assignments and customer profiles cascade from app_users.
+  { table: 'app_users', sql: 'DELETE FROM "app_users"' },
+];
+
 /**
  * Skips tables that do not exist yet, so the wipe also works on an empty database (the schema is
  * created afterwards by the migrations) and on a database still at the previous schema.
  */
-async function wipe(manager: EntityManager): Promise<void> {
-  for (const { table, sql } of WIPE_STEPS) {
+async function wipe(
+  manager: EntityManager,
+  steps: { table: string; sql: string }[],
+): Promise<void> {
+  for (const { table, sql } of steps) {
     const [{ exists }] = await manager.query(`SELECT to_regclass($1) IS NOT NULL AS "exists"`, [
       `public.${table}`,
     ]);
@@ -113,11 +129,13 @@ async function main(): Promise<void> {
 
   await AppDataSource.initialize();
   try {
-    await AppDataSource.transaction(wipe);
+    const wipeUsers = process.argv.includes('--wipe-users');
+    const steps = wipeUsers ? [...WIPE_STEPS, ...USER_WIPE_STEPS] : WIPE_STEPS;
+    await AppDataSource.transaction((manager) => wipe(manager, steps));
     const applied = await AppDataSource.runMigrations({ transaction: 'each' });
     await AppDataSource.transaction((manager) => seed(manager, demoPassword));
     console.log(
-      `db:reset-demo: wiped business data, applied ${applied.length} migration(s), seeded ` +
+      `db:reset-demo: wiped business data${wipeUsers ? ' and all users' : ''}, applied ${applied.length} migration(s), seeded ` +
         `${DEMO_FACILITIES.length} facilities, ${DEMO_WAREHOUSES.length} warehouses and ${DEMO_ACCOUNTS.length} demo accounts ` +
         `(${demoPassword === DEMO_PASSWORD ? `password ${DEMO_PASSWORD}` : 'password from DEMO_PASSWORD'} for new accounts).`,
     );

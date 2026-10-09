@@ -4,6 +4,7 @@
  * demo accounts:
  *   pnpm --filter @storage/api db:reset-demo --yes                       # local database
  *   pnpm --filter @storage/api db:reset-demo --yes --allow-remote=<db>   # any other host
+ *     (add --allow-committed-password to give remote demo accounts the committed password)
  * Facility-scoped demo roles (manager@, staff@) are granted per facility, see DEMO_ACCOUNTS.
  * Users, sessions, customer profiles, settings, provinces/wards and ticket types survive.
  * Demo accounts include an ADMIN, so the committed DEMO_PASSWORD is only used on a local
@@ -91,15 +92,23 @@ async function main(): Promise<void> {
       `${target} is not a local database. Re-run with --allow-remote=${process.env.DB_DATABASE} to wipe it.`,
     );
   }
-  const demoPassword = isLocal ? DEMO_PASSWORD : (process.env.DEMO_PASSWORD ?? '');
+  // A shared demo database may knowingly reuse the committed password; this must be asked for
+  // explicitly because it lets anyone who has read the repository sign in as admin there.
+  const allowCommittedPassword = process.argv.includes('--allow-committed-password');
+  const demoPassword =
+    isLocal || allowCommittedPassword ? DEMO_PASSWORD : (process.env.DEMO_PASSWORD ?? '');
   if (demoPassword.length < MIN_PASSWORD_LENGTH) {
     throw new Error(
       `${target} is not a local database: set DEMO_PASSWORD (min ${MIN_PASSWORD_LENGTH} ` +
-        'characters, not the one in the repository) for the demo accounts.',
+        'characters, not the one in the repository) for the demo accounts, or pass ' +
+        '--allow-committed-password to use the repository password.',
     );
   }
-  if (!isLocal && demoPassword === DEMO_PASSWORD) {
-    throw new Error('DEMO_PASSWORD must differ from the password committed in the repository');
+  if (!isLocal && !allowCommittedPassword && demoPassword === DEMO_PASSWORD) {
+    throw new Error(
+      'DEMO_PASSWORD must differ from the password committed in the repository ' +
+        '(pass --allow-committed-password to use it anyway)',
+    );
   }
 
   await AppDataSource.initialize();
@@ -110,7 +119,7 @@ async function main(): Promise<void> {
     console.log(
       `db:reset-demo: wiped business data, applied ${applied.length} migration(s), seeded ` +
         `${DEMO_FACILITIES.length} facilities, ${DEMO_WAREHOUSES.length} warehouses and ${DEMO_ACCOUNTS.length} demo accounts ` +
-        `(${isLocal ? `password ${DEMO_PASSWORD}` : 'password from DEMO_PASSWORD'} for new accounts).`,
+        `(${demoPassword === DEMO_PASSWORD ? `password ${DEMO_PASSWORD}` : 'password from DEMO_PASSWORD'} for new accounts).`,
     );
   } finally {
     await AppDataSource.destroy();

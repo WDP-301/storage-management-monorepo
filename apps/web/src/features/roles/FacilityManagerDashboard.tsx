@@ -139,8 +139,12 @@ export const FacilityManagerDashboard: React.FC = () => {
     return (
       <Empty
         icon={<Buildings className="w-8 h-8" />}
-        title="Chưa được gán kho"
-        description="Tài khoản của bạn chưa được gán quản lý kho nào. Liên hệ quản trị viên để được cấp quyền."
+        title={isAdmin ? 'Chưa có kho nào' : 'Chưa được gán kho'}
+        description={
+          isAdmin
+            ? 'Hệ thống chưa có kho nào. Vui lòng thêm kho mới.'
+            : 'Tài khoản của bạn chưa được gán quản lý kho nào. Liên hệ quản trị viên để được cấp quyền.'
+        }
       />
     );
   }

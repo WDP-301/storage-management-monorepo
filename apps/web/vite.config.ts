@@ -11,6 +11,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), tailwindcss()],
     resolve: {
+      // Keep hoisted dependencies on the same React instance as the web app.
+      dedupe: ['react', 'react-dom'],
       alias: {
         '@': path.resolve(import.meta.dirname, './src'),
         '@storage/types': path.resolve(import.meta.dirname, '../../packages/types/src/index.ts'),

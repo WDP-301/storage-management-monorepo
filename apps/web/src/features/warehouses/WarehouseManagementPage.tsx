@@ -2,6 +2,8 @@ import { Button, LayerCard, Pagination, Text } from '@cloudflare/kumo';
 import {
   ArrowsClockwise,
   CheckCircle,
+  List,
+  MapTrifold,
   Plus,
   Stack,
   Warehouse as WarehouseIcon,
@@ -25,6 +27,7 @@ import {
   WarehouseFilters,
 } from './WarehouseFilters';
 import { WarehouseFormDialog } from './WarehouseFormDialog';
+import { WarehouseOverviewMap } from './WarehouseOverviewMap';
 import { WarehouseTable } from './WarehouseTable';
 
 const PAGE_SIZE = 20;
@@ -72,6 +75,10 @@ export const WarehouseManagementPage: React.FC = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Warehouse | null>(null);
   const [deleting, setDeleting] = useState<Warehouse | null>(null);
+  const [view, setView] = useState<'list' | 'map'>('list');
+  // Once opened, the map stays mounted (hidden in list view) so toggling does not reload it.
+  const [mapOpened, setMapOpened] = useState(false);
+  const [focusedWarehouseId, setFocusedWarehouseId] = useState<string | null>(null);
 
   const headerFacilityId = selectedFacility?.id ?? ALL;
   useEffect(() => {
@@ -89,6 +96,7 @@ export const WarehouseManagementPage: React.FC = () => {
 
   const updateFilters = (patch: Partial<WarehouseFilterState>) => {
     setFilters((prev) => ({ ...prev, ...patch }));
+    setFocusedWarehouseId(null);
     if (!('search' in patch)) setPage(1);
   };
   const facilityId = filters.facility !== ALL ? filters.facility : undefined;
@@ -182,7 +190,28 @@ export const WarehouseManagementPage: React.FC = () => {
 
   const resetFilters = () => {
     setFilters(EMPTY_FILTERS);
+    setFocusedWarehouseId(null);
     setPage(1);
+  };
+
+  useEffect(() => {
+    if (
+      focusedWarehouseId &&
+      !warehouses.some((warehouse) => warehouse.id === focusedWarehouseId)
+    ) {
+      setFocusedWarehouseId(null);
+    }
+  }, [warehouses, focusedWarehouseId]);
+
+  const openMap = (focusId: string | null) => {
+    setFocusedWarehouseId(focusId);
+    setMapOpened(true);
+    setView('map');
+  };
+
+  const editWarehouse = (warehouse: Warehouse) => {
+    setEditing(warehouse);
+    setFormOpen(true);
   };
 
   return (
@@ -254,15 +283,47 @@ export const WarehouseManagementPage: React.FC = () => {
         onReset={resetFilters}
       />
 
-      <WarehouseTable
-        warehouses={warehouses}
-        hasFilters={hasFilters}
-        onEdit={(w) => {
-          setEditing(w);
-          setFormOpen(true);
-        }}
-        onDelete={setDeleting}
-      />
+      <div className="flex items-center gap-2">
+        <Button
+          variant={view === 'list' ? 'primary' : 'secondary'}
+          icon={<List className="h-4 w-4" />}
+          onClick={() => {
+            // Clearing the focus lets the same warehouse be focused again from the table.
+            setFocusedWarehouseId(null);
+            setView('list');
+          }}
+        >
+          Danh sách
+        </Button>
+        <Button
+          variant={view === 'map' ? 'primary' : 'secondary'}
+          icon={<MapTrifold className="h-4 w-4" />}
+          onClick={() => openMap(null)}
+        >
+          Bản đồ
+        </Button>
+      </div>
+
+      {view === 'list' && (
+        <WarehouseTable
+          warehouses={warehouses}
+          hasFilters={hasFilters}
+          onEdit={editWarehouse}
+          onViewMap={(warehouse) => openMap(warehouse.id)}
+          onDelete={setDeleting}
+        />
+      )}
+      {mapOpened && (
+        <div hidden={view !== 'map'}>
+          <WarehouseOverviewMap
+            warehouses={warehouses}
+            page={page}
+            visible={view === 'map'}
+            focusedWarehouseId={focusedWarehouseId}
+            onEdit={editWarehouse}
+          />
+        </div>
+      )}
 
       {total > 0 && (
         <div className="pt-2 border-t border-kumo-line">

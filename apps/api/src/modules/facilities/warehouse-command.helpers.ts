@@ -40,6 +40,27 @@ export function assertNoNullRequiredFields(dto: UpdateWarehouseDto): void {
   }
 }
 
+/**
+ * 0,0 is what a missing coordinate becomes once coerced to a number, not a real warehouse site.
+ * Stored decimals come back as strings, so both sides go through `Number`.
+ */
+export function assertRealLocation(
+  latitude: number | string | undefined,
+  longitude: number | string | undefined,
+): void {
+  if (Number(latitude) !== 0 || Number(longitude) !== 0) return;
+  throw new DomainException(
+    ErrorCode.VALIDATION_FAILED,
+    'Validation failed',
+    HttpStatus.BAD_REQUEST,
+    {
+      fields: [
+        { field: 'latitude', code: 'isRealLocation', message: 'latitude,longitude cannot be 0,0' },
+      ],
+    },
+  );
+}
+
 export function handleDbError(err: unknown): never {
   const code = pgErrorCode(err);
   if (code === PG_UNIQUE_VIOLATION) {

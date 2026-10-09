@@ -1,11 +1,12 @@
 import { Button, Dialog, Input, InputArea, Select, Text } from '@cloudflare/kumo';
 import { X } from '@phosphor-icons/react';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { type FacilityRecord, LocationsApi, WarehousesApi } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
 import type { Province, Ward, Warehouse } from '../../types/warehouse';
 import { WarehouseAddressPicker } from './WarehouseAddressPicker';
 import { WarehouseFacilityField } from './WarehouseFacilityField';
+import { WarehouseLocationMap } from './WarehouseLocationMap';
 import {
   describeWarehouseError,
   formatArea,
@@ -58,6 +59,7 @@ export const WarehouseFormDialog: React.FC<Props> = ({
   const [provinces, setProvinces] = useState<Province[]>([]);
   const [wards, setWards] = useState<Ward[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [pinMoved, setPinMoved] = useState(false);
 
   const isEdit = warehouse !== null;
   const frozen = isEdit && !isIdleStatus(warehouse.status);
@@ -67,6 +69,7 @@ export const WarehouseFormDialog: React.FC<Props> = ({
     setForm(
       warehouse ? toFormState(warehouse) : { ...EMPTY_FORM, facilityId: defaultFacilityId ?? '' },
     );
+    setPinMoved(false);
     LocationsApi.provinces()
       .then(setProvinces)
       .catch(() => toast.error('Lỗi tải dữ liệu', 'Không tải được danh sách tỉnh/thành.'));
@@ -88,6 +91,23 @@ export const WarehouseFormDialog: React.FC<Props> = ({
 
   const set = <K extends keyof WarehouseFormState>(key: K, value: WarehouseFormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
+
+  const handleMapPointChange = useCallback((point: { latitude: number; longitude: number }) => {
+    setForm((prev) => ({
+      ...prev,
+      latitude: String(Number(point.latitude.toFixed(6))),
+      longitude: String(Number(point.longitude.toFixed(6))),
+    }));
+    setPinMoved(true);
+  }, []);
+
+  const mapPoint = useMemo(
+    () =>
+      form.latitude.trim() !== '' && form.longitude.trim() !== ''
+        ? { latitude: Number(form.latitude), longitude: Number(form.longitude) }
+        : null,
+    [form.latitude, form.longitude],
+  );
 
   const { area, volume } = computeDerived(form);
 
@@ -175,15 +195,23 @@ export const WarehouseFormDialog: React.FC<Props> = ({
           <WarehouseAddressPicker
             addressLine={form.addressLine}
             onAddressChange={(v) => set('addressLine', v)}
-            onPlacePicked={(p) =>
+            onPlacePicked={(p) => {
+              setPinMoved(false);
               setForm((prev) => ({
                 ...prev,
                 addressLine: p.address,
                 latitude: String(p.lat),
                 longitude: String(p.lng),
-              }))
-            }
+              }));
+            }}
           />
+
+          {open && <WarehouseLocationMap point={mapPoint} onPointChange={handleMapPointChange} />}
+          {pinMoved && form.addressLine.trim() && (
+            <p role="status" className="text-kumo-warning">
+              Vị trí ghim đã thay đổi. Hãy kiểm tra lại địa chỉ kho trước khi lưu.
+            </p>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Select

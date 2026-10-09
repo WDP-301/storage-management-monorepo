@@ -1,7 +1,8 @@
 import { Badge, Button, Empty, LayerCard, Table } from '@cloudflare/kumo';
-import { PencilSimple, Trash, Warehouse as WarehouseIcon } from '@phosphor-icons/react';
+import { MapPin, PencilSimple, Trash, Warehouse as WarehouseIcon } from '@phosphor-icons/react';
 import React from 'react';
 import type { Warehouse } from '../../types/warehouse';
+import { hasValidCoordinates } from './goong-map';
 import {
   formatArea,
   formatDeposit,
@@ -15,10 +16,17 @@ interface Props {
   warehouses: Warehouse[];
   hasFilters: boolean;
   onEdit: (w: Warehouse) => void;
+  onViewMap: (w: Warehouse) => void;
   onDelete: (w: Warehouse) => void;
 }
 
-export const WarehouseTable: React.FC<Props> = ({ warehouses, hasFilters, onEdit, onDelete }) => (
+export const WarehouseTable: React.FC<Props> = ({
+  warehouses,
+  hasFilters,
+  onEdit,
+  onViewMap,
+  onDelete,
+}) => (
   <LayerCard className="overflow-x-auto p-0 ring ring-kumo-line">
     <Table>
       <Table.Header>
@@ -83,6 +91,16 @@ export const WarehouseTable: React.FC<Props> = ({ warehouses, hasFilters, onEdit
             </Table.Cell>
             <Table.Cell className="whitespace-nowrap text-right">
               <div className="inline-flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<MapPin className="w-3.5 h-3.5" />}
+                  aria-label={`Xem kho ${w.code} trên bản đồ`}
+                  disabled={!hasValidCoordinates(w)}
+                  onClick={() => onViewMap(w)}
+                >
+                  Bản đồ
+                </Button>
                 <Button
                   variant="secondary"
                   size="sm"

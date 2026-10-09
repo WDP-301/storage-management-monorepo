@@ -92,6 +92,12 @@ describe('warehouse form helpers', () => {
     expect(validateForm({ ...ok, monthlyPrice: '10.005' })).toContain('2 chữ số thập phân');
   });
 
+  it('rejects 0,0 as a location but accepts a single zero coordinate', () => {
+    const ok = toFormState({ ...warehouse, status: 'AVAILABLE' });
+    expect(validateForm({ ...ok, latitude: '0', longitude: '0' })).toContain('tọa độ hợp lệ');
+    expect(validateForm({ ...ok, latitude: '0', longitude: '106' })).toBeNull();
+  });
+
   it('sends facilityId only when it changed and never for an occupied warehouse', () => {
     const idle = { ...warehouse, status: 'AVAILABLE' as const };
     const moved = { ...toFormState(idle), facilityId: 'fac-2' };

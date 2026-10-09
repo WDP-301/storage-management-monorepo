@@ -128,12 +128,12 @@ export function warehouseDeposit(
 
 /** Items for `POST /bookings`: each warehouse is booked through its hidden unit id. */
 export function buildBookingItems(
-  warehouses: readonly Pick<Warehouse, 'unitId'>[],
+  warehouses: readonly Pick<Warehouse, 'id'>[],
   startDate: string,
   rentalMonths: number,
 ) {
   return warehouses.map((warehouse) => ({
-    storageUnitId: warehouse.unitId,
+    storageUnitId: warehouse.id,
     // Noon UTC keeps the selected calendar day stable for the API's date validation.
     requestedStartAt: `${startDate}T12:00:00.000Z`,
     rentalMonths,

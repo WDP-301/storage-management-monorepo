@@ -96,10 +96,10 @@ function ContractDetail({
         <StatusPill label={state.label} tone={state.tone} />
       </View>
 
-      {contract.facility ? (
+      {contract.unit ? (
         <Card className="border border-border bg-surface">
           <Card.Body className="gap-1">
-            <Text className="text-sm leading-5 text-muted">{contract.facility.address}</Text>
+            <Text className="text-sm leading-5 text-muted">{contract.unit.address}</Text>
           </Card.Body>
         </Card>
       ) : null}

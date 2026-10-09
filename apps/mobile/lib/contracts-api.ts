@@ -39,6 +39,8 @@ function normaliseContract(contract: CustomerContractResponse): ApiContract {
       ? {
           id: contract.unit.id,
           code: contract.unit.code,
+          name: contract.unit.name,
+          address: contract.unit.address_line,
           areaM2: Number(contract.unit.area_m2),
           widthM: toOptionalNumber(contract.unit.width_m),
           lengthM: toOptionalNumber(contract.unit.length_m),
@@ -50,8 +52,8 @@ function normaliseContract(contract: CustomerContractResponse): ApiContract {
     facility: contract.facility
       ? {
           id: contract.facility.id,
+          code: contract.facility.code,
           name: contract.facility.name,
-          address: contract.facility.address_line,
         }
       : null,
     handover: contract.handover ? normaliseInspection(contract.handover) : null,

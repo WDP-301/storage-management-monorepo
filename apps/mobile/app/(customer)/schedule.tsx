@@ -1,5 +1,6 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
+import { bookingErrorMessage } from '../../lib/booking-errors';
 import { useHold } from '../../lib/hold';
 import { ScheduleRentalScreen } from '../../src/features/customer/ScheduleRentalScreen';
 
@@ -26,9 +27,7 @@ export default function ScheduleRoute() {
           const booking = await createBooking(schedule);
           if (booking) router.navigate(`/(customer)/payment?id=${booking.id}`);
         } catch (cause) {
-          setError(
-            cause instanceof Error ? cause.message : 'Không giữ được kho. Vui lòng thử lại.',
-          );
+          setError(bookingErrorMessage(cause));
         }
       }}
     />

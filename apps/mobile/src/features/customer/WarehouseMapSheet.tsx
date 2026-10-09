@@ -81,6 +81,9 @@ export function WarehouseMapSheet({
             <View className="gap-1.5">
               <Text className="font-numeric text-caption text-muted">{warehouse.code}</Text>
               <Text className="font-strong text-foreground text-title-sm">{warehouse.name}</Text>
+              <Text className="font-body text-caption text-muted" numberOfLines={1}>
+                Thuộc {warehouse.facility.name}
+              </Text>
               <View className="flex-row items-start gap-1.5">
                 <MapPin color={accent} size={16} weight="fill" />
                 <Text className="flex-1 font-body text-body-sm text-subtle">

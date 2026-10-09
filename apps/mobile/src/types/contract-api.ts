@@ -43,6 +43,8 @@ export type CustomerContractResponse = {
   unit: {
     id: string;
     code: string;
+    name: string;
+    address_line: string;
     area_m2: string;
     width_m: string | null;
     length_m: string | null;
@@ -50,7 +52,7 @@ export type CustomerContractResponse = {
     volume_m3: string | null;
     status: string;
   } | null;
-  facility: { id: string; name: string; address_line: string } | null;
+  facility: { id: string; code: string; name: string } | null;
   handover: InspectionSummaryResponse | null;
   return: InspectionSummaryResponse | null;
 };
@@ -85,6 +87,8 @@ export type ApiContract = {
   unit: {
     id: string;
     code: string;
+    name: string;
+    address: string;
     areaM2: number;
     widthM: number | null;
     lengthM: number | null;
@@ -92,7 +96,7 @@ export type ApiContract = {
     volumeM3: number | null;
     status: string;
   } | null;
-  facility: { id: string; name: string; address: string } | null;
+  facility: { id: string; code: string; name: string } | null;
   handover: ApiInspection | null;
   /** Latest return request; open (not finalized) while the customer waits to move out. */
   return: ApiInspection | null;

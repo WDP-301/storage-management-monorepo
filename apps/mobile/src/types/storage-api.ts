@@ -14,10 +14,11 @@ export type WarehouseStatus =
   | 'MAINTENANCE'
   | 'INACTIVE';
 
-/** A standalone warehouse (kho lẻ). `id` is the facility id, `unitId` is what bookings reference. */
+/** A warehouse (kho). `id` is the storage unit id that bookings, holds and tickets reference. */
 export type Warehouse = {
   id: string;
-  unitId: string;
+  /** The branch (cơ sở) the warehouse belongs to. */
+  facility: { id: string; code: string; name: string };
   code: string;
   name: string;
   addressLine: string;

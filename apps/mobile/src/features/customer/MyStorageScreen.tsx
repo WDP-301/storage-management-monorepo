@@ -106,9 +106,9 @@ function ContractCard({
             <StatusPill label={state.label} tone={state.tone} />
           </View>
 
-          {contract.facility ? (
+          {contract.unit ? (
             <Text className="text-sm text-muted" numberOfLines={2}>
-              {contract.facility.address}
+              {contract.unit.address}
             </Text>
           ) : null}
 

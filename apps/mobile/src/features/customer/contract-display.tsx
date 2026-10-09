@@ -148,9 +148,9 @@ export function contractKindLabel(kind: ApiContract['kind']) {
   return kind === 'RENEWAL' ? 'Gia hạn' : 'Thuê mới';
 }
 
-/** Warehouse name for a contract; the unit code (= warehouse code) when the facility is missing. */
+/** Warehouse name for a contract; falls back to the unit code, then the contract number. */
 export function contractWarehouseName(contract: ApiContract): string {
-  return contract.facility?.name ?? contract.unit?.code ?? contract.contractNo;
+  return contract.unit?.name ?? contract.unit?.code ?? contract.contractNo;
 }
 
 /** `KHO-01 · 5 × 8 × 3,5 m · 40 m² · 140 m³` — whichever parts the API provided. */

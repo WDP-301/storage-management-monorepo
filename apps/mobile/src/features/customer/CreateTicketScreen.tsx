@@ -157,7 +157,7 @@ export function CreateTicketScreen({
 
             {facility && facility.units.length > 0 ? (
               <View className="gap-2">
-                <Label>Kho</Label>
+                <Label>Kho đang thuê</Label>
                 <View className="flex-row flex-wrap gap-2">
                   <Chip
                     color={form.storageUnitId === null ? 'accent' : 'default'}
@@ -173,7 +173,7 @@ export function CreateTicketScreen({
                       variant={form.storageUnitId === unit.id ? 'primary' : 'soft'}
                       onPress={() => onChange({ storageUnitId: unit.id })}
                     >
-                      <Chip.Label>{unit.code}</Chip.Label>
+                      <Chip.Label>{`${unit.name} (${unit.code})`}</Chip.Label>
                     </Chip>
                   ))}
                 </View>

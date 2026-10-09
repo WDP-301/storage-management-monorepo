@@ -7,7 +7,7 @@ const cache = new Map<string, Warehouse>();
 
 /**
  * Warehouse details (name, dimensions) for ids that only arrive as bare references, such as the
- * facility id on a booking item. Misses resolve silently: callers fall back to the unit code.
+ * storage unit id on a booking item. Misses resolve silently: callers fall back to the unit code.
  */
 export function useWarehouseDetails(ids: readonly string[]): ReadonlyMap<string, Warehouse> {
   const key = [...new Set(ids.filter(Boolean))].sort().join(',');

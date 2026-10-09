@@ -86,7 +86,14 @@ export function TicketDetailScreen({
 
                 <View className="h-px bg-separator" />
                 <DetailRow label="Cơ sở" value={ticket.facility?.name ?? '—'} />
-                <DetailRow label="Kho" value={ticket.storage_unit?.code ?? 'Toàn cơ sở'} />
+                <DetailRow
+                  label="Kho"
+                  value={
+                    ticket.storage_unit
+                      ? `${ticket.storage_unit.name} (${ticket.storage_unit.code})`
+                      : 'Toàn cơ sở'
+                  }
+                />
                 <DetailRow label="Ngày tạo" value={formatIsoDateTime(ticket.created_at)} />
                 {ticket.resolution ? <DetailRow label="Kết quả" value={ticket.resolution} /> : null}
               </Card.Body>

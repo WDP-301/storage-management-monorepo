@@ -254,8 +254,7 @@ function toBooking(created: CreatedBooking, warehouses: Warehouse[]): ApiBooking
     updatedAt: now,
     items: created.items.map((item, index) => {
       const warehouse =
-        warehouses.find((candidate) => candidate.unitId === item.storageUnitId) ??
-        warehouses[index];
+        warehouses.find((candidate) => candidate.id === item.storageUnitId) ?? warehouses[index];
       return {
         ...item,
         id: `${created.id}-${item.storageUnitId}`,
@@ -265,7 +264,7 @@ function toBooking(created: CreatedBooking, warehouses: Warehouse[]): ApiBooking
           id: item.storageUnitId,
           code: warehouse?.code ?? item.storageUnitId,
           areaM2: String(warehouse?.areaM2 ?? 0),
-          facilityId: warehouse?.id ?? '',
+          facilityId: warehouse?.facility.id ?? '',
         },
       };
     }),

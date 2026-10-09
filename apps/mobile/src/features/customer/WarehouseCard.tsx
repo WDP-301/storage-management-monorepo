@@ -54,6 +54,9 @@ export function WarehouseCard({ warehouse, distanceKm, isSelected, isDisabled, o
       <View className="flex-row items-start justify-between gap-3">
         <View className="flex-1 gap-1">
           <Text className="font-strong text-foreground text-title-sm">{warehouse.name}</Text>
+          <Text className="font-body text-caption text-muted" numberOfLines={1}>
+            Thuộc {warehouse.facility.name}
+          </Text>
           <View className="flex-row items-start gap-1.5">
             <MapPin color={MUTED} size={14} weight="fill" />
             <Text className="flex-1 font-body text-body-sm text-muted">

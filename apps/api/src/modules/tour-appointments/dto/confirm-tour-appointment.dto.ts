@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { IsDateString, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 
 export class ConfirmTourAppointmentDto {
   @ApiPropertyOptional({
@@ -11,6 +11,7 @@ export class ConfirmTourAppointmentDto {
   @IsOptional()
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'preferredDate must be formatted as YYYY-MM-DD' })
+  @IsDateString({ strict: true }, { message: 'preferredDate must be a valid calendar date' })
   preferredDate?: string;
 
   @ApiPropertyOptional({

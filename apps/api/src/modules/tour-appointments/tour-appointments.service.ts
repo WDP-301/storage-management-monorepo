@@ -325,6 +325,8 @@ export class TourAppointmentsService {
     }
 
     appointment.assignedTo = dto.assignedTo;
+    // The loaded `assignee` relation wins over `assignedTo` on save, so it must be swapped too.
+    appointment.assignee = assignee;
     appointment.status = TourAppointmentStatus.ASSIGNED;
 
     await this.appointments.save(appointment);

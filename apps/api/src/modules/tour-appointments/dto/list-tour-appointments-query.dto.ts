@@ -1,7 +1,17 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { TourAppointmentStatus } from '@storage/types';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  Max,
+  Min,
+} from 'class-validator';
 
 export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 100;
@@ -74,6 +84,7 @@ export class ListTourAppointmentsQueryDto {
   @IsOptional()
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'fromDate must be formatted as YYYY-MM-DD' })
+  @IsDateString({ strict: true }, { message: 'fromDate must be a valid calendar date' })
   fromDate?: string;
 
   @ApiPropertyOptional({
@@ -84,5 +95,6 @@ export class ListTourAppointmentsQueryDto {
   @IsOptional()
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'toDate must be formatted as YYYY-MM-DD' })
+  @IsDateString({ strict: true }, { message: 'toDate must be a valid calendar date' })
   toDate?: string;
 }

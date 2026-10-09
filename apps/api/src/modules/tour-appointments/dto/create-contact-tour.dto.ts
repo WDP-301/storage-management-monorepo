@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsDateString,
   IsEmail,
   IsNotEmpty,
   IsOptional,
@@ -55,6 +56,7 @@ export class CreateContactTourDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/, {
     message: 'preferredDate must be formatted as YYYY-MM-DD',
   })
+  @IsDateString({ strict: true }, { message: 'preferredDate must be a valid calendar date' })
   preferredDate: string;
 
   @ApiPropertyOptional({

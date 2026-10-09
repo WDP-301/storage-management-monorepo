@@ -253,6 +253,33 @@ describe('TourAppointmentsService', () => {
       expect(res.appointment.status).toBe(TourAppointmentStatus.ASSIGNED);
     });
 
+    it('reassigns from one staff to another, replacing the loaded assignee relation', async () => {
+      const manager = buildActor({ id: 'mgr-1', roles: [UserRole.FACILITY_MANAGER] });
+      const apt = buildAppointment({
+        id: 'apt-1',
+        facilityId: 'facility-1',
+        status: TourAppointmentStatus.ASSIGNED,
+        assignedTo: 'staff-1',
+        assignee: { id: 'staff-1', fullName: 'Nhân viên 1' } as AppUser,
+      });
+      appointmentsRepo.findOne.mockResolvedValue(apt);
+      roleAssignmentsRepo.find
+        .mockResolvedValueOnce([buildManagerAssignment('mgr-1', 'facility-1')])
+        .mockResolvedValueOnce([buildStaffAssignment('staff-2', 'facility-1')]);
+      const newStaff = {
+        id: 'staff-2',
+        status: UserStatus.ACTIVE,
+        fullName: 'Nhân viên 2',
+      } as AppUser;
+      usersRepo.findOne.mockResolvedValue(newStaff);
+
+      await service.assignAppointment('apt-1', { assignedTo: 'staff-2' }, manager);
+
+      expect(appointmentsRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ assignedTo: 'staff-2', assignee: newStaff }),
+      );
+    });
+
     it('rejects assigning staff that does not belong to this facility', async () => {
       const manager = buildActor({ id: 'mgr-1', roles: [UserRole.FACILITY_MANAGER] });
       const apt = buildAppointment({

@@ -106,8 +106,8 @@ export function MyTicketsScreen({
           <Card className="border border-border bg-surface">
             <Card.Body>
               <Text className="text-sm leading-5 text-muted">
-                Bạn cần thuê kho để gửi yêu cầu hỗ trợ. Các yêu cầu gắn với cơ sở hoặc kho bạn đang
-                thuê.
+                Bạn cần đặt cọc hoặc thuê kho để gửi yêu cầu hỗ trợ. Các yêu cầu gắn với cơ sở hoặc
+                kho của bạn.
               </Text>
             </Card.Body>
           </Card>

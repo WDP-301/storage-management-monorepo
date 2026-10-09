@@ -72,9 +72,13 @@ export type ServiceTicketListResponse = {
   meta: PaginationMeta;
 };
 
-/** A facility the customer may file against; `units` holds only actively-rented units. */
+/**
+ * A facility the customer may file against; `units` holds only actively-rented units and
+ * `typeIds` the ticket types allowed there (deposit-only customers cannot file maintenance).
+ */
 export type TicketFacilityOption = TicketFacilityInfo & {
   units: TicketStorageUnitInfo[];
+  typeIds: string[];
 };
 
 export type TicketFormOptions = {

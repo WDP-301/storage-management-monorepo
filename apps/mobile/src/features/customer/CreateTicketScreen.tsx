@@ -48,6 +48,10 @@ export function CreateTicketScreen({
     description: 0,
   });
   const facility = options?.facilities.find((f) => f.id === form.facilityId) ?? null;
+  // Types depend on the facility — a deposit-only facility offers no maintenance type.
+  const types = facility
+    ? (options?.types ?? []).filter((t) => facility.typeIds.includes(t.id))
+    : [];
   // Keyboard events never reach this screen (KAV and automaticallyAdjustKeyboardInsets
   // are both dead here), so grow the scroll content while a field is focused instead —
   // focus implies the keyboard is opening on a phone.
@@ -96,7 +100,7 @@ export function CreateTicketScreen({
       <View className="px-4 pb-4 pt-5">
         <Text className="text-2xl font-bold tracking-tight text-foreground">Tạo yêu cầu</Text>
         <Text className="mt-1 text-sm leading-5 text-muted">
-          Mô tả vấn đề bạn gặp tại cơ sở đang thuê.
+          Mô tả vấn đề bạn gặp tại cơ sở đang thuê hoặc đã đặt cọc.
         </Text>
       </View>
 
@@ -119,7 +123,7 @@ export function CreateTicketScreen({
           <Card className="border border-border bg-surface">
             <Card.Body>
               <Text className="text-sm leading-5 text-muted">
-                Bạn cần thuê kho để gửi yêu cầu hỗ trợ.
+                Bạn cần đặt cọc hoặc thuê kho để gửi yêu cầu hỗ trợ.
               </Text>
             </Card.Body>
           </Card>
@@ -136,9 +140,15 @@ export function CreateTicketScreen({
                     ? { value: facility.id, label: `${facility.name} (${facility.code})` }
                     : undefined
                 }
-                onValueChange={(option) =>
-                  onChange({ facilityId: option?.value ?? null, storageUnitId: null })
-                }
+                onValueChange={(option) => {
+                  const next = options.facilities.find((f) => f.id === option?.value);
+                  onChange({
+                    facilityId: next?.id ?? null,
+                    storageUnitId: null,
+                    // Drop a picked type the new facility does not allow.
+                    typeId: form.typeId && next?.typeIds.includes(form.typeId) ? form.typeId : null,
+                  });
+                }}
               >
                 <Select.Trigger>
                   <Select.Value placeholder="Chọn cơ sở" />
@@ -188,20 +198,21 @@ export function CreateTicketScreen({
                   form.typeId
                     ? {
                         value: form.typeId,
-                        label: options.types.find((t) => t.id === form.typeId)?.name ?? '',
+                        label: types.find((t) => t.id === form.typeId)?.name ?? '',
                       }
                     : undefined
                 }
                 onValueChange={(option) => onChange({ typeId: option?.value ?? null })}
+                isDisabled={!facility}
               >
                 <Select.Trigger>
-                  <Select.Value placeholder="Chọn loại yêu cầu" />
+                  <Select.Value placeholder={facility ? 'Chọn loại yêu cầu' : 'Chọn cơ sở trước'} />
                   <Select.TriggerIndicator />
                 </Select.Trigger>
                 <Select.Portal>
                   <Select.Overlay />
                   <Select.Content presentation="bottom-sheet" snapPoints={['35%']}>
-                    {options.types.map((type) => (
+                    {types.map((type) => (
                       <Select.Item key={type.id} value={type.id} label={type.name} />
                     ))}
                   </Select.Content>

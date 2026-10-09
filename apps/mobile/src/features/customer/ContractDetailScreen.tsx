@@ -80,6 +80,8 @@ function ContractDetail({
   const isActive = contract.status === 'ACTIVE';
   const canRequestReturn = isActive && !openReturn(contract);
   const showReturnSection = isActive || contract.status === 'ENDED' || contract.return !== null;
+  // Matches the server: a deposit-paid (DRAFT) or ended contract still allows facility tickets.
+  const canFileTicket = isActive || contract.status === 'DRAFT' || contract.status === 'ENDED';
 
   return (
     <View className="mt-2 gap-4">
@@ -113,7 +115,7 @@ function ContractDetail({
           <Button.Label>Yêu cầu trả kho</Button.Label>
         </Button>
       ) : null}
-      {isActive ? (
+      {canFileTicket ? (
         <Button onPress={onSupport}>
           <Button.Label>Báo sự cố / hỗ trợ</Button.Label>
         </Button>

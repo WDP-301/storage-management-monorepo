@@ -4,16 +4,87 @@
 
 @source "./node_modules/heroui-native/lib";
 
+/*
+ * Design tokens from the "Kho Bãi Tối Giản" system generated in Stitch.
+ *
+ * Token NAMES stay as they were: heroui-native resolves its own component styling against
+ * `accent`, `surface`, `muted`, `border` and friends, so renaming them would restyle every Button
+ * and Chip in the app. Only the VALUES move.
+ *
+ * Font families are declared per weight, not per weight utility. React Native on Android does NOT
+ * synthesize weights: once `fontFamily` is set, `fontWeight` is ignored and everything renders at
+ * the family's own weight. So `font-bold` alone would silently flatten to regular. UI code picks
+ * the family (`font-display`, `font-strong`, `font-ui`, `font-body`) instead of a weight.
+ *
+ * Be Vietnam Pro is drawn for Vietnamese: its diacritics are designed into the glyph rather than
+ * stacked on top, so "ờ" and "ễ" keep their shape at small sizes. JetBrains Mono carries every
+ * figure — money, areas, unit codes, countdowns — because tabular digits keep columns aligned
+ * while the customer scans near-identical rooms.
+ */
 @theme {
-  --color-accent: hsl(221 83% 53%);
-  --color-accent-foreground: hsl(0 0% 100%);
-  --color-background: hsl(210 40% 98%);
+  --font-body: "BeVietnamPro_400Regular";
+  --font-ui: "BeVietnamPro_500Medium";
+  --font-strong: "BeVietnamPro_600SemiBold";
+  --font-display: "BeVietnamPro_700Bold";
+  --font-mono: "JetBrainsMono_500Medium";
+  --font-numeric: "JetBrainsMono_600SemiBold";
+  --font-numeric-strong: "JetBrainsMono_700Bold";
+
+  /*
+   * Type scale. Sizes are deliberately odd (13/15/17) rather than the Tailwind defaults: Vietnamese
+   * sets taller than Latin because of stacked diacritics, so the steps are tighter and every line
+   * height is set explicitly instead of inherited.
+   */
+  --text-caption: 11px;
+  --text-caption--line-height: 16px;
+  --text-body-sm: 13px;
+  --text-body-sm--line-height: 18px;
+  --text-body-md: 14px;
+  --text-body-md--line-height: 20px;
+  --text-body-lg: 15px;
+  --text-body-lg--line-height: 22px;
+  --text-title-sm: 17px;
+  --text-title-sm--line-height: 24px;
+  --text-title-md: 20px;
+  --text-title-md--line-height: 28px;
+  --text-title-lg: 24px;
+  --text-title-lg--line-height: 32px;
+  --text-num-sm: 12px;
+  --text-num-sm--line-height: 16px;
+  --text-num-md: 14px;
+  --text-num-md--line-height: 18px;
+  --text-num-lg: 16px;
+  --text-num-lg--line-height: 22px;
+
+  /*
+   * Cool cement neutrals. The warm off-white of the previous pass fought the blue accent; this
+   * palette reads as an architectural ledger, which is what someone paying a deposit on an unseen
+   * room needs to feel.
+   */
+  --color-background: hsl(210 33% 98%);
   --color-foreground: hsl(222 47% 11%);
   --color-surface: hsl(0 0% 100%);
   --color-surface-secondary: hsl(210 40% 96%);
   --color-muted: hsl(215 16% 47%);
-  --color-border: hsl(214 32% 91%);
-  --color-separator: hsl(214 32% 91%);
-  --color-success: hsl(158 64% 52%);
-  --color-success-foreground: hsl(164 86% 16%);
+  /* Between `foreground` and `muted`: body copy that must stay readable but not compete. */
+  --color-subtle: hsl(215 25% 31%);
+  --color-border: hsl(213 27% 84%);
+  --color-separator: hsl(213 27% 84%);
+  /* Only for dividers that must survive on top of `surface-secondary`. */
+  --color-border-strong: hsl(213 20% 65%);
+
+  /* Reserved for availability and the booking action. Nothing decorative uses it. */
+  --color-accent: hsl(203 100% 30%);
+  --color-accent-foreground: hsl(0 0% 100%);
+
+  /*
+   * Status colours always travel in pairs: a text colour and the tint it sits on. Never use the
+   * text colour as a fill or the tint as a text colour — contrast fails both ways round.
+   */
+  --color-success: hsl(160 84% 31%);
+  --color-success-bg: hsl(152 81% 96%);
+  --color-warning: hsl(32 95% 44%);
+  --color-warning-bg: hsl(48 100% 96%);
+  --color-danger: hsl(0 72% 51%);
+  --color-danger-bg: hsl(0 86% 97%);
 }

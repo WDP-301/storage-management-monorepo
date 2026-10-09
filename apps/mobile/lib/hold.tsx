@@ -34,6 +34,11 @@ type HoldContextValue = {
   /** Units held across all active bookings, which is what the customer actually has reserved. */
   heldUnitCount: number;
   remaining: string;
+  /**
+   * `true` in the last two minutes of the soonest hold, so the UI can warn before it lapses.
+   * Derived here rather than parsed back out of `remaining` by each consumer.
+   */
+  isExpiringSoon: boolean;
   /** Shared clock so every consumer classifies holds against the same instant. */
   now: number;
   isLoading: boolean;
@@ -49,6 +54,9 @@ type HoldContextValue = {
   /** Releases the held units. Rejects with the API's message when the booking cannot be cancelled. */
   cancelBooking: (bookingId: string) => Promise<void>;
 };
+
+/** Two minutes: long enough to finish paying, short enough that the warning still means something. */
+const EXPIRING_SOON_MS = 2 * 60 * 1000;
 
 const HoldContext = createContext<HoldContextValue | null>(null);
 
@@ -181,10 +189,9 @@ export function HoldProvider({ children }: { children: ReactNode }) {
     [refreshBookings],
   );
 
-  const remaining = useMemo(
-    () => formatRemaining((heldBooking ? holdDeadline(heldBooking) : now) - now),
-    [heldBooking, now],
-  );
+  const msLeft = heldBooking ? holdDeadline(heldBooking) - now : 0;
+  const remaining = useMemo(() => formatRemaining(msLeft), [msLeft]);
+  const isExpiringSoon = Boolean(heldBooking) && msLeft > 0 && msLeft <= EXPIRING_SOON_MS;
 
   const value = useMemo<HoldContextValue>(
     () => ({
@@ -194,6 +201,7 @@ export function HoldProvider({ children }: { children: ReactNode }) {
       heldBooking,
       heldUnitCount,
       remaining,
+      isExpiringSoon,
       now,
       isLoading,
       isCreating,
@@ -212,6 +220,7 @@ export function HoldProvider({ children }: { children: ReactNode }) {
       heldBooking,
       heldUnitCount,
       remaining,
+      isExpiringSoon,
       now,
       isLoading,
       isCreating,

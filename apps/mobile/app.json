@@ -16,6 +16,15 @@
           "isAccessMediaLocationEnabled": false
         }
       ],
+      "@maplibre/maplibre-react-native",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#2563eb",
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain"
+        }
+      ],
       [
         "expo-image-picker",
         {
@@ -25,10 +34,6 @@
         }
       ]
     ],
-    "splash": {
-      "resizeMode": "contain",
-      "backgroundColor": "#2563eb"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.storage.management"

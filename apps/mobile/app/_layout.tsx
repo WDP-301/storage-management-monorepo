@@ -4,6 +4,7 @@ import { HeroUINativeProvider } from 'heroui-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
 import { SessionProvider, useSession } from '../lib/session';
+import { useAppFonts } from '../src/features/app/use-app-fonts';
 import { SessionLoadingScreen } from '../src/features/auth/SessionLoadingScreen';
 import '../global.css';
 
@@ -30,8 +31,11 @@ export default function RootLayout() {
  */
 function RootNavigator() {
   const { area, isCheckingSession } = useSession();
+  const areFontsLoaded = useAppFonts();
 
-  if (isCheckingSession) {
+  // Holding the splash one frame longer avoids the flash where every label renders in the system
+  // font and then reflows once Be Vietnam Pro arrives, which is worse than a slightly longer wait.
+  if (isCheckingSession || !areFontsLoaded) {
     return <SessionLoadingScreen />;
   }
 

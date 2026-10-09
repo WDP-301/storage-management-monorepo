@@ -20,6 +20,7 @@ export default function PaymentRoute() {
       error={error}
       contentBottomPadding={32}
       onCheck={() => void check()}
+      onBack={() => router.navigate('/(customer)/bookings')}
       onDone={() => router.navigate('/(customer)/bookings')}
       // No navigation here: the refreshed booking turns the screen into its cancelled state, which
       // is the confirmation. Leaving immediately would drop the customer on the list with no word

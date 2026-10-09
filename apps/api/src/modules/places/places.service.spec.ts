@@ -23,6 +23,34 @@ describe('PlacesService', () => {
     service = new PlacesService({ get: jest.fn() } as never, facilitiesService as never);
   });
 
+  describe('autocomplete', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    const mockGoong = (body: unknown) =>
+      jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValue({ ok: true, json: async () => body } as unknown as Response);
+
+    beforeEach(() => {
+      service = new PlacesService(
+        { get: jest.fn().mockReturnValue('test-key') } as never,
+        facilitiesService as never,
+      );
+    });
+
+    it('returns an empty list when Goong finds no match', async () => {
+      mockGoong({ status: 'ZERO_RESULTS' });
+
+      await expect(service.autocomplete('zzzz không tồn tại')).resolves.toEqual([]);
+    });
+
+    it('surfaces 503 when Goong rejects the request', async () => {
+      mockGoong({ status: 'REQUEST_DENIED' });
+
+      await expect(service.autocomplete('quận 1')).rejects.toMatchObject({ status: 503 });
+    });
+  });
+
   describe('findNearby', () => {
     it('accepts raw lat/lng without calling Goong', async () => {
       const fetchSpy = jest.spyOn(global, 'fetch');

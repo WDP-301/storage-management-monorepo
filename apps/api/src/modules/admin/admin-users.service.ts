@@ -6,6 +6,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
+import { escapeLikePattern } from '@shared/utils/like-pattern.util';
 import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import { UserRole, UserStatus } from '@storage/types';
 import { In, IsNull, Repository } from 'typeorm';
@@ -276,9 +277,4 @@ export class AdminUsersService {
       updatedAt: user.updatedAt,
     };
   }
-}
-
-/** Neutralises LIKE wildcards so a literal `%` or `_` in a search term is matched as text. */
-function escapeLikePattern(term: string): string {
-  return term.replace(/[\\%_]/g, (char) => `\\${char}`);
 }

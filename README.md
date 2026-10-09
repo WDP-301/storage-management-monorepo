@@ -73,6 +73,11 @@ cp apps/api/.env.example apps/api/.env
 ```bash
 # Apply DB migrations (creates tables on first run):
 pnpm --filter @storage/api migration:run
+
+# Create the first administrator (self-registration only ever creates customers).
+# Idempotent: re-running grants ADMIN to an existing user without touching their password.
+SEED_ADMIN_EMAIL=admin@example.com SEED_ADMIN_PASSWORD='<min 8 chars>' SEED_ADMIN_NAME='Admin' \
+  pnpm --filter @storage/api seed:admin
 ```
 
 ### 2b. Mobile: dev client (bắt buộc từ khi có bản đồ)
@@ -123,4 +128,5 @@ pnpm dev:mobile  # Expo SDK 54 Metro bundler (--dev-client; cần build một l�
 | `pnpm format` | Auto-format all code with Biome |
 | `pnpm clean` | Clean all `dist`, `build`, and `.turbo` caches |
 | `pnpm --filter @storage/api migration:run` | Apply pending DB migrations |
+| `pnpm --filter @storage/api seed:admin` | Create or promote an administrator (`SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`) |
 | `pnpm --filter @storage/api migration:generate src/migrations/<Name>` | Generate migration from entity changes |

@@ -1,25 +1,12 @@
-import { Facility } from '@entities/facility.entity';
 import { CurrentUser } from '@modules/auth/decorators/current-user.decorator';
 import { Roles } from '@modules/auth/decorators/roles.decorator';
 import { RolesGuard } from '@modules/auth/guards/roles.guard';
 import { SessionGuard } from '@modules/auth/guards/session.guard';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  ParseUUIDPipe,
-  Patch,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@storage/types';
-import { CreateFacilityDto, UpdateFacilityDto } from './dto/facility.dto';
+import { AdminFacilitiesQueryDto } from './dto/facility.dto';
 import { FacilitiesService } from './facilities.service';
 
 @ApiTags('Facilities')
@@ -27,10 +14,12 @@ import { FacilitiesService } from './facilities.service';
 export class FacilitiesController {
   constructor(private readonly facilitiesService: FacilitiesService) {}
 
-  @Get()
-  @ApiOperation({ summary: 'List all active facilities' })
-  findAll() {
-    return this.facilitiesService.findAll();
+  @Get('admin')
+  @UseGuards(SessionGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
+  @ApiOperation({ summary: '[Admin] List facilities of every status, paginated and searchable' })
+  findForAdmin(@Query() query: AdminFacilitiesQueryDto) {
+    return this.facilitiesService.findForAdmin(query);
   }
 
   @Get('mine')
@@ -54,32 +43,5 @@ export class FacilitiesController {
   @ApiResponse({ status: 404, description: 'Facility not found' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.facilitiesService.findById(id);
-  }
-
-  @Post()
-  @UseGuards(SessionGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: '[Admin] Create a new facility' })
-  @ApiResponse({ status: 201, description: 'Facility created', type: Facility })
-  create(@Body() dto: CreateFacilityDto) {
-    return this.facilitiesService.create(dto);
-  }
-
-  @Patch(':id')
-  @UseGuards(SessionGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: '[Admin] Update facility' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateFacilityDto) {
-    return this.facilitiesService.update(id, dto);
-  }
-
-  @Delete(':id')
-  @UseGuards(SessionGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: '[Admin] Soft-delete facility' })
-  @ApiResponse({ status: 204, description: 'Deleted' })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.facilitiesService.softDelete(id);
   }
 }

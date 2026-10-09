@@ -6,8 +6,11 @@ export interface CustomerContractUnit {
   id: string;
   code: string;
   area_m2: number;
+  width_m: number;
+  length_m: number;
+  height_m: number | null;
+  volume_m3: number | null;
   status: string;
-  type_name: string | null;
 }
 
 export interface CustomerContractFacility {
@@ -84,9 +87,12 @@ export function toCustomerContractRecord(
       ? {
           id: unit.id,
           code: unit.code,
-          area_m2: unit.areaM2,
+          area_m2: Number(unit.areaM2),
+          width_m: Number(unit.widthM),
+          length_m: Number(unit.lengthM),
+          height_m: unit.heightM === null ? null : Number(unit.heightM),
+          volume_m3: unit.volumeM3 === null ? null : Number(unit.volumeM3),
           status: unit.status,
-          type_name: unit.unitType?.name ?? null,
         }
       : null,
     facility: unit?.facility

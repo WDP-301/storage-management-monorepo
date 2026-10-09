@@ -1,58 +1,32 @@
-import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { FacilityStatus } from '@storage/types';
-import {
-  IsEnum,
-  IsLatitude,
-  IsLongitude,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  MaxLength,
-} from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
-export class CreateFacilityDto {
-  @ApiProperty({ example: 'HCM-Q1-01', description: 'Unique facility code' })
+export class AdminFacilitiesQueryDto {
+  @ApiPropertyOptional({ example: 'Q1', description: 'Code or name contains (case-insensitive)' })
   @IsString()
-  @IsNotEmpty()
-  @MaxLength(50)
-  code: string;
-
-  @ApiProperty({ example: 'Kho Q1 - Nguyễn Huệ', description: 'Facility display name' })
-  @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MaxLength(150)
-  name: string;
+  search?: string;
 
-  @ApiProperty({ example: '12 Nguyễn Huệ', description: 'Street address' })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(255)
-  addressLine: string;
-
-  @ApiPropertyOptional({ example: '00001', description: 'Ward code (FK → wards.code)' })
-  @IsString()
-  @MaxLength(20)
-  @IsOptional()
-  wardCode?: string;
-
-  @ApiPropertyOptional({ example: '01', description: 'Province code (FK → provinces.code)' })
-  @IsString()
-  @MaxLength(20)
-  @IsOptional()
-  provinceCode?: string;
-
-  @ApiProperty({ example: 10.7769, description: 'Latitude (-90 to 90)' })
-  @IsLatitude()
-  latitude: number;
-
-  @ApiProperty({ example: 106.7009, description: 'Longitude (-180 to 180)' })
-  @IsLongitude()
-  longitude: number;
-
-  @ApiPropertyOptional({ enum: FacilityStatus, default: FacilityStatus.ACTIVE })
+  @ApiPropertyOptional({ enum: FacilityStatus })
   @IsEnum(FacilityStatus)
   @IsOptional()
   status?: FacilityStatus;
-}
 
-export class UpdateFacilityDto extends PartialType(CreateFacilityDto) {}
+  @ApiPropertyOptional({ default: 1, minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  @Min(1)
+  page?: number = 1;
+
+  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  @Min(1)
+  @Max(100)
+  limit?: number = 20;
+}

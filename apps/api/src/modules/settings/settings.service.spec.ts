@@ -185,4 +185,17 @@ describe('SettingsService', () => {
       await expect(service.get('booking.hold_minutes')).resolves.toBe(30);
     });
   });
+
+  describe('getDepositMonthsFor', () => {
+    it('uses the unit own level when set', async () => {
+      await expect(service.getDepositMonthsFor({ depositMonths: 3 })).resolves.toBe(3);
+      expect(repo.findOne).not.toHaveBeenCalled();
+    });
+
+    it('falls back to deposit.default_months when the unit has none', async () => {
+      repo.findOne.mockResolvedValue(buildSetting('deposit.default_months', 1.5));
+
+      await expect(service.getDepositMonthsFor({ depositMonths: null })).resolves.toBe(1.5);
+    });
+  });
 });

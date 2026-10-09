@@ -1,26 +1,26 @@
-import { Facility } from '@entities/facility.entity';
+import type { WarehouseView } from '@modules/facilities/warehouse.view';
 import { PlacesService } from './places.service';
 
-const buildFacility = (overrides: Partial<Facility> = {}): Facility =>
+const buildWarehouse = (overrides: Partial<WarehouseView> = {}): WarehouseView =>
   ({
-    id: 'facility-1',
+    id: 'warehouse-1',
     latitude: 10.78,
     longitude: 106.7,
     ...overrides,
-  }) as Facility;
+  }) as WarehouseView;
 
 describe('PlacesService', () => {
-  let facilitiesService: { findAll: jest.Mock };
+  let warehouses: { listAvailable: jest.Mock };
   let service: PlacesService;
 
   beforeEach(() => {
-    facilitiesService = {
-      findAll: jest.fn().mockResolvedValue([
-        buildFacility({ id: 'near' }), // ~0.4km from center
-        buildFacility({ id: 'far', latitude: 21.0285, longitude: 105.8542 }), // Hanoi
+    warehouses = {
+      listAvailable: jest.fn().mockResolvedValue([
+        buildWarehouse({ id: 'near' }), // ~0.4km from center
+        buildWarehouse({ id: 'far', latitude: 21.0285, longitude: 105.8542 }), // Hanoi
       ]),
     };
-    service = new PlacesService({ get: jest.fn() } as never, facilitiesService as never);
+    service = new PlacesService({ get: jest.fn() } as never, warehouses as never);
   });
 
   describe('autocomplete', () => {
@@ -34,7 +34,7 @@ describe('PlacesService', () => {
     beforeEach(() => {
       service = new PlacesService(
         { get: jest.fn().mockReturnValue('test-key') } as never,
-        facilitiesService as never,
+        warehouses as never,
       );
     });
 
@@ -58,8 +58,8 @@ describe('PlacesService', () => {
       const result = await service.findNearby({ lat: 10.7769, lng: 106.7009, radius: 5 });
 
       expect(result.center).toEqual({ lat: 10.7769, lng: 106.7009 });
-      expect(result.facilities.map((f) => f.id)).toEqual(['near']);
-      expect(result.facilities[0].distanceKm).toBeLessThan(1);
+      expect(result.warehouses.map((w) => w.id)).toEqual(['near']);
+      expect(result.warehouses[0].distanceKm).toBeLessThan(1);
       expect(fetchSpy).not.toHaveBeenCalled();
     });
 

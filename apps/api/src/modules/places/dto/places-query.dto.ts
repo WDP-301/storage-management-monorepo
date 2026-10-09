@@ -18,6 +18,13 @@ export class AutocompleteQueryDto {
   input: string;
 }
 
+export class PlaceDetailQueryDto {
+  @ApiProperty({ example: 'some-goong-place-id', description: 'Goong place_id from autocomplete' })
+  @IsString()
+  @IsNotEmpty()
+  place_id: string;
+}
+
 export class NearbyQueryDto {
   @ApiPropertyOptional({
     example: 'some-goong-place-id',

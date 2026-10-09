@@ -1,5 +1,5 @@
-import { Facility } from '@entities/facility.entity';
-import { FacilitiesService } from '@modules/facilities/facilities.service';
+import type { WarehouseView } from '@modules/facilities/warehouse.view';
+import { WarehouseQueryService } from '@modules/facilities/warehouse-query.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ENV_KEY, GOONG_BASE_URL, GOONG_DEFAULT_LOCATION } from '@shared/constants';
@@ -7,13 +7,20 @@ import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { NearbyQueryDto } from './dto/places-query.dto';
 
-export interface NearbyFacility extends Facility {
+export interface NearbyWarehouse extends WarehouseView {
   distanceKm: number;
+}
+
+export interface ResolvedPlace {
+  placeId: string;
+  address: string | null;
+  lat: number;
+  lng: number;
 }
 
 export interface NearbyResult {
   center: { lat: number; lng: number };
-  facilities: NearbyFacility[];
+  warehouses: NearbyWarehouse[];
 }
 
 @Injectable()
@@ -24,7 +31,7 @@ export class PlacesService {
 
   constructor(
     private readonly config: ConfigService,
-    private readonly facilitiesService: FacilitiesService,
+    private readonly warehouses: WarehouseQueryService,
   ) {}
 
   private get apiKey(): string {
@@ -99,24 +106,30 @@ export class PlacesService {
   async findNearby(query: NearbyQueryDto): Promise<NearbyResult> {
     const location = await this.resolveCenter(query);
 
-    const allFacilities = await this.facilitiesService.findAll();
-
-    const nearby: NearbyFacility[] = allFacilities
-      .map((f) => ({
-        ...f,
+    const nearby: NearbyWarehouse[] = (await this.warehouses.listAvailable())
+      .map((warehouse) => ({
+        ...warehouse,
         distanceKm: this.haversine(
           location.lat,
           location.lng,
-          Number(f.latitude),
-          Number(f.longitude),
+          warehouse.latitude,
+          warehouse.longitude,
         ),
       }))
-      .filter((f) => f.distanceKm <= query.radius)
+      .filter((warehouse) => warehouse.distanceKm <= query.radius)
       .sort((a, b) => a.distanceKm - b.distanceKm);
 
+    return { center: location, warehouses: nearby };
+  }
+
+  async resolvePlace(placeId: string): Promise<ResolvedPlace> {
+    const detail = await this.getPlaceDetail(placeId);
+    const location = this.extractLocation(detail);
     return {
-      center: location,
-      facilities: nearby,
+      placeId,
+      address: detail?.result?.formatted_address ?? null,
+      lat: location.lat,
+      lng: location.lng,
     };
   }
 
@@ -132,7 +145,10 @@ export class PlacesService {
       );
     }
 
-    const detail = await this.getPlaceDetail(query.place_id);
+    return this.extractLocation(await this.getPlaceDetail(query.place_id));
+  }
+
+  private extractLocation(detail: any): { lat: number; lng: number } {
     const location: { lat: number; lng: number } = detail?.result?.geometry?.location;
 
     if (!location?.lat || !location?.lng) {

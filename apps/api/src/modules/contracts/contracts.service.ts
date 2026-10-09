@@ -91,7 +91,7 @@ export class ContractsService {
   async findMine(customerId: string): Promise<CustomerContractRecord[]> {
     const contracts = await this.contracts.find({
       where: { customerId, deletedAt: IsNull() },
-      relations: { bookingItem: { storageUnit: { facility: true, unitType: true } } },
+      relations: { bookingItem: { storageUnit: { facility: true } } },
       order: { effectiveAt: 'DESC' },
     });
     if (contracts.length === 0) return [];

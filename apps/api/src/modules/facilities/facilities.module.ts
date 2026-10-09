@@ -1,24 +1,24 @@
 import { Facility } from '@entities/facility.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
-import { UnitType } from '@entities/unit-type.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { AuthModule } from '@modules/auth/auth.module';
+import { SettingsModule } from '@modules/settings/settings.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FacilitiesController } from './facilities.controller';
 import { FacilitiesService } from './facilities.service';
-import { StorageUnitsController } from './storage-units.controller';
-import { StorageUnitsService } from './storage-units.service';
-import { UnitTypesController } from './unit-types.controller';
-import { UnitTypesService } from './unit-types.service';
+import { WarehouseCommandService } from './warehouse-command.service';
+import { WarehouseQueryService } from './warehouse-query.service';
+import { WarehousesController } from './warehouses.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Facility, UnitType, StorageUnit, UserRoleAssignment]),
+    TypeOrmModule.forFeature([Facility, StorageUnit, UserRoleAssignment]),
     AuthModule, // provides SessionGuard and RolesGuard for controllers
+    SettingsModule,
   ],
-  controllers: [FacilitiesController, UnitTypesController, StorageUnitsController],
-  providers: [FacilitiesService, UnitTypesService, StorageUnitsService],
-  exports: [FacilitiesService, UnitTypesService, StorageUnitsService],
+  controllers: [FacilitiesController, WarehousesController],
+  providers: [FacilitiesService, WarehouseQueryService, WarehouseCommandService],
+  exports: [FacilitiesService, WarehouseQueryService],
 })
 export class FacilitiesModule {}

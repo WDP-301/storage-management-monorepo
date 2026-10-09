@@ -1,6 +1,8 @@
+import { BookingItem } from '@entities/booking-item.entity';
 import type { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { SettingsService } from '@modules/settings/settings.service';
 import { ChangeRequestStatus, ContractStatus, StorageUnitStatus, UserRole } from '@storage/types';
 import { ChangeRequestsService } from './change-requests.service';
 
@@ -44,7 +46,7 @@ const buildRequest = (overrides: Partial<UnitChangeRequest> = {}): UnitChangeReq
       id: 'unit-new',
       code: 'A-02',
       facilityId: FACILITY_ID,
-      unitType: { monthlyPrice: '950000.00', defaultDepositMonths: '1.00' },
+      monthlyPrice: '950000.00',
     },
     requester: { id: CUSTOMER_ID, fullName: 'Cust', email: 'c@test.dev' },
     createdAt: new Date(),
@@ -76,7 +78,10 @@ describe('ChangeRequestsService', () => {
     createQueryBuilder: jest.Mock;
     update: jest.Mock;
     save: jest.Mock;
+    findOne: jest.Mock;
+    count: jest.Mock;
   };
+  let settings: SettingsService;
   let service: ChangeRequestsService;
 
   beforeEach(() => {
@@ -107,6 +112,13 @@ describe('ChangeRequestsService', () => {
       createQueryBuilder: jest.fn(),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       save: jest.fn(async (v) => v),
+      // Locked re-read: the contract is still active and still on the old unit.
+      findOne: jest.fn(async (entity: unknown) =>
+        entity === BookingItem
+          ? { id: 'bi-1', storageUnitId: 'unit-old' }
+          : { id: 'contract-1', status: ContractStatus.ACTIVE, bookingItemId: 'bi-1' },
+      ),
+      count: jest.fn().mockResolvedValue(0),
     };
     const claimBuilder = {
       update: jest.fn().mockReturnThis(),
@@ -116,12 +128,18 @@ describe('ChangeRequestsService', () => {
     };
     txManager.createQueryBuilder.mockReturnValue(claimBuilder);
 
+    // Real resolution logic; only the stored system-wide level is stubbed.
+    settings = Object.assign(Object.create(SettingsService.prototype), {
+      getDepositDefaultMonths: jest.fn().mockResolvedValue(2),
+    });
+
     service = new ChangeRequestsService(
       requests as never,
       contracts as never,
       storageUnits as never,
       roleAssignments as never,
       { transaction: jest.fn(async (fn: (m: unknown) => unknown) => fn(txManager)) } as never,
+      settings,
     );
   });
 
@@ -130,7 +148,7 @@ describe('ChangeRequestsService', () => {
       id: 'unit-new',
       facilityId: FACILITY_ID,
       status: StorageUnitStatus.AVAILABLE,
-      unitType: { monthlyPrice: '950000.00', defaultDepositMonths: '1.00' },
+      monthlyPrice: '950000.00',
     });
     requests.createQueryBuilder.mockReturnValue({
       where: jest.fn().mockReturnThis(),
@@ -154,9 +172,63 @@ describe('ChangeRequestsService', () => {
     expect(txManager.update).toHaveBeenCalledWith(
       expect.anything(),
       { id: 'unit-old' },
-      { status: StorageUnitStatus.AVAILABLE },
+      { status: StorageUnitStatus.MAINTENANCE },
     );
     expect(result.request.status).toBe(ChangeRequestStatus.COMPLETED);
+  });
+
+  it('approve snapshots the system-wide deposit level for a unit without its own', async () => {
+    await service.decide('req-1', { decision: 'APPROVED' }, manager);
+
+    expect(txManager.update).toHaveBeenCalledWith(
+      BookingItem,
+      expect.anything(),
+      expect.objectContaining({ monthlyPriceSnapshot: 950000, depositSnapshot: 1900000 }),
+    );
+  });
+
+  it('approve snapshots the target unit own deposit level', async () => {
+    requests.findOne.mockResolvedValue(
+      buildRequest({
+        newUnit: {
+          id: 'unit-new',
+          code: 'A-02',
+          facilityId: FACILITY_ID,
+          depositMonths: 3,
+          monthlyPrice: '950000.00',
+        },
+      } as never),
+    );
+
+    await service.decide('req-1', { decision: 'APPROVED' }, manager);
+
+    expect(txManager.update).toHaveBeenCalledWith(
+      BookingItem,
+      expect.anything(),
+      expect.objectContaining({ depositSnapshot: 2850000 }),
+    );
+  });
+
+  it('approve refuses while the contract has a return in progress', async () => {
+    txManager.count.mockResolvedValue(1);
+
+    await expect(service.decide('req-1', { decision: 'APPROVED' }, manager)).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(txManager.update).not.toHaveBeenCalled();
+  });
+
+  it('approve refuses a request made from a unit the contract has already left', async () => {
+    txManager.findOne.mockImplementation(async (entity: unknown) =>
+      entity === BookingItem
+        ? { id: 'bi-1', storageUnitId: 'unit-elsewhere' }
+        : { id: 'contract-1', status: ContractStatus.ACTIVE, bookingItemId: 'bi-1' },
+    );
+
+    await expect(service.decide('req-1', { decision: 'APPROVED' }, manager)).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(txManager.update).not.toHaveBeenCalled();
   });
 
   it('approve fails when the target unit was already taken', async () => {

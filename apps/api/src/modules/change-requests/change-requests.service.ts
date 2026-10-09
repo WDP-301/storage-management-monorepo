@@ -1,16 +1,24 @@
 import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
+import { Inspection } from '@entities/inspection.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { activeFacilityIds } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { SettingsService } from '@modules/settings/settings.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
-import { ChangeRequestStatus, ContractStatus, StorageUnitStatus, UserRole } from '@storage/types';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import {
+  ChangeRequestStatus,
+  ContractStatus,
+  InspectionType,
+  StorageUnitStatus,
+  UserRole,
+} from '@storage/types';
+import { DataSource, type EntityManager, IsNull, Repository } from 'typeorm';
 import {
   CreateChangeRequestDto,
   DecideChangeRequestDto,
@@ -31,7 +39,7 @@ const OPEN_STATUSES: readonly ChangeRequestStatus[] = [
 const REQUEST_RELATIONS = {
   requester: true,
   oldUnit: true,
-  newUnit: { unitType: true },
+  newUnit: true,
 } as const;
 
 @Injectable()
@@ -46,6 +54,7 @@ export class ChangeRequestsService {
     @InjectRepository(UserRoleAssignment)
     private readonly roleAssignments: Repository<UserRoleAssignment>,
     private readonly dataSource: DataSource,
+    private readonly settings: SettingsService,
   ) {}
 
   /**
@@ -107,9 +116,9 @@ export class ChangeRequestsService {
   }
 
   /**
-   * Customer asks to move to another AVAILABLE unit in the same facility as their
-   * active contract. The request carries the price/deposit delta as a quote —
-   * decided later by a facility manager.
+   * Customer asks to move their active contract to another AVAILABLE warehouse. The request
+   * carries the price/deposit delta as a quote — decided later by the manager of the
+   * warehouse they rent today.
    */
   async create(dto: CreateChangeRequestDto, actor: AuthUser): Promise<ChangeRequestResponse> {
     const contract = await this.contracts.findOne({
@@ -127,20 +136,12 @@ export class ChangeRequestsService {
     const oldUnit = contract.bookingItem.storageUnit;
     const newUnit = await this.storageUnits.findOne({
       where: { id: dto.newUnitId, deletedAt: IsNull() },
-      relations: { unitType: true },
     });
     if (!newUnit) {
       throw this.fieldError('newUnitId', 'notFound', 'Storage unit does not exist');
     }
     if (newUnit.id === oldUnit.id) {
       throw this.fieldError('newUnitId', 'sameUnit', 'New unit must differ from the current one');
-    }
-    if (newUnit.facilityId !== oldUnit.facilityId) {
-      throw this.fieldError(
-        'newUnitId',
-        'differentFacility',
-        'New unit must be in the same facility',
-      );
     }
     if (newUnit.status !== StorageUnitStatus.AVAILABLE) {
       throw this.fieldError('newUnitId', 'notAvailable', 'New unit is not available');
@@ -162,8 +163,8 @@ export class ChangeRequestsService {
       );
     }
 
-    const newPrice = Number(newUnit.unitType.monthlyPrice);
-    const newDeposit = newPrice * Number(newUnit.unitType.defaultDepositMonths);
+    const newPrice = Number(newUnit.monthlyPrice);
+    const newDeposit = newPrice * (await this.settings.getDepositMonthsFor(newUnit));
     const rentDifference = newPrice - Number(contract.bookingItem.monthlyPriceSnapshot);
     const depositDifference = newDeposit - Number(contract.bookingItem.depositSnapshot);
 
@@ -205,8 +206,6 @@ export class ChangeRequestsService {
       );
     }
 
-    const now = new Date();
-
     if (dto.decision === 'REJECTED') {
       request.status = ChangeRequestStatus.REJECTED;
       request.approvedBy = actor.id;
@@ -244,24 +243,26 @@ export class ChangeRequestsService {
       );
     }
 
-    const newUnitType = request.newUnit?.unitType;
-    if (!newUnitType) {
+    const newUnit = request.newUnit;
+    if (!newUnit) {
       throw new DomainException(
         ErrorCode.CONFLICT,
         'Target unit no longer exists',
         HttpStatus.CONFLICT,
       );
     }
-    const newPrice = Number(newUnitType.monthlyPrice);
-    const newDeposit = newPrice * Number(newUnitType.defaultDepositMonths);
+    const newPrice = Number(newUnit.monthlyPrice);
+    const newDeposit = newPrice * (await this.settings.getDepositMonthsFor(newUnit));
 
     await this.dataSource.transaction(async (manager) => {
+      await this.assertContractStillMovable(manager, contract.id, request.oldUnitId);
+
       // Claim the target unit atomically — if someone else took it, bail out.
       const claimed = await manager
         .createQueryBuilder()
         .update(StorageUnit)
         .set({ status: StorageUnitStatus.RENTED })
-        .where('id = :id AND status = :available', {
+        .where('id = :id AND status = :available AND deleted_at IS NULL', {
           id: request.newUnitId,
           available: StorageUnitStatus.AVAILABLE,
         })
@@ -274,10 +275,12 @@ export class ChangeRequestsService {
         );
       }
 
+      // The customer's goods may still be in the old warehouse; it stays out of the
+      // catalogue until staff confirm it is empty and put it back in service.
       await manager.update(
         StorageUnit,
         { id: request.oldUnitId },
-        { status: StorageUnitStatus.AVAILABLE },
+        { status: StorageUnitStatus.MAINTENANCE },
       );
       await manager.update(
         BookingItem,
@@ -293,8 +296,6 @@ export class ChangeRequestsService {
       request.status = ChangeRequestStatus.COMPLETED;
       request.approvedBy = actor.id;
       request.decisionNote = dto.decisionNote;
-      request.transitionStartAt = now;
-      request.transitionEndAt = now;
       request.history = [
         ...(request.history ?? []),
         this.historyEntry(
@@ -308,6 +309,46 @@ export class ChangeRequestsService {
     });
 
     return { request: toChangeRequestRecord(request) };
+  }
+
+  /**
+   * Under the contract row lock (shared with return and inspection flows): the contract is
+   * still active, still on the unit the request was made from, and not mid move-out.
+   */
+  private async assertContractStillMovable(
+    manager: EntityManager,
+    contractId: string,
+    oldUnitId: string,
+  ): Promise<void> {
+    const contract = await manager.findOne(Contract, {
+      where: { id: contractId },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (!contract || contract.status !== ContractStatus.ACTIVE) {
+      throw new DomainException(
+        ErrorCode.CONFLICT,
+        'Contract is no longer active',
+        HttpStatus.CONFLICT,
+      );
+    }
+    const item = await manager.findOne(BookingItem, { where: { id: contract.bookingItemId } });
+    if (item?.storageUnitId !== oldUnitId) {
+      throw new DomainException(
+        ErrorCode.CONFLICT,
+        'Contract has already moved to another warehouse',
+        HttpStatus.CONFLICT,
+      );
+    }
+    const openReturns = await manager.count(Inspection, {
+      where: { contractId, type: InspectionType.RETURN, finalizedAt: IsNull() },
+    });
+    if (openReturns > 0) {
+      throw new DomainException(
+        ErrorCode.CONFLICT,
+        'Contract has a return in progress',
+        HttpStatus.CONFLICT,
+      );
+    }
   }
 
   private async findOrFail(id: string): Promise<UnitChangeRequest> {

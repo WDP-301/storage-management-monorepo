@@ -8,6 +8,7 @@ export type InspectionResponse = {
   id: string;
   type: InspectionKind;
   inspectedBy: string | null;
+  requestNote: string | null;
   conditionNotes: string | null;
   evidence: unknown[] | null;
   damages: unknown[] | null;
@@ -38,6 +39,8 @@ export type StaffInspection = {
   type: InspectionKind;
   inspectedBy: string | null;
   inspectorName: string | null;
+  /** The customer's own note on a return request; read-only for staff. */
+  requestNote: string | null;
   conditionNotes: string;
   evidence: EvidenceFile[];
   damages: InspectionDamage[];

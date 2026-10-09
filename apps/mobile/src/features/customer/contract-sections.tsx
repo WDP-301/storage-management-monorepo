@@ -143,7 +143,13 @@ function InspectionBody({
           }
         />
       ) : null}
-      {inspection.conditionNotes ? (
+      {inspection.requestNote ? (
+        <Text className="text-sm leading-5 text-foreground">
+          Ghi chú của bạn: {inspection.requestNote}
+        </Text>
+      ) : null}
+      {/* Staff notes are a draft until the record is signed off. */}
+      {finalized && inspection.conditionNotes ? (
         <Text className="text-sm leading-5 text-muted">{inspection.conditionNotes}</Text>
       ) : null}
       <EvidenceGallery files={inspection.evidence} />

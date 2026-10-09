@@ -25,7 +25,7 @@ export const InspectionsApi = {
   get: async (id: string, signal?: AbortSignal): Promise<StaffInspection> =>
     normaliseInspection(await request<InspectionResponse>(`/inspections/${id}`, { signal })),
 
-  update: async (id: string, body: InspectionUpdate): Promise<StaffInspection> =>
+  update: async (id: string, body: Partial<InspectionUpdate>): Promise<StaffInspection> =>
     normaliseInspection(
       await request<InspectionResponse>(`/inspections/${id}`, {
         method: 'PATCH',
@@ -44,6 +44,7 @@ export function normaliseInspection(row: InspectionResponse): StaffInspection {
     type: row.type,
     inspectedBy: row.inspectedBy,
     inspectorName: row.inspector?.fullName ?? null,
+    requestNote: row.requestNote ?? null,
     conditionNotes: row.conditionNotes ?? '',
     evidence: (row.evidence ?? []).filter(isEvidenceFile),
     damages: toDamages(row.damages),

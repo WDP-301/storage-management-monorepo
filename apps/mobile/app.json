@@ -20,7 +20,8 @@
         "expo-image-picker",
         {
           "photosPermission": "Cho phép chọn ảnh để đính kèm vào yêu cầu hỗ trợ và biên bản kho.",
-          "cameraPermission": "Cho phép chụp ảnh hiện trạng kho khi lập biên bản nhận/trả kho."
+          "cameraPermission": "Cho phép chụp ảnh hiện trạng kho khi lập biên bản nhận/trả kho.",
+          "microphonePermission": false
         }
       ]
     ],

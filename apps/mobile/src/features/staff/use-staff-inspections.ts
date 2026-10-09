@@ -5,7 +5,13 @@ import { InspectionsApi } from '../../../lib/inspections-api';
 import { useSession } from '../../../lib/session';
 import type { InspectionListStatus, StaffInspection } from '../../types/inspection-api';
 
-type State = { items: StaffInspection[]; isLoading: boolean; error: string | null };
+type State = {
+  /** scope+status the items belong to; a different one means they are stale. */
+  key: string;
+  items: StaffInspection[];
+  isLoading: boolean;
+  error: string | null;
+};
 
 /**
  * Inspections for the staff area, refreshed on every focus. Facility managers see their whole
@@ -14,16 +20,22 @@ type State = { items: StaffInspection[]; isLoading: boolean; error: string | nul
 export function useStaffInspections(status: InspectionListStatus) {
   const { user } = useSession();
   const scope = user?.roles.includes('FACILITY_MANAGER') ? 'managed' : 'assigned';
-  const [state, setState] = useState<State>({ items: [], isLoading: true, error: null });
+  const [state, setState] = useState<State>({ key: '', items: [], isLoading: true, error: null });
   const [reloadToken, setReloadToken] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
       const controller = new AbortController();
-      setState((current) => ({ ...current, isLoading: true, error: null }));
+      const key = `${scope}:${status}`;
+      // Another segment's rows must not show under this one while it loads (or if it fails).
+      setState((current) =>
+        current.key === key
+          ? { ...current, isLoading: true, error: null }
+          : { key, items: [], isLoading: true, error: null },
+      );
       InspectionsApi.list(scope, status, controller.signal)
         .then((items) => {
-          if (!controller.signal.aborted) setState({ items, isLoading: false, error: null });
+          if (!controller.signal.aborted) setState({ key, items, isLoading: false, error: null });
         })
         .catch((error: unknown) => {
           if (controller.signal.aborted) return;
@@ -37,5 +49,6 @@ export function useStaffInspections(status: InspectionListStatus) {
   );
 
   const refetch = useCallback(() => setReloadToken((token) => token + 1), []);
-  return { ...state, refetch };
+  const { items, isLoading, error } = state;
+  return { items, isLoading, error, refetch };
 }

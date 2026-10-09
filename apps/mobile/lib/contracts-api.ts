@@ -63,6 +63,7 @@ function normaliseInspection(inspection: InspectionSummaryResponse): ApiInspecti
     inspectedAt: inspection.inspected_at,
     finalizedAt: inspection.finalized_at,
     inspectorName: inspection.inspector_name,
+    requestNote: inspection.request_note,
     conditionNotes: inspection.condition_notes,
     evidence: (inspection.evidence ?? []).filter(isEvidenceFile),
     damages: toDamages(inspection.damages),

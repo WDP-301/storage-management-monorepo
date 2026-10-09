@@ -21,7 +21,18 @@ type Props = {
 
 export function InspectionDetailScreen({ detail, onBack, onFinalized }: Props) {
   const [mutedColor] = useThemeColor(['muted']);
-  const { inspection, form, setForm, error, busy, isDirty, save, finalize } = detail;
+  const {
+    inspection,
+    form,
+    updateForm,
+    error,
+    busy,
+    isDirty,
+    isUploading,
+    trackUpload,
+    save,
+    finalize,
+  } = detail;
 
   if (!inspection || !form) {
     return (
@@ -71,7 +82,9 @@ export function InspectionDetailScreen({ detail, onBack, onFinalized }: Props) {
               placeholder="Tình trạng kho, chìa khoá, đồng hồ điện…"
               placeholderTextColor={mutedColor}
               value={form.conditionNotes}
-              onChangeText={(conditionNotes) => setForm({ ...form, conditionNotes })}
+              onChangeText={(conditionNotes) =>
+                updateForm((current) => ({ ...current, conditionNotes }))
+              }
               maxLength={5000}
               multiline
               textAlignVertical="top"
@@ -82,7 +95,19 @@ export function InspectionDetailScreen({ detail, onBack, onFinalized }: Props) {
         <Section title="Ảnh hiện trạng">
           <EvidenceEditor
             files={form.evidence}
-            onChange={(evidence) => setForm({ ...form, evidence })}
+            onAdd={(added) =>
+              updateForm((current) => ({
+                ...current,
+                evidence: [...current.evidence, ...added].slice(0, MAX_PHOTOS),
+              }))
+            }
+            onRemove={(file) =>
+              updateForm((current) => ({
+                ...current,
+                evidence: current.evidence.filter((f) => f.fileKey !== file.fileKey),
+              }))
+            }
+            onUploadingChange={trackUpload}
             max={MAX_PHOTOS}
             readOnly={readOnly}
           />
@@ -91,7 +116,10 @@ export function InspectionDetailScreen({ detail, onBack, onFinalized }: Props) {
         <Section title="Hư hỏng">
           <DamageEditor
             damages={form.damages}
-            onChange={(damages) => setForm({ ...form, damages })}
+            onChange={(change) =>
+              updateForm((current) => ({ ...current, damages: change(current.damages) }))
+            }
+            onUploadingChange={trackUpload}
             readOnly={readOnly}
           />
         </Section>
@@ -102,13 +130,19 @@ export function InspectionDetailScreen({ detail, onBack, onFinalized }: Props) {
           <View className="gap-3">
             <Button
               variant="secondary"
-              isDisabled={!isDirty || busy !== null}
+              isDisabled={!isDirty || busy !== null || isUploading}
               onPress={() => void save()}
             >
               <Button.Label>{busy === 'saving' ? 'Đang lưu…' : 'Lưu'}</Button.Label>
             </Button>
-            <Button isDisabled={busy !== null} onPress={confirmFinalize}>
-              <Button.Label>{busy === 'finalizing' ? 'Đang chốt…' : 'Chốt biên bản'}</Button.Label>
+            <Button isDisabled={busy !== null || isUploading} onPress={confirmFinalize}>
+              <Button.Label>
+                {busy === 'finalizing'
+                  ? 'Đang chốt…'
+                  : isUploading
+                    ? 'Đang tải ảnh…'
+                    : 'Chốt biên bản'}
+              </Button.Label>
             </Button>
           </View>
         )}
@@ -148,6 +182,11 @@ function InspectionFacts({ inspection }: { inspection: StaffInspection }) {
         <InfoRow label="Điện thoại" value={inspection.customerPhone} />
       ) : null}
       <InfoRow label="Nhân viên" value={inspection.inspectorName ?? 'Chưa phân công'} />
+      {inspection.requestNote ? (
+        <Text className="text-sm leading-5 text-muted">
+          Ghi chú của khách: {inspection.requestNote}
+        </Text>
+      ) : null}
       {contract && startIso ? (
         <>
           <InfoRow label="Hợp đồng" value={contract.contractNo} />

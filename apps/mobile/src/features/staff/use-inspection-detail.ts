@@ -1,5 +1,5 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError } from '../../../lib/api';
 import { InspectionsApi } from '../../../lib/inspections-api';
 import type { InspectionUpdate, StaffInspection } from '../../types/inspection-api';
@@ -13,7 +13,8 @@ const toForm = (inspection: StaffInspection): InspectionUpdate => ({
 /** API conflicts arrive in English; staff get the reason in Vietnamese. */
 export function staffErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof ApiError)) return fallback;
-  if (error.statusCode === 403) return 'Bạn không có quyền với biên bản này.';
+  if (error.code === 'FORBIDDEN' || error.statusCode === 403)
+    return 'Bạn không có quyền với biên bản này.';
   const reason = [
     ['already finalized', 'Biên bản đã được chốt trước đó.'],
     [
@@ -24,8 +25,28 @@ export function staffErrorMessage(error: unknown, fallback: string): string {
     ['expected state', 'Trạng thái kho không khớp — liên hệ quản lý cơ sở.'],
   ].find(([needle]) => error.message.includes(needle));
   if (reason) return reason[1];
+  // Message substrings above are best-effort; the error code is the stable signal.
+  if (error.code === 'CONFLICT' || error.statusCode === 409)
+    return 'Thao tác bị xung đột — tải lại biên bản rồi thử lại.';
   if (error.statusCode === 400) return 'Thông tin chưa hợp lệ, kiểm tra lại ghi chú và hư hỏng.';
   return error.message || fallback;
+}
+
+/** Fields whose edited value differs from the stored record; the rest stay untouched server-side. */
+function changedFields(
+  form: InspectionUpdate,
+  inspection: StaffInspection,
+): Partial<InspectionUpdate> {
+  const stored = toForm(inspection);
+  const changes: Partial<InspectionUpdate> = {};
+  if (form.conditionNotes !== stored.conditionNotes) changes.conditionNotes = form.conditionNotes;
+  if (JSON.stringify(form.evidence) !== JSON.stringify(stored.evidence)) {
+    changes.evidence = form.evidence;
+  }
+  if (JSON.stringify(form.damages) !== JSON.stringify(stored.damages)) {
+    changes.damages = form.damages.map((d) => ({ ...d, description: d.description.trim() }));
+  }
+  return changes;
 }
 
 /** Loads one inspection and keeps an editable copy; `isDirty` drives the unsaved-changes guard. */
@@ -34,6 +55,10 @@ export function useInspectionDetail(id: string | undefined) {
   const [form, setForm] = useState<InspectionUpdate | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'saving' | 'finalizing' | null>(null);
+  const [uploads, setUploads] = useState(0);
+  // The route stays mounted across inspections: async results for a previous id are dropped.
+  const idRef = useRef(id);
+  idRef.current = id;
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -56,6 +81,7 @@ export function useInspectionDetail(id: string | undefined) {
     setInspection(null);
     setForm(null);
     setError(null);
+    setUploads(0);
   }, [id]);
 
   useFocusEffect(
@@ -66,11 +92,27 @@ export function useInspectionDetail(id: string | undefined) {
     }, [load]),
   );
 
+  /**
+   * Edits go through the latest form (not the one captured when an upload started), so a
+   * photo that finishes uploading never rolls back notes or damages typed meanwhile.
+   */
+  const updateForm = useCallback(
+    (change: (current: InspectionUpdate) => InspectionUpdate) => {
+      if (idRef.current !== id) return;
+      setForm((current) => (current ? change(current) : current));
+    },
+    [id],
+  );
+
+  const trackUpload = useCallback((active: boolean) => {
+    setUploads((count) => Math.max(0, count + (active ? 1 : -1)));
+  }, []);
+
   const isDirty = useMemo(
     () =>
       inspection !== null &&
       form !== null &&
-      JSON.stringify(form) !== JSON.stringify(toForm(inspection)),
+      Object.keys(changedFields(form, inspection)).length > 0,
     [form, inspection],
   );
 
@@ -80,23 +122,22 @@ export function useInspectionDetail(id: string | undefined) {
     : null;
 
   const save = async (): Promise<boolean> => {
-    if (!id || !form) return false;
+    if (!id || !form || !inspection) return false;
     if (validationError) {
       setError(validationError);
       return false;
     }
     setBusy('saving');
     try {
-      const saved = await InspectionsApi.update(id, {
-        ...form,
-        damages: form.damages.map((d) => ({ ...d, description: d.description.trim() })),
-      });
-      setInspection(saved);
-      setForm(toForm(saved));
-      setError(null);
+      const saved = await InspectionsApi.update(id, changedFields(form, inspection));
+      if (idRef.current === id) {
+        setInspection(saved);
+        setForm(toForm(saved));
+        setError(null);
+      }
       return true;
     } catch (err) {
-      setError(staffErrorMessage(err, 'Không lưu được biên bản.'));
+      if (idRef.current === id) setError(staffErrorMessage(err, 'Không lưu được biên bản.'));
       return false;
     } finally {
       setBusy(null);
@@ -109,15 +150,35 @@ export function useInspectionDetail(id: string | undefined) {
     if (isDirty && !(await save())) return false;
     setBusy('finalizing');
     try {
-      await InspectionsApi.finalize(id);
+      const done = await InspectionsApi.finalize(id);
+      // Locks the screen at once instead of waiting for the next reload.
+      if (idRef.current === id) {
+        setInspection((current) =>
+          current
+            ? { ...current, finalizedAt: done.finalizedAt ?? new Date().toISOString() }
+            : current,
+        );
+      }
       return true;
     } catch (err) {
-      setError(staffErrorMessage(err, 'Không chốt được biên bản.'));
+      if (idRef.current === id) setError(staffErrorMessage(err, 'Không chốt được biên bản.'));
       return false;
     } finally {
       setBusy(null);
     }
   };
 
-  return { inspection, form, setForm, error, busy, isDirty, save, finalize, reload: load };
+  return {
+    inspection,
+    form,
+    updateForm,
+    error,
+    busy,
+    isDirty,
+    isUploading: uploads > 0,
+    trackUpload,
+    save,
+    finalize,
+    reload: load,
+  };
 }

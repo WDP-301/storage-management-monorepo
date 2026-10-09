@@ -12,14 +12,16 @@ const SEVERITY_LABEL: Record<DamageSeverity, string> = { MINOR: 'Nhẹ', MAJOR: 
 
 type Props = {
   damages: InspectionDamage[];
-  onChange: (damages: InspectionDamage[]) => void;
+  /** Takes an updater so edits apply to the latest list, not the one rendered earlier. */
+  onChange: (change: (damages: InspectionDamage[]) => InspectionDamage[]) => void;
+  onUploadingChange: (uploading: boolean) => void;
   readOnly?: boolean;
 };
 
-export function DamageEditor({ damages, onChange, readOnly }: Props) {
+export function DamageEditor({ damages, onChange, onUploadingChange, readOnly }: Props) {
   const [mutedColor] = useThemeColor(['muted']);
   const replace = (index: number, patch: Partial<InspectionDamage>) =>
-    onChange(damages.map((damage, i) => (i === index ? { ...damage, ...patch } : damage)));
+    onChange((list) => list.map((damage, i) => (i === index ? { ...damage, ...patch } : damage)));
 
   if (readOnly && damages.length === 0) {
     return <Text className="text-sm text-muted">Không ghi nhận hư hỏng.</Text>;
@@ -47,7 +49,7 @@ export function DamageEditor({ damages, onChange, readOnly }: Props) {
                 <Text className="text-sm font-semibold text-foreground">Hư hỏng {index + 1}</Text>
                 <Pressable
                   hitSlop={8}
-                  onPress={() => onChange(damages.filter((_, i) => i !== index))}
+                  onPress={() => onChange((list) => list.filter((_, i) => i !== index))}
                 >
                   <Text className="text-sm font-semibold text-danger">Xoá</Text>
                 </Pressable>
@@ -76,7 +78,31 @@ export function DamageEditor({ damages, onChange, readOnly }: Props) {
           )}
           <EvidenceEditor
             files={damage.evidence ?? []}
-            onChange={(evidence) => replace(index, { evidence })}
+            onAdd={(added) =>
+              onChange((list) =>
+                list.map((item, i) =>
+                  i === index
+                    ? {
+                        ...item,
+                        evidence: [...(item.evidence ?? []), ...added].slice(0, MAX_DAMAGE_PHOTOS),
+                      }
+                    : item,
+                ),
+              )
+            }
+            onRemove={(file) =>
+              onChange((list) =>
+                list.map((item, i) =>
+                  i === index
+                    ? {
+                        ...item,
+                        evidence: (item.evidence ?? []).filter((f) => f.fileKey !== file.fileKey),
+                      }
+                    : item,
+                ),
+              )
+            }
+            onUploadingChange={onUploadingChange}
             max={MAX_DAMAGE_PHOTOS}
             readOnly={readOnly}
           />
@@ -89,7 +115,7 @@ export function DamageEditor({ damages, onChange, readOnly }: Props) {
           className="self-start"
           isDisabled={damages.length >= MAX_DAMAGES}
           onPress={() =>
-            onChange([...damages, { description: '', severity: 'MINOR', evidence: [] }])
+            onChange((list) => [...list, { description: '', severity: 'MINOR', evidence: [] }])
           }
         >
           <Button.Label>+ Thêm hư hỏng</Button.Label>

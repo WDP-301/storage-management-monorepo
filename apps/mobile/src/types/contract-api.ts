@@ -22,6 +22,7 @@ export type InspectionSummaryResponse = {
   inspected_at: string | null;
   finalized_at: string | null;
   inspector_name: string | null;
+  request_note: string | null;
   condition_notes: string | null;
   evidence: unknown[];
   damages: unknown[];
@@ -58,6 +59,8 @@ export type ApiInspection = {
   inspectedAt: string | null;
   finalizedAt: string | null;
   inspectorName: string | null;
+  /** What the customer wrote when asking for the return. */
+  requestNote: string | null;
   conditionNotes: string | null;
   evidence: EvidenceFile[];
   damages: InspectionDamage[];

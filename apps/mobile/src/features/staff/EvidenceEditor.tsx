@@ -9,7 +9,11 @@ import type { EvidenceFile } from '../../types/contract-api';
 
 type Props = {
   files: EvidenceFile[];
-  onChange: (files: EvidenceFile[]) => void;
+  /** Called with the photos that finished uploading; the parent merges them into its latest state. */
+  onAdd: (added: EvidenceFile[]) => void;
+  onRemove: (file: EvidenceFile) => void;
+  /** Lets the screen block Save/Finalize and the leave guard while a photo is on its way. */
+  onUploadingChange: (uploading: boolean) => void;
   max: number;
   readOnly?: boolean;
 };
@@ -21,12 +25,20 @@ const PHOTO_QUALITY = 0.6;
  * Inspection photos: shoot or pick, upload right away (the record stores file keys), remove.
  * Uploads run one by one so a weak connection fails on a single photo, not the whole batch.
  */
-export function EvidenceEditor({ files, onChange, max, readOnly }: Props) {
+export function EvidenceEditor({
+  files,
+  onAdd,
+  onRemove,
+  onUploadingChange,
+  max,
+  readOnly,
+}: Props) {
   const [progress, setProgress] = useState<string | null>(null);
   if (readOnly) return <EvidenceGallery files={files} />;
 
   const upload = async (picked: PickedFile[]) => {
     const added: EvidenceFile[] = [];
+    onUploadingChange(true);
     try {
       for (const [index, file] of picked.entries()) {
         setProgress(`Đang tải ảnh ${index + 1}/${picked.length}…`);
@@ -36,7 +48,8 @@ export function EvidenceEditor({ files, onChange, max, readOnly }: Props) {
       Alert.alert('Tải ảnh thất bại', error instanceof ApiError ? error.message : 'Thử lại sau.');
     } finally {
       setProgress(null);
-      if (added.length > 0) onChange([...files, ...added].slice(0, max));
+      if (added.length > 0) onAdd(added);
+      onUploadingChange(false);
     }
   };
 
@@ -79,10 +92,7 @@ export function EvidenceEditor({ files, onChange, max, readOnly }: Props) {
 
   return (
     <View className="gap-3">
-      <EvidenceGallery
-        files={files}
-        onRemove={(file) => onChange(files.filter((f) => f.fileKey !== file.fileKey))}
-      />
+      <EvidenceGallery files={files} onRemove={onRemove} />
       {progress ? (
         <View className="flex-row items-center gap-2">
           <ActivityIndicator size="small" />

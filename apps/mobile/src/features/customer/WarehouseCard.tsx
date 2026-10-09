@@ -61,9 +61,13 @@ export function WarehouseCard({ warehouse, distanceKm, isSelected, isDisabled, o
             <MapPin color={MUTED} size={14} weight="fill" />
             <Text className="flex-1 font-body text-body-sm text-muted">
               {warehouse.addressLine}
-              {distanceKm !== undefined ? ` · cách ${formatNumber(distanceKm)} km` : ''}
             </Text>
           </View>
+          {distanceKm !== undefined ? (
+            <Text className="self-start rounded-full bg-accent/10 px-2 py-0.5 font-ui text-caption text-accent">
+              Cách {formatNumber(Math.round(distanceKm * 10) / 10)} km
+            </Text>
+          ) : null}
         </View>
         <View className="items-end">
           <Text className="font-numeric-strong text-accent text-num-lg">

@@ -1,25 +1,28 @@
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { Button } from 'heroui-native';
 import { useEffect, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { hasPlottableCoords } from '../../../lib/goong-map-config';
-import { type PlacePrediction, PlacesApi } from '../../../lib/places-api';
+import { type PlacePrediction, WIDE_NEARBY_RADIUS_KM } from '../../../lib/places-api';
 import {
   countActiveFilters,
   MAX_WAREHOUSES_PER_BOOKING,
-  matchesCriteria,
+  matchesNearbyCriteria,
 } from '../../../lib/warehouse-query';
 import type { BrowseView } from '../../types/customer';
-import type { NearbyWarehouse, Warehouse } from '../../types/storage-api';
+import type { Warehouse } from '../../types/storage-api';
 import { BrowseFiltersSheet } from './BrowseFiltersSheet';
-import { BrowseBrandHeader, BrowseLocationControls } from './BrowseHeader';
+import { BrowseBrandHeader, BrowseLocationControls, nearbyTitle } from './BrowseHeader';
 import { BrowseMapOverlay } from './BrowseMapOverlay';
 import { BrowseMapView } from './BrowseMapView';
 import { BrowseQuickFilters } from './BrowseQuickFilters';
 import { BrowseResultsList } from './BrowseResultsList';
 import { BrowseSelectionBar } from './BrowseSelectionBar';
 import { ErrorState, LoadingState } from './BrowseStates';
-import { MapPlaceSearchSheet } from './MapPlaceSearchSheet';
+import { LocationPickerSheet } from './LocationPickerSheet';
+import { NearbySearchBanner } from './NearbySearchBanner';
 import { useBrowseCriteria } from './use-browse-criteria';
+import { useNearbySearch } from './use-nearby-search';
 import { useWarehouses } from './use-warehouses';
 import { WarehouseMapSheet } from './WarehouseMapSheet';
 
@@ -29,12 +32,6 @@ type Props = {
   onHold: (warehouses: Warehouse[]) => void;
   /** Changes whenever the customer's set of active holds changes. */
   holdsKey: string;
-};
-
-type NearbySearch = {
-  label: string;
-  center: { lat: number; lng: number };
-  warehouses: NearbyWarehouse[];
 };
 
 export function BrowseWarehousesScreen({
@@ -49,17 +46,19 @@ export function BrowseWarehousesScreen({
   const [view, setView] = useState<BrowseView>('list');
   const [selected, setSelected] = useState<Warehouse[]>([]);
   const [mapWarehouseId, setMapWarehouseId] = useState<string | null>(null);
-  const [nearbySearch, setNearbySearch] = useState<NearbySearch | null>(null);
+  const nearby = useNearbySearch();
+  const nearbySearch = nearby.search;
   const filtersSheetRef = useRef<BottomSheetModal>(null);
   const warehouseSheetRef = useRef<BottomSheetModal>(null);
-  const placeSearchSheetRef = useRef<BottomSheetModal>(null);
+  const locationSheetRef = useRef<BottomSheetModal>(null);
   const pendingContinueRef = useRef(false);
 
-  // A nearby search replaces the paged list on the map; it has no server filters, so the same
-  // criteria are applied here.
-  const mapWarehouses: readonly Warehouse[] = nearbySearch
-    ? nearbySearch.warehouses.filter((warehouse) => matchesCriteria(warehouse, criteria))
-    : warehouses;
+  // A nearby search replaces the paged results in both views; it has no server filters, so the
+  // size/price criteria are applied here.
+  const nearbyWarehouses = nearbySearch
+    ? nearbySearch.warehouses.filter((warehouse) => matchesNearbyCriteria(warehouse, criteria))
+    : null;
+  const mapWarehouses: readonly Warehouse[] = nearbyWarehouses ?? warehouses;
   const mapWarehouse = mapWarehouses.find((warehouse) => warehouse.id === mapWarehouseId) ?? null;
   const selectedIds = selected.map((warehouse) => warehouse.id);
 
@@ -84,6 +83,10 @@ export function BrowseWarehousesScreen({
   };
 
   const changeCriteria = (next: typeof criteria) => {
+    // Picking a province or ward means "look there" — it replaces any nearby search.
+    if (next.provinceCode !== criteria.provinceCode || next.wardCode !== criteria.wardCode) {
+      nearby.clear();
+    }
     setCriteria(next);
     setMapWarehouseId(null);
     warehouseSheetRef.current?.dismiss();
@@ -106,20 +109,26 @@ export function BrowseWarehousesScreen({
   }, [view, mapWarehouse]);
 
   const choosePlace = async (place: PlacePrediction) => {
-    const result = await PlacesApi.nearby(place.place_id);
-    setNearbySearch({
-      label: place.structured_formatting?.main_text ?? place.description,
-      center: result.center,
-      warehouses: result.warehouses,
-    });
+    await nearby.searchPlace(place);
     setMapWarehouseId(null);
     warehouseSheetRef.current?.dismiss();
   };
+  const searchNearMe = () => {
+    setMapWarehouseId(null);
+    warehouseSheetRef.current?.dismiss();
+    void nearby.searchNearMe();
+  };
+  const clearNearby = () => {
+    nearby.clear();
+    setMapWarehouseId(null);
+  };
+  const openLocation = () => locationSheetRef.current?.present();
 
   const selectedProvince = provinceOptions.find((option) => option.code === criteria.provinceCode);
-  const location =
-    selectedProvince?.name ??
-    (provinceOptions.length === 1 ? provinceOptions[0].name : 'Tất cả kho');
+  const location = nearbySearch
+    ? nearbyTitle(nearbySearch)
+    : (selectedProvince?.name ??
+      (provinceOptions.length === 1 ? provinceOptions[0].name : 'Tất cả kho'));
   const provinceCount = selectedProvince?.count ?? provinceOptions.reduce((n, o) => n + o.count, 0);
   const openFilters = () => filtersSheetRef.current?.present();
 
@@ -135,6 +144,10 @@ export function BrowseWarehousesScreen({
         onView={setView}
         onChange={changeCriteria}
         onOpenFilters={openFilters}
+        nearby={nearbySearch}
+        isLocating={nearby.isBusy && !nearbySearch}
+        onOpenLocation={openLocation}
+        onClearNearby={clearNearby}
       />
       {view === 'list' ? (
         <BrowseQuickFilters criteria={criteria} onChange={changeCriteria} />
@@ -144,7 +157,11 @@ export function BrowseWarehousesScreen({
 
   return (
     <View className="flex-1">
-      <BrowseBrandHeader location={location} onLocation={openFilters} />
+      <BrowseBrandHeader
+        location={location}
+        scope={nearbySearch ? `Trong ${nearbySearch.radiusKm} km` : undefined}
+        onLocation={openLocation}
+      />
       {view === 'map' ? (
         // Outside the ScrollView on purpose: a ScrollView swallows the map's pan and zoom gestures.
         <>
@@ -155,27 +172,37 @@ export function BrowseWarehousesScreen({
             <BrowseMapView
               pickedIds={selectedIds}
               searchCenter={nearbySearch?.center ?? null}
+              searchSource={nearbySearch?.source ?? null}
+              searchRadiusKm={nearbySearch?.radiusKm ?? null}
               selectedWarehouseId={mapWarehouse?.id ?? null}
               warehouses={mapWarehouses}
               onSelect={(warehouse) => setMapWarehouseId(warehouse.id)}
             />
             <BrowseMapOverlay
               activeFilterCount={activeFilterCount}
-              nearbyCount={nearbySearch ? mapWarehouses.length : null}
+              error={nearby.error}
+              isLocating={nearby.isBusy}
+              nearbyCount={nearbyWarehouses?.length ?? null}
+              radiusKm={nearbySearch?.radiusKm ?? null}
               searchLabel={nearbySearch?.label ?? null}
               selectedCount={selected.length}
-              onClearSearch={() => {
-                setNearbySearch(null);
-                setMapWarehouseId(null);
-              }}
+              onClearSearch={clearNearby}
+              onNearMe={searchNearMe}
               onOpenFilters={openFilters}
-              onSearch={() => placeSearchSheetRef.current?.present()}
+              onSearch={openLocation}
             />
-            {nearbySearch && mapWarehouses.length === 0 ? (
-              <View className="absolute top-28 right-4 left-4 rounded-xl bg-surface p-3">
+            {nearbySearch && nearbyWarehouses?.length === 0 ? (
+              <View className="absolute right-4 bottom-4 left-4 gap-2 rounded-xl bg-surface p-3 shadow-sm">
                 <Text className="font-body text-body-sm text-foreground">
-                  Không có kho trống phù hợp trong 5 km. Thử địa điểm khác hoặc xóa tìm kiếm.
+                  Không có kho trống phù hợp trong {nearbySearch.radiusKm} km.
                 </Text>
+                {nearby.canWiden ? (
+                  <Button isDisabled={nearby.isBusy} size="sm" onPress={nearby.widenRadius}>
+                    <Button.Label className="font-ui">
+                      Mở rộng {WIDE_NEARBY_RADIUS_KM} km
+                    </Button.Label>
+                  </Button>
+                ) : null}
               </View>
             ) : null}
             {!nearbySearch && hasMore ? (
@@ -198,31 +225,65 @@ export function BrowseWarehousesScreen({
         <ScrollView
           className="flex-1"
           contentContainerStyle={{ paddingBottom: contentBottomPadding }}
-          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refetch} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={nearbySearch ? false : isRefreshing}
+              onRefresh={nearbySearch ? nearby.refresh : refetch}
+            />
+          }
           showsVerticalScrollIndicator={false}
         >
           {header}
-          {isInitialLoading ? <LoadingState /> : null}
-          {/* A failed refresh keeps the stale list below, so the error sits above it rather than
-            replacing everything the customer was already looking at. */}
-          {error ? <ErrorState message={error} onRetry={refetch} /> : null}
-          {!isInitialLoading && !(error && !hasData) ? (
-            <BrowseResultsList
-              hasFilters={activeFilterCount > 0}
-              hasHolding={hasHolding}
-              hasMore={hasMore}
-              isLoadingMore={isLoadingMore}
-              selectedIds={selectedIds}
-              total={total}
-              warehouses={warehouses}
-              onLoadMore={loadMore}
-              onToggle={toggleWarehouse}
-            />
-          ) : null}
+          <NearbySearchBanner
+            canWiden={nearby.canWiden}
+            error={nearby.error}
+            isBusy={nearby.isBusy}
+            resultCount={nearbyWarehouses?.length ?? 0}
+            search={nearbySearch}
+            onWiden={nearby.widenRadius}
+          />
+          {nearbyWarehouses ? (
+            nearbyWarehouses.length > 0 ? (
+              <BrowseResultsList
+                hasFilters={activeFilterCount > 0}
+                hasHolding={hasHolding}
+                hasMore={false}
+                isLoadingMore={false}
+                selectedIds={selectedIds}
+                summary={`${nearbyWarehouses.length} kho trống gần ${
+                  nearbySearch?.source === 'me' ? 'bạn' : nearbySearch?.label
+                }, gần nhất trước`}
+                total={nearbyWarehouses.length}
+                warehouses={nearbyWarehouses}
+                onLoadMore={loadMore}
+                onToggle={toggleWarehouse}
+              />
+            ) : null
+          ) : (
+            <>
+              {isInitialLoading ? <LoadingState /> : null}
+              {/* A failed refresh keeps the stale list below, so the error sits above it rather
+                than replacing everything the customer was already looking at. */}
+              {error ? <ErrorState message={error} onRetry={refetch} /> : null}
+              {!isInitialLoading && !(error && !hasData) ? (
+                <BrowseResultsList
+                  hasFilters={activeFilterCount > 0}
+                  hasHolding={hasHolding}
+                  hasMore={hasMore}
+                  isLoadingMore={isLoadingMore}
+                  selectedIds={selectedIds}
+                  total={total}
+                  warehouses={warehouses}
+                  onLoadMore={loadMore}
+                  onToggle={toggleWarehouse}
+                />
+              ) : null}
+            </>
+          )}
         </ScrollView>
       )}
 
-      {view === 'list' && selected.length > 0 && !isInitialLoading ? (
+      {view === 'list' && selected.length > 0 && (nearbySearch || !isInitialLoading) ? (
         <BrowseSelectionBar
           hasHolding={hasHolding}
           selected={selected}
@@ -234,12 +295,22 @@ export function BrowseWarehousesScreen({
       <BrowseFiltersSheet
         criteria={criteria}
         provinceOptions={provinceOptions}
-        resultCount={nearbySearch && view === 'map' ? mapWarehouses.length : total}
+        resultCount={nearbyWarehouses?.length ?? total}
         sheetRef={filtersSheetRef}
         wardOptions={wardOptions}
         onChange={changeCriteria}
       />
-      <MapPlaceSearchSheet sheetRef={placeSearchSheetRef} onChoose={choosePlace} />
+      <LocationPickerSheet
+        isNearbyActive={nearbySearch !== null}
+        provinceOptions={provinceOptions}
+        selectedProvinceCode={criteria.provinceCode}
+        sheetRef={locationSheetRef}
+        onChoosePlace={choosePlace}
+        onChooseProvince={(code) =>
+          changeCriteria({ ...criteria, provinceCode: code, wardCode: null })
+        }
+        onNearMe={searchNearMe}
+      />
     </View>
   );
 }

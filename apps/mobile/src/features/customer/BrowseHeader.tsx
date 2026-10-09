@@ -1,18 +1,30 @@
 import { useRouter } from 'expo-router';
-import { CaretDown, Faders, MapPin, User } from 'phosphor-react-native';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import {
+  CaretDown,
+  Faders,
+  MagnifyingGlass,
+  MapPin,
+  NavigationArrow,
+  User,
+  X,
+} from 'phosphor-react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import type { BrowseCriteria, BrowseView } from '../../types/customer';
 import { BrowseViewToggle } from './BrowseViewToggle';
 import type { LocationOption } from './location-options';
+import type { NearbySearch } from './use-nearby-search';
 
 const ACCENT = '#006398';
 const MUTED = '#64748b';
 
 export function BrowseBrandHeader({
   location,
+  scope = 'Toàn quốc',
   onLocation,
 }: {
   location: string;
+  /** Muted text after the location, e.g. the radius of a nearby search. */
+  scope?: string;
   onLocation: () => void;
 }) {
   const router = useRouter();
@@ -21,7 +33,7 @@ export function BrowseBrandHeader({
       <View className="flex-1">
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Chọn tỉnh thành"
+          accessibilityLabel="Chọn nơi tìm kho"
           onPress={onLocation}
         >
           <View className="flex-row items-center gap-1">
@@ -32,7 +44,7 @@ export function BrowseBrandHeader({
               {location}
             </Text>
             <CaretDown size={12} color={ACCENT} weight="fill" />
-            <Text className="font-body text-caption text-muted">• Toàn quốc</Text>
+            <Text className="font-body text-caption text-muted">• {scope}</Text>
           </View>
         </Pressable>
         <Text
@@ -69,6 +81,11 @@ type Props = {
   onView: (view: BrowseView) => void;
   onChange: (criteria: BrowseCriteria) => void;
   onOpenFilters: () => void;
+  /** Active "Gần tôi" / place search; replaces the province as the card's answer to "where". */
+  nearby: NearbySearch | null;
+  isLocating: boolean;
+  onOpenLocation: () => void;
+  onClearNearby: () => void;
 };
 
 export function BrowseLocationControls({
@@ -81,6 +98,10 @@ export function BrowseLocationControls({
   onView,
   onChange,
   onOpenFilters,
+  nearby,
+  isLocating,
+  onOpenLocation,
+  onClearNearby,
 }: Props) {
   const selectedWard = wards.find((ward) => ward.code === criteria.wardCode);
   const options = [
@@ -90,28 +111,59 @@ export function BrowseLocationControls({
   return (
     <View className="gap-2 px-4 pt-3">
       <View className="flex-row items-center gap-2">
-        <Pressable
-          className="flex-1"
-          accessibilityRole="button"
-          accessibilityLabel="Chọn khu vực và bộ lọc"
-          onPress={onOpenFilters}
-        >
-          <View className="min-h-14 flex-row items-center gap-2 rounded-xl bg-surface-secondary px-3 py-2">
-            <MapPin size={20} color={ACCENT} />
+        <View className="min-h-14 flex-1 flex-row items-center rounded-xl bg-surface-secondary">
+          <Pressable
+            className="flex-1 flex-row items-center gap-2 py-2 pl-3"
+            accessibilityRole="button"
+            accessibilityLabel="Chọn nơi tìm kho"
+            onPress={onOpenLocation}
+          >
+            {isLocating ? (
+              <ActivityIndicator color={ACCENT} />
+            ) : nearby?.source === 'me' ? (
+              <NavigationArrow size={20} color={ACCENT} weight="fill" />
+            ) : nearby ? (
+              <MagnifyingGlass size={20} color={ACCENT} weight="bold" />
+            ) : (
+              <MapPin size={20} color={ACCENT} />
+            )}
             <View className="flex-1">
               <Text className="font-body text-caption text-muted" numberOfLines={1}>
-                Khu vực tìm kho
+                {nearby ? `≤ ${nearby.radiusKm} km` : isLocating ? 'Gần tôi' : 'Khu vực tìm kho'}
               </Text>
               <Text className="font-strong text-body-sm text-foreground" numberOfLines={1}>
-                {selectedWard ? `${location} • ${selectedWard.name}` : location}
+                {isLocating
+                  ? 'Đang lấy vị trí...'
+                  : nearby
+                    ? nearbyTitle(nearby)
+                    : selectedWard
+                      ? `${location} • ${selectedWard.name}`
+                      : location}
               </Text>
             </View>
+          </Pressable>
+          {nearby ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Bỏ tìm kho gần"
+              className="h-14 w-8 items-center justify-center"
+              onPress={onClearNearby}
+            >
+              <X size={18} color={MUTED} />
+            </Pressable>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Mở bộ lọc"
+            className="h-14 w-10 items-center justify-center"
+            onPress={onOpenFilters}
+          >
             <Faders size={18} color={MUTED} />
-          </View>
-        </Pressable>
+          </Pressable>
+        </View>
         <BrowseViewToggle view={view} onChange={onView} plottableCount={plottableCount} />
       </View>
-      {wards.length > 0 ? (
+      {wards.length > 0 && !nearby ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -148,4 +200,9 @@ export function BrowseLocationControls({
       ) : null}
     </View>
   );
+}
+
+/** "Gần bạn" for GPS, "Gần <place>" for a searched place — short enough for the area card. */
+export function nearbyTitle(nearby: NearbySearch): string {
+  return nearby.source === 'me' ? 'Gần bạn' : `Gần ${nearby.label}`;
 }

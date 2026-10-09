@@ -2,12 +2,15 @@ import { Button } from 'heroui-native';
 import { ActivityIndicator, Text, View } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { MAX_WAREHOUSES_PER_BOOKING } from '../../../lib/warehouse-query';
-import type { Warehouse } from '../../types/storage-api';
+import type { NearbyWarehouse, Warehouse } from '../../types/storage-api';
 import { EmptyState } from './BrowseStates';
 import { WarehouseCard } from './WarehouseCard';
 
 type Props = {
-  warehouses: readonly Warehouse[];
+  /** Nearby results carry `distanceKm`, which each card shows. */
+  warehouses: readonly (Warehouse | NearbyWarehouse)[];
+  /** Replaces the "N kho đang trống" line, e.g. while showing nearby results. */
+  summary?: string;
   total: number;
   hasMore: boolean;
   isLoadingMore: boolean;
@@ -21,6 +24,7 @@ type Props = {
 /** The list half of Browse: result summary, warehouse cards and a load-more footer. */
 export function BrowseResultsList({
   warehouses,
+  summary,
   total,
   hasMore,
   isLoadingMore,
@@ -36,7 +40,8 @@ export function BrowseResultsList({
   return (
     <>
       <Text className="mx-4 mt-3 mb-3 font-body text-body-sm text-muted">
-        {total} kho đang trống. Chọn tối đa {MAX_WAREHOUSES_PER_BOOKING} kho cho một lần đặt.
+        {summary ?? `${total} kho đang trống`}. Chọn tối đa {MAX_WAREHOUSES_PER_BOOKING} kho cho một
+        lần đặt.
       </Text>
 
       {warehouses.length === 0 ? (
@@ -56,6 +61,7 @@ export function BrowseResultsList({
                 }
               >
                 <WarehouseCard
+                  distanceKm={'distanceKm' in warehouse ? warehouse.distanceKm : undefined}
                   isDisabled={hasHolding || (selectionFull && !isSelected)}
                   isSelected={isSelected}
                   warehouse={warehouse}
@@ -69,7 +75,7 @@ export function BrowseResultsList({
 
       {warehouses.length > 0 ? (
         <View className="items-center gap-3 px-4 pt-5">
-          <Text className="font-body text-center text-muted text-xs">
+          <Text className="font-body text-center text-muted text-caption">
             Hiển thị {warehouses.length} / {total} kho
           </Text>
           {isLoadingMore ? <ActivityIndicator /> : null}

@@ -83,3 +83,39 @@ export function toLngLatBounds(points: readonly Located[]): LngLatBounds | null 
   const padY = Math.max(0, MIN_SPAN - (north - south)) / 2;
   return [west - padX, south - padY, east + padX, north + padY];
 }
+
+const EARTH_RADIUS_KM = 6371;
+
+/**
+ * Closed ring approximating a `radiusKm` circle around `center`, for drawing the nearby-search
+ * area. Uses the destination-point formula, so it stays round at Vietnam's latitudes instead of
+ * squashing into an ellipse like a naive degrees offset would.
+ */
+export function circlePolygon(
+  center: { lat: number; lng: number },
+  radiusKm: number,
+  steps = 64,
+): GeoJSON.Feature<GeoJSON.Polygon> {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const toDeg = (rad: number) => (rad * 180) / Math.PI;
+  const lat1 = toRad(center.lat);
+  const lng1 = toRad(center.lng);
+  const angular = radiusKm / EARTH_RADIUS_KM;
+  const ring: number[][] = [];
+
+  for (let i = 0; i <= steps; i++) {
+    const bearing = (2 * Math.PI * (i % steps)) / steps;
+    const lat2 = Math.asin(
+      Math.sin(lat1) * Math.cos(angular) + Math.cos(lat1) * Math.sin(angular) * Math.cos(bearing),
+    );
+    const lng2 =
+      lng1 +
+      Math.atan2(
+        Math.sin(bearing) * Math.sin(angular) * Math.cos(lat1),
+        Math.cos(angular) - Math.sin(lat1) * Math.sin(lat2),
+      );
+    ring.push([toDeg(lng2), toDeg(lat2)]);
+  }
+
+  return { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring] } };
+}

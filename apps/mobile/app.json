@@ -32,6 +32,14 @@
           "cameraPermission": "Cho phép chụp ảnh hiện trạng kho khi lập biên bản nhận/trả kho.",
           "microphonePermission": false
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Cho phép dùng vị trí để tìm kho trống gần bạn.",
+          "isAndroidBackgroundLocationEnabled": false,
+          "isIosBackgroundLocationEnabled": false
+        }
       ]
     ],
     "ios": {

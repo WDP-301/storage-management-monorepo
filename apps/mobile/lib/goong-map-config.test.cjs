@@ -71,3 +71,20 @@ test('an empty list yields null so the caller keeps its initial camera', () => {
   assert.equal(toLngLatBounds([]), null);
   assert.equal(toLngLatBounds([{ latitude: 0, longitude: 0 }]), null);
 });
+
+test('circlePolygon draws a closed ring radiusKm from the center', () => {
+  const { circlePolygon } = loadMapConfig();
+  const center = { lat: 10.7869, lng: 106.7372 };
+  const ring = circlePolygon(center, 5).geometry.coordinates[0];
+  assert.deepEqual(ring[0], ring[ring.length - 1]);
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  for (const [lng, lat] of ring) {
+    const dLat = toRad(lat - center.lat);
+    const dLng = toRad(lng - center.lng);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(center.lat)) * Math.cos(toRad(lat)) * Math.sin(dLng / 2) ** 2;
+    const km = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    assert.ok(Math.abs(km - 5) < 0.01, `point ${lng},${lat} is ${km} km away`);
+  }
+});

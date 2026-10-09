@@ -91,12 +91,11 @@ function inRange(value: number | null, preset: RangePreset | undefined): boolean
 }
 
 /**
- * Client-side mirror of the server filters. Only used for `/places/nearby`, which returns every
- * warehouse in range and takes no filter params.
+ * Client-side mirror of the size and price filters for `/places/nearby`, which returns every
+ * warehouse in range and takes no filter params. Province/ward are skipped on purpose: the search
+ * center already decides the area, and a stale province pick would silently empty the results.
  */
-export function matchesCriteria(warehouse: Warehouse, criteria: BrowseCriteria): boolean {
-  if (criteria.provinceCode && warehouse.provinceCode !== criteria.provinceCode) return false;
-  if (criteria.wardCode && warehouse.wardCode !== criteria.wardCode) return false;
+export function matchesNearbyCriteria(warehouse: Warehouse, criteria: BrowseCriteria): boolean {
   return (
     inRange(warehouse.areaM2, findPreset(AREA_PRESETS, criteria.areaPreset)) &&
     inRange(warehouse.volumeM3, findPreset(VOLUME_PRESETS, criteria.volumePreset)) &&

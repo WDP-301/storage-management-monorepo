@@ -56,7 +56,7 @@ test('province and ward codes are passed through', () => {
   assert.equal(p.wardCode, '26740');
 });
 
-test('matchesCriteria mirrors the server bounds inclusively', () => {
+test('matchesNearbyCriteria mirrors the size and price bounds inclusively', () => {
   const w = {
     areaM2: 10,
     volumeM3: 30,
@@ -64,10 +64,14 @@ test('matchesCriteria mirrors the server bounds inclusively', () => {
     provinceCode: '79',
     wardCode: 'a',
   };
-  assert.equal(q.matchesCriteria(w, { ...base, areaPreset: 'xs', pricePreset: 'xs' }), true);
-  assert.equal(q.matchesCriteria(w, { ...base, areaPreset: 'm' }), false);
-  assert.equal(q.matchesCriteria(w, { ...base, provinceCode: '01' }), false);
-  assert.equal(q.matchesCriteria({ ...w, volumeM3: null }, { ...base, volumePreset: 'xs' }), false);
+  assert.equal(q.matchesNearbyCriteria(w, { ...base, areaPreset: 'xs', pricePreset: 'xs' }), true);
+  assert.equal(q.matchesNearbyCriteria(w, { ...base, areaPreset: 'm' }), false);
+  // The search center decides the area, so a province pick must not hide nearby warehouses.
+  assert.equal(q.matchesNearbyCriteria(w, { ...base, provinceCode: '01', wardCode: 'b' }), true);
+  assert.equal(
+    q.matchesNearbyCriteria({ ...w, volumeM3: null }, { ...base, volumePreset: 'xs' }),
+    false,
+  );
 });
 
 test('active filter count and reset', () => {

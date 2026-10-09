@@ -3,6 +3,8 @@
 import {
   Camera,
   type CameraRef,
+  GeoJSONSource,
+  Layer,
   Map as MapLibreMap,
   Marker,
 } from '@maplibre/maplibre-react-native';
@@ -10,6 +12,7 @@ import { MapPin as PinIcon } from 'phosphor-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import {
+  circlePolygon,
   DEFAULT_ZOOM,
   FIT_PADDING,
   goongStyleUrl,
@@ -30,15 +33,22 @@ type Props = {
   pickedIds: readonly string[];
   onSelect: (warehouse: Warehouse) => void;
   searchCenter: { lat: number; lng: number } | null;
+  /** `me` draws the customer's position as a location dot instead of a place pin. */
+  searchSource: 'place' | 'me' | null;
+  searchRadiusKm: number | null;
 };
 
-/** `fitBounds` takes pixel insets, not a single number, so the shared padding is spread to all sides. */
+/**
+ * `fitBounds` takes pixel insets, not a single number. The top inset also clears the floating
+ * search bar and chips (`BrowseMapOverlay`), which would otherwise cover the northernmost pins.
+ */
 const FIT_INSETS = {
-  top: FIT_PADDING,
+  top: FIT_PADDING + 96,
   right: FIT_PADDING,
   bottom: FIT_PADDING,
   left: FIT_PADDING,
 };
+const ACCENT = '#006398';
 
 export function BrowseMapView({
   warehouses,
@@ -46,6 +56,8 @@ export function BrowseMapView({
   pickedIds,
   onSelect,
   searchCenter,
+  searchSource,
+  searchRadiusKm,
 }: Props) {
   const cameraRef = useRef<CameraRef>(null);
   const [mapHeight, setMapHeight] = useState(0);
@@ -63,28 +75,35 @@ export function BrowseMapView({
       ),
     [plottable, selectedWarehouseId],
   );
-  const bounds = useMemo(() => toLngLatBounds(plottable), [plottable]);
+  // A nearby search frames its center together with the results, so the customer sees both where
+  // they searched and every warehouse found; with no results it frames the whole search circle.
+  const bounds = useMemo(() => {
+    if (!searchCenter) return toLngLatBounds(plottable);
+    const center = { latitude: searchCenter.lat, longitude: searchCenter.lng };
+    if (plottable.length > 0) return toLngLatBounds([center, ...plottable]);
+    const ring = searchRadiusKm ? circlePolygon(searchCenter, searchRadiusKm).geometry : null;
+    return toLngLatBounds(
+      ring
+        ? ring.coordinates[0].map(([longitude, latitude]) => ({ latitude, longitude }))
+        : [center],
+    );
+  }, [plottable, searchCenter, searchRadiusKm]);
+  const radiusArea = useMemo(
+    () => (searchCenter && searchRadiusKm ? circlePolygon(searchCenter, searchRadiusKm) : null),
+    [searchCenter, searchRadiusKm],
+  );
   // Comparing the box rather than the array keeps the camera still when filtering changed nothing
   // geographically — refitting on every render fights the user's own panning.
   const boundsKey = bounds?.join(',') ?? '';
 
   useEffect(() => {
-    if (!isMapReady || !boundsKey || !mapHeight || searchCenter) return;
+    if (!isMapReady || !boundsKey || !mapHeight) return;
     const box = boundsKey.split(',').map(Number) as [number, number, number, number];
     cameraRef.current?.fitBounds(box, {
       padding: FIT_INSETS,
       duration: 400,
     });
-  }, [boundsKey, isMapReady, mapHeight, searchCenter]);
-
-  useEffect(() => {
-    if (!isMapReady || !searchCenter) return;
-    cameraRef.current?.flyTo({
-      center: [searchCenter.lng, searchCenter.lat],
-      zoom: 12,
-      duration: 450,
-    });
-  }, [isMapReady, searchCenter?.lat, searchCenter?.lng]);
+  }, [boundsKey, isMapReady, mapHeight]);
 
   if (!hasMapTilesKey) return <MapUnavailable />;
 
@@ -97,6 +116,9 @@ export function BrowseMapView({
     >
       <MapLibreMap
         attribution
+        // The map is never rotated on purpose; the compass only appeared after an accidental
+        // two-finger twist, right under the floating search bar.
+        compass={false}
         mapStyle={goongStyleUrl}
         style={{ flex: 1 }}
         onDidFinishLoadingMap={() => setIsMapReady(true)}
@@ -106,6 +128,20 @@ export function BrowseMapView({
           initialViewState={{ center: HCM_CENTER, zoom: DEFAULT_ZOOM }}
           maxZoom={MAX_ZOOM}
         />
+        {radiusArea ? (
+          <GeoJSONSource id="nearby-radius" data={radiusArea}>
+            <Layer
+              id="nearby-radius-fill"
+              type="fill"
+              paint={{ 'fill-color': ACCENT, 'fill-opacity': 0.07 }}
+            />
+            <Layer
+              id="nearby-radius-line"
+              type="line"
+              paint={{ 'line-color': ACCENT, 'line-opacity': 0.5, 'line-width': 1.5 }}
+            />
+          </GeoJSONSource>
+        ) : null}
         {orderedPins.map((warehouse) => (
           <Marker
             key={warehouse.id}
@@ -128,17 +164,27 @@ export function BrowseMapView({
           </Marker>
         ))}
         {searchCenter ? (
-          <Marker id="searched-place" anchor="bottom" lngLat={[searchCenter.lng, searchCenter.lat]}>
-            <View className="size-9 items-center justify-center rounded-full border-2 border-surface bg-accent">
-              <PinIcon color="white" size={20} weight="fill" />
-            </View>
+          <Marker
+            id="searched-place"
+            anchor={searchSource === 'me' ? 'center' : 'bottom'}
+            lngLat={[searchCenter.lng, searchCenter.lat]}
+          >
+            {searchSource === 'me' ? (
+              <View className="size-7 items-center justify-center rounded-full bg-accent/20">
+                <View className="size-4 rounded-full border-2 border-surface bg-accent" />
+              </View>
+            ) : (
+              <View className="size-9 items-center justify-center rounded-full border-2 border-surface bg-accent">
+                <PinIcon color="white" size={20} weight="fill" />
+              </View>
+            )}
           </Marker>
         ) : null}
       </MapLibreMap>
       {/* Confirmed in validation: say how many pins are missing AND where to find them, so the
           map's warehouse count never silently disagrees with the list's. */}
       {missingCount > 0 ? (
-        <Text className="font-body absolute top-2 left-3 right-3 rounded-lg bg-surface/90 px-2 py-1 text-[11px] text-muted">
+        <Text className="font-body absolute top-2 left-3 right-3 rounded-lg bg-surface/90 px-2 py-1 text-caption text-muted">
           {missingCount} kho chưa có toạ độ, xem ở danh sách
         </Text>
       ) : null}
@@ -151,7 +197,7 @@ function MapUnavailable() {
   return (
     <View className="m-4 flex-1 items-center justify-center rounded-2xl border border-border border-dashed px-6">
       <Text className="font-strong text-foreground">Chưa cấu hình bản đồ</Text>
-      <Text className="font-body mt-1 text-center text-muted text-sm leading-5">
+      <Text className="font-body mt-1 text-center text-muted text-body-sm leading-5">
         Thiếu khoá bản đồ Goong. Hãy dùng chế độ danh sách, hoặc liên hệ quản trị viên để bổ sung
         cấu hình.
       </Text>

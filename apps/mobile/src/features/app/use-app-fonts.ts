@@ -19,7 +19,7 @@ import { useFonts } from 'expo-font';
  * `font-*` token without a matching entry renders as the system font with no error.
  */
 export function useAppFonts(): boolean {
-  const [isLoaded] = useFonts({
+  const [isLoaded, error] = useFonts({
     BeVietnamPro_400Regular,
     BeVietnamPro_500Medium,
     BeVietnamPro_600SemiBold,
@@ -29,5 +29,6 @@ export function useAppFonts(): boolean {
     JetBrainsMono_700Bold,
   });
 
-  return isLoaded;
+  // A failed load falls back to system fonts instead of holding the splash screen forever.
+  return isLoaded || error != null;
 }

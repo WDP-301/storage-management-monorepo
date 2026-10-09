@@ -96,7 +96,7 @@ export function EvidenceEditor({
       {progress ? (
         <View className="flex-row items-center gap-2">
           <ActivityIndicator size="small" />
-          <Text className="text-sm text-muted">{progress}</Text>
+          <Text className="font-body text-body-sm text-muted">{progress}</Text>
         </View>
       ) : (
         <Button

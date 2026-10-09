@@ -186,7 +186,7 @@ export function DepositPaymentScreen({
             Thanh toán tiền cọc
           </Text>
         </View>
-        <Text className="font-body mt-1 text-sm leading-5 text-muted">
+        <Text className="font-body mt-1 text-body-sm leading-5 text-muted">
           Booking {booking.bookingNo}, {booking.items.length} kho
         </Text>
       </View>
@@ -197,7 +197,7 @@ export function DepositPaymentScreen({
           they cannot. When polling itself fails, though, they need a way out of the dead end. */}
         {error ? (
           <View className="gap-3 rounded-xl border border-danger/30 bg-danger/5 p-3">
-            <Text className="font-body text-sm text-danger">{error}</Text>
+            <Text className="font-body text-body-sm text-danger">{error}</Text>
             <Button size="sm" variant="secondary" isDisabled={isChecking} onPress={onCheck}>
               <Button.Label className="font-ui">
                 {isChecking ? 'Đang kiểm tra...' : 'Thử lại'}
@@ -218,7 +218,7 @@ export function DepositPaymentScreen({
               <Text className="text-center font-display text-foreground">
                 Chưa thanh toán online được
               </Text>
-              <Text className="font-body text-center text-sm leading-5 text-muted">
+              <Text className="font-body text-center text-body-sm leading-5 text-muted">
                 Hệ thống chưa cấu hình tài khoản nhận tiền. Vui lòng liên hệ hỗ trợ kèm mã{' '}
                 {booking.bookingNo} để được hướng dẫn thanh toán.
               </Text>
@@ -253,12 +253,12 @@ function PaymentSucceeded({ booking, onDone }: { booking: ApiBooking; onDone: ()
         </View>
 
         <View className="items-center gap-2">
-          <Text className="text-base font-strong text-foreground">Thanh toán thành công</Text>
+          <Text className="text-body-lg font-strong text-foreground">Thanh toán thành công</Text>
           {/* The amount is what the customer scans for first, so it gets the largest type. */}
           <Text className="text-3xl font-display text-accent">
             {formatMoney(Number(booking.depositTotal))}
           </Text>
-          <Text className="font-body text-sm text-muted">
+          <Text className="font-body text-body-sm text-muted">
             {formatIsoDateTime(booking.updatedAt)}
           </Text>
         </View>
@@ -301,12 +301,12 @@ function BookingClosed({ booking, onDone }: { booking: ApiBooking; onDone: () =>
         </View>
 
         <View className="items-center gap-2">
-          <Text className="text-base font-strong text-foreground">
+          <Text className="text-body-lg font-strong text-foreground">
             {isCancelled ? 'Đã hủy booking' : 'Hết hạn giữ chỗ'}
           </Text>
           {/* Where the paid state puts the amount: what the customer got back, not what they paid. */}
           <Text className="text-3xl font-display text-foreground">{booking.items.length} kho</Text>
-          <Text className="font-body text-sm text-muted">
+          <Text className="font-body text-body-sm text-muted">
             đã được trả lại {formatIsoDateTime(booking.updatedAt)}
           </Text>
         </View>
@@ -324,7 +324,7 @@ function BookingClosed({ booking, onDone }: { booking: ApiBooking; onDone: () =>
       <View className="gap-3">
         {/* Money already transferred cannot confirm a booking that is no longer awaiting a
           deposit — the API records the payment and leaves it for manual reconciliation. */}
-        <Text className="font-body text-center text-xs leading-5 text-muted">
+        <Text className="font-body text-center text-caption leading-5 text-muted">
           {isCancelled
             ? `Nếu bạn đã chuyển khoản cho booking này, vui lòng liên hệ hỗ trợ kèm mã ${booking.bookingNo}.`
             : `Nếu bạn vừa chuyển khoản, tiền đã được ghi nhận nhưng cần đối soát thủ công — vui lòng liên hệ hỗ trợ kèm mã ${booking.bookingNo}.`}
@@ -340,8 +340,11 @@ function BookingClosed({ booking, onDone }: { booking: ApiBooking; onDone: () =>
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
     <View className="flex-row items-center justify-between gap-3">
-      <Text className="font-body text-sm text-muted">{label}</Text>
-      <Text className="flex-1 text-right text-sm font-strong text-foreground" numberOfLines={1}>
+      <Text className="font-body text-body-sm text-muted">{label}</Text>
+      <Text
+        className="flex-1 text-right text-body-sm font-strong text-foreground"
+        numberOfLines={1}
+      >
         {value}
       </Text>
     </View>
@@ -476,7 +479,7 @@ function AwaitingTransfer({
       {/* Nothing to press and no spinner. Polling runs for as long as the hold lasts, so an
         indicator that never resolves would read as a stuck screen, and a button would suggest the
         customer can hurry along a confirmation that only the bank's webhook can deliver. */}
-      <Text className="font-body text-center text-xs leading-5 text-muted">
+      <Text className="font-body text-center text-caption leading-5 text-muted">
         Hệ thống tự cập nhật khi nhận được tiền, bạn không cần chờ ở màn hình này.
       </Text>
 
@@ -548,11 +551,13 @@ function BankAppsSheet({ sheetRef }: { sheetRef: RefObject<BottomSheetModal | nu
       }}
     >
       <View className="mb-2 px-4">
-        <Text className="text-lg font-display text-foreground">Chọn app ngân hàng</Text>
+        <Text className="text-title-sm font-display text-foreground">Chọn app ngân hàng</Text>
       </View>
       {loadFailed ? (
         <View className="items-center gap-3 px-4 py-8">
-          <Text className="font-body text-sm text-muted">Không tải được danh sách ngân hàng.</Text>
+          <Text className="font-body text-body-sm text-muted">
+            Không tải được danh sách ngân hàng.
+          </Text>
           <Button
             size="sm"
             variant="secondary"
@@ -571,7 +576,7 @@ function BankAppsSheet({ sheetRef }: { sheetRef: RefObject<BottomSheetModal | nu
       ) : (
         <>
           <BottomSheetTextInput
-            className="mx-4 mb-2 rounded-lg border border-border bg-surface-secondary px-3 py-2 text-sm text-foreground"
+            className="font-body mx-4 mb-2 rounded-lg border border-border bg-surface-secondary px-3 py-2 text-body-sm text-foreground"
             placeholder="Tìm ngân hàng..."
             placeholderTextColor={mutedColor}
             value={query}
@@ -588,8 +593,8 @@ function BankAppsSheet({ sheetRef }: { sheetRef: RefObject<BottomSheetModal | nu
               >
                 <Image source={{ uri: item.appLogo }} className="h-9 w-9 rounded-lg" />
                 <View className="flex-1">
-                  <Text className="text-sm font-strong text-foreground">{item.appName}</Text>
-                  <Text className="font-body text-xs text-muted" numberOfLines={1}>
+                  <Text className="text-body-sm font-strong text-foreground">{item.appName}</Text>
+                  <Text className="font-body text-caption text-muted" numberOfLines={1}>
                     {item.bankName}
                   </Text>
                 </View>
@@ -658,9 +663,9 @@ function PaymentStep({ index, text }: { index: number; text: string }) {
   return (
     <View className="flex-row items-start gap-3">
       <View className="h-6 w-6 items-center justify-center rounded-full bg-accent/10">
-        <Text className="text-xs font-display text-accent">{index}</Text>
+        <Text className="text-caption font-display text-accent">{index}</Text>
       </View>
-      <Text className="font-body flex-1 text-sm leading-6 text-foreground">{text}</Text>
+      <Text className="font-body flex-1 text-body-sm leading-6 text-foreground">{text}</Text>
     </View>
   );
 }
@@ -710,7 +715,7 @@ function SaveImageButton({
         </Button.Label>
       </Button>
       {outcome === 'denied' ? (
-        <Text className="font-body text-center text-xs leading-5 text-muted">
+        <Text className="font-body text-center text-caption leading-5 text-muted">
           Cấp quyền ảnh cho ứng dụng trong Cài đặt để lưu được ảnh.
         </Text>
       ) : null}
@@ -724,7 +729,7 @@ function CopyableCode({ value }: { value: string }) {
 
   return (
     <View className="flex-row items-center justify-between gap-3 rounded-lg border border-border bg-surface-secondary py-2 pl-3 pr-2">
-      <Text className="flex-1 font-numeric text-base text-foreground" numberOfLines={1}>
+      <Text className="flex-1 font-numeric text-num-lg text-foreground" numberOfLines={1}>
         {value}
       </Text>
       <Button

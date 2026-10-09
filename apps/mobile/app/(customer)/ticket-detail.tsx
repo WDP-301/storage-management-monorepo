@@ -1,4 +1,4 @@
-import { Redirect, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 import { ApiError } from '../../lib/api';
@@ -8,6 +8,7 @@ import { TicketDetailScreen } from '../../src/features/customer/TicketDetailScre
 import type { ServiceTicketRecord } from '../../src/types/ticket-api';
 
 export default function TicketDetailRoute() {
+  const router = useRouter();
   const { user } = useSession();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [ticket, setTicket] = useState<ServiceTicketRecord | null>(null);
@@ -66,6 +67,7 @@ export default function TicketDetailRoute() {
       sessionUserId={user?.id}
       onCancel={cancel}
       onRetry={() => void load()}
+      onBack={() => router.navigate('/(customer)/tickets')}
     />
   );
 }

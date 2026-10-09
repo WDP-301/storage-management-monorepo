@@ -12,8 +12,8 @@ type Props = {
 export function StaffPlaceholderScreen({ title, description, upcoming }: Props) {
   return (
     <ScrollView contentContainerClassName="px-4 pb-8 pt-5" showsVerticalScrollIndicator={false}>
-      <Text className="text-2xl font-display tracking-tight text-foreground">{title}</Text>
-      <Text className="font-body mt-1 text-sm leading-5 text-muted">{description}</Text>
+      <Text className="text-title-md font-display tracking-tight text-foreground">{title}</Text>
+      <Text className="font-body mt-1 text-body-sm leading-5 text-muted">{description}</Text>
 
       <Card className="mt-5 border border-border bg-surface">
         <Card.Body className="gap-4">
@@ -28,7 +28,9 @@ export function StaffPlaceholderScreen({ title, description, upcoming }: Props) 
             {upcoming.map((item) => (
               <View key={item} className="flex-row gap-3">
                 <View className="mt-2 size-1.5 rounded-full bg-accent" />
-                <Text className="font-body flex-1 text-sm leading-5 text-foreground">{item}</Text>
+                <Text className="font-body flex-1 text-body-sm leading-5 text-foreground">
+                  {item}
+                </Text>
               </View>
             ))}
           </View>

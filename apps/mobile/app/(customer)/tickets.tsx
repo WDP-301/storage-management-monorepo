@@ -69,6 +69,7 @@ export default function TicketsRoute() {
       }}
       onOpenTicket={(id) => router.navigate(`/(customer)/ticket-detail?id=${id}`)}
       onCreate={() => router.navigate('/(customer)/ticket-create')}
+      onBack={() => router.navigate('/(customer)/settings')}
     />
   );
 }

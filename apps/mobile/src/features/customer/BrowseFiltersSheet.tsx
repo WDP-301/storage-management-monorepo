@@ -98,8 +98,8 @@ export function BrowseFiltersSheet({
         contentContainerStyle={{ paddingBottom: FOOTER_HEIGHT + insets.bottom }}
       >
         <View className="mb-4 px-4">
-          <Text className="text-xl font-display tracking-tight text-foreground">Bộ lọc</Text>
-          <Text className="font-body mt-1 text-xs leading-5 text-muted">
+          <Text className="text-title-md font-display tracking-tight text-foreground">Bộ lọc</Text>
+          <Text className="font-body mt-1 text-caption leading-5 text-muted">
             Thay đổi được áp dụng ngay, số kho khớp hiện ở nút bên dưới.
           </Text>
         </View>

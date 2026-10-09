@@ -54,20 +54,24 @@ export function handoverCountdownLabel(dayIso: string, now: number): string {
   return `Quá ngày nhận kho ${-days} ngày`;
 }
 
-export type StatusTone = 'success' | 'accent' | 'neutral';
+export type StatusTone = 'success' | 'accent' | 'warning' | 'neutral';
 
 const STATUS_TONES = {
   success: {
-    box: 'shrink-0 rounded-full bg-success/10 px-3 py-1',
-    label: 'text-xs font-semibold text-success-foreground',
+    box: 'shrink-0 rounded-full bg-success-bg px-3 py-1',
+    label: 'font-ui text-caption text-success',
   },
   accent: {
     box: 'shrink-0 rounded-full bg-accent/10 px-3 py-1',
-    label: 'text-xs font-semibold text-accent',
+    label: 'font-ui text-caption text-accent',
+  },
+  warning: {
+    box: 'shrink-0 rounded-full bg-warning-bg px-3 py-1',
+    label: 'font-ui text-caption text-warning',
   },
   neutral: {
     box: 'shrink-0 rounded-full bg-surface-secondary px-3 py-1',
-    label: 'text-xs font-semibold text-muted',
+    label: 'font-ui text-caption text-muted',
   },
 } as const;
 

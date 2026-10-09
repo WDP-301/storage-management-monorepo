@@ -24,7 +24,7 @@ export function DamageEditor({ damages, onChange, onUploadingChange, readOnly }:
     onChange((list) => list.map((damage, i) => (i === index ? { ...damage, ...patch } : damage)));
 
   if (readOnly && damages.length === 0) {
-    return <Text className="text-sm text-muted">Không ghi nhận hư hỏng.</Text>;
+    return <Text className="font-body text-body-sm text-muted">Không ghi nhận hư hỏng.</Text>;
   }
 
   return (
@@ -37,7 +37,9 @@ export function DamageEditor({ damages, onChange, onUploadingChange, readOnly }:
         >
           {readOnly ? (
             <View className="flex-row items-start justify-between gap-3">
-              <Text className="flex-1 text-sm text-foreground">{damage.description}</Text>
+              <Text className="font-body flex-1 text-body-sm text-foreground">
+                {damage.description}
+              </Text>
               <StatusPill
                 label={SEVERITY_LABEL[damage.severity]}
                 tone={damage.severity === 'MAJOR' ? 'accent' : 'neutral'}
@@ -46,16 +48,18 @@ export function DamageEditor({ damages, onChange, onUploadingChange, readOnly }:
           ) : (
             <>
               <View className="flex-row items-center justify-between">
-                <Text className="text-sm font-semibold text-foreground">Hư hỏng {index + 1}</Text>
+                <Text className="text-body-sm font-strong text-foreground">
+                  Hư hỏng {index + 1}
+                </Text>
                 <Pressable
                   hitSlop={8}
                   onPress={() => onChange((list) => list.filter((_, i) => i !== index))}
                 >
-                  <Text className="text-sm font-semibold text-danger">Xoá</Text>
+                  <Text className="text-body-sm font-strong text-danger">Xoá</Text>
                 </Pressable>
               </View>
               <TextInput
-                className="min-h-16 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground"
+                className="font-body min-h-16 rounded-lg border border-border bg-surface px-3 py-2 text-body-sm text-foreground"
                 placeholder="Mô tả hư hỏng, vị trí…"
                 placeholderTextColor={mutedColor}
                 value={damage.description}

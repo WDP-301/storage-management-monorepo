@@ -7,7 +7,7 @@ export function LoadingState() {
   return (
     <View className="items-center gap-3 px-4 py-16">
       <ActivityIndicator />
-      <Text className="font-body text-sm text-muted">Đang tải danh sách kho trống...</Text>
+      <Text className="font-body text-body-sm text-muted">Đang tải danh sách kho trống...</Text>
     </View>
   );
 }
@@ -17,7 +17,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry: () 
     <Card className="mx-4 mt-6 border border-danger/25 bg-danger/10">
       <Card.Body className="gap-3">
         <Text className="font-strong text-foreground">Không tải được danh sách kho</Text>
-        <Text className="font-body text-sm leading-5 text-danger">{message}</Text>
+        <Text className="font-body text-body-sm leading-5 text-danger">{message}</Text>
         <Button variant="secondary" onPress={onRetry}>
           <Button.Label className="font-ui">Thử lại</Button.Label>
         </Button>
@@ -33,7 +33,7 @@ export function EmptyState({ isFilteredOut }: { isFilteredOut: boolean }) {
       <Text className="font-strong text-foreground">
         {isFilteredOut ? 'Không có kho nào khớp bộ lọc' : 'Chưa có kho trống'}
       </Text>
-      <Text className="font-body mt-1 text-center text-sm leading-5 text-muted">
+      <Text className="font-body mt-1 text-center text-body-sm leading-5 text-muted">
         {isFilteredOut
           ? 'Thử mở rộng khu vực, kích thước hoặc ngân sách.'
           : 'Hiện chưa có kho nào đang trống. Vui lòng quay lại sau.'}

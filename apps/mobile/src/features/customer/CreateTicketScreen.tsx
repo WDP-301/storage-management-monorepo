@@ -1,7 +1,9 @@
-import { Button, Card, Chip, Input, Label, Select, TextArea, TextField } from 'heroui-native';
+import { Button, Input, Label, Select, TextArea, TextField } from 'heroui-native';
 import { useRef, useState } from 'react';
 import { Image, Keyboard, Pressable, ScrollView, Text, View } from 'react-native';
 import type { PickedFile } from '../../../lib/uploads-api';
+import { FilterPill } from '../../components/FilterPill';
+import { ScreenHeader } from '../../components/ScreenHeader';
 import type { TicketFormOptions } from '../../types/ticket-api';
 
 const MAX_ATTACHMENTS = 5;
@@ -26,6 +28,7 @@ type Props = {
   onRemovePhoto: (uri: string) => void;
   onSubmit: () => void;
   onRetryOptions: () => void;
+  onBack: () => void;
 };
 
 export function CreateTicketScreen({
@@ -38,6 +41,7 @@ export function CreateTicketScreen({
   onRemovePhoto,
   onSubmit,
   onRetryOptions,
+  onBack,
 }: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);
@@ -80,228 +84,230 @@ export function CreateTicketScreen({
     !isSubmitting;
 
   return (
-    <ScrollView
-      ref={scrollRef}
-      style={{ flex: 1 }}
-      contentContainerStyle={{ paddingBottom: editing ? 240 : 32 }}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-      onLayout={(e) => {
-        svHeight.current = e.nativeEvent.layout.height;
-      }}
-      scrollEventThrottle={200}
-      onScroll={(e) => {
-        scrollY.current = e.nativeEvent.contentOffset.y;
-        // Hiding the keyboard via the keyboard's own button doesn't blur the input —
-        // without it the extra padding would stick around after the keyboard is gone.
-        if (editing && !Keyboard.isVisible()) setEditing(false);
-      }}
-    >
-      <View className="px-4 pb-4 pt-5">
-        <Text className="text-2xl font-bold tracking-tight text-foreground">Tạo yêu cầu</Text>
-        <Text className="mt-1 text-sm leading-5 text-muted">
-          Mô tả vấn đề bạn gặp tại cơ sở đang thuê hoặc đã đặt cọc.
-        </Text>
-      </View>
-
-      <View
-        className="gap-5 px-4"
+    <View className="flex-1">
+      <ScreenHeader backLabel="Quay lại danh sách yêu cầu" title="Tạo yêu cầu" onBack={onBack} />
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: editing ? 240 : 32 }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         onLayout={(e) => {
-          formTop.current = e.nativeEvent.layout.y;
+          svHeight.current = e.nativeEvent.layout.height;
+        }}
+        scrollEventThrottle={200}
+        onScroll={(e) => {
+          scrollY.current = e.nativeEvent.contentOffset.y;
+          // Hiding the keyboard via the keyboard's own button doesn't blur the input —
+          // without it the extra padding would stick around after the keyboard is gone.
+          if (editing && !Keyboard.isVisible()) setEditing(false);
         }}
       >
-        {error ? (
-          <View className="rounded-xl border border-danger/30 bg-danger/5 p-3">
-            <Text className="text-sm text-danger">{error}</Text>
-            <Button className="mt-3" size="sm" variant="secondary" onPress={onRetryOptions}>
-              <Button.Label>Tải lại</Button.Label>
-            </Button>
-          </View>
-        ) : null}
+        <View className="px-4 pb-4">
+          <Text className="font-body text-body-sm text-muted">
+            Mô tả vấn đề bạn gặp tại cơ sở đang thuê hoặc đã đặt cọc.
+          </Text>
+        </View>
 
-        {options !== null && options.facilities.length === 0 ? (
-          <Card className="border border-border bg-surface">
-            <Card.Body>
-              <Text className="text-sm leading-5 text-muted">
+        <View
+          className="gap-5 px-4"
+          onLayout={(e) => {
+            formTop.current = e.nativeEvent.layout.y;
+          }}
+        >
+          {error ? (
+            <View className="rounded-xl border border-danger/30 bg-danger-bg p-3">
+              <Text className="font-body text-body-sm text-danger">{error}</Text>
+              <Button className="mt-3" size="sm" variant="secondary" onPress={onRetryOptions}>
+                <Button.Label className="font-ui">Tải lại</Button.Label>
+              </Button>
+            </View>
+          ) : null}
+
+          {options !== null && options.facilities.length === 0 ? (
+            <View className="rounded-xl border border-border bg-surface p-3">
+              <Text className="font-body text-body-sm text-muted">
                 Bạn cần đặt cọc hoặc thuê kho để gửi yêu cầu hỗ trợ.
               </Text>
-            </Card.Body>
-          </Card>
-        ) : null}
+            </View>
+          ) : null}
 
-        {options !== null && options.facilities.length > 0 ? (
-          <>
-            <View className="gap-2">
-              <Label>Cơ sở *</Label>
-              <Select
-                presentation="bottom-sheet"
-                value={
-                  facility
-                    ? { value: facility.id, label: `${facility.name} (${facility.code})` }
-                    : undefined
-                }
-                onValueChange={(option) => {
-                  const next = options.facilities.find((f) => f.id === option?.value);
-                  onChange({
-                    facilityId: next?.id ?? null,
-                    storageUnitId: null,
-                    // Drop a picked type the new facility does not allow.
-                    typeId: form.typeId && next?.typeIds.includes(form.typeId) ? form.typeId : null,
-                  });
+          {options !== null && options.facilities.length > 0 ? (
+            <>
+              <View className="gap-2">
+                <Label className="font-ui">Cơ sở *</Label>
+                <Select
+                  presentation="bottom-sheet"
+                  value={
+                    facility
+                      ? { value: facility.id, label: `${facility.name} (${facility.code})` }
+                      : undefined
+                  }
+                  onValueChange={(option) => {
+                    const next = options.facilities.find((f) => f.id === option?.value);
+                    onChange({
+                      facilityId: next?.id ?? null,
+                      storageUnitId: null,
+                      // Drop a picked type the new facility does not allow.
+                      typeId:
+                        form.typeId && next?.typeIds.includes(form.typeId) ? form.typeId : null,
+                    });
+                  }}
+                >
+                  <Select.Trigger>
+                    <Select.Value placeholder="Chọn cơ sở" />
+                    <Select.TriggerIndicator />
+                  </Select.Trigger>
+                  <Select.Portal>
+                    <Select.Overlay />
+                    <Select.Content presentation="bottom-sheet" snapPoints={['50%']}>
+                      {options.facilities.map((f) => (
+                        <Select.Item key={f.id} value={f.id} label={`${f.name} (${f.code})`} />
+                      ))}
+                    </Select.Content>
+                  </Select.Portal>
+                </Select>
+              </View>
+
+              {facility && facility.units.length > 0 ? (
+                <View className="gap-2">
+                  <Label className="font-ui">Kho đang thuê</Label>
+                  <View className="flex-row flex-wrap gap-2">
+                    <FilterPill
+                      isSelected={form.storageUnitId === null}
+                      label="Toàn cơ sở"
+                      onPress={() => onChange({ storageUnitId: null })}
+                    />
+                    {facility.units.map((unit) => (
+                      <FilterPill
+                        key={unit.id}
+                        isSelected={form.storageUnitId === unit.id}
+                        label={`${unit.name} (${unit.code})`}
+                        onPress={() => onChange({ storageUnitId: unit.id })}
+                      />
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+
+              <View className="gap-2">
+                <Label className="font-ui">Loại yêu cầu *</Label>
+                <Select
+                  presentation="bottom-sheet"
+                  value={
+                    form.typeId
+                      ? {
+                          value: form.typeId,
+                          label: types.find((t) => t.id === form.typeId)?.name ?? '',
+                        }
+                      : undefined
+                  }
+                  onValueChange={(option) => onChange({ typeId: option?.value ?? null })}
+                  isDisabled={!facility}
+                >
+                  <Select.Trigger>
+                    <Select.Value
+                      placeholder={facility ? 'Chọn loại yêu cầu' : 'Chọn cơ sở trước'}
+                    />
+                    <Select.TriggerIndicator />
+                  </Select.Trigger>
+                  <Select.Portal>
+                    <Select.Overlay />
+                    <Select.Content presentation="bottom-sheet" snapPoints={['35%']}>
+                      {types.map((type) => (
+                        <Select.Item key={type.id} value={type.id} label={type.name} />
+                      ))}
+                    </Select.Content>
+                  </Select.Portal>
+                </Select>
+              </View>
+
+              <View
+                onLayout={(e) => {
+                  fieldBottom.current.subject =
+                    e.nativeEvent.layout.y + e.nativeEvent.layout.height;
                 }}
               >
-                <Select.Trigger>
-                  <Select.Value placeholder="Chọn cơ sở" />
-                  <Select.TriggerIndicator />
-                </Select.Trigger>
-                <Select.Portal>
-                  <Select.Overlay />
-                  <Select.Content presentation="bottom-sheet" snapPoints={['50%']}>
-                    {options.facilities.map((f) => (
-                      <Select.Item key={f.id} value={f.id} label={`${f.name} (${f.code})`} />
-                    ))}
-                  </Select.Content>
-                </Select.Portal>
-              </Select>
-            </View>
-
-            {facility && facility.units.length > 0 ? (
-              <View className="gap-2">
-                <Label>Kho đang thuê</Label>
-                <View className="flex-row flex-wrap gap-2">
-                  <Chip
-                    color={form.storageUnitId === null ? 'accent' : 'default'}
-                    variant={form.storageUnitId === null ? 'primary' : 'soft'}
-                    onPress={() => onChange({ storageUnitId: null })}
-                  >
-                    <Chip.Label>Toàn cơ sở</Chip.Label>
-                  </Chip>
-                  {facility.units.map((unit) => (
-                    <Chip
-                      key={unit.id}
-                      color={form.storageUnitId === unit.id ? 'accent' : 'default'}
-                      variant={form.storageUnitId === unit.id ? 'primary' : 'soft'}
-                      onPress={() => onChange({ storageUnitId: unit.id })}
-                    >
-                      <Chip.Label>{`${unit.name} (${unit.code})`}</Chip.Label>
-                    </Chip>
-                  ))}
-                </View>
+                <TextField isRequired>
+                  <Label className="font-ui">Tiêu đề</Label>
+                  <Input
+                    placeholder="Ví dụ: Cửa cuốn không lên được"
+                    value={form.subject}
+                    onChangeText={(subject) => onChange({ subject })}
+                    onFocus={() => {
+                      setEditing(true);
+                      scrollToField('subject');
+                    }}
+                    onBlur={() => setEditing(false)}
+                    maxLength={200}
+                  />
+                </TextField>
               </View>
-            ) : null}
 
-            <View className="gap-2">
-              <Label>Loại yêu cầu *</Label>
-              <Select
-                presentation="bottom-sheet"
-                value={
-                  form.typeId
-                    ? {
-                        value: form.typeId,
-                        label: types.find((t) => t.id === form.typeId)?.name ?? '',
-                      }
-                    : undefined
-                }
-                onValueChange={(option) => onChange({ typeId: option?.value ?? null })}
-                isDisabled={!facility}
+              <View
+                onLayout={(e) => {
+                  fieldBottom.current.description =
+                    e.nativeEvent.layout.y + e.nativeEvent.layout.height;
+                }}
               >
-                <Select.Trigger>
-                  <Select.Value placeholder={facility ? 'Chọn loại yêu cầu' : 'Chọn cơ sở trước'} />
-                  <Select.TriggerIndicator />
-                </Select.Trigger>
-                <Select.Portal>
-                  <Select.Overlay />
-                  <Select.Content presentation="bottom-sheet" snapPoints={['35%']}>
-                    {types.map((type) => (
-                      <Select.Item key={type.id} value={type.id} label={type.name} />
-                    ))}
-                  </Select.Content>
-                </Select.Portal>
-              </Select>
-            </View>
+                <TextField isRequired>
+                  <Label className="font-ui">Mô tả</Label>
+                  <TextArea
+                    placeholder="Mô tả chi tiết vấn đề..."
+                    value={form.description}
+                    onChangeText={(description) => onChange({ description })}
+                    onFocus={() => {
+                      setEditing(true);
+                      scrollToField('description');
+                    }}
+                    onBlur={() => setEditing(false)}
+                    maxLength={5000}
+                  />
+                </TextField>
+              </View>
 
-            <View
-              onLayout={(e) => {
-                fieldBottom.current.subject = e.nativeEvent.layout.y + e.nativeEvent.layout.height;
-              }}
-            >
-              <TextField isRequired>
-                <Label>Tiêu đề</Label>
-                <Input
-                  placeholder="Ví dụ: Cửa cuốn không lên được"
-                  value={form.subject}
-                  onChangeText={(subject) => onChange({ subject })}
-                  onFocus={() => {
-                    setEditing(true);
-                    scrollToField('subject');
-                  }}
-                  onBlur={() => setEditing(false)}
-                  maxLength={200}
-                />
-              </TextField>
-            </View>
+              <View className="gap-2">
+                <Label className="font-ui">
+                  Ảnh đính kèm ({form.photos.length}/{MAX_ATTACHMENTS})
+                </Label>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 10 }}
+                >
+                  {form.photos.map((photo) => (
+                    <Pressable key={photo.uri} onPress={() => onRemovePhoto(photo.uri)}>
+                      <Image
+                        source={{ uri: photo.uri }}
+                        className="size-20 rounded-lg"
+                        resizeMode="cover"
+                      />
+                      <View className="absolute right-1 top-1 size-5 items-center justify-center rounded-full bg-danger">
+                        <Text className="text-caption font-strong text-white">×</Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                  {form.photos.length < MAX_ATTACHMENTS ? (
+                    <Pressable
+                      onPress={onPickPhotos}
+                      className="size-20 items-center justify-center rounded-lg border border-dashed border-border bg-surface"
+                    >
+                      <Text className="font-body text-title-md text-muted">+</Text>
+                      <Text className="font-body text-caption text-muted">Thêm ảnh</Text>
+                    </Pressable>
+                  ) : null}
+                </ScrollView>
+              </View>
 
-            <View
-              onLayout={(e) => {
-                fieldBottom.current.description =
-                  e.nativeEvent.layout.y + e.nativeEvent.layout.height;
-              }}
-            >
-              <TextField isRequired>
-                <Label>Mô tả</Label>
-                <TextArea
-                  placeholder="Mô tả chi tiết vấn đề..."
-                  value={form.description}
-                  onChangeText={(description) => onChange({ description })}
-                  onFocus={() => {
-                    setEditing(true);
-                    scrollToField('description');
-                  }}
-                  onBlur={() => setEditing(false)}
-                  maxLength={5000}
-                />
-              </TextField>
-            </View>
-
-            <View className="gap-2">
-              <Label>
-                Ảnh đính kèm ({form.photos.length}/{MAX_ATTACHMENTS})
-              </Label>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: 10 }}
-              >
-                {form.photos.map((photo) => (
-                  <Pressable key={photo.uri} onPress={() => onRemovePhoto(photo.uri)}>
-                    <Image
-                      source={{ uri: photo.uri }}
-                      className="size-20 rounded-lg"
-                      resizeMode="cover"
-                    />
-                    <View className="absolute right-1 top-1 size-5 items-center justify-center rounded-full bg-danger">
-                      <Text className="text-[10px] font-bold text-white">×</Text>
-                    </View>
-                  </Pressable>
-                ))}
-                {form.photos.length < MAX_ATTACHMENTS ? (
-                  <Pressable
-                    onPress={onPickPhotos}
-                    className="size-20 items-center justify-center rounded-lg border border-dashed border-border bg-surface"
-                  >
-                    <Text className="text-xl text-muted">+</Text>
-                    <Text className="text-[10px] text-muted">Thêm ảnh</Text>
-                  </Pressable>
-                ) : null}
-              </ScrollView>
-            </View>
-
-            <Button isDisabled={!canSubmit} onPress={onSubmit}>
-              <Button.Label>{isSubmitting ? 'Đang gửi...' : 'Gửi yêu cầu'}</Button.Label>
-            </Button>
-          </>
-        ) : null}
-      </View>
-    </ScrollView>
+              <Button isDisabled={!canSubmit} onPress={onSubmit}>
+                <Button.Label className="font-ui">
+                  {isSubmitting ? 'Đang gửi...' : 'Gửi yêu cầu'}
+                </Button.Label>
+              </Button>
+            </>
+          ) : null}
+        </View>
+      </ScrollView>
+    </View>
   );
 }

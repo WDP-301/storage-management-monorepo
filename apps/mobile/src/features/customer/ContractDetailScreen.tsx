@@ -1,7 +1,9 @@
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
-import { Button, Card } from 'heroui-native';
+import { Button } from 'heroui-native';
+import { MapPin } from 'phosphor-react-native';
 import { useRef } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ScreenHeader } from '../../components/ScreenHeader';
 import type { ApiContract } from '../../types/contract-api';
 import {
   contractUnitSummary,
@@ -12,6 +14,8 @@ import {
 } from './contract-display';
 import { ContractSection, HandoverSection, ReturnSection } from './contract-sections';
 import { ReturnRequestSheet } from './ReturnRequestSheet';
+
+const MUTED = 'hsl(215 16% 47%)';
 
 type Props = {
   contract: ApiContract | null;
@@ -35,20 +39,18 @@ export function ContractDetailScreen({
   onRefresh,
 }: Props) {
   return (
-    <ScrollView
-      contentContainerStyle={{ paddingBottom: contentBottomPadding }}
-      refreshControl={
-        <RefreshControl refreshing={isLoading && contract !== null} onRefresh={onRefresh} />
-      }
-      showsVerticalScrollIndicator={false}
-    >
-      <View className="px-4 pb-4 pt-5">
-        <Button variant="ghost" size="sm" className="self-start" onPress={onBack}>
-          <Button.Label>← Kho của tôi</Button.Label>
-        </Button>
+    <View className="flex-1">
+      <ScreenHeader backLabel="Quay lại Kho của tôi" title="Chi tiết kho thuê" onBack={onBack} />
 
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: contentBottomPadding }}
+        refreshControl={
+          <RefreshControl refreshing={isLoading && contract !== null} onRefresh={onRefresh} />
+        }
+        showsVerticalScrollIndicator={false}
+      >
         {!contract ? (
-          <Text className="mt-8 text-center text-sm text-muted">
+          <Text className="font-body mt-8 text-center text-body-sm text-muted">
             {isLoading ? 'Đang tải…' : (error ?? 'Không tìm thấy hợp đồng này.')}
           </Text>
         ) : (
@@ -59,8 +61,8 @@ export function ContractDetailScreen({
             onReturnRequested={onRefresh}
           />
         )}
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -84,27 +86,29 @@ function ContractDetail({
   const canFileTicket = isActive || contract.status === 'DRAFT' || contract.status === 'ENDED';
 
   return (
-    <View className="mt-2 gap-4">
-      <View className="flex-row items-start justify-between gap-3">
-        <View className="flex-1">
-          <Text className="text-2xl font-bold tracking-tight text-foreground">
+    <View className="gap-3">
+      <View className="gap-1 rounded-xl border border-border bg-surface p-3">
+        <View className="flex-row items-start justify-between gap-3">
+          <Text className="flex-1 font-strong text-foreground text-title-sm">
             {contractWarehouseName(contract)}
           </Text>
-          <Text className="mt-1 text-sm text-muted">{contractUnitSummary(contract)}</Text>
-          {state.hint ? (
-            <Text className="mt-1 text-sm font-medium text-accent">{state.hint}</Text>
-          ) : null}
+          <StatusPill label={state.label} tone={state.tone} />
         </View>
-        <StatusPill label={state.label} tone={state.tone} />
+        <Text className="font-numeric text-caption text-muted">
+          {contractUnitSummary(contract)}
+        </Text>
+        {contract.unit ? (
+          <View className="flex-row items-start gap-1.5">
+            <MapPin color={MUTED} size={14} weight="fill" />
+            <Text className="flex-1 font-body text-body-sm text-muted">
+              {contract.unit.address}
+            </Text>
+          </View>
+        ) : null}
+        {state.hint ? (
+          <Text className="mt-1 font-ui text-body-sm text-accent">{state.hint}</Text>
+        ) : null}
       </View>
-
-      {contract.unit ? (
-        <Card className="border border-border bg-surface">
-          <Card.Body className="gap-1">
-            <Text className="text-sm leading-5 text-muted">{contract.unit.address}</Text>
-          </Card.Body>
-        </Card>
-      ) : null}
 
       <ContractSection contract={contract} />
       <HandoverSection handover={contract.handover} />
@@ -112,12 +116,12 @@ function ContractDetail({
 
       {canRequestReturn ? (
         <Button variant="secondary" onPress={() => returnSheet.current?.present()}>
-          <Button.Label>Yêu cầu trả kho</Button.Label>
+          <Button.Label className="font-ui">Yêu cầu trả kho</Button.Label>
         </Button>
       ) : null}
       {canFileTicket ? (
         <Button onPress={onSupport}>
-          <Button.Label>Báo sự cố / hỗ trợ</Button.Label>
+          <Button.Label className="font-ui">Báo sự cố / hỗ trợ</Button.Label>
         </Button>
       ) : null}
 

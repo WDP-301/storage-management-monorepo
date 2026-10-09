@@ -1,9 +1,12 @@
 import { TicketStatus } from '@storage/types';
-import { Button, Card, Chip } from 'heroui-native';
+import { Button } from 'heroui-native';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { formatIsoDateTime } from '../../../lib/format-vi';
+import { FilterPill } from '../../components/FilterPill';
+import { ScreenHeader } from '../../components/ScreenHeader';
 import type { ServiceTicketRecord, TicketFormOptions } from '../../types/ticket-api';
-import { TICKET_STATUS_COLOR, TICKET_STATUS_LABEL } from './ticket-display';
+import { StatusPill } from './contract-display';
+import { TICKET_STATUS_LABEL, TICKET_STATUS_TONE } from './ticket-display';
 
 const STATUS_FILTERS: (TicketStatus | null)[] = [
   null,
@@ -27,6 +30,7 @@ type Props = {
   onLoadMore: () => void;
   onOpenTicket: (id: string) => void;
   onCreate: () => void;
+  onBack: () => void;
 };
 
 export function MyTicketsScreen({
@@ -42,6 +46,7 @@ export function MyTicketsScreen({
   onLoadMore,
   onOpenTicket,
   onCreate,
+  onBack,
 }: Props) {
   const canCreate = options !== null && options.facilities.length > 0;
 
@@ -60,19 +65,21 @@ export function MyTicketsScreen({
       scrollEventThrottle={200}
       showsVerticalScrollIndicator={false}
     >
-      <View className="flex-row items-center justify-between px-4 pb-4 pt-5">
-        <View className="flex-1 pr-3">
-          <Text className="text-2xl font-bold tracking-tight text-foreground">Yêu cầu hỗ trợ</Text>
-          <Text className="mt-1 text-sm leading-5 text-muted">
-            Gửi và theo dõi các yêu cầu với cơ sở kho.
-          </Text>
-        </View>
-        {canCreate ? (
-          <Button size="sm" onPress={onCreate}>
-            <Button.Label>Tạo yêu cầu</Button.Label>
-          </Button>
-        ) : null}
-      </View>
+      <ScreenHeader
+        backLabel="Quay lại Tài khoản"
+        title="Yêu cầu hỗ trợ"
+        onBack={onBack}
+        right={
+          canCreate ? (
+            <Button size="sm" onPress={onCreate}>
+              <Button.Label className="font-ui">Tạo yêu cầu</Button.Label>
+            </Button>
+          ) : null
+        }
+      />
+      <Text className="font-body px-4 pb-3 text-body-sm text-muted">
+        Gửi và theo dõi các yêu cầu với cơ sở kho.
+      </Text>
 
       <ScrollView
         horizontal
@@ -80,81 +87,82 @@ export function MyTicketsScreen({
         contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingBottom: 12 }}
       >
         {STATUS_FILTERS.map((status) => (
-          <Chip
+          <FilterPill
             key={status ?? 'all'}
-            color={statusFilter === status ? 'accent' : 'default'}
-            size="md"
-            variant={statusFilter === status ? 'primary' : 'soft'}
+            isSelected={statusFilter === status}
+            label={status ? TICKET_STATUS_LABEL[status] : 'Tất cả'}
             onPress={() => onFilterStatus(status)}
-          >
-            <Chip.Label>{status ? TICKET_STATUS_LABEL[status] : 'Tất cả'}</Chip.Label>
-          </Chip>
+          />
         ))}
       </ScrollView>
 
       <View className="gap-3 px-4">
         {error ? (
-          <View className="rounded-xl border border-danger/30 bg-danger/5 p-3">
-            <Text className="text-sm text-danger">{error}</Text>
+          <View className="rounded-xl border border-danger/30 bg-danger-bg p-3">
+            <Text className="font-body text-body-sm text-danger">{error}</Text>
             <Button className="mt-3" size="sm" variant="secondary" onPress={onRefresh}>
-              <Button.Label>Thử lại</Button.Label>
+              <Button.Label className="font-ui">Thử lại</Button.Label>
             </Button>
           </View>
         ) : null}
 
         {options !== null && options.facilities.length === 0 ? (
-          <Card className="border border-border bg-surface">
-            <Card.Body>
-              <Text className="text-sm leading-5 text-muted">
-                Bạn cần đặt cọc hoặc thuê kho để gửi yêu cầu hỗ trợ. Các yêu cầu gắn với cơ sở hoặc
-                kho của bạn.
-              </Text>
-            </Card.Body>
-          </Card>
+          <View className="rounded-xl border border-border bg-surface p-3">
+            <Text className="font-body text-body-sm leading-5 text-muted">
+              Bạn cần đặt cọc hoặc thuê kho để gửi yêu cầu hỗ trợ. Các yêu cầu gắn với cơ sở hoặc
+              kho của bạn.
+            </Text>
+          </View>
         ) : null}
 
         {isLoading && tickets.length === 0 ? <ActivityIndicator /> : null}
 
         {!isLoading && tickets.length === 0 && !error ? (
-          <Card className="border border-border bg-surface">
-            <Card.Body className="items-center gap-3 py-8">
-              <Text className="text-sm text-muted">Chưa có yêu cầu nào.</Text>
-              {canCreate ? (
-                <Button size="sm" variant="secondary" onPress={onCreate}>
-                  <Button.Label>Tạo yêu cầu</Button.Label>
-                </Button>
-              ) : null}
-            </Card.Body>
-          </Card>
+          <View className="items-center gap-3 rounded-2xl border border-border border-dashed px-5 py-10">
+            <Text className="font-strong text-body-md text-foreground">Chưa có yêu cầu nào</Text>
+            {canCreate ? (
+              <Button size="sm" variant="secondary" onPress={onCreate}>
+                <Button.Label className="font-ui">Tạo yêu cầu</Button.Label>
+              </Button>
+            ) : null}
+          </View>
         ) : null}
 
         {tickets.map((ticket) => (
-          <Pressable key={ticket.id} onPress={() => onOpenTicket(ticket.id)}>
-            <Card className="border border-border bg-surface">
-              <Card.Body className="gap-2">
-                <View className="flex-row items-center justify-between gap-2">
-                  <Text className="font-mono text-xs text-muted">{ticket.ticket_no}</Text>
-                  <Chip color={TICKET_STATUS_COLOR[ticket.status]} size="sm" variant="soft">
-                    <Chip.Label>{TICKET_STATUS_LABEL[ticket.status]}</Chip.Label>
-                  </Chip>
-                </View>
-                <Text className="font-semibold text-foreground" numberOfLines={2}>
-                  {ticket.subject}
-                </Text>
-                <Text className="text-xs text-muted" numberOfLines={1}>
-                  {[ticket.type?.name, ticket.facility?.name ?? ticket.facility_id]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </Text>
-                <Text className="text-xs text-muted">{formatIsoDateTime(ticket.created_at)}</Text>
-              </Card.Body>
-            </Card>
+          <Pressable
+            key={ticket.id}
+            accessibilityRole="button"
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+            onPress={() => onOpenTicket(ticket.id)}
+          >
+            <View className="gap-2 rounded-xl border border-border bg-surface p-3">
+              <View className="flex-row items-center justify-between gap-2">
+                <Text className="font-numeric text-num-sm text-muted">{ticket.ticket_no}</Text>
+                <StatusPill
+                  label={TICKET_STATUS_LABEL[ticket.status]}
+                  tone={TICKET_STATUS_TONE[ticket.status]}
+                />
+              </View>
+              <Text className="font-strong text-body-lg text-foreground" numberOfLines={2}>
+                {ticket.subject}
+              </Text>
+              <Text className="font-body text-caption text-muted" numberOfLines={1}>
+                {[ticket.type?.name, ticket.facility?.name ?? ticket.facility_id]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </Text>
+              <Text className="font-numeric text-num-sm text-muted">
+                {formatIsoDateTime(ticket.created_at)}
+              </Text>
+            </View>
           </Pressable>
         ))}
 
         {isLoadingMore ? <ActivityIndicator /> : null}
         {!isLoading && !hasMore && tickets.length > 0 ? (
-          <Text className="pb-2 text-center text-xs text-muted">Đã hiển thị hết yêu cầu.</Text>
+          <Text className="font-body pb-2 text-center text-caption text-muted">
+            Đã hiển thị hết yêu cầu.
+          </Text>
         ) : null}
       </View>
     </ScrollView>

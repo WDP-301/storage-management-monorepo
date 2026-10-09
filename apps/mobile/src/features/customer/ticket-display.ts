@@ -1,6 +1,7 @@
 import { TicketPriority, TicketStatus } from '@storage/types';
+import type { StatusTone } from './contract-display';
 
-/** Vietnamese labels + chip colours shared by the ticket list, detail, and create screens. */
+/** Vietnamese labels + status-pill tones shared by the ticket list, detail, and create screens. */
 
 export const TICKET_STATUS_LABEL: Record<TicketStatus, string> = {
   [TicketStatus.OPEN]: 'Mới tạo',
@@ -18,15 +19,13 @@ export const TICKET_PRIORITY_LABEL: Record<TicketPriority, string> = {
   [TicketPriority.URGENT]: 'Khẩn cấp',
 };
 
-type ChipColor = 'accent' | 'default' | 'success' | 'warning' | 'danger';
-
-export const TICKET_STATUS_COLOR: Record<TicketStatus, ChipColor> = {
+export const TICKET_STATUS_TONE: Record<TicketStatus, StatusTone> = {
   [TicketStatus.OPEN]: 'accent',
   [TicketStatus.ASSIGNED]: 'warning',
   [TicketStatus.IN_PROGRESS]: 'warning',
   [TicketStatus.RESOLVED]: 'success',
-  [TicketStatus.CLOSED]: 'default',
-  [TicketStatus.CANCELLED]: 'default',
+  [TicketStatus.CLOSED]: 'neutral',
+  [TicketStatus.CANCELLED]: 'neutral',
 };
 
 /** Statuses the owner can still cancel — mirrors the server's ASSIGNABLE_STATUSES rule. */

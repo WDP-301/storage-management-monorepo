@@ -12,7 +12,7 @@ import { Text, View } from 'react-native';
 export function FilterRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <View>
-      <Text className="text-xs font-ui text-muted">{label}</Text>
+      <Text className="text-caption font-ui text-muted">{label}</Text>
       <View className="mt-2 flex-row flex-wrap gap-2">{children}</View>
     </View>
   );

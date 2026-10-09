@@ -29,7 +29,7 @@ export function EvidenceGallery({ files, onRemove }: Props) {
               hitSlop={6}
               onPress={() => onRemove(file)}
             >
-              <Text className="text-xs font-bold text-white">✕</Text>
+              <Text className="text-caption font-strong text-white">✕</Text>
             </Pressable>
           ) : null}
         </View>
@@ -73,7 +73,7 @@ function EvidenceThumb({ file, onPress }: { file: EvidenceFile; onPress: () => v
         />
       ) : (
         <View className="size-20 items-center justify-center rounded-lg border border-border bg-background p-1">
-          <Text className="text-center text-[10px] text-muted" numberOfLines={3}>
+          <Text className="font-body text-center text-caption text-muted" numberOfLines={3}>
             {file.name}
           </Text>
         </View>
@@ -91,7 +91,7 @@ function EvidenceViewer({ file, onClose }: { file: EvidenceFile | null; onClose:
     <Modal visible={file !== null} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable className="flex-1 items-center justify-center bg-black/90" onPress={onClose}>
         {failed ? (
-          <Text className="text-sm text-white">Không mở được tệp này.</Text>
+          <Text className="font-body text-body-sm text-white">Không mở được tệp này.</Text>
         ) : url ? (
           <Image
             source={{ uri: url }}
@@ -102,8 +102,8 @@ function EvidenceViewer({ file, onClose }: { file: EvidenceFile | null; onClose:
         ) : (
           <ActivityIndicator color="#fff" />
         )}
-        <Text className="mt-4 text-sm text-white">{file?.name}</Text>
-        <Text className="mt-1 text-xs text-white/70">Chạm để đóng</Text>
+        <Text className="font-body mt-4 text-body-sm text-white">{file?.name}</Text>
+        <Text className="font-body mt-1 text-caption text-white/70">Chạm để đóng</Text>
       </Pressable>
     </Modal>
   );

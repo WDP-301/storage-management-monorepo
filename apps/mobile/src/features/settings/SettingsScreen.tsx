@@ -133,10 +133,10 @@ function SettingItem({
     <Pressable onPress={onPress} disabled={!onPress}>
       <View className="flex-row items-center justify-between py-3">
         <View className="flex-1">
-          <Text className="font-semibold text-foreground">{title}</Text>
-          <Text className="mt-1 text-xs text-muted">{description}</Text>
+          <Text className="font-strong text-foreground">{title}</Text>
+          <Text className="font-body mt-1 text-caption text-muted">{description}</Text>
         </View>
-        <Text className="text-lg text-muted">›</Text>
+        <Text className="font-body text-title-sm text-muted">›</Text>
       </View>
     </Pressable>
   );

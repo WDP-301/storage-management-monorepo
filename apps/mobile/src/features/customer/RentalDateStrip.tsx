@@ -53,18 +53,20 @@ function DateCell({
       onPress={onPress}
     >
       <Text
-        className={`text-xs font-medium ${isSelected ? 'text-accent-foreground' : 'text-muted'}`}
+        className={`font-ui text-caption ${isSelected ? 'text-accent-foreground' : 'text-muted'}`}
       >
         {option.isToday ? 'Hôm nay' : option.weekday}
       </Text>
       <Text
-        className={`mt-1 text-lg font-bold ${
+        className={`mt-1 font-numeric-strong text-num-lg ${
           isSelected ? 'text-accent-foreground' : 'text-foreground'
         }`}
       >
         {option.day}
       </Text>
-      <Text className={`text-xs ${isSelected ? 'text-accent-foreground' : 'text-muted'}`}>
+      <Text
+        className={`font-body text-caption ${isSelected ? 'text-accent-foreground' : 'text-muted'}`}
+      >
         th{option.month.replace(/^0/, '')}
       </Text>
     </Pressable>

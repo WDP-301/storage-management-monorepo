@@ -73,21 +73,21 @@ export function ReturnRequestSheet({ sheetRef, contractId, warehouseName, onSubm
     >
       <BottomSheetView style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
         <View className="mb-4 px-4">
-          <Text className="text-xl font-bold tracking-tight text-foreground">
+          <Text className="text-title-md font-strong tracking-tight text-foreground">
             Yêu cầu trả kho {warehouseName}
           </Text>
-          <Text className="mt-1 text-xs leading-5 text-muted">
+          <Text className="font-body mt-1 text-caption leading-5 text-muted">
             Chọn ngày bạn qua dọn đồ. Nhân viên sẽ kiểm tra kho cùng bạn và lập biên trả.
           </Text>
         </View>
 
-        <Text className="mb-2 px-4 text-sm font-semibold text-foreground">Ngày trả kho</Text>
+        <Text className="mb-2 px-4 text-body-sm font-strong text-foreground">Ngày trả kho</Text>
         <RentalDateStrip options={options} selectedIso={dayIso ?? ''} onSelect={setDayIso} />
 
         <View className="mt-4 gap-2 px-4">
-          <Text className="text-sm font-semibold text-foreground">Ghi chú (không bắt buộc)</Text>
+          <Text className="text-body-sm font-strong text-foreground">Ghi chú (không bắt buộc)</Text>
           <BottomSheetTextInput
-            className="min-h-20 rounded-lg border border-border bg-surface-secondary px-3 py-2 text-sm text-foreground"
+            className="font-body min-h-20 rounded-lg border border-border bg-surface-secondary px-3 py-2 text-body-sm text-foreground"
             placeholder="VD: mình qua buổi sáng, cần xe đẩy…"
             placeholderTextColor={mutedColor}
             value={note}
@@ -96,7 +96,7 @@ export function ReturnRequestSheet({ sheetRef, contractId, warehouseName, onSubm
             multiline
             textAlignVertical="top"
           />
-          {error ? <Text className="text-sm text-danger">{error}</Text> : null}
+          {error ? <Text className="font-body text-body-sm text-danger">{error}</Text> : null}
           <Button className="mt-2" isDisabled={!dayIso || isSubmitting} onPress={submit}>
             <Button.Label>{isSubmitting ? 'Đang gửi…' : 'Gửi yêu cầu'}</Button.Label>
           </Button>

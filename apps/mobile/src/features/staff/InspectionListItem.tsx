@@ -15,8 +15,10 @@ export function InspectionListItem({ inspection, onPress }: Props) {
         <Card.Body className="gap-2">
           <View className="flex-row items-start justify-between gap-3">
             <View className="flex-1">
-              <Text className="text-lg font-bold text-foreground">{inspection.unitCode}</Text>
-              <Text className="text-sm text-muted" numberOfLines={1}>
+              <Text className="text-title-sm font-strong text-foreground">
+                {inspection.unitCode}
+              </Text>
+              <Text className="font-body text-body-sm text-muted" numberOfLines={1}>
                 {inspection.facilityName}
               </Text>
             </View>
@@ -27,7 +29,7 @@ export function InspectionListItem({ inspection, onPress }: Props) {
           </View>
 
           <View className="flex-row items-center justify-between gap-3">
-            <Text className="flex-1 text-sm font-semibold text-foreground" numberOfLines={1}>
+            <Text className="flex-1 text-body-sm font-strong text-foreground" numberOfLines={1}>
               {inspection.customerName}
             </Text>
             {inspection.customerPhone ? (
@@ -35,14 +37,14 @@ export function InspectionListItem({ inspection, onPress }: Props) {
                 hitSlop={8}
                 onPress={() => void Linking.openURL(`tel:${inspection.customerPhone}`)}
               >
-                <Text className="text-sm font-semibold text-accent">
+                <Text className="text-body-sm font-strong text-accent">
                   {inspection.customerPhone}
                 </Text>
               </Pressable>
             ) : null}
           </View>
 
-          <Text className="text-xs text-muted">
+          <Text className="font-body text-caption text-muted">
             {done && inspection.finalizedAt
               ? `Đã chốt ${formatIsoDateTime(inspection.finalizedAt)}`
               : `${scheduledLabel(inspection)} · ${inspection.inspectorName ?? 'Chưa phân công'}`}

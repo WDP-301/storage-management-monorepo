@@ -129,6 +129,7 @@ export default function TicketCreateRoute() {
       }
       onSubmit={() => void submit()}
       onRetryOptions={() => void loadOptions()}
+      onBack={() => router.navigate('/(customer)/tickets')}
     />
   );
 }

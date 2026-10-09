@@ -38,7 +38,7 @@ export function InspectionDetailScreen({ detail, onBack, onFinalized }: Props) {
     return (
       <View className="flex-1 items-center justify-center px-6">
         {error ? (
-          <Text className="text-center text-sm text-danger">{error}</Text>
+          <Text className="font-body text-center text-body-sm text-danger">{error}</Text>
         ) : (
           <ActivityIndicator />
         )}
@@ -75,10 +75,12 @@ export function InspectionDetailScreen({ detail, onBack, onFinalized }: Props) {
 
         <Section title="Ghi chú tình trạng">
           {readOnly ? (
-            <Text className="text-sm leading-5 text-foreground">{form.conditionNotes || '—'}</Text>
+            <Text className="font-body text-body-sm leading-5 text-foreground">
+              {form.conditionNotes || '—'}
+            </Text>
           ) : (
             <TextInput
-              className="min-h-24 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+              className="font-body min-h-24 rounded-lg border border-border bg-background px-3 py-2 text-body-sm text-foreground"
               placeholder="Tình trạng kho, chìa khoá, đồng hồ điện…"
               placeholderTextColor={mutedColor}
               value={form.conditionNotes}
@@ -124,7 +126,7 @@ export function InspectionDetailScreen({ detail, onBack, onFinalized }: Props) {
           />
         </Section>
 
-        {error ? <Text className="text-sm text-danger">{error}</Text> : null}
+        {error ? <Text className="font-body text-body-sm text-danger">{error}</Text> : null}
 
         {readOnly ? null : (
           <View className="gap-3">
@@ -155,10 +157,10 @@ function Header({ inspection }: { inspection: StaffInspection }) {
   return (
     <View className="flex-row items-start justify-between gap-3">
       <View className="flex-1">
-        <Text className="text-2xl font-bold tracking-tight text-foreground">
+        <Text className="text-title-md font-strong tracking-tight text-foreground">
           {inspection.unitCode}
         </Text>
-        <Text className="mt-1 text-sm text-muted">{inspection.facilityName}</Text>
+        <Text className="font-body mt-1 text-body-sm text-muted">{inspection.facilityName}</Text>
       </View>
       <StatusPill
         label={inspection.finalizedAt ? 'Đã chốt' : INSPECTION_KIND_LABEL[inspection.type]}
@@ -183,7 +185,7 @@ function InspectionFacts({ inspection }: { inspection: StaffInspection }) {
       ) : null}
       <InfoRow label="Nhân viên" value={inspection.inspectorName ?? 'Chưa phân công'} />
       {inspection.requestNote ? (
-        <Text className="text-sm leading-5 text-muted">
+        <Text className="font-body text-body-sm leading-5 text-muted">
           Ghi chú của khách: {inspection.requestNote}
         </Text>
       ) : null}
@@ -211,7 +213,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Card className="border border-border bg-surface">
       <Card.Body className="gap-3">
-        <Text className="text-base font-semibold text-foreground">{title}</Text>
+        <Text className="text-body-lg font-strong text-foreground">{title}</Text>
         {children}
       </Card.Body>
     </Card>

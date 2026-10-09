@@ -40,8 +40,10 @@ export function StaffTodayScreen({ onOpen }: Props) {
       showsVerticalScrollIndicator={false}
     >
       <View className="px-4 pb-4 pt-5">
-        <Text className="text-2xl font-bold tracking-tight text-foreground">Hôm nay</Text>
-        <Text className="mt-1 text-sm text-muted">Lượt nhận và trả kho cần lập biên bản.</Text>
+        <Text className="text-title-md font-strong tracking-tight text-foreground">Hôm nay</Text>
+        <Text className="font-body mt-1 text-body-sm text-muted">
+          Lượt nhận và trả kho cần lập biên bản.
+        </Text>
 
         <View className="mt-4 flex-row gap-2">
           <ChipButton
@@ -63,14 +65,14 @@ export function StaffTodayScreen({ onOpen }: Props) {
 
         {error ? (
           <View className="mt-4 rounded-xl border border-danger/30 bg-danger/5 px-4 py-3">
-            <Text className="text-sm text-danger-foreground">{error}</Text>
+            <Text className="font-body text-body-sm text-danger">{error}</Text>
           </View>
         ) : null}
 
         {isLoading && isEmpty ? (
           <ActivityIndicator className="mt-12" />
         ) : isEmpty ? (
-          <Text className="mt-12 text-center text-sm text-muted">
+          <Text className="font-body mt-12 text-center text-body-sm text-muted">
             {segment === 'done'
               ? 'Chưa có biên bản nào được chốt.'
               : 'Không có lượt nào cần xử lý.'}
@@ -79,7 +81,7 @@ export function StaffTodayScreen({ onOpen }: Props) {
           groups.map((group) => (
             <View key={group.title ?? 'all'} className="mt-5 gap-3">
               {group.title ? (
-                <Text className="text-sm font-semibold text-muted">
+                <Text className="text-body-sm font-strong text-muted">
                   {group.title} · {group.items.length}
                 </Text>
               ) : null}

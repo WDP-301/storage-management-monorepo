@@ -20,6 +20,7 @@ import { RoleLandingPage } from '../features/roles/RoleLandingPage';
 import { UnassignedRolePage } from '../features/roles/UnassignedRolePage';
 import { SystemSettingsPage } from '../features/settings/SystemSettingsPage';
 import { ManagerTicketsPage } from '../features/tickets/ManagerTicketsPage';
+import { WarehouseManagementPage } from '../features/warehouses/WarehouseManagementPage';
 import { AppShell } from '../layouts/AppShell';
 import { AuthLayout } from '../layouts/AuthLayout';
 import { RoleRoute } from './RoleRoute';
@@ -91,6 +92,12 @@ export const AppRouter: React.FC = () => {
             <Route element={<RoleRoute allowedRoles={[UserRole.ADMIN]} />}>
               <Route path="/admin/users" element={<UserManagementPage />} />
               <Route path="/admin/settings" element={<SystemSettingsPage />} />
+            </Route>
+
+            <Route
+              element={<RoleRoute allowedRoles={[UserRole.ADMIN, UserRole.OPERATIONS_MANAGER]} />}
+            >
+              <Route path="/admin/warehouses" element={<WarehouseManagementPage />} />
             </Route>
 
             <Route

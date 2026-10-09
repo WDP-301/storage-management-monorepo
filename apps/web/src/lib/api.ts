@@ -1,7 +1,6 @@
 import {
   ApiResponse,
   ChangeRequestStatus,
-  StorageUnitStatus,
   SystemSettingRecord,
   SystemSettingsResponse,
   UpdateSettingsResponse,
@@ -31,8 +30,25 @@ import type {
   ServiceTicketResponse,
   UpdateTicketDto,
 } from '../types/service-tickets';
+import type {
+  PlaceDetail,
+  PlacePrediction,
+  Province,
+  Ward,
+  Warehouse,
+  WarehouseInput,
+  WarehouseListQuery,
+  WarehouseListResponse,
+} from '../types/warehouse';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+
+/** Error surfaced by every Api call: server message plus machine-readable context. */
+export type ApiError = Error & {
+  status?: number;
+  code?: string;
+  details?: Record<string, unknown>;
+};
 
 // Callback hook for 401 unauthenticated events (e.g. session expired)
 let unauthorizedHandler: (() => void) | null = null;
@@ -71,7 +87,14 @@ apiClient.interceptors.response.use(
   (response) => {
     return response;
   },
-  (error: AxiosError<{ message?: string | string[]; statusCode?: number }>) => {
+  (
+    error: AxiosError<{
+      message?: string | string[];
+      statusCode?: number;
+      code?: string;
+      details?: Record<string, unknown>;
+    }>,
+  ) => {
     const status = error.response?.status;
     const requestUrl = error.config?.url || '';
 
@@ -90,8 +113,10 @@ apiClient.interceptors.response.use(
       errorMessage = error.message;
     }
 
-    const err = new Error(errorMessage) as Error & { status?: number };
+    const err = new Error(errorMessage) as ApiError;
     err.status = status;
+    err.code = error.response?.data?.code;
+    err.details = error.response?.data?.details;
     return Promise.reject(err);
   },
 );
@@ -153,15 +178,6 @@ export interface FacilityRecord {
   status: string;
 }
 
-export interface ManagedUnit {
-  id: string;
-  code: string;
-  zone?: string | null;
-  areaM2: string;
-  status: StorageUnitStatus;
-  unitType: { id: string; code: string; name: string; monthlyPrice: string };
-}
-
 export interface UnitChangeRequestRecord {
   id: string;
   status: ChangeRequestStatus;
@@ -187,9 +203,13 @@ export const FacilitiesApi = {
     return res.data.data;
   },
 
+  /** Every facility regardless of status — back-office pickers must still reach closed sites. */
   listAll: async (): Promise<FacilityRecord[]> => {
-    const res = await apiClient.get<ApiResponse<FacilityRecord[]>>('/facilities');
-    return res.data.data;
+    const res = await apiClient.get<ApiResponse<{ facilities: FacilityRecord[] } & Paged>>(
+      '/facilities/admin',
+      { params: { limit: 100 } },
+    );
+    return res.data.data.facilities;
   },
 
   /** Active staff of a facility — the people a manager can assign work to. */
@@ -245,22 +265,74 @@ export const UploadsApi = {
   },
 };
 
-export const UnitsApi = {
-  managed: async (
-    facilityId: string,
-    params?: { page?: number; limit?: number; status?: StorageUnitStatus },
-  ) => {
-    const res = await apiClient.get<ApiResponse<{ units: ManagedUnit[] } & Paged>>(
-      '/storage-units/managed',
-      { params: { facilityId, ...params } },
-    );
+export const WarehousesApi = {
+  /** Back-office list over every status (ADMIN, OPERATIONS_MANAGER). */
+  listAdmin: async (query: WarehouseListQuery = {}): Promise<WarehouseListResponse> => {
+    const res = await apiClient.get<ApiResponse<WarehouseListResponse>>('/warehouses/admin', {
+      params: query,
+    });
     return res.data.data;
   },
 
-  updateStatus: async (id: string, status: 'AVAILABLE' | 'MAINTENANCE') => {
-    const res = await apiClient.patch<ApiResponse<ManagedUnit>>(`/storage-units/${id}/status`, {
+  /** Warehouses assigned to the calling facility manager / staff. */
+  listMine: async (): Promise<Warehouse[]> => {
+    const res = await apiClient.get<ApiResponse<Warehouse[]>>('/warehouses/mine');
+    return res.data.data;
+  },
+
+  get: async (id: string): Promise<Warehouse> => {
+    const res = await apiClient.get<ApiResponse<Warehouse>>(`/warehouses/${id}`);
+    return res.data.data;
+  },
+
+  create: async (input: WarehouseInput): Promise<Warehouse> => {
+    const res = await apiClient.post<ApiResponse<Warehouse>>('/warehouses', input);
+    return res.data.data;
+  },
+
+  update: async (id: string, input: Partial<WarehouseInput>): Promise<Warehouse> => {
+    const res = await apiClient.patch<ApiResponse<Warehouse>>(`/warehouses/${id}`, input);
+    return res.data.data;
+  },
+
+  updateStatus: async (id: string, status: 'AVAILABLE' | 'MAINTENANCE'): Promise<Warehouse> => {
+    const res = await apiClient.patch<ApiResponse<Warehouse>>(`/warehouses/${id}/status`, {
       status,
     });
+    return res.data.data;
+  },
+
+  remove: async (id: string): Promise<void> => {
+    await apiClient.delete(`/warehouses/${id}`);
+  },
+};
+
+export const PlacesApi = {
+  autocomplete: async (input: string): Promise<PlacePrediction[]> => {
+    const res = await apiClient.get<ApiResponse<PlacePrediction[]>>('/places/autocomplete', {
+      params: { input },
+    });
+    return res.data.data;
+  },
+
+  detail: async (placeId: string): Promise<PlaceDetail> => {
+    const res = await apiClient.get<ApiResponse<PlaceDetail>>('/places/detail', {
+      params: { place_id: placeId },
+    });
+    return res.data.data;
+  },
+};
+
+export const LocationsApi = {
+  provinces: async (): Promise<Province[]> => {
+    const res = await apiClient.get<ApiResponse<Province[]>>('/locations/provinces');
+    return res.data.data;
+  },
+
+  wards: async (provinceCode: string): Promise<Ward[]> => {
+    const res = await apiClient.get<ApiResponse<Ward[]>>(
+      `/locations/provinces/${provinceCode}/wards`,
+    );
     return res.data.data;
   },
 };

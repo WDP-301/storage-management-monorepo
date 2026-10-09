@@ -129,7 +129,7 @@ const SETTINGS_METADATA: Record<string, SettingMetadata> = {
   'deposit.default_months': {
     label: 'Tỷ lệ tiền đặt cọc tối thiểu (Tháng thuê)',
     description:
-      'Mức cọc chuẩn khi tạo hợp đồng thuê kho mới (Quy định chuẩn bằng 1 tháng giá thuê kho).',
+      'Áp dụng cho ô kho chưa cấu hình số tháng cọc riêng; ô kho đã cấu hình sẽ dùng số tháng của nó.',
     unit: 'tháng thuê',
     group: 'deposit',
   },
@@ -310,7 +310,7 @@ const INITIAL_SETTINGS: SystemSettingRecord[] = [
     key: 'deposit.default_months',
     label: 'Tỷ lệ tiền đặt cọc tối thiểu (Tháng thuê)',
     description:
-      'Mức cọc chuẩn khi tạo hợp đồng thuê kho mới (Quy định chuẩn bằng 1 tháng giá thuê kho).',
+      'Áp dụng cho ô kho chưa cấu hình số tháng cọc riêng; ô kho đã cấu hình sẽ dùng số tháng của nó.',
     value_type: 'float',
     value: 1,
     default: 1,

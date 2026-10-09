@@ -1,5 +1,6 @@
 import { Badge, Button, Select, Sidebar, Text, useSidebar } from '@cloudflare/kumo';
 import {
+  Buildings,
   ClipboardText,
   Faders,
   Lifebuoy,
@@ -25,12 +26,15 @@ interface NavItem {
 const ROLE_NAV: Record<UserRole, NavItem[]> = {
   [UserRole.ADMIN]: [
     { to: '/admin/users', label: 'Quản lý người dùng', icon: Users },
+    { to: '/admin/warehouses', label: 'Quản lý kho', icon: Buildings },
     { to: '/admin/settings', label: 'Cấu hình tham số', icon: Faders },
     { to: '/facility-manager', label: 'Quản lý cơ sở kho', icon: Warehouse },
     { to: '/facility-manager/tickets', label: 'Vé sự cố', icon: Lifebuoy },
     { to: '/facility-manager/inspections', label: 'Biên bản', icon: ClipboardText },
   ],
-  [UserRole.OPERATIONS_MANAGER]: [],
+  [UserRole.OPERATIONS_MANAGER]: [
+    { to: '/admin/warehouses', label: 'Quản lý kho', icon: Buildings },
+  ],
   [UserRole.FACILITY_MANAGER]: [
     { to: '/facility-manager', label: 'Quản lý cơ sở kho', icon: Warehouse },
     { to: '/facility-manager/tickets', label: 'Vé sự cố', icon: Lifebuoy },

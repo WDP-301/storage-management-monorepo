@@ -76,6 +76,8 @@ export const WarehouseManagementPage: React.FC = () => {
   const [editing, setEditing] = useState<Warehouse | null>(null);
   const [deleting, setDeleting] = useState<Warehouse | null>(null);
   const [view, setView] = useState<'list' | 'map'>('list');
+  // Once opened, the map stays mounted (hidden in list view) so toggling does not reload it.
+  const [mapOpened, setMapOpened] = useState(false);
   const [focusedWarehouseId, setFocusedWarehouseId] = useState<string | null>(null);
 
   const headerFacilityId = selectedFacility?.id ?? ALL;
@@ -201,6 +203,12 @@ export const WarehouseManagementPage: React.FC = () => {
     }
   }, [warehouses, focusedWarehouseId]);
 
+  const openMap = (focusId: string | null) => {
+    setFocusedWarehouseId(focusId);
+    setMapOpened(true);
+    setView('map');
+  };
+
   const editWarehouse = (warehouse: Warehouse) => {
     setEditing(warehouse);
     setFormOpen(true);
@@ -279,40 +287,42 @@ export const WarehouseManagementPage: React.FC = () => {
         <Button
           variant={view === 'list' ? 'primary' : 'secondary'}
           icon={<List className="h-4 w-4" />}
-          onClick={() => setView('list')}
+          onClick={() => {
+            // Clearing the focus lets the same warehouse be focused again from the table.
+            setFocusedWarehouseId(null);
+            setView('list');
+          }}
         >
           Danh sách
         </Button>
         <Button
           variant={view === 'map' ? 'primary' : 'secondary'}
           icon={<MapTrifold className="h-4 w-4" />}
-          onClick={() => {
-            setFocusedWarehouseId(null);
-            setView('map');
-          }}
+          onClick={() => openMap(null)}
         >
           Bản đồ
         </Button>
       </div>
 
-      {view === 'list' ? (
+      {view === 'list' && (
         <WarehouseTable
           warehouses={warehouses}
           hasFilters={hasFilters}
           onEdit={editWarehouse}
-          onViewMap={(warehouse) => {
-            setFocusedWarehouseId(warehouse.id);
-            setView('map');
-          }}
+          onViewMap={(warehouse) => openMap(warehouse.id)}
           onDelete={setDeleting}
         />
-      ) : (
-        <WarehouseOverviewMap
-          warehouses={warehouses}
-          page={page}
-          focusedWarehouseId={focusedWarehouseId}
-          onEdit={editWarehouse}
-        />
+      )}
+      {mapOpened && (
+        <div hidden={view !== 'map'}>
+          <WarehouseOverviewMap
+            warehouses={warehouses}
+            page={page}
+            visible={view === 'map'}
+            focusedWarehouseId={focusedWarehouseId}
+            onEdit={editWarehouse}
+          />
+        </div>
       )}
 
       {total > 0 && (

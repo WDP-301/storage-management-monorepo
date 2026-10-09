@@ -5,19 +5,33 @@ import { GOONG_MAX_ZOOM, GOONG_STYLE_URL, HCM_CENTER } from './goong-map';
 
 let workerConfigured = false;
 
-export function useGoongMap() {
+const VI_LOCALE = {
+  'CooperativeGesturesHandler.WindowsHelpText': 'Giữ Ctrl và cuộn để phóng to/thu nhỏ bản đồ',
+  'CooperativeGesturesHandler.MacHelpText': 'Giữ ⌘ và cuộn để phóng to/thu nhỏ bản đồ',
+  'CooperativeGesturesHandler.MobileHelpText': 'Dùng hai ngón tay để di chuyển bản đồ',
+};
+
+interface Options {
+  /** Require Ctrl/⌘ + scroll to zoom, so a map inside a scrolling container does not trap the wheel. */
+  cooperativeGestures?: boolean;
+}
+
+export function useGoongMap({ cooperativeGestures = false }: Options = {}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const [map, setMap] = useState<MapLibreMap | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Options apply when the map is created; later changes do not rebuild it.
+  const creationOptions = useRef({ cooperativeGestures });
 
   useEffect(() => {
     if (!GOONG_STYLE_URL || !containerRef.current) return;
     let disposed = false;
     let resizeObserver: ResizeObserver | undefined;
 
-    import('maplibre-gl')
-      .then(({ Map: MapLibre, NavigationControl, setWorkerUrl }) => {
+    // The stylesheet travels with the library so pages without a map never download it.
+    Promise.all([import('maplibre-gl'), import('maplibre-gl/dist/maplibre-gl.css')])
+      .then(([{ Map: MapLibre, NavigationControl, setWorkerUrl }]) => {
         if (disposed || !containerRef.current) return;
         if (!workerConfigured) {
           setWorkerUrl(workerUrl);
@@ -29,6 +43,8 @@ export function useGoongMap() {
           center: HCM_CENTER,
           zoom: 11,
           maxZoom: GOONG_MAX_ZOOM,
+          cooperativeGestures: creationOptions.current.cooperativeGestures,
+          locale: VI_LOCALE,
         });
         mapRef.current = instance;
         instance.addControl(new NavigationControl({ showCompass: false }), 'top-right');

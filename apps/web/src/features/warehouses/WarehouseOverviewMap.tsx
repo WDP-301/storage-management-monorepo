@@ -1,53 +1,89 @@
 import { Badge, Button, LayerCard, Text } from '@cloudflare/kumo';
-import { PencilSimple } from '@phosphor-icons/react';
+import { PencilSimple, X } from '@phosphor-icons/react';
 import type { Marker } from 'maplibre-gl';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Warehouse } from '../../types/warehouse';
 import { GOONG_STYLE_URL, hasValidCoordinates, toLngLat, warehouseBounds } from './goong-map';
 import { useGoongMap } from './useGoongMap';
 import { WAREHOUSE_STATUS_LABEL } from './warehouse-display';
 
+type MarkerClass = typeof import('maplibre-gl').Marker;
+
 interface Props {
   warehouses: Warehouse[];
   page: number;
+  /** Kept mounted while hidden so switching views does not reload the map. */
+  visible: boolean;
   focusedWarehouseId: string | null;
   onEdit: (warehouse: Warehouse) => void;
 }
 
-export function WarehouseOverviewMap({ warehouses, page, focusedWarehouseId, onEdit }: Props) {
+export function WarehouseOverviewMap({
+  warehouses,
+  page,
+  visible,
+  focusedWarehouseId,
+  onEdit,
+}: Props) {
   const { containerRef, map, error } = useGoongMap();
+  const [MapMarker, setMapMarker] = useState<MarkerClass | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(focusedWarehouseId);
+  const markers = useRef(new Map<string, Marker>());
+  const selectedIdRef = useRef(selectedId);
+  const previousSelectedId = useRef(selectedId);
   const selected = warehouses.find((warehouse) => warehouse.id === selectedId);
   const plottable = useMemo(() => warehouses.filter(hasValidCoordinates), [warehouses]);
 
   useEffect(() => {
     if (!map) return;
-    const bounds = warehouseBounds(warehouses);
-    if (bounds) map.fitBounds(bounds, { padding: 56, maxZoom: 15, duration: 0 });
-  }, [map, warehouses]);
+    import('maplibre-gl').then(({ Marker }) => setMapMarker(() => Marker));
+  }, [map]);
+
+  // The default pin's colour is fixed at creation, so a selection change replaces that marker.
+  const placeMarker = useCallback(
+    (warehouse: Warehouse, isSelected: boolean) => {
+      if (!map || !MapMarker) return;
+      markers.current.get(warehouse.id)?.remove();
+      const marker = new MapMarker({ color: isSelected ? '#f48120' : '#2658b8' });
+      const element = marker.getElement();
+      element.setAttribute('role', 'button');
+      element.setAttribute('tabindex', '0');
+      element.setAttribute('aria-label', `Xem kho ${warehouse.code} trên bản đồ`);
+      element.setAttribute('aria-pressed', String(isSelected));
+      element.addEventListener('click', () => setSelectedId(warehouse.id));
+      element.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        setSelectedId(warehouse.id);
+      });
+      marker.setLngLat(toLngLat(warehouse)).addTo(map);
+      markers.current.set(warehouse.id, marker);
+    },
+    [map, MapMarker],
+  );
 
   useEffect(() => {
-    if (!map) return;
-    let removed = false;
-    const markers: Marker[] = [];
-    import('maplibre-gl').then(({ Marker: MapMarker }) => {
-      if (removed) return;
-      for (const warehouse of plottable) {
-        const marker = new MapMarker({ color: warehouse.id === selectedId ? '#f48120' : '#2658b8' })
-          .setLngLat(toLngLat(warehouse))
-          .addTo(map);
-        marker.getElement().setAttribute('aria-label', `Xem kho ${warehouse.code} trên bản đồ`);
-        marker.getElement().addEventListener('click', () => setSelectedId(warehouse.id));
-        markers.push(marker);
-      }
-    });
+    const placed = markers.current;
+    for (const warehouse of plottable) {
+      placeMarker(warehouse, warehouse.id === selectedIdRef.current);
+    }
     return () => {
-      removed = true;
-      markers.forEach((marker) => {
-        marker.remove();
-      });
+      for (const marker of placed.values()) marker.remove();
+      placed.clear();
     };
-  }, [map, plottable, selectedId]);
+  }, [plottable, placeMarker]);
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+    const previous = previousSelectedId.current;
+    previousSelectedId.current = selectedId;
+    if (previous === selectedId) return;
+    for (const warehouse of plottable) {
+      if (warehouse.id === previous || warehouse.id === selectedId) {
+        placeMarker(warehouse, warehouse.id === selectedId);
+      }
+    }
+  }, [selectedId, plottable, placeMarker]);
 
   useEffect(() => {
     setSelectedId(focusedWarehouseId);
@@ -59,10 +95,25 @@ export function WarehouseOverviewMap({ warehouses, page, focusedWarehouseId, onE
     }
   }, [selectedId, warehouses]);
 
+  // A selected warehouse owns the camera, so a refetch (e.g. after saving it) does not pull the
+  // view back out to the whole page.
   useEffect(() => {
-    if (!map || !selected || !hasValidCoordinates(selected)) return;
-    map.flyTo({ center: toLngLat(selected), zoom: 15, essential: true });
-  }, [map, selected]);
+    if (!map || !visible) return;
+    map.resize();
+    const keptId = selectedIdRef.current;
+    if (keptId && warehouses.some((warehouse) => warehouse.id === keptId)) return;
+    const bounds = warehouseBounds(warehouses);
+    if (bounds) map.fitBounds(bounds, { padding: 56, maxZoom: 15, duration: 0 });
+  }, [map, visible, warehouses]);
+
+  const selectedLat = selected?.latitude;
+  const selectedLng = selected?.longitude;
+  useEffect(() => {
+    if (!map || !visible || selectedLat === undefined || selectedLng === undefined) return;
+    const point = { latitude: selectedLat, longitude: selectedLng };
+    if (!hasValidCoordinates(point)) return;
+    map.flyTo({ center: toLngLat(point), zoom: 15, essential: true });
+  }, [map, visible, selectedId, selectedLat, selectedLng]);
 
   const notice = !GOONG_STYLE_URL ? 'Chưa cấu hình VITE_GOONG_MAPTILES_KEY cho web.' : error;
 
@@ -73,7 +124,7 @@ export function WarehouseOverviewMap({ warehouses, page, focusedWarehouseId, onE
           Bản đồ kho
         </Text>
         <Text variant="secondary">
-          Hiển thị {warehouses.length} kho ở trang {page}
+          {plottable.length}/{warehouses.length} kho có tọa độ · trang {page}
         </Text>
       </div>
       {notice ? (
@@ -99,13 +150,14 @@ export function WarehouseOverviewMap({ warehouses, page, focusedWarehouseId, onE
                     {selected.code} · {selected.facility.name}
                   </Text>
                 </div>
-                <button
-                  type="button"
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  shape="square"
+                  icon={<X className="h-4 w-4" />}
                   aria-label="Đóng thông tin kho"
                   onClick={() => setSelectedId(null)}
-                >
-                  ×
-                </button>
+                />
               </div>
               <p className="mt-2 text-kumo-subtle">{selected.addressLine}</p>
               <div className="mt-3 flex items-center justify-between gap-2">

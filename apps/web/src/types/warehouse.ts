@@ -19,6 +19,15 @@ export interface WarehouseFacility {
   name: string;
 }
 
+/** A warehouse photo in the private bucket; `url` is a presigned link that expires. */
+export interface WarehouseImage {
+  fileKey: string;
+  name: string;
+  mimeType: string;
+  size?: number;
+  url?: string;
+}
+
 export interface Warehouse {
   id: string;
   facility: WarehouseFacility;
@@ -39,6 +48,8 @@ export interface Warehouse {
   effectiveDepositMonths: number;
   status: WarehouseStatus;
   notes: string | null;
+  /** Display order; the first one is the cover. */
+  images: WarehouseImage[];
   createdAt: string;
   updatedAt: string;
 }
@@ -80,6 +91,8 @@ export interface WarehouseInput {
   depositMonths: number | null;
   notes?: string;
   status?: WarehouseIdleStatus;
+  /** The full photo list; replaces the stored one. */
+  images?: Omit<WarehouseImage, 'url'>[];
 }
 
 export interface Province {

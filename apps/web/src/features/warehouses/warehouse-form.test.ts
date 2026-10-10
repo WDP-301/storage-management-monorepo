@@ -30,6 +30,7 @@ const warehouse: Warehouse = {
   effectiveDepositMonths: 3,
   status: 'RENTED',
   notes: null,
+  images: [],
   createdAt: '',
   updatedAt: '',
 };
@@ -59,6 +60,21 @@ describe('warehouse form helpers', () => {
   it('patches only changed fields and never resends frozen ones for occupied warehouses', () => {
     const form = { ...toFormState(warehouse), monthlyPrice: '1200000', depositMonths: 'default' };
     expect(buildPatch(form, warehouse)).toEqual({ monthlyPrice: 1200000, depositMonths: null });
+  });
+
+  it('sends photos only when the set or order changed, without the signed links', () => {
+    const cover = { fileKey: 'uploads/1-a.jpg', name: 'a.jpg', mimeType: 'image/jpeg', url: 'u1' };
+    const inside = { fileKey: 'uploads/2-b.jpg', name: 'b.jpg', mimeType: 'image/jpeg', url: 'u2' };
+    const stored = { ...warehouse, images: [cover, inside] };
+
+    expect(buildPatch(toFormState(stored), stored)).toEqual({});
+    expect(buildPatch({ ...toFormState(stored), images: [inside, cover] }, stored)).toEqual({
+      images: [
+        { fileKey: 'uploads/2-b.jpg', name: 'b.jpg', mimeType: 'image/jpeg' },
+        { fileKey: 'uploads/1-a.jpg', name: 'a.jpg', mimeType: 'image/jpeg' },
+      ],
+    });
+    expect(buildPatch({ ...toFormState(stored), images: [] }, stored)).toEqual({ images: [] });
   });
 
   it('clears the stored ward when the province changes and no ward is picked', () => {

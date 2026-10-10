@@ -6,6 +6,7 @@ import { useAppToast } from '../../lib/toast';
 import type { Province, Ward, Warehouse } from '../../types/warehouse';
 import { WarehouseAddressPicker } from './WarehouseAddressPicker';
 import { WarehouseFacilityField } from './WarehouseFacilityField';
+import { WarehouseImagesField } from './WarehouseImagesField';
 import { WarehouseLocationMap } from './WarehouseLocationMap';
 import {
   describeWarehouseError,
@@ -62,6 +63,7 @@ export const WarehouseFormDialog: React.FC<Props> = ({
   const [wards, setWards] = useState<Ward[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [pinMoved, setPinMoved] = useState(false);
+  const [imagesUploading, setImagesUploading] = useState(false);
 
   const isEdit = warehouse !== null;
   const frozen = isEdit && !isIdleStatus(warehouse.status);
@@ -339,6 +341,13 @@ export const WarehouseFormDialog: React.FC<Props> = ({
             onChange={(e) => set('notes', e.target.value)}
           />
 
+          <WarehouseImagesField
+            images={form.images}
+            onChange={(images) => set('images', images)}
+            onUploadingChange={setImagesUploading}
+            onError={(message) => toast.error('Lỗi ảnh kho', message)}
+          />
+
           <div className="flex items-center justify-between gap-2.5 pt-3 border-t border-kumo-line">
             <Text variant="secondary" size="xs">
               Tiền cọc = giá thuê tháng × số tháng cọc.
@@ -347,7 +356,7 @@ export const WarehouseFormDialog: React.FC<Props> = ({
               <Button variant="secondary" onClick={onClose} disabled={isSaving}>
                 Hủy bỏ
               </Button>
-              <Button type="submit" variant="primary" loading={isSaving}>
+              <Button type="submit" variant="primary" loading={isSaving} disabled={imagesUploading}>
                 {isEdit ? 'Lưu thay đổi' : 'Tạo kho'}
               </Button>
             </div>

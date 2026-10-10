@@ -60,6 +60,7 @@ const wh = (over: Partial<Warehouse>): Warehouse => ({
   effectiveDepositMonths: 1,
   status: 'AVAILABLE',
   notes: null,
+  images: [],
   createdAt: '',
   updatedAt: '',
   ...over,

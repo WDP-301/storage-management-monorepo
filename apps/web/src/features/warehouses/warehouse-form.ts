@@ -1,4 +1,9 @@
-import type { Warehouse, WarehouseIdleStatus, WarehouseInput } from '../../types/warehouse';
+import type {
+  Warehouse,
+  WarehouseIdleStatus,
+  WarehouseImage,
+  WarehouseInput,
+} from '../../types/warehouse';
 
 export const DEPOSIT_DEFAULT = 'default';
 
@@ -18,6 +23,7 @@ export interface WarehouseFormState {
   depositMonths: string;
   notes: string;
   status: WarehouseIdleStatus;
+  images: WarehouseImage[];
 }
 
 export const EMPTY_FORM: WarehouseFormState = {
@@ -36,6 +42,7 @@ export const EMPTY_FORM: WarehouseFormState = {
   depositMonths: DEPOSIT_DEFAULT,
   notes: '',
   status: 'AVAILABLE',
+  images: [],
 };
 
 export const IDLE_STATUSES: WarehouseIdleStatus[] = ['AVAILABLE', 'MAINTENANCE', 'INACTIVE'];
@@ -59,6 +66,7 @@ export const toFormState = (w: Warehouse): WarehouseFormState => ({
   depositMonths: w.depositMonths === null ? DEPOSIT_DEFAULT : String(w.depositMonths),
   notes: w.notes ?? '',
   status: isIdleStatus(w.status) ? w.status : 'AVAILABLE',
+  images: w.images ?? [],
 });
 
 const num = (value: string) => (value.trim() === '' ? Number.NaN : Number(value));
@@ -135,8 +143,16 @@ export function buildPayload(form: WarehouseFormState): WarehouseInput {
     depositMonths: form.depositMonths === DEPOSIT_DEFAULT ? null : Number(form.depositMonths),
     ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
     status: form.status,
+    images: form.images.map(({ fileKey, name, mimeType, size }) => ({
+      fileKey,
+      name,
+      mimeType,
+      ...(size === undefined ? {} : { size }),
+    })),
   };
 }
+
+const imageOrder = (images: readonly WarehouseImage[]) => images.map((i) => i.fileKey).join('\n');
 
 /** Only the fields that differ from the stored warehouse, so frozen fields are not resent. */
 export function buildPatch(form: WarehouseFormState, original: Warehouse): Partial<WarehouseInput> {
@@ -144,8 +160,10 @@ export function buildPatch(form: WarehouseFormState, original: Warehouse): Parti
   const before = buildPayload(toFormState(original));
   const patch: Record<string, unknown> = {};
   for (const key of Object.keys(next) as (keyof WarehouseInput)[]) {
-    if (next[key] !== before[key]) patch[key] = next[key];
+    if (key !== 'images' && next[key] !== before[key]) patch[key] = next[key];
   }
+  // Sent only when the set or order changed — the order decides the cover.
+  if (imageOrder(form.images) !== imageOrder(original.images ?? [])) patch.images = next.images;
   if (!form.notes.trim() && original.notes) patch.notes = '';
   // A ward left over from the old province must be cleared explicitly, or the API pairs it
   // with the new province and rejects the mismatch.

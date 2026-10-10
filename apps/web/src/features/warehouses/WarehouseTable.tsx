@@ -70,7 +70,16 @@ export const WarehouseTable: React.FC<Props> = ({
               {w.code}
             </Table.Cell>
             <Table.Cell className="font-medium text-kumo-default min-w-[160px]">
-              {w.name}
+              <div className="flex items-center gap-2">
+                {w.images?.[0]?.url && (
+                  <img
+                    src={w.images[0].url}
+                    alt=""
+                    className="w-9 h-9 rounded-md object-cover shrink-0 border border-kumo-line"
+                  />
+                )}
+                <span>{w.name}</span>
+              </div>
             </Table.Cell>
             <Table.Cell className="text-kumo-subtle min-w-[200px]">{w.addressLine}</Table.Cell>
             <Table.Cell className="whitespace-nowrap text-kumo-default">

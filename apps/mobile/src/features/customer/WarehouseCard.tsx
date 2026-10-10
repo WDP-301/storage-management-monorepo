@@ -2,6 +2,7 @@ import { CheckCircle, MapPin, Plus } from 'phosphor-react-native';
 import { Pressable, Text, View } from 'react-native';
 import { formatDimensions, formatMoney, formatNumber } from '../../../lib/format-vi';
 import { warehouseDeposit } from '../../../lib/warehouse-query';
+import { WarehouseCover } from '../../components/WarehousePhotos';
 import type { Warehouse } from '../../types/storage-api';
 
 /** Mirror the colour tokens in global.css; SVG icons cannot read a Tailwind class. */
@@ -15,6 +16,8 @@ type Props = {
   isSelected: boolean;
   isDisabled: boolean;
   onToggle: () => void;
+  /** Opens the detail page with every photo. */
+  onOpen: () => void;
 };
 
 /** Size, volume, rent and deposit — the figures customers compare between warehouses. */
@@ -44,49 +47,67 @@ export function WarehouseSpecs({ warehouse }: { warehouse: Warehouse }) {
 }
 
 /** One warehouse as an outlined card that can be toggled into the booking selection. */
-export function WarehouseCard({ warehouse, distanceKm, isSelected, isDisabled, onToggle }: Props) {
+export function WarehouseCard({
+  warehouse,
+  distanceKm,
+  isSelected,
+  isDisabled,
+  onToggle,
+  onOpen,
+}: Props) {
   return (
-    <View
-      className={`gap-2.5 rounded-xl border p-3 ${
-        isSelected ? 'border-accent bg-accent/5' : 'border-border bg-surface'
-      }`}
+    <Pressable
+      accessibilityRole="button"
+      accessibilityHint="Mở chi tiết kho"
+      style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+      onPress={onOpen}
     >
-      <View className="flex-row items-start justify-between gap-3">
-        <View className="flex-1 gap-1">
-          <Text className="font-strong text-foreground text-title-sm">{warehouse.name}</Text>
-          <Text className="font-body text-caption text-muted" numberOfLines={1}>
-            Thuộc {warehouse.facility.name}
-          </Text>
-          <View className="flex-row items-start gap-1.5">
-            <MapPin color={MUTED} size={14} weight="fill" />
-            <Text className="flex-1 font-body text-body-sm text-muted">
-              {warehouse.addressLine}
+      <View
+        className={`gap-2.5 rounded-xl border p-3 ${
+          isSelected ? 'border-accent bg-accent/5' : 'border-border bg-surface'
+        }`}
+      >
+        <WarehouseCover images={warehouse.images ?? []} name={warehouse.name} onPress={onOpen} />
+        <View className="flex-row items-start justify-between gap-3">
+          <View className="flex-1 gap-1">
+            <Text className="font-strong text-foreground text-title-sm">{warehouse.name}</Text>
+            <Text className="font-body text-caption text-muted" numberOfLines={1}>
+              Thuộc {warehouse.facility.name}
             </Text>
+            <View className="flex-row items-start gap-1.5">
+              <MapPin color={MUTED} size={14} weight="fill" />
+              <Text className="flex-1 font-body text-body-sm text-muted">
+                {warehouse.addressLine}
+              </Text>
+            </View>
+            {distanceKm !== undefined ? (
+              <Text className="self-start rounded-full bg-accent/10 px-2 py-0.5 font-ui text-caption text-accent">
+                Cách {formatNumber(Math.round(distanceKm * 10) / 10)} km
+              </Text>
+            ) : null}
           </View>
-          {distanceKm !== undefined ? (
-            <Text className="self-start rounded-full bg-accent/10 px-2 py-0.5 font-ui text-caption text-accent">
-              Cách {formatNumber(Math.round(distanceKm * 10) / 10)} km
+          <View className="items-end">
+            <Text className="font-numeric-strong text-accent text-num-lg">
+              {formatMoney(warehouse.monthlyPrice)}
             </Text>
-          ) : null}
+            <Text className="font-body text-caption text-muted">/tháng</Text>
+          </View>
         </View>
-        <View className="items-end">
-          <Text className="font-numeric-strong text-accent text-num-lg">
-            {formatMoney(warehouse.monthlyPrice)}
-          </Text>
-          <Text className="font-body text-caption text-muted">/tháng</Text>
+
+        <WarehouseSpecs warehouse={warehouse} />
+        {warehouse.notes ? (
+          <Text className="font-body text-body-sm text-subtle">{warehouse.notes}</Text>
+        ) : null}
+
+        <View className="flex-row items-center justify-between gap-2">
+          <Text className="font-numeric text-caption text-muted">{warehouse.code}</Text>
+          <View className="flex-row items-center gap-2">
+            <Text className="font-ui text-caption text-accent">Xem chi tiết</Text>
+            <SelectPill isDisabled={isDisabled} isSelected={isSelected} onPress={onToggle} />
+          </View>
         </View>
       </View>
-
-      <WarehouseSpecs warehouse={warehouse} />
-      {warehouse.notes ? (
-        <Text className="font-body text-body-sm text-subtle">{warehouse.notes}</Text>
-      ) : null}
-
-      <View className="flex-row items-center justify-between gap-2">
-        <Text className="font-numeric text-caption text-muted">{warehouse.code}</Text>
-        <SelectPill isDisabled={isDisabled} isSelected={isSelected} onPress={onToggle} />
-      </View>
-    </View>
+    </Pressable>
   );
 }
 

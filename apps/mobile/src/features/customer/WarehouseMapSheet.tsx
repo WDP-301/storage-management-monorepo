@@ -10,6 +10,7 @@ import { type RefObject, useCallback } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { formatMoney, formatNumber } from '../../../lib/format-vi';
 import { MAX_WAREHOUSES_PER_BOOKING } from '../../../lib/warehouse-query';
+import { WarehousePhotoStrip } from '../../components/WarehousePhotos';
 import type { Warehouse } from '../../types/storage-api';
 import { WarehouseSpecs } from './WarehouseCard';
 
@@ -21,6 +22,7 @@ type Props = {
   onToggle: (warehouse: Warehouse) => void;
   onContinue: () => void;
   onDismiss: () => void;
+  onOpenDetail: (warehouse: Warehouse) => void;
 };
 
 /** Warehouse details appear only after a pin is tapped. */
@@ -32,6 +34,7 @@ export function WarehouseMapSheet({
   onToggle,
   onContinue,
   onDismiss,
+  onOpenDetail,
 }: Props) {
   const [surface, muted, accent, onAccent] = useThemeColor([
     'surface',
@@ -78,6 +81,15 @@ export function WarehouseMapSheet({
                 Bạn đang có đơn giữ kho. Hoàn tất hoặc hủy đơn trong Kho của tôi để chọn thêm.
               </Text>
             ) : null}
+            <WarehousePhotoStrip images={warehouse.images ?? []} />
+            <Pressable
+              accessibilityRole="button"
+              className="self-start"
+              hitSlop={8}
+              onPress={() => onOpenDetail(warehouse)}
+            >
+              <Text className="font-ui text-body-sm text-accent">Xem chi tiết kho ›</Text>
+            </Pressable>
             <View className="gap-1.5">
               <Text className="font-numeric text-caption text-muted">{warehouse.code}</Text>
               <Text className="font-strong text-foreground text-title-sm">{warehouse.name}</Text>

@@ -10,7 +10,7 @@ import {
   matchesNearbyCriteria,
 } from '../../../lib/warehouse-query';
 import type { BrowseView } from '../../types/customer';
-import type { Warehouse } from '../../types/storage-api';
+import type { NearbyWarehouse, Warehouse } from '../../types/storage-api';
 import { BrowseFiltersSheet } from './BrowseFiltersSheet';
 import { BrowseBrandHeader, BrowseLocationControls, nearbyTitle } from './BrowseHeader';
 import { BrowseMapOverlay } from './BrowseMapOverlay';
@@ -24,6 +24,7 @@ import { NearbySearchBanner } from './NearbySearchBanner';
 import { useBrowseCriteria } from './use-browse-criteria';
 import { useNearbySearch } from './use-nearby-search';
 import { useWarehouses } from './use-warehouses';
+import { WarehouseDetailScreen } from './WarehouseDetailScreen';
 import { WarehouseMapSheet } from './WarehouseMapSheet';
 
 type Props = {
@@ -46,6 +47,7 @@ export function BrowseWarehousesScreen({
   const [view, setView] = useState<BrowseView>('list');
   const [selected, setSelected] = useState<Warehouse[]>([]);
   const [mapWarehouseId, setMapWarehouseId] = useState<string | null>(null);
+  const [detailWarehouse, setDetailWarehouse] = useState<Warehouse | NearbyWarehouse | null>(null);
   const nearby = useNearbySearch();
   const nearbySearch = nearby.search;
   const filtersSheetRef = useRef<BottomSheetModal>(null);
@@ -218,6 +220,7 @@ export function BrowseWarehousesScreen({
               onContinue={continueFromMap}
               onDismiss={dismissWarehouse}
               onToggle={toggleWarehouse}
+              onOpenDetail={setDetailWarehouse}
             />
           </View>
         </>
@@ -256,6 +259,7 @@ export function BrowseWarehousesScreen({
                 total={nearbyWarehouses.length}
                 warehouses={nearbyWarehouses}
                 onLoadMore={loadMore}
+                onOpen={setDetailWarehouse}
                 onToggle={toggleWarehouse}
               />
             ) : null
@@ -275,6 +279,7 @@ export function BrowseWarehousesScreen({
                   total={total}
                   warehouses={warehouses}
                   onLoadMore={loadMore}
+                  onOpen={setDetailWarehouse}
                   onToggle={toggleWarehouse}
                 />
               ) : null}
@@ -310,6 +315,23 @@ export function BrowseWarehousesScreen({
           changeCriteria({ ...criteria, provinceCode: code, wardCode: null })
         }
         onNearMe={searchNearMe}
+      />
+      <WarehouseDetailScreen
+        distanceKm={
+          detailWarehouse && 'distanceKm' in detailWarehouse
+            ? detailWarehouse.distanceKm
+            : undefined
+        }
+        hasHolding={hasHolding}
+        isDisabled={
+          hasHolding ||
+          (!selectedIds.includes(detailWarehouse?.id ?? '') &&
+            selected.length >= MAX_WAREHOUSES_PER_BOOKING)
+        }
+        isSelected={selectedIds.includes(detailWarehouse?.id ?? '')}
+        warehouse={detailWarehouse}
+        onClose={() => setDetailWarehouse(null)}
+        onToggle={toggleWarehouse}
       />
     </View>
   );

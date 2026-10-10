@@ -14,6 +14,15 @@ export type WarehouseStatus =
   | 'MAINTENANCE'
   | 'INACTIVE';
 
+/** A warehouse photo; `url` is a presigned link that expires, so refetch instead of caching it. */
+export type WarehouseImage = {
+  fileKey: string;
+  name: string;
+  mimeType: string;
+  size?: number;
+  url: string;
+};
+
 /** A warehouse (kho). `id` is the storage unit id that bookings, holds and tickets reference. */
 export type Warehouse = {
   id: string;
@@ -37,6 +46,8 @@ export type Warehouse = {
   effectiveDepositMonths: number;
   status: WarehouseStatus;
   notes: string | null;
+  /** Display order; the first one is the cover. */
+  images: WarehouseImage[];
 };
 
 export type NearbyWarehouse = Warehouse & { distanceKm: number };

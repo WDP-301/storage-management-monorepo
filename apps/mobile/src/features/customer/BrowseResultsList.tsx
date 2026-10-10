@@ -18,6 +18,7 @@ type Props = {
   hasHolding: boolean;
   selectedIds: readonly string[];
   onToggle: (warehouse: Warehouse) => void;
+  onOpen: (warehouse: Warehouse | NearbyWarehouse) => void;
   onLoadMore: () => void;
 };
 
@@ -32,6 +33,7 @@ export function BrowseResultsList({
   hasHolding,
   selectedIds,
   onToggle,
+  onOpen,
   onLoadMore,
 }: Props) {
   const prefersReducedMotion = useReducedMotion();
@@ -66,6 +68,7 @@ export function BrowseResultsList({
                   isSelected={isSelected}
                   warehouse={warehouse}
                   onToggle={() => onToggle(warehouse)}
+                  onOpen={() => onOpen(warehouse)}
                 />
               </Animated.View>
             );

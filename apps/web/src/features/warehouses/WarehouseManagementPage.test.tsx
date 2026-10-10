@@ -114,6 +114,8 @@ describe('WarehouseManagementPage', () => {
     mockFacility(null);
     vi.spyOn(LocationsApi, 'provinces').mockResolvedValue([]);
     vi.spyOn(LocationsApi, 'wards').mockResolvedValue([]);
+    // Typing an address asks Goong for suggestions; keep tests off the network.
+    vi.spyOn(PlacesApi, 'autocomplete').mockResolvedValue([]);
     vi.spyOn(WarehousesApi, 'listAdmin').mockResolvedValue({
       warehouses: WAREHOUSES,
       meta: { page: 1, limit: 20, total: 2, totalPages: 1 },

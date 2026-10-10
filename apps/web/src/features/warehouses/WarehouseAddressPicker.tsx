@@ -1,6 +1,6 @@
 import { Button, Input } from '@cloudflare/kumo';
 import { Crosshair, MagnifyingGlass } from '@phosphor-icons/react';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { PlacesApi } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
 import type { PlacePrediction } from '../../types/warehouse';
@@ -16,7 +16,7 @@ interface Props {
 }
 
 /**
- * Address input with Goong autocomplete; picking a suggestion fills address and coordinates.
+ * Address input with Goong suggestions while typing; picking one fills address and coordinates.
  * A typed address can also be geocoded directly, taking Goong's best match.
  */
 export const WarehouseAddressPicker: React.FC<Props> = ({
@@ -27,9 +27,13 @@ export const WarehouseAddressPicker: React.FC<Props> = ({
   onLocated,
 }) => {
   const toast = useAppToast();
+  const listId = useId();
+  // Only typing searches, so a prefilled or just-picked address does not reopen suggestions.
   const [query, setQuery] = useState('');
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const [isPicking, setIsPicking] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   // The place the coordinates were taken from, shown so the match can be checked.
   const [locatedFrom, setLocatedFrom] = useState<string | null>(null);
@@ -38,13 +42,20 @@ export const WarehouseAddressPicker: React.FC<Props> = ({
     const term = query.trim();
     if (term.length < 3) {
       setPredictions([]);
+      setOpen(false);
       return;
     }
     let cancelled = false;
     const handler = setTimeout(() => {
       PlacesApi.autocomplete(term)
-        .then((list) => !cancelled && setPredictions(list ?? []))
-        .catch(() => !cancelled && setPredictions([]));
+        .then((list) => list ?? [])
+        .catch(() => [])
+        .then((list) => {
+          if (cancelled) return;
+          setPredictions(list);
+          setActiveIndex(-1);
+          setOpen(list.length > 0);
+        });
     }, 350);
     return () => {
       cancelled = true;
@@ -53,20 +64,37 @@ export const WarehouseAddressPicker: React.FC<Props> = ({
   }, [query]);
 
   const pick = async (prediction: PlacePrediction) => {
-    setIsSearching(true);
+    if (isPicking) return;
+    setIsPicking(true);
     try {
       const detail = await PlacesApi.detail(prediction.place_id);
       onPlacePicked({ address: detail.address, lat: detail.lat, lng: detail.lng });
       setLocatedFrom(null);
       setQuery('');
-      setPredictions([]);
+      setOpen(false);
     } catch (err) {
       toast.error(
         'Không lấy được vị trí',
         err instanceof Error ? err.message : 'Vui lòng thử lại hoặc nhập tọa độ thủ công.',
       );
     } finally {
-      setIsSearching(false);
+      setIsPicking(false);
+    }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!open || predictions.length === 0) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      setActiveIndex((i) => (i + step + predictions.length) % predictions.length);
+    } else if (event.key === 'Enter' && activeIndex >= 0) {
+      // Enter picks the highlighted suggestion instead of submitting the form.
+      event.preventDefault();
+      void pick(predictions[activeIndex]);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      setOpen(false);
     }
   };
 
@@ -78,7 +106,7 @@ export const WarehouseAddressPicker: React.FC<Props> = ({
         setLocatedFrom(null);
         toast.warning(
           'Không tìm thấy vị trí',
-          'Không tìm thấy địa chỉ này trên bản đồ. Hãy chọn một gợi ý ở ô tìm địa chỉ hoặc đặt ghim trên bản đồ.',
+          'Không tìm thấy địa chỉ này trên bản đồ. Hãy chọn một gợi ý khi nhập địa chỉ hoặc đặt ghim trên bản đồ.',
         );
         return;
       }
@@ -99,38 +127,61 @@ export const WarehouseAddressPicker: React.FC<Props> = ({
     <div className="space-y-2">
       <div className="relative">
         <Input
-          label="Tìm địa chỉ (gợi ý từ bản đồ)"
-          placeholder="Nhập tên đường, tòa nhà..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          label="Địa chỉ kho"
+          placeholder="Nhập số nhà, tên đường để xem gợi ý"
+          autoComplete="off"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-activedescendant={open && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
+          value={addressLine}
+          onChange={(e) => {
+            setLocatedFrom(null);
+            setQuery(e.target.value);
+            onAddressChange(e.target.value);
+          }}
+          onKeyDown={handleKeyDown}
+          onFocus={() => setOpen(predictions.length > 0)}
+          onBlur={() => setOpen(false)}
         />
-        {predictions.length > 0 && (
-          <ul className="absolute z-10 mt-1 w-full max-h-52 overflow-y-auto rounded-lg bg-kumo-base ring ring-kumo-line shadow-lg">
-            {predictions.map((p) => (
-              <li key={p.place_id}>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start text-left text-xs"
-                  icon={<MagnifyingGlass className="w-3.5 h-3.5" />}
-                  disabled={isSearching}
-                  onClick={() => pick(p)}
-                >
-                  {p.description}
-                </Button>
-              </li>
+        {open && (
+          <div
+            id={listId}
+            role="listbox"
+            aria-label="Gợi ý địa chỉ"
+            className="absolute z-10 mt-1 w-full max-h-52 overflow-y-auto rounded-lg bg-kumo-base py-1 ring ring-kumo-line shadow-lg"
+          >
+            {predictions.map((p, index) => (
+              <div
+                key={p.place_id}
+                id={`${listId}-${index}`}
+                role="option"
+                // Focus stays in the input (aria-activedescendant); -1 keeps options out of tab order.
+                tabIndex={-1}
+                aria-selected={index === activeIndex}
+                aria-disabled={isPicking}
+                className={`flex cursor-pointer items-center gap-2 px-3 py-2 text-xs text-kumo-default ${
+                  index === activeIndex ? 'bg-kumo-tint' : 'hover:bg-kumo-tint'
+                }`}
+                // Keep focus in the input so its blur does not close the list before the click.
+                onMouseDown={(e) => e.preventDefault()}
+                onMouseEnter={() => setActiveIndex(index)}
+                onClick={() => pick(p)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    void pick(p);
+                  }
+                }}
+              >
+                <MagnifyingGlass className="w-3.5 h-3.5 shrink-0 text-kumo-subtle" />
+                {p.description}
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
-      <Input
-        label="Địa chỉ kho"
-        placeholder="Số nhà, tên đường"
-        value={addressLine}
-        onChange={(e) => {
-          setLocatedFrom(null);
-          onAddressChange(e.target.value);
-        }}
-      />
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"

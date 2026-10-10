@@ -1,30 +1,21 @@
 import { Badge, Button, Dialog, Text } from '@cloudflare/kumo';
-import {
-  FileText,
-  PencilSimple,
-  Trash,
-  UploadSimple,
-  WarningCircle,
-  X,
-} from '@phosphor-icons/react';
+import { FileText, PencilSimple, Trash, WarningCircle, X } from '@phosphor-icons/react';
 import { UserRole } from '@storage/types';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { SignedFileLink } from '../../components/SignedFile';
 import { useAuth } from '../../context/AuthContext';
-import { ContractsApi, InspectionsApi, UploadsApi } from '../../lib/api';
-import type { ContractRecord } from '../../types/contract';
+import { ContractsApi, InspectionsApi } from '../../lib/api';
+import type { ContractDocument, ContractRecord } from '../../types/contract';
 import type { InspectionRecord } from '../../types/inspection';
 import { InspectionDetailDialog } from '../inspections/InspectionDetailDialog';
 import { formatDateTime, formatDay } from '../inspections/inspection-display';
 import { formatVnd } from '../warehouses/warehouse-display';
+import { ContractDocumentsPanel } from './ContractDocumentsPanel';
 import { ContractEditDialog } from './ContractEditDialog';
 import { ContractStaffSection } from './ContractStaffSection';
 import {
   CONTRACT_KIND_LABEL,
   CONTRACT_STATUS_LABEL,
-  evidenceFileKey,
-  fileNameOf,
   plannedEnd,
   shortContractNo,
 } from './contract-display';
@@ -36,7 +27,7 @@ interface Props {
   onChanged: () => void;
 }
 
-type Busy = 'cancel' | 'remove' | 'upload' | null;
+type Busy = 'cancel' | 'remove' | 'documents' | null;
 type Confirm = 'cancel' | 'remove' | null;
 
 export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onChanged }) => {
@@ -46,7 +37,6 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
   const [editing, setEditing] = useState(false);
   const [inspection, setInspection] = useState<InspectionRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
 
   const contractId = contract?.id;
   // The contract on screen; an action that finishes after another one opened must not touch it.
@@ -67,6 +57,7 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
   const code = shortContractNo(contract.contract_no);
   const status = CONTRACT_STATUS_LABEL[contract.status];
   const editable = contract.status === 'DRAFT' || contract.status === 'ACTIVE';
+  const canEditDocuments = canCancel && editable;
   const removable = contract.status === 'ENDED' || contract.status === 'CANCELLED';
 
   const run = async (kind: Exclude<Busy, null>, action: () => Promise<unknown>) => {
@@ -122,11 +113,8 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
     );
   }
 
-  const uploadEvidence = (file: File) =>
-    run('upload', async () => {
-      const { publicUrl } = await UploadsApi.upload(file);
-      await ContractsApi.setEvidence(contract.id, publicUrl);
-    });
+  const saveDocuments = (build: () => Promise<ContractDocument[]>) =>
+    run('documents', async () => ContractsApi.replaceDocuments(contract.id, await build()));
 
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
@@ -190,46 +178,14 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
             onChanged={onChanged}
           />
 
-          <section className="space-y-1.5">
-            <span className="text-xs font-semibold text-kumo-default block">File hợp đồng</span>
-            {contract.evidence ? (
-              <SignedFileLink
-                file={{
-                  name: fileNameOf(contract.evidence),
-                  fileKey: evidenceFileKey(contract.evidence) ?? undefined,
-                  url: contract.evidence,
-                }}
-              />
-            ) : (
-              <p className="text-sm text-kumo-subtle">Chưa có file hợp đồng.</p>
-            )}
-            {canManage && (
-              <>
-                <input
-                  ref={fileInput}
-                  type="file"
-                  accept="application/pdf,image/*"
-                  aria-label="Chọn file hợp đồng"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    e.target.value = '';
-                    if (file) void uploadEvidence(file);
-                  }}
-                />
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  icon={<UploadSimple className="w-3.5 h-3.5" />}
-                  loading={busy === 'upload'}
-                  disabled={busy !== null}
-                  onClick={() => fileInput.current?.click()}
-                >
-                  {contract.evidence ? 'Thay file' : 'Tải file lên'}
-                </Button>
-              </>
-            )}
-          </section>
+          <ContractDocumentsPanel
+            documents={contract.documents}
+            canEdit={canEditDocuments}
+            keepOne={contract.status === 'ACTIVE'}
+            busy={busy !== null}
+            onSave={saveDocuments}
+            onInvalid={setError}
+          />
 
           {error && (
             <div

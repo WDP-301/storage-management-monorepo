@@ -16,7 +16,12 @@ import type {
   RevokeRoleResponse,
 } from '../types/admin-user';
 import { AuthUser, LoginInput, LoginResponse } from '../types/auth';
-import type { ContractListQuery, ContractListResponse, ContractPatch } from '../types/contract';
+import type {
+  ContractDocument,
+  ContractListQuery,
+  ContractListResponse,
+  ContractPatch,
+} from '../types/contract';
 import type {
   FacilityStaffMember,
   InspectionRecord,
@@ -298,9 +303,9 @@ export const ContractsApi = {
     await apiClient.patch(`/contracts/${id}`, patch);
   },
 
-  /** Stores the link of a file already uploaded through UploadsApi.upload. */
-  setEvidence: async (id: string, evidenceUrl: string): Promise<void> => {
-    await apiClient.put(`/contracts/${id}/evidence`, { evidenceUrl });
+  /** Replaces the whole list of signed-contract files (files already uploaded via UploadsApi). */
+  replaceDocuments: async (id: string, documents: ContractDocument[]): Promise<void> => {
+    await apiClient.put(`/contracts/${id}/documents`, { documents });
   },
 
   /** Only ENDED or CANCELLED contracts can be deleted. */
@@ -310,17 +315,30 @@ export const ContractsApi = {
 };
 
 export const UploadsApi = {
-  /** Sends the file through the API to private storage. */
-  upload: async (file: File): Promise<{ key: string; publicUrl: string }> => {
-    const body = new FormData();
-    body.append('file', file);
-    const res = await apiClient.post<ApiResponse<{ key: string; publicUrl: string }>>(
-      '/uploads/direct',
-      body,
-      // A non-JSON type keeps axios from serialising the form; the browser adds the boundary.
-      { headers: { 'Content-Type': 'multipart/form-data' } },
+  /**
+   * Presigned PUT straight to the private bucket (the signed Content-Length pins the size).
+   * The PUT skips axios on purpose: the API session must not be sent to the storage host.
+   */
+  upload: async (file: File): Promise<ContractDocument> => {
+    const res = await apiClient.post<ApiResponse<{ uploadUrl: string; fileKey: string }>>(
+      '/uploads/presigned-url',
+      { fileName: file.name, mimeType: file.type, fileSize: file.size },
     );
-    return res.data.data;
+    const { uploadUrl, fileKey } = res.data.data;
+    let put: Response;
+    try {
+      put = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+    } catch {
+      throw new Error(
+        `Không tải được "${file.name}" lên kho lưu trữ. Kiểm tra kết nối rồi thử lại.`,
+      );
+    }
+    if (!put.ok) throw new Error(`Tải "${file.name}" lên thất bại (${put.status}).`);
+    return { fileKey, name: file.name, mimeType: file.type, size: file.size };
   },
 
   /** Presigned GET for a private object; links expire, so resolve right before opening. */

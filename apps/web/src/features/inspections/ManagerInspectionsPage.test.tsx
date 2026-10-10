@@ -1,5 +1,6 @@
 import { UserRole } from '@storage/types';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as AuthContextModule from '../../context/AuthContext';
 import * as FacilityContextModule from '../../context/FacilityContext';
@@ -207,6 +208,25 @@ describe('ManagerInspectionsPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận chốt' }));
     await waitFor(() => expect(finalize).toHaveBeenCalledWith('insp-B-202'));
+  });
+
+  it('blocks finalizing a pre-handover while the contract has no signed files', async () => {
+    const noFiles = row({ code: 'D-404', customer: 'Lê Chưa Có File', inspectedBy: 'staff-1' });
+    if (noFiles.contract) noFiles.contract.documents = [];
+    vi.spyOn(InspectionsApi, 'list').mockResolvedValue([noFiles]);
+    render(
+      <MemoryRouter>
+        <ManagerInspectionsPage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem biên bản D-404' }));
+    expect(
+      (screen.getByRole('button', { name: 'Chốt biên bản' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(screen.getByRole('link', { name: 'trang Hợp đồng' }).getAttribute('href')).toBe(
+      '/contracts',
+    );
   });
 
   it('searches within the default unfinalized view', async () => {

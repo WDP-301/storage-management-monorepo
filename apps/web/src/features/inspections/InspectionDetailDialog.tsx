@@ -2,6 +2,7 @@ import { Badge, Button, Dialog, Text } from '@cloudflare/kumo';
 import { ClipboardText, WarningCircle, X } from '@phosphor-icons/react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { SignedImageThumb } from '../../components/SignedFile';
 import { ContractsApi, FacilitiesApi, InspectionsApi } from '../../lib/api';
 import type { FacilityStaffMember, InspectionRecord } from '../../types/inspection';
@@ -49,6 +50,11 @@ export const InspectionDetailDialog: React.FC<Props> = ({ inspection, onClose, o
   const done = Boolean(inspection.finalizedAt);
   const evidence = toEvidence(inspection.evidence);
   const damages = toDamages(inspection.damages);
+  // Only a payload that lists documents and has none blocks; the API enforces the rule either way.
+  const missingContractFiles =
+    inspection.type === 'PRE_HANDOVER' &&
+    Array.isArray(inspection.contract?.documents) &&
+    toEvidence(inspection.contract?.documents).length === 0;
 
   const run = async (kind: 'assign' | 'finalize' | 'cancel', action: () => Promise<unknown>) => {
     setBusy(kind);
@@ -208,6 +214,16 @@ export const InspectionDetailDialog: React.FC<Props> = ({ inspection, onClose, o
                 </Button>
               </div>
 
+              {missingContractFiles && (
+                <p role="status" className="text-sm text-kumo-warning">
+                  Chưa có file hợp đồng đã ký — tải lên ở{' '}
+                  <Link to="/contracts" className="font-medium underline">
+                    trang Hợp đồng
+                  </Link>{' '}
+                  trước khi chốt biên nhận.
+                </p>
+              )}
+
               {confirming ? (
                 <div className="p-3 bg-kumo-warning-tint rounded-lg space-y-3 text-sm">
                   <p className="text-kumo-default">
@@ -262,7 +278,7 @@ export const InspectionDetailDialog: React.FC<Props> = ({ inspection, onClose, o
                     )}
                   <Button
                     variant="primary"
-                    disabled={!inspection.inspectedBy || busy !== null}
+                    disabled={!inspection.inspectedBy || missingContractFiles || busy !== null}
                     title={inspection.inspectedBy ? undefined : 'Giao nhân viên trước khi chốt'}
                     onClick={() => setConfirming(true)}
                   >

@@ -38,6 +38,8 @@ export interface InspectionRecord {
     effectiveAt: string;
     endedAt: string | null;
     months: number;
+    /** Signed-contract files; absent on payloads that predate the field. */
+    documents?: unknown[] | null;
     customerSnapshot?: { fullName?: string; phone?: string | null; email?: string } | null;
     bookingItem?: {
       storageUnit?: {

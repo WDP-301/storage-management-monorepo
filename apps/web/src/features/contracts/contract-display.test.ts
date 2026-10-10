@@ -3,8 +3,6 @@ import { contractRecord } from '../../test-utils/contract-fixtures';
 import {
   buildContractPatch,
   endOfDateInput,
-  evidenceFileKey,
-  fileNameOf,
   fromDateInput,
   handoverState,
   plannedEnd,
@@ -12,6 +10,7 @@ import {
   toContractForm,
   toDateInput,
   validateContractForm,
+  validateNewDocuments,
 } from './contract-display';
 
 describe('contract display helpers', () => {
@@ -51,16 +50,19 @@ describe('contract display helpers', () => {
     ).toBe('done');
   });
 
-  it('finds the private storage key and file name of an evidence link', () => {
-    const url = 'https://cdn.example.com/bucket/uploads/1791593784863-hop%20dong.pdf?x=1';
-    expect(evidenceFileKey(url)).toBe('uploads/1791593784863-hop dong.pdf');
-    expect(fileNameOf(url)).toBe('1791593784863-hop dong.pdf');
-    expect(evidenceFileKey('https://example.com/other/file.pdf')).toBeNull();
-    // A malformed escape falls back to the raw text instead of throwing.
-    expect(fileNameOf('https://cdn.example.com/uploads/100%-scan.pdf')).toBe('100%-scan.pdf');
-    expect(evidenceFileKey('https://cdn.example.com/uploads/100%-scan.pdf')).toBe(
-      'uploads/100%-scan.pdf',
-    );
+  it('checks new contract files before any upload', () => {
+    const file = (name: string, type: string, size = 1000) =>
+      new File([new Uint8Array(size)], name, { type });
+    expect(
+      validateNewDocuments(0, [file('a.jpg', 'image/jpeg'), file('b.pdf', 'application/pdf')]),
+    ).toBeNull();
+    expect(
+      validateNewDocuments(9, [file('a.jpg', 'image/jpeg'), file('b.jpg', 'image/jpeg')]),
+    ).toMatch(/tối đa 10/);
+    expect(validateNewDocuments(0, [file('notes.txt', 'text/plain')])).toMatch(/notes\.txt/);
+    expect(
+      validateNewDocuments(0, [file('big.pdf', 'application/pdf', 15 * 1024 * 1024 + 1)]),
+    ).toMatch(/15 MB/);
   });
 
   it('validates the commercial terms only while the contract is unsigned', () => {

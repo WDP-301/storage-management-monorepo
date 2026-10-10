@@ -1,14 +1,14 @@
 import { UserRole } from '@storage/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ContractsApi, FacilitiesApi, InspectionsApi, UploadsApi } from '../../lib/api';
+import { ContractsApi, FacilitiesApi, InspectionsApi } from '../../lib/api';
 import { contractRecord, mockRole } from '../../test-utils/contract-fixtures';
 import type { ContractRecord } from '../../types/contract';
 import { ContractDetailDialog } from './ContractDetailDialog';
 
 vi.mock('../../lib/toast', () => ({ useAppToast: () => ({ notifyUpdated: vi.fn() }) }));
 
-const ACTIONS = ['Hủy hợp đồng', 'Sửa hợp đồng', 'Xóa', 'Tải file lên', 'Thay file'];
+const ACTIONS = ['Hủy hợp đồng', 'Sửa hợp đồng', 'Xóa', 'Tải file lên'];
 const visibleActions = () =>
   ACTIONS.filter((name) => screen.queryByRole('button', { name }) !== null);
 
@@ -58,10 +58,10 @@ describe('ContractDetailDialog', () => {
   it.each([
     [UserRole.ADMIN, 'DRAFT', ['Hủy hợp đồng', 'Sửa hợp đồng', 'Tải file lên']],
     [UserRole.OPERATIONS_MANAGER, 'ACTIVE', ['Sửa hợp đồng', 'Tải file lên']],
-    [UserRole.OPERATIONS_MANAGER, 'CANCELLED', ['Xóa', 'Tải file lên']],
-    [UserRole.ADMIN, 'ENDED', ['Xóa', 'Tải file lên']],
-    [UserRole.FACILITY_MANAGER, 'DRAFT', ['Hủy hợp đồng']],
-    [UserRole.FACILITY_MANAGER, 'ACTIVE', []],
+    [UserRole.OPERATIONS_MANAGER, 'CANCELLED', ['Xóa']],
+    [UserRole.ADMIN, 'ENDED', ['Xóa']],
+    [UserRole.FACILITY_MANAGER, 'DRAFT', ['Hủy hợp đồng', 'Tải file lên']],
+    [UserRole.FACILITY_MANAGER, 'ACTIVE', ['Tải file lên']],
     [UserRole.FACILITY_MANAGER, 'CANCELLED', []],
   ] as const)('%s on a %s contract can use %j', (role, status, expected) => {
     mockRole(role);
@@ -111,42 +111,6 @@ describe('ContractDetailDialog', () => {
     );
     expect(onChanged).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
-  });
-
-  it('uploads a contract file and stores its link', async () => {
-    mockRole(UserRole.OPERATIONS_MANAGER);
-    const upload = vi.spyOn(UploadsApi, 'upload').mockResolvedValue({
-      key: 'uploads/1-hop-dong.pdf',
-      publicUrl: 'https://cdn.example.com/b/uploads/1-hop-dong.pdf',
-    });
-    const setEvidence = vi.spyOn(ContractsApi, 'setEvidence').mockResolvedValue();
-    const { onChanged } = renderDialog(contractRecord());
-
-    const file = new File(['%PDF'], 'hop-dong.pdf', { type: 'application/pdf' });
-    fireEvent.change(screen.getByLabelText('Chọn file hợp đồng'), { target: { files: [file] } });
-    await waitFor(() =>
-      expect(setEvidence).toHaveBeenCalledWith(
-        'c-1',
-        'https://cdn.example.com/b/uploads/1-hop-dong.pdf',
-      ),
-    );
-    expect(upload).toHaveBeenCalledWith(file);
-    expect(onChanged).toHaveBeenCalled();
-  });
-
-  it('opens an existing contract file through a fresh signed link', async () => {
-    mockRole(UserRole.FACILITY_MANAGER);
-    const downloadUrl = vi
-      .spyOn(UploadsApi, 'downloadUrl')
-      .mockResolvedValue('https://signed.example.com/x');
-    const open = vi.spyOn(window, 'open').mockReturnValue({ location: {} } as Window);
-    renderDialog(contractRecord({ evidence: 'https://cdn.example.com/b/uploads/1-hop-dong.pdf' }));
-
-    fireEvent.click(screen.getByRole('button', { name: '1-hop-dong.pdf' }));
-    await waitFor(() => expect(downloadUrl).toHaveBeenCalledWith('uploads/1-hop-dong.pdf'));
-    expect(open).toHaveBeenCalled();
-    // Managers can open the file but not replace it.
-    expect(screen.queryByRole('button', { name: 'Thay file' })).toBeNull();
   });
 
   it('does not carry a pending action over to another contract', async () => {

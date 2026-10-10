@@ -32,7 +32,7 @@ export const contractRecord = (over: Partial<ContractRecord> = {}): ContractReco
     inspector_name: null,
   },
   return: null,
-  evidence: null,
+  documents: [],
   created_at: '2026-10-10T00:49:00.000Z',
   ...over,
 });

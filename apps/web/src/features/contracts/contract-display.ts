@@ -81,24 +81,28 @@ export const HANDOVER_STATE_LABEL: Record<HandoverState, string> = {
   done: 'Đã bàn giao',
 };
 
-/**
- * Evidence is stored as the file's public URL, but the bucket is private: opening it needs a
- * presigned link for its key. Uploads live under "uploads/".
- */
-export function evidenceFileKey(url: string): string | null {
-  const at = url.indexOf('/uploads/');
-  return at === -1 ? null : safeDecode(url.slice(at + 1).split('?')[0]);
-}
+export const MAX_CONTRACT_DOCUMENTS = 10;
+export const MAX_DOCUMENT_BYTES = 15 * 1024 * 1024;
+export const ACCEPTED_DOCUMENT_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'application/pdf',
+];
 
-export const fileNameOf = (url: string) => safeDecode(url.split('?')[0].split('/').pop() ?? url);
-
-/** The link is free text; a stray "%" must not crash the dialog. */
-function safeDecode(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
+/** Client-side pre-check so a bad pick never costs an upload; the API stays the authority. */
+export function validateNewDocuments(existing: number, files: readonly File[]): string | null {
+  if (existing + files.length > MAX_CONTRACT_DOCUMENTS)
+    return `Mỗi hợp đồng tối đa ${MAX_CONTRACT_DOCUMENTS} file (hiện có ${existing}).`;
+  for (const file of files) {
+    if (!ACCEPTED_DOCUMENT_TYPES.includes(file.type))
+      return `"${file.name}" không đúng định dạng — chỉ nhận ảnh (JPG, PNG, WebP, HEIC) hoặc PDF.`;
+    if (file.size > MAX_DOCUMENT_BYTES) return `"${file.name}" vượt quá 15 MB.`;
+    if (file.size === 0) return `"${file.name}" là file rỗng.`;
   }
+  return null;
 }
 
 export interface ContractFormState {

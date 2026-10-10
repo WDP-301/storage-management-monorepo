@@ -11,6 +11,14 @@ export interface ContractInspectionSummary {
   inspector_name: string | null;
 }
 
+/** A signed-contract scan or photo kept in the private bucket. */
+export interface ContractDocument {
+  fileKey: string;
+  name: string;
+  mimeType: string;
+  size?: number;
+}
+
 /** Back-office contract row from GET /contracts and GET /contracts/:id. */
 export interface ContractRecord {
   id: string;
@@ -29,7 +37,7 @@ export interface ContractRecord {
   customer: { id: string; full_name: string | null; email: string | null; phone: string | null };
   handover: ContractInspectionSummary | null;
   return: ContractInspectionSummary | null;
-  evidence: string | null;
+  documents: ContractDocument[];
   created_at: string;
 }
 

@@ -3,6 +3,14 @@ import { StorageUnitStatus } from '@storage/types';
 import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Facility } from './facility.entity';
 
+/** A photo of the warehouse; `fileKey` is an `uploads/` object key in the private bucket. */
+export interface WarehouseImage {
+  fileKey: string;
+  name: string;
+  mimeType: string;
+  size?: number;
+}
+
 /**
  * A rentable warehouse belonging to a facility (branch). It carries its own name, address,
  * coordinates, size, price, deposit and rental lifecycle status.
@@ -89,6 +97,10 @@ export class StorageUnit extends AuditWithTimezone {
   /** Deposit in whole months (1–12); null follows the `deposit.default_months` setting. */
   @Column({ type: 'smallint', nullable: true, name: 'deposit_months' })
   depositMonths: number | null;
+
+  /** Photos shown to customers, in display order; the first one is the cover. */
+  @Column({ type: 'jsonb', default: () => "'[]'" })
+  images: WarehouseImage[];
 
   @ManyToOne(() => Facility)
   @JoinColumn({ name: 'facility_id' })

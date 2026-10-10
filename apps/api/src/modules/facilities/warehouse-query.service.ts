@@ -2,6 +2,7 @@ import { StorageUnit } from '@entities/storage-unit.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { activeFacilityIds } from '@modules/auth/role-assignment.util';
 import { SettingsService } from '@modules/settings/settings.service';
+import { UploadService } from '@modules/upload/upload.service';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { notFound } from '@shared/exceptions/domain.exception';
@@ -14,7 +15,10 @@ import type {
   WarehouseListQueryDto,
   WarehouseSort,
 } from './dto/warehouse.dto';
-import { toWarehouseView, type WarehouseView } from './warehouse.view';
+import { toWarehouseView, type WarehouseImageView, type WarehouseView } from './warehouse.view';
+
+/** Long enough for a customer to browse a page of results without the photos going stale. */
+const IMAGE_URL_TTL_SECONDS = 6 * 3600;
 
 const SORT_COLUMNS: Record<WarehouseSort, [string, 'ASC' | 'DESC']> = {
   newest: ['unit.createdAt', 'DESC'],
@@ -33,6 +37,7 @@ export class WarehouseQueryService {
     @InjectRepository(UserRoleAssignment)
     private readonly roleAssignments: Repository<UserRoleAssignment>,
     private readonly settings: SettingsService,
+    private readonly uploads: UploadService,
   ) {}
 
   /** Customer catalogue: only warehouses that can be rented right now. */
@@ -106,8 +111,22 @@ export class WarehouseQueryService {
   private async toViews(units: StorageUnit[]): Promise<WarehouseView[]> {
     return Promise.all(
       units.map(async (unit) =>
-        toWarehouseView(unit, await this.settings.getDepositMonthsFor(unit)),
+        toWarehouseView(
+          unit,
+          await this.settings.getDepositMonthsFor(unit),
+          await this.signImages(unit),
+        ),
       ),
+    );
+  }
+
+  /** The bucket is private and the catalogue is public, so photos travel as presigned links. */
+  private signImages(unit: StorageUnit): Promise<WarehouseImageView[]> {
+    return Promise.all(
+      (unit.images ?? []).map(async (image) => ({
+        ...image,
+        url: await this.uploads.generatePresignedDownloadUrl(image.fileKey, IMAGE_URL_TTL_SECONDS),
+      })),
     );
   }
 }

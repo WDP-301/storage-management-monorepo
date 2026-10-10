@@ -50,6 +50,7 @@ const UNIT_FIELDS = [
   'notes',
   'status',
   'facilityId',
+  'images',
 ] as const;
 
 /**
@@ -89,7 +90,7 @@ export class WarehouseCommandService {
   }
 
   /**
-   * Price, deposit, address and notes stay editable — bookings and contracts keep their own
+   * Price, deposit, address, notes and photos stay editable — bookings and contracts keep their own
    * snapshots. Code, dimensions, status and facility are frozen while a customer is attached;
    * moving to another facility also requires an active target facility and no open tour or service ticket.
    */

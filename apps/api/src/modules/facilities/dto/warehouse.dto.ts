@@ -1,7 +1,11 @@
+import { EvidenceFileDto } from '@modules/inspection/dto/inspection-evidence.dto';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { StorageUnitStatus } from '@storage/types';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
   IsIn,
   IsInt,
   IsLatitude,
@@ -15,6 +19,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateNested,
 } from 'class-validator';
 import { IDLE_UNIT_STATUSES } from '../unit-status';
 
@@ -22,6 +27,24 @@ import { IDLE_UNIT_STATUSES } from '../unit-status';
 const MAX_SIDE_M = 1000;
 /** Highest monthly rent accepted, in VND — numeric(14,2) tops out just below 1e12. */
 const MAX_MONTHLY_PRICE = 100_000_000_000;
+
+export const MAX_WAREHOUSE_IMAGES = 10;
+
+export const WAREHOUSE_IMAGE_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+] as const;
+
+/**
+ * An uploaded file restricted to photos. The rule is attached to the inherited property:
+ * redeclaring the field would reset it under `useDefineForClassFields`.
+ */
+export class WarehouseImageDto extends EvidenceFileDto {}
+IsIn(WAREHOUSE_IMAGE_MIME_TYPES)(WarehouseImageDto.prototype, 'mimeType');
+ApiProperty({ enum: WAREHOUSE_IMAGE_MIME_TYPES })(WarehouseImageDto.prototype, 'mimeType');
 
 export class CreateWarehouseDto {
   @ApiProperty({ description: 'Owning facility (branch)' })
@@ -115,6 +138,19 @@ export class CreateWarehouseDto {
   @IsIn(IDLE_UNIT_STATUSES)
   @IsOptional()
   status?: StorageUnitStatus;
+
+  @ApiPropertyOptional({
+    type: [WarehouseImageDto],
+    maxItems: MAX_WAREHOUSE_IMAGES,
+    description: 'The full photo list in display order (first is the cover); replaces the old one',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_WAREHOUSE_IMAGES)
+  @ArrayUnique((image: WarehouseImageDto) => image.fileKey)
+  @ValidateNested({ each: true })
+  @Type(() => WarehouseImageDto)
+  images?: WarehouseImageDto[];
 }
 
 export class UpdateWarehouseDto extends PartialType(CreateWarehouseDto) {}

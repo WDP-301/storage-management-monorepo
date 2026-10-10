@@ -1,5 +1,10 @@
-import type { StorageUnit } from '@entities/storage-unit.entity';
+import type { StorageUnit, WarehouseImage } from '@entities/storage-unit.entity';
 import type { StorageUnitStatus } from '@storage/types';
+
+/** A stored photo plus a presigned GET link; links expire, so clients refetch rather than keep them. */
+export interface WarehouseImageView extends WarehouseImage {
+  url: string;
+}
 
 /**
  * A warehouse as clients see it: the storage unit with its owning facility (branch) summary.
@@ -27,6 +32,8 @@ export interface WarehouseView {
   effectiveDepositMonths: number;
   status: StorageUnitStatus;
   notes: string | null;
+  /** Display order; the first one is the cover. */
+  images: WarehouseImageView[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,7 +42,11 @@ const toNumberOrNull = (value: unknown): number | null =>
   value === null || value === undefined ? null : Number(value);
 
 /** `unit.facility` must be loaded. Postgres decimals arrive as strings and are normalised. */
-export function toWarehouseView(unit: StorageUnit, effectiveDepositMonths: number): WarehouseView {
+export function toWarehouseView(
+  unit: StorageUnit,
+  effectiveDepositMonths: number,
+  images: WarehouseImageView[] = [],
+): WarehouseView {
   const { facility } = unit;
   return {
     id: unit.id,
@@ -57,6 +68,7 @@ export function toWarehouseView(unit: StorageUnit, effectiveDepositMonths: numbe
     effectiveDepositMonths,
     status: unit.status,
     notes: unit.notes ?? null,
+    images,
     createdAt: unit.createdAt,
     updatedAt: unit.updatedAt,
   };

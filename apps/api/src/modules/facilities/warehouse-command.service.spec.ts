@@ -190,6 +190,22 @@ describe('WarehouseCommandService', () => {
       });
     });
 
+    it('replaces the photos of a RENTED warehouse', async () => {
+      stubWarehouse(buildFacility(), buildUnit({ status: StorageUnitStatus.RENTED }));
+      const images = [{ fileKey: 'uploads/1-kho.jpg', name: 'kho.jpg', mimeType: 'image/jpeg' }];
+
+      await service.update('unit-1', { images });
+
+      expect(manager.update).toHaveBeenCalledWith(StorageUnit, 'unit-1', { images });
+    });
+
+    it('rejects null photos instead of clearing them', async () => {
+      await expect(service.update('unit-1', { images: null as never })).rejects.toBeInstanceOf(
+        DomainException,
+      );
+      expect(manager.update).not.toHaveBeenCalled();
+    });
+
     it('moves an idle warehouse, locking the target facility before the unit', async () => {
       stubWarehouse(buildFacility({ id: 'fac-2' }), buildUnit());
 

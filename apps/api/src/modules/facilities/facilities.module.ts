@@ -3,6 +3,7 @@ import { StorageUnit } from '@entities/storage-unit.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { AuthModule } from '@modules/auth/auth.module';
 import { SettingsModule } from '@modules/settings/settings.module';
+import { UploadModule } from '@modules/upload/upload.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FacilitiesController } from './facilities.controller';
@@ -17,6 +18,7 @@ import { WarehousesController } from './warehouses.controller';
     TypeOrmModule.forFeature([Facility, StorageUnit, UserRoleAssignment]),
     AuthModule, // provides SessionGuard and RolesGuard for controllers
     SettingsModule,
+    UploadModule, // presigns warehouse photo links
   ],
   controllers: [FacilitiesController, WarehousesController],
   providers: [

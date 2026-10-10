@@ -29,6 +29,21 @@ import {
 } from './contract-display';
 
 const PAGE_SIZE = 20;
+
+/** The step staff act on next: an open return request outranks the finished handover. */
+function workLabel(row: ContractRecord): { label: string; needsStaff: boolean } {
+  if (row.return && !row.return.finalized_at) {
+    return row.return.inspector_name
+      ? { label: 'Trả kho · đã giao nhân viên', needsStaff: false }
+      : { label: 'Trả kho · chưa giao người', needsStaff: true };
+  }
+  const state = handoverState(row);
+  if (state === 'none') return { label: '—', needsStaff: false };
+  return {
+    label: `Nhận kho · ${HANDOVER_STATE_LABEL[state].toLowerCase()}`,
+    needsStaff: state === 'unassigned',
+  };
+}
 const ALL = 'ALL';
 const STATUS_OPTIONS = [
   { value: ALL, label: 'Tất cả' },
@@ -181,7 +196,7 @@ export const ContractsPage: React.FC = () => {
               <Table.Head>Kho</Table.Head>
               <Table.Head>Thời hạn</Table.Head>
               <Table.Head>Giá / tháng</Table.Head>
-              <Table.Head>Nhận kho</Table.Head>
+              <Table.Head>Bàn giao</Table.Head>
               <Table.Head>Trạng thái</Table.Head>
               <Table.Head className="text-right">Thao tác</Table.Head>
             </Table.Row>
@@ -196,7 +211,7 @@ export const ContractsPage: React.FC = () => {
             ) : (
               rows.map((row) => {
                 const code = shortContractNo(row.contract_no);
-                const handover = handoverState(row);
+                const work = workLabel(row);
                 return (
                   <Table.Row key={row.id}>
                     <Table.Cell className="whitespace-nowrap font-mono font-semibold">
@@ -223,10 +238,10 @@ export const ContractsPage: React.FC = () => {
                     </Table.Cell>
                     <Table.Cell
                       className={`whitespace-nowrap text-xs ${
-                        handover === 'unassigned' ? 'text-kumo-warning' : 'text-kumo-subtle'
+                        work.needsStaff ? 'text-kumo-warning' : 'text-kumo-subtle'
                       }`}
                     >
-                      {HANDOVER_STATE_LABEL[handover]}
+                      {work.label}
                     </Table.Cell>
                     <Table.Cell>
                       <Badge variant={CONTRACT_STATUS_LABEL[row.status].variant} appearance="dot">

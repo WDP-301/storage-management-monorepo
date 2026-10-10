@@ -12,18 +12,19 @@ import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { SignedFileLink } from '../../components/SignedFile';
 import { useAuth } from '../../context/AuthContext';
-import { ContractsApi, UploadsApi } from '../../lib/api';
+import { ContractsApi, InspectionsApi, UploadsApi } from '../../lib/api';
 import type { ContractRecord } from '../../types/contract';
+import type { InspectionRecord } from '../../types/inspection';
+import { InspectionDetailDialog } from '../inspections/InspectionDetailDialog';
 import { formatDateTime, formatDay } from '../inspections/inspection-display';
 import { formatVnd } from '../warehouses/warehouse-display';
 import { ContractEditDialog } from './ContractEditDialog';
+import { ContractStaffSection } from './ContractStaffSection';
 import {
   CONTRACT_KIND_LABEL,
   CONTRACT_STATUS_LABEL,
   evidenceFileKey,
   fileNameOf,
-  HANDOVER_STATE_LABEL,
-  handoverState,
   plannedEnd,
   shortContractNo,
 } from './contract-display';
@@ -43,6 +44,7 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
   const [busy, setBusy] = useState<Busy>(null);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [editing, setEditing] = useState(false);
+  const [inspection, setInspection] = useState<InspectionRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -54,6 +56,7 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
     setBusy(null);
     setConfirm(null);
     setEditing(false);
+    setInspection(null);
     setError(null);
   }, [contractId]);
 
@@ -87,6 +90,25 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
   };
 
   // Shown in place of the detail, so two modal dialogs never compete for focus.
+  const openInspection = (id: string) =>
+    InspectionsApi.get(id)
+      .then(setInspection)
+      .catch((err) => setError(err instanceof Error ? err.message : 'Không mở được biên bản.'));
+
+  // The inspection record is part of the contract; it opens in place of the contract dialog.
+  if (inspection) {
+    return (
+      <InspectionDetailDialog
+        inspection={inspection}
+        onClose={() => setInspection(null)}
+        onChanged={() => {
+          onChanged();
+          void openInspection(inspection.id);
+        }}
+      />
+    );
+  }
+
   if (editing) {
     return (
       <ContractEditDialog
@@ -161,24 +183,12 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
             <Fact label="Tạo lúc" value={formatDateTime(contract.created_at)} />
           </dl>
 
-          <section className="space-y-1.5">
-            <span className="text-xs font-semibold text-kumo-default block">Bàn giao kho</span>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm p-3 bg-kumo-control rounded-lg">
-              <Fact label="Nhận kho" value={HANDOVER_STATE_LABEL[handoverState(contract)]} />
-              <Fact label="Nhân viên" value={contract.handover?.inspector_name ?? '—'} />
-              <Fact label="Ngày hẹn" value={formatDay(contract.handover?.scheduled_at ?? null)} />
-              <Fact
-                label="Trả kho"
-                value={
-                  contract.return
-                    ? contract.return.finalized_at
-                      ? `Đã trả ${formatDay(contract.return.finalized_at)}`
-                      : `Hẹn trả ${formatDay(contract.return.scheduled_at)}`
-                    : '—'
-                }
-              />
-            </dl>
-          </section>
+          <ContractStaffSection
+            contract={contract}
+            canAssign={canCancel}
+            onOpenInspection={openInspection}
+            onChanged={onChanged}
+          />
 
           <section className="space-y-1.5">
             <span className="text-xs font-semibold text-kumo-default block">File hợp đồng</span>

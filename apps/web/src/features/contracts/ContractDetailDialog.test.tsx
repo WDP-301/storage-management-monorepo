@@ -1,7 +1,7 @@
 import { UserRole } from '@storage/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ContractsApi, UploadsApi } from '../../lib/api';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ContractsApi, FacilitiesApi, InspectionsApi, UploadsApi } from '../../lib/api';
 import { contractRecord, mockRole } from '../../test-utils/contract-fixtures';
 import type { ContractRecord } from '../../types/contract';
 import { ContractDetailDialog } from './ContractDetailDialog';
@@ -18,6 +18,11 @@ const renderDialog = (contract: ContractRecord, onChanged = vi.fn(), onClose = v
 };
 
 describe('ContractDetailDialog', () => {
+  beforeEach(() => {
+    vi.spyOn(FacilitiesApi, 'listStaff').mockResolvedValue([
+      { id: 's-1', fullName: 'Nhân viên kho Demo', phone: '0900000004' },
+    ]);
+  });
   afterEach(() => vi.restoreAllMocks());
 
   it('shows the customer, unit, terms, handover and the full number', () => {
@@ -41,7 +46,6 @@ describe('ContractDetailDialog', () => {
       'HCM-SG-01 · Kho mini Sài Gòn',
       '45 Lê Thánh Tôn',
       'Thuê mới',
-      'Đã giao nhân viên',
       'Nhân viên kho Demo',
       'CT-41bf439c-f69b-44ee-a615-3ccd5fa65e8f',
       'Chưa có file hợp đồng.',
@@ -172,6 +176,32 @@ describe('ContractDetailDialog', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(screen.queryByRole('alert')).toBeNull();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('opens the handover record in place of the contract and comes back', async () => {
+    mockRole(UserRole.FACILITY_MANAGER);
+    vi.spyOn(InspectionsApi, 'get').mockResolvedValue({
+      id: 'i-1',
+      type: 'PRE_HANDOVER',
+      contractId: 'c-1',
+      inspectedBy: null,
+      inspector: null,
+      scheduledAt: '2026-10-15T00:00:00.000Z',
+      inspectedAt: null,
+      finalizedAt: null,
+      conditionNotes: null,
+      requestNote: null,
+      evidence: [],
+      damages: [],
+      contract: null,
+    } as never);
+    renderDialog(contractRecord());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Xem biên bản nhận kho' }));
+    expect(await screen.findByRole('dialog', { name: /Biên bản nhận kho/ })).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'Hợp đồng CT-41BF439C' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+    expect(screen.getByRole('dialog', { name: 'Hợp đồng CT-41BF439C' })).toBeTruthy();
   });
 
   it('switches to the edit form and back', () => {

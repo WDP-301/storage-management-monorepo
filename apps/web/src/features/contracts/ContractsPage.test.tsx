@@ -32,7 +32,7 @@ describe('ContractsPage', () => {
     expect(within(row).getByText('HCM-SG-01')).toBeTruthy();
     expect(within(row).getByText('6 tháng')).toBeTruthy();
     expect(within(row).getByText('3.200.000 đ')).toBeTruthy();
-    expect(within(row).getByText('Chưa giao người')).toBeTruthy();
+    expect(within(row).getByText('Nhận kho · chưa giao người')).toBeTruthy();
     expect(within(row).getByText('Chờ nhận kho')).toBeTruthy();
     expect(list).toHaveBeenCalledWith({
       page: 1,
@@ -94,6 +94,33 @@ describe('ContractsPage', () => {
     render(<ContractsPage />);
     expect(await screen.findByText('15/10/2026 → 14/10/2027')).toBeTruthy();
     expect(screen.getByText('15/10/2026 → 15/01/2027')).toBeTruthy();
+  });
+
+  it('shows an open return request as the step needing staff', async () => {
+    const step = {
+      id: 'r-1',
+      type: 'RETURN',
+      scheduled_at: '2027-04-14T00:00:00.000Z',
+      inspected_at: null,
+      finalized_at: null,
+      inspector_name: null,
+    };
+    list.mockResolvedValue(
+      page([
+        contractRecord({ status: 'ACTIVE', return: step }),
+        contractRecord({
+          id: 'b',
+          contract_no: 'CT-bbbbbbbb-0',
+          status: 'ACTIVE',
+          return: { ...step, id: 'r-2', inspector_name: 'Nhân viên kho Demo' },
+        }),
+        contractRecord({ id: 'c', contract_no: 'CT-cccccccc-0', handover: null }),
+      ]),
+    );
+    render(<ContractsPage />);
+    expect(await screen.findByText('Trả kho · chưa giao người')).toBeTruthy();
+    expect(screen.getByText('Trả kho · đã giao nhân viên')).toBeTruthy();
+    expect(screen.getByText('Trả kho · chưa giao người').className).toContain('text-kumo-warning');
   });
 
   it('opens the detail of a contract', async () => {

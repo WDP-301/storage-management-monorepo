@@ -15,35 +15,36 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useFacility } from '../../context/FacilityContext';
 import { ContractsApi } from '../../lib/api';
-import type { ContractRecord, ContractStatus } from '../../types/contract';
+import type {
+  ContractInspectionSummary,
+  ContractRecord,
+  ContractStatus,
+} from '../../types/contract';
 import { formatDay } from '../inspections/inspection-display';
 import { formatVnd } from '../warehouses/warehouse-display';
 import { ContractDetailDialog } from './ContractDetailDialog';
 import {
   CONTRACT_STATUS_LABEL,
   CONTRACT_STATUSES,
-  HANDOVER_STATE_LABEL,
-  handoverState,
   plannedEnd,
   shortContractNo,
 } from './contract-display';
 
 const PAGE_SIZE = 20;
 
-/** The step staff act on next: an open return request outranks the finished handover. */
-function workLabel(row: ContractRecord): { label: string; needsStaff: boolean } {
-  if (row.return && !row.return.finalized_at) {
-    return row.return.inspector_name
-      ? { label: 'Trả kho · đã giao nhân viên', needsStaff: false }
-      : { label: 'Trả kho · chưa giao người', needsStaff: true };
-  }
-  const state = handoverState(row);
-  if (state === 'none') return { label: '—', needsStaff: false };
-  return {
-    label: `Nhận kho · ${HANDOVER_STATE_LABEL[state].toLowerCase()}`,
-    needsStaff: state === 'unassigned',
-  };
+/** One inspection record in the list: who carries it out, or when it was signed off. */
+function inspectionCell(step: ContractInspectionSummary | null): {
+  label: string;
+  needsStaff: boolean;
+} {
+  if (!step) return { label: '—', needsStaff: false };
+  if (step.finalized_at)
+    return { label: `Đã chốt ${formatDay(step.finalized_at)}`, needsStaff: false };
+  return step.inspector_name
+    ? { label: step.inspector_name, needsStaff: false }
+    : { label: 'Chưa giao người', needsStaff: true };
 }
+
 const ALL = 'ALL';
 const STATUS_OPTIONS = [
   { value: ALL, label: 'Tất cả' },
@@ -196,7 +197,8 @@ export const ContractsPage: React.FC = () => {
               <Table.Head>Kho</Table.Head>
               <Table.Head>Thời hạn</Table.Head>
               <Table.Head>Giá / tháng</Table.Head>
-              <Table.Head>Bàn giao</Table.Head>
+              <Table.Head>Biên bản nhận</Table.Head>
+              <Table.Head>Biên bản trả</Table.Head>
               <Table.Head>Trạng thái</Table.Head>
               <Table.Head className="text-right">Thao tác</Table.Head>
             </Table.Row>
@@ -204,14 +206,14 @@ export const ContractsPage: React.FC = () => {
           <Table.Body>
             {rows.length === 0 ? (
               <Table.Row>
-                <Table.Cell colSpan={8} className="text-center py-10 text-kumo-subtle">
+                <Table.Cell colSpan={9} className="text-center py-10 text-kumo-subtle">
                   {isLoading ? 'Đang tải…' : 'Không có hợp đồng nào khớp bộ lọc.'}
                 </Table.Cell>
               </Table.Row>
             ) : (
               rows.map((row) => {
                 const code = shortContractNo(row.contract_no);
-                const work = workLabel(row);
+                const steps = [inspectionCell(row.handover), inspectionCell(row.return)];
                 return (
                   <Table.Row key={row.id}>
                     <Table.Cell className="whitespace-nowrap font-mono font-semibold">
@@ -236,13 +238,17 @@ export const ContractsPage: React.FC = () => {
                     <Table.Cell className="whitespace-nowrap font-medium">
                       {formatVnd(row.monthly_price)}
                     </Table.Cell>
-                    <Table.Cell
-                      className={`whitespace-nowrap text-xs ${
-                        work.needsStaff ? 'text-kumo-warning' : 'text-kumo-subtle'
-                      }`}
-                    >
-                      {work.label}
-                    </Table.Cell>
+                    {steps.map((step, index) => (
+                      <Table.Cell
+                        // Two fixed columns: handover, then return.
+                        key={index}
+                        className={`whitespace-nowrap text-xs ${
+                          step.needsStaff ? 'text-kumo-warning' : 'text-kumo-subtle'
+                        }`}
+                      >
+                        {step.label}
+                      </Table.Cell>
+                    ))}
                     <Table.Cell>
                       <Badge variant={CONTRACT_STATUS_LABEL[row.status].variant} appearance="dot">
                         {CONTRACT_STATUS_LABEL[row.status].label}

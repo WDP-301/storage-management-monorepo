@@ -16,12 +16,10 @@ interface Props {
   onChanged: () => void;
 }
 
-const STEP_LABEL = { handover: 'Nhận kho', return: 'Trả kho' } as const;
-type Step = keyof typeof STEP_LABEL;
-
 /**
- * Who carries out the contract: the handover and, once requested, the return. Each step is an
- * inspection record staff complete on the app; managers assign them here.
+ * The contract's inspection records, one section each: the handover ("biên bản nhận kho")
+ * exists from the start, the return ("biên bản trả kho") only once the customer asks to move
+ * out. Staff complete them on the app; managers assign them here.
  */
 export const ContractStaffSection: React.FC<Props> = ({
   contract,
@@ -31,9 +29,7 @@ export const ContractStaffSection: React.FC<Props> = ({
 }) => {
   const [staff, setStaff] = useState<FacilityStaffMember[]>([]);
   const facilityId = contract.facility?.id;
-  const open = (['handover', 'return'] as Step[]).some(
-    (step) => contract[step] && !contract[step]?.finalized_at,
-  );
+  const open = [contract.handover, contract.return].some((step) => step && !step.finalized_at);
 
   useEffect(() => {
     if (!canAssign || !facilityId || !open) return;
@@ -42,30 +38,34 @@ export const ContractStaffSection: React.FC<Props> = ({
       .catch(() => setStaff([]));
   }, [canAssign, facilityId, open]);
 
-  const steps = (['handover', 'return'] as Step[]).filter((step) => contract[step]);
+  const row = (label: string, inspection: ContractInspectionSummary) => (
+    <StepRow
+      label={label}
+      inspection={inspection}
+      staff={staff}
+      canAssign={canAssign}
+      onOpen={onOpenInspection}
+      onChanged={onChanged}
+    />
+  );
+
   return (
-    <section className="space-y-1.5">
-      <span className="text-xs font-semibold text-kumo-default block">
-        Bàn giao & phân công nhân viên
-      </span>
-      {steps.length === 0 ? (
-        <p className="text-sm text-kumo-subtle">Chưa có lượt bàn giao nào.</p>
-      ) : (
-        <div className="space-y-2">
-          {steps.map((step) => (
-            <StepRow
-              key={step}
-              label={STEP_LABEL[step]}
-              inspection={contract[step] as ContractInspectionSummary}
-              staff={staff}
-              canAssign={canAssign}
-              onOpen={onOpenInspection}
-              onChanged={onChanged}
-            />
-          ))}
-        </div>
+    <>
+      <section className="space-y-1.5">
+        <span className="text-xs font-semibold text-kumo-default block">Biên bản nhận kho</span>
+        {contract.handover ? (
+          row('Nhận kho', contract.handover)
+        ) : (
+          <p className="text-sm text-kumo-subtle">Chưa có biên bản nhận kho.</p>
+        )}
+      </section>
+      {contract.return && (
+        <section className="space-y-1.5">
+          <span className="text-xs font-semibold text-kumo-default block">Biên bản trả kho</span>
+          {row('Trả kho', contract.return)}
+        </section>
       )}
-    </section>
+    </>
   );
 };
 
@@ -100,12 +100,10 @@ const StepRow: React.FC<{
     <div className="p-3 bg-kumo-control rounded-lg space-y-2 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <span className="font-medium text-kumo-default">{label}</span>
           <span className="text-kumo-subtle">
-            {' · '}
             {done
               ? `Đã chốt ${formatDay(inspection.finalized_at)}`
-              : `Hẹn ${formatDay(inspection.scheduled_at)}`}
+              : `Hẹn ${label.toLowerCase()} ${formatDay(inspection.scheduled_at)}`}
           </span>
           <div className={inspection.inspector_name ? 'text-kumo-default' : 'text-kumo-warning'}>
             {inspection.inspector_name ?? 'Chưa giao nhân viên'}

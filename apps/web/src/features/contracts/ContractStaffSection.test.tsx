@@ -102,7 +102,28 @@ describe('ContractStaffSection', () => {
 
   it('says so when the contract has no handover yet', () => {
     renderSection(contractRecord({ handover: null }));
-    expect(screen.getByText('Chưa có lượt bàn giao nào.')).toBeTruthy();
+    expect(screen.getByText('Chưa có biên bản nhận kho.')).toBeTruthy();
     expect(listStaff).not.toHaveBeenCalled();
+  });
+
+  it('shows only the handover record until the customer asks to return', () => {
+    renderSection(contractRecord({ handover: step() }));
+    expect(screen.getByText('Biên bản nhận kho')).toBeTruthy();
+    expect(screen.queryByText('Biên bản trả kho')).toBeNull();
+    expect(screen.getByText('Hẹn nhận kho 15/10/2026')).toBeTruthy();
+  });
+
+  it('gives the return record its own section once it exists', () => {
+    renderSection(
+      contractRecord({
+        status: 'ACTIVE',
+        handover: step({ finalized_at: '2026-10-15T03:00:00.000Z' }),
+        return: step({ id: 'r-1', type: 'RETURN', scheduled_at: '2027-04-14T00:00:00.000Z' }),
+      }),
+    );
+    const sections = screen.getAllByText(/^Biên bản (nhận|trả) kho$/).map((el) => el.textContent);
+    expect(sections).toEqual(['Biên bản nhận kho', 'Biên bản trả kho']);
+    expect(screen.getByText('Hẹn trả kho 14/04/2027')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Xem biên bản trả kho' })).toBeTruthy();
   });
 });

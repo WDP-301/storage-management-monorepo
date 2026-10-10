@@ -32,7 +32,9 @@ describe('ContractsPage', () => {
     expect(within(row).getByText('HCM-SG-01')).toBeTruthy();
     expect(within(row).getByText('6 tháng')).toBeTruthy();
     expect(within(row).getByText('3.200.000 đ')).toBeTruthy();
-    expect(within(row).getByText('Nhận kho · chưa giao người')).toBeTruthy();
+    expect(within(row).getByText('Chưa giao người')).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Biên bản nhận' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Biên bản trả' })).toBeTruthy();
     expect(within(row).getByText('Chờ nhận kho')).toBeTruthy();
     expect(list).toHaveBeenCalledWith({
       page: 1,
@@ -96,7 +98,7 @@ describe('ContractsPage', () => {
     expect(screen.getByText('15/10/2026 → 15/01/2027')).toBeTruthy();
   });
 
-  it('shows an open return request as the step needing staff', async () => {
+  it('shows the handover and the return record in their own columns', async () => {
     const step = {
       id: 'r-1',
       type: 'RETURN',
@@ -105,22 +107,35 @@ describe('ContractsPage', () => {
       finalized_at: null,
       inspector_name: null,
     };
+    const signedHandover = {
+      ...step,
+      id: 'h-1',
+      type: 'PRE_HANDOVER',
+      finalized_at: '2026-10-15T03:00:00.000Z',
+      inspector_name: 'Nhân viên kho Demo',
+    };
     list.mockResolvedValue(
       page([
-        contractRecord({ status: 'ACTIVE', return: step }),
+        contractRecord({ status: 'ACTIVE', handover: signedHandover, return: step }),
         contractRecord({
           id: 'b',
           contract_no: 'CT-bbbbbbbb-0',
-          status: 'ACTIVE',
-          return: { ...step, id: 'r-2', inspector_name: 'Nhân viên kho Demo' },
+          handover: { ...signedHandover, finalized_at: null },
         }),
-        contractRecord({ id: 'c', contract_no: 'CT-cccccccc-0', handover: null }),
       ]),
     );
     render(<ContractsPage />);
-    expect(await screen.findByText('Trả kho · chưa giao người')).toBeTruthy();
-    expect(screen.getByText('Trả kho · đã giao nhân viên')).toBeTruthy();
-    expect(screen.getByText('Trả kho · chưa giao người').className).toContain('text-kumo-warning');
+    await screen.findByText('CT-BBBBBBBB');
+    const [returning, fresh] = screen.getAllByRole('row').slice(1);
+    const cells = (row: HTMLElement) =>
+      within(row)
+        .getAllByRole('cell')
+        .slice(5, 7)
+        .map((cell) => cell.textContent);
+    expect(cells(returning)).toEqual(['Đã chốt 15/10/2026', 'Chưa giao người']);
+    // A new contract only has its handover record.
+    expect(cells(fresh)).toEqual(['Nhân viên kho Demo', '—']);
+    expect(within(returning).getByText('Chưa giao người').className).toContain('text-kumo-warning');
   });
 
   it('opens the detail of a contract', async () => {

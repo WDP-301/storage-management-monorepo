@@ -820,14 +820,21 @@ describe('ServiceTicketsService', () => {
         buildTicket({
           facilityId: 'facility-1',
           assignedTo: 'staff-2',
+          // Loaded like the real read: the previous assignee relation is present.
+          assignee: { id: 'staff-2', fullName: 'Staff Two' } as ServiceTicket['assignee'],
           status: TicketStatus.ASSIGNED,
         }),
       );
 
       const result = await service.assign('ticket-1', dto, manager);
 
+      // TypeORM writes the FK from the loaded relation, so both must point at the new staff.
       expect(tickets.save).toHaveBeenCalledWith(
-        expect.objectContaining({ assignedTo: 'staff-1', status: TicketStatus.ASSIGNED }),
+        expect.objectContaining({
+          assignedTo: 'staff-1',
+          assignee: expect.objectContaining({ id: 'staff-1' }),
+          status: TicketStatus.ASSIGNED,
+        }),
       );
       expect(result.ticket.history.map((entry) => entry.action)).toEqual(['ASSIGNED']);
     });

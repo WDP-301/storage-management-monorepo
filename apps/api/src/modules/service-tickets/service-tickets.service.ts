@@ -357,6 +357,8 @@ export class ServiceTicketsService {
     const previousAssigneeId = ticket.assignedTo ?? null;
     const previousStatus = ticket.status;
     ticket.assignedTo = dto.assignedTo;
+    // The loaded `assignee` relation wins over `assignedTo` on save, so it must be swapped too.
+    ticket.assignee = assignee;
     if (ticket.status === TicketStatus.OPEN) {
       ticket.status = TicketStatus.ASSIGNED;
     }

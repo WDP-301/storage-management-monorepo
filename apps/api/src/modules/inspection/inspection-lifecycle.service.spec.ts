@@ -28,6 +28,7 @@ const buildContract = (overrides: Partial<Contract> = {}): Contract =>
     contractNo: 'CT-1',
     bookingItemId: 'item-1',
     status: ContractStatus.DRAFT,
+    documents: [{ fileKey: 'uploads/1-a.pdf', name: 'a.pdf', mimeType: 'application/pdf' }],
     bookingItem: { storageUnit: { facilityId: 'facility-1' } },
     ...overrides,
   }) as unknown as Contract;
@@ -89,6 +90,32 @@ describe('InspectionLifecycleService.finalize', () => {
     );
     expect(result.finalizedAt).toBeInstanceOf(Date);
     expect(result.inspectedAt).toBe(result.finalizedAt);
+  });
+
+  it('refuses to finalize a handover while the contract has no signed files', async () => {
+    stubRows(buildInspection(), buildContract({ documents: [] }));
+
+    await expect(service.finalize('insp-1', actor('staff-1'))).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+      response: {
+        code: 'CONTRACT_DOCUMENTS_REQUIRED',
+        message: 'Chưa có file hợp đồng đã ký — tải lên trước khi chốt biên nhận.',
+        details: { contractId: 'contract-1' },
+      },
+    });
+    expect(em.update).not.toHaveBeenCalled();
+    expect(em.save).not.toHaveBeenCalled();
+  });
+
+  it('does not require contract files to finalize a return', async () => {
+    stubRows(
+      buildInspection({ type: InspectionType.RETURN }),
+      buildContract({ status: ContractStatus.ACTIVE, documents: [] }),
+    );
+
+    await expect(service.finalize('insp-1', actor('staff-1'))).resolves.toEqual(
+      expect.objectContaining({ finalizedAt: expect.any(Date) }),
+    );
   });
 
   it('keeps an inspectedAt the inspector already recorded', async () => {

@@ -11,7 +11,6 @@ import { BookingStatus, ContractStatus, InspectionType } from '@storage/types';
 import { DataSource, In, IsNull, Repository } from 'typeorm';
 import { loadContractInspections } from './contract-inspections.util';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
-import { UploadContractEvidenceDto } from './dto/upload-contract-evidence.dto';
 import { persistContract } from './initial-contract.util';
 import { type CustomerContractRecord, toCustomerContractRecord } from './types/customer-contract';
 
@@ -80,7 +79,6 @@ export class ContractsService {
         endedAt,
         signedAt: dto.signedAt ? new Date(dto.signedAt) : undefined,
         termsSnapshot: dto.termsSnapshot,
-        evidence: dto.evidence,
       });
     });
   }
@@ -184,22 +182,6 @@ export class ContractsService {
       HttpStatus.CONFLICT,
       { contractId: id, status: contract.status },
     );
-  }
-
-  /**
-   * Sets the contract evidence URL (single link, replaces the previous one).
-   * The file itself is uploaded by the client beforehand via
-   * POST /uploads/presigned-url + PUT to R2 — this endpoint only stores the link.
-   * Allowed even after `signedAt` (evidence is not a sealed commercial term).
-   */
-  async uploadEvidence(id: string, dto: UploadContractEvidenceDto): Promise<Contract> {
-    await this.findById(id);
-    const result = await this.contracts.update(
-      { id, deletedAt: IsNull() },
-      { evidence: dto.evidenceUrl },
-    );
-    if (!result.affected) notFound('Contract', id);
-    return this.findById(id);
   }
 
   private validateDates(effectiveAt: Date, endedAt?: Date): void {

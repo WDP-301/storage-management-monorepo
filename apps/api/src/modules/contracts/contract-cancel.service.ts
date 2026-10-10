@@ -2,10 +2,7 @@ import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import {
-  isGlobalManager,
-  loadManagedFacilityIds,
-} from '@modules/inspection/inspection-access.util';
+import { managesFacility } from '@modules/inspection/inspection-access.util';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
@@ -62,8 +59,7 @@ export class ContractCancelService {
     actor: AuthUser,
     facilityId: string,
   ): Promise<void> {
-    if (isGlobalManager(actor)) return;
-    if ((await loadManagedFacilityIds(em, actor.id)).includes(facilityId)) return;
+    if (await managesFacility(em, actor, facilityId)) return;
     throw new DomainException(
       ErrorCode.FORBIDDEN,
       'You do not manage the facility this contract belongs to',

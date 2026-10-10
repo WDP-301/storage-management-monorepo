@@ -52,6 +52,17 @@ export async function loadInspectionFacilityId(
   return contract?.bookingItem?.storageUnit?.facilityId ?? null;
 }
 
+/** True for global managers and for facility managers assigned to that facility. */
+export async function managesFacility(
+  em: EntityManager,
+  actor: AuthUser,
+  facilityId: string | null | undefined,
+): Promise<boolean> {
+  if (isGlobalManager(actor)) return true;
+  if (!facilityId || !actor.roles.includes(UserRole.FACILITY_MANAGER)) return false;
+  return (await loadManagedFacilityIds(em, actor.id)).includes(facilityId);
+}
+
 /** True when the actor manages the facility the inspection's unit belongs to. */
 export async function managesInspectionFacility(
   em: EntityManager,
@@ -59,10 +70,7 @@ export async function managesInspectionFacility(
   actor: AuthUser,
 ): Promise<boolean> {
   if (isGlobalManager(actor)) return true;
-  if (!actor.roles.includes(UserRole.FACILITY_MANAGER)) return false;
-  const facilityId = await loadInspectionFacilityId(em, inspection);
-  if (!facilityId) return false;
-  return (await loadManagedFacilityIds(em, actor.id)).includes(facilityId);
+  return managesFacility(em, actor, await loadInspectionFacilityId(em, inspection));
 }
 
 /** Writes are open to the assigned inspector and to managers of the unit's facility. */

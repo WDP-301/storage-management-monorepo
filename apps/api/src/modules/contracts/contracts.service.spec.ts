@@ -257,24 +257,4 @@ describe('ContractsService', () => {
       });
     },
   );
-
-  it('sets the contract evidence URL', async () => {
-    repo.findOne.mockResolvedValue({ id: 'contract-1' });
-    repo.update.mockResolvedValue({ affected: 1 });
-    await service.uploadEvidence('contract-1', {
-      evidenceUrl: 'https://r2.example.com/uploads/a.jpg',
-    });
-    expect(repo.update).toHaveBeenCalledWith(
-      { id: 'contract-1', deletedAt: IsNull() },
-      { evidence: 'https://r2.example.com/uploads/a.jpg' },
-    );
-  });
-
-  it('returns 404 when setting evidence on a missing contract', async () => {
-    repo.findOne.mockResolvedValue(null);
-    await expect(
-      service.uploadEvidence('missing', { evidenceUrl: 'https://r2.example.com/uploads/a.jpg' }),
-    ).rejects.toMatchObject({ status: 404 });
-    expect(repo.update).not.toHaveBeenCalled();
-  });
 });

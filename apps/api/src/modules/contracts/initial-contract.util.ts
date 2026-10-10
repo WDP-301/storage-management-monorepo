@@ -20,7 +20,6 @@ export interface PersistContractInput {
   endedAt?: Date;
   signedAt?: Date;
   termsSnapshot?: Record<string, unknown>;
-  evidence?: string | null;
 }
 
 /**
@@ -49,7 +48,6 @@ export async function persistContract(
     months: item.rentalMonths,
     monthlyPriceSnapshot: monthlyPriceSnapshot as unknown as number,
     termsSnapshot: input.termsSnapshot ?? {},
-    evidence: input.evidence ?? null,
     customerSnapshot: {
       id: customer.id,
       fullName: customer.fullName,

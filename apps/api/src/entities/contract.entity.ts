@@ -13,6 +13,14 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
+/** A file attached to a contract; `fileKey` is an `uploads/` object key in the private bucket. */
+export interface ContractDocument {
+  fileKey: string;
+  name: string;
+  mimeType: string;
+  size?: number;
+}
+
 @Entity('contracts')
 // Partial unique index (kind='INITIAL' AND deleted_at IS NULL) — created by migration,
 // metadata kept sync-off so schema sync never tries to manage the WHERE clause.
@@ -57,8 +65,9 @@ export class Contract {
   @Column({ type: 'jsonb', default: () => "'{}'", name: 'customer_snapshot' })
   customerSnapshot: Record<string, any>;
 
-  @Column({ type: 'text', nullable: true })
-  evidence?: string | null;
+  /** Signed contract scans/photos already uploaded to the private bucket. */
+  @Column({ type: 'jsonb', default: () => "'[]'" })
+  documents: ContractDocument[];
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

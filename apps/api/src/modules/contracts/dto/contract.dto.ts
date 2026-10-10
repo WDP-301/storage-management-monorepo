@@ -6,10 +6,8 @@ import {
   IsInt,
   IsNumber,
   IsObject,
-  IsString,
   IsUUID,
   Max,
-  MaxLength,
   Min,
   ValidateIf,
 } from 'class-validator';
@@ -43,12 +41,6 @@ export class ContractFieldsDto {
   @ValidateIf((_object, value) => value !== undefined)
   @IsObject()
   termsSnapshot?: Record<string, any>;
-
-  @ApiPropertyOptional({ description: 'URL ảnh bằng chứng của hợp đồng' })
-  @ValidateIf((_object, value) => value !== undefined && value !== null)
-  @IsString()
-  @MaxLength(2048)
-  evidence?: string | null;
 }
 
 export class CreateContractDto extends ContractFieldsDto {

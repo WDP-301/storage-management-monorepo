@@ -22,13 +22,14 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ApiErrorResponseDto } from '@shared/models/api-response';
 import { UserRole } from '@storage/types';
 import { ContractCancelService } from './contract-cancel.service';
+import { ContractDocumentsService } from './contract-documents.service';
 import { ContractQueryService } from './contract-query.service';
 import { ContractReturnService } from './contract-return.service';
 import { ContractsService } from './contracts.service';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
+import { ReplaceContractDocumentsDto } from './dto/contract-documents.dto';
 import { ListContractsQueryDto } from './dto/list-contracts-query.dto';
 import { ReturnRequestDto } from './dto/return-request.dto';
-import { UploadContractEvidenceDto } from './dto/upload-contract-evidence.dto';
 
 @ApiTags('Contracts')
 @Controller('contracts')
@@ -47,6 +48,7 @@ export class ContractsController {
     private readonly contractReturn: ContractReturnService,
     private readonly contractCancel: ContractCancelService,
     private readonly contractQuery: ContractQueryService,
+    private readonly contractDocuments: ContractDocumentsService,
   ) {}
 
   // Writes can strand units, so they stay with system-wide roles. Contracts carry
@@ -101,6 +103,41 @@ export class ContractsController {
     return this.contractCancel.cancelDraft(id, user);
   }
 
+  @Get(':id/staff-view')
+  @ApiOperation({
+    summary: 'Contract file record for staff: files, handover, return and what the caller may edit',
+    description:
+      'Assigned inspector of the handover or latest return, facility managers of the unit, admin and operations.',
+  })
+  @ApiResponse({ status: 403, description: 'Not assigned and not a manager of this facility' })
+  @ApiResponse({ status: 404, type: ApiErrorResponseDto })
+  staffView(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.contractQuery.staffView(id, user);
+  }
+
+  @Put(':id/documents')
+  @ApiOperation({
+    summary: 'Replace the signed contract files (images or PDF, at most 10)',
+    description:
+      'Managers of the unit facility, admin and operations while DRAFT/ACTIVE; the assigned handover inspector while the contract is DRAFT.',
+  })
+  @ApiResponse({ status: 400, type: ApiErrorResponseDto })
+  @ApiResponse({ status: 403, type: ApiErrorResponseDto })
+  @ApiResponse({ status: 404, type: ApiErrorResponseDto })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Contract ENDED/CANCELLED, or CONTRACT_DOCUMENTS_REQUIRED for ACTIVE with no files',
+    type: ApiErrorResponseDto,
+  })
+  replaceDocuments(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReplaceContractDocumentsDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.contractDocuments.replace(id, dto.documents, user);
+  }
+
   @Get(':id')
   @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER, UserRole.FACILITY_MANAGER)
   @ApiOperation({ summary: 'Get a contract with unit, facility, customer and inspections' })
@@ -115,14 +152,6 @@ export class ContractsController {
   @ApiOperation({ summary: 'Update a contract' })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateContractDto) {
     return this.contractsService.update(id, dto);
-  }
-
-  @Put(':id/evidence')
-  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
-  @ApiOperation({ summary: 'Set the contract evidence URL (R2 public link)' })
-  @ApiResponse({ status: 400, type: ApiErrorResponseDto })
-  uploadEvidence(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UploadContractEvidenceDto) {
-    return this.contractsService.uploadEvidence(id, dto);
   }
 
   @Delete(':id')

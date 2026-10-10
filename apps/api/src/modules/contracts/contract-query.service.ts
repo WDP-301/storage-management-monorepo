@@ -11,11 +11,14 @@ import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
 import { escapeLikePattern } from '@shared/utils/like-pattern.util';
 import type { PaginationMeta } from '@storage/types';
 import { DataSource, Repository, type SelectQueryBuilder } from 'typeorm';
+import { resolveContractAccess } from './contract-access.util';
 import { loadContractInspections } from './contract-inspections.util';
 import type { ListContractsQueryDto } from './dto/list-contracts-query.dto';
 import {
   type BackOfficeContractRecord,
+  type StaffContractRecord,
   toBackOfficeContractRecord,
+  toStaffContractRecord,
 } from './types/back-office-contract';
 
 /**
@@ -81,6 +84,24 @@ export class ContractQueryService {
     }
     const inspections = await loadContractInspections(this.dataSource, [contract.id]);
     return toBackOfficeContractRecord(contract, inspections.get(contract.id));
+  }
+
+  /**
+   * Contract file record for facility staff: the assigned inspector of the handover or latest
+   * return, managers of the unit's facility, and global managers.
+   */
+  async staffView(id: string, actor: AuthUser): Promise<StaffContractRecord> {
+    const contract = await this.baseQuery().andWhere('contract.id = :id', { id }).getOne();
+    if (!contract) notFound('Contract', id);
+    const access = await resolveContractAccess(this.dataSource.manager, contract, actor);
+    if (!access.canView) {
+      throw new DomainException(
+        ErrorCode.FORBIDDEN,
+        'You are not assigned to this contract',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+    return toStaffContractRecord(contract, access.inspections, access.permissions);
   }
 
   /** Facility ids the actor may read; undefined means every facility. */

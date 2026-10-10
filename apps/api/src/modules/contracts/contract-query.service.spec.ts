@@ -21,7 +21,7 @@ const contract = (over: Partial<Contract> = {}) =>
     months: 6,
     monthlyPriceSnapshot: 3200000,
     termsSnapshot: { note: 'x' },
-    evidence: null,
+    documents: [],
     createdAt: new Date('2026-10-10'),
     customerSnapshot: { fullName: 'Khách Demo', phone: '0900000005', email: 'k@example.com' },
     bookingItem: {
@@ -58,9 +58,10 @@ describe('ContractQueryService', () => {
     qb.getOne = jest.fn(async () => contract());
     assignments = [{ facilityId: 'fac-hcm', startsAt: SINCE, endsAt: null }];
     inspections = [];
+    const getRepository = jest.fn(() => ({ find: jest.fn(async () => inspections) }));
     const dataSource = {
-      manager: { find: jest.fn(async () => assignments) },
-      getRepository: jest.fn(() => ({ find: jest.fn(async () => inspections) })),
+      manager: { find: jest.fn(async () => assignments), getRepository },
+      getRepository,
     };
     service = new ContractQueryService(
       { createQueryBuilder: jest.fn(() => qb) } as unknown as Repository<Contract>,
@@ -150,7 +151,7 @@ describe('ContractQueryService', () => {
       handover: { id: 'insp-1', inspector_name: 'Võ Kỹ Thuật' },
       return: null,
       terms: { note: 'x' },
-      evidence: null,
+      documents: [],
     });
   });
 
@@ -177,5 +178,70 @@ describe('ContractQueryService', () => {
   it('returns 404 for a missing or soft-deleted contract', async () => {
     qb.getOne.mockResolvedValueOnce(null);
     await expect(service.detail('gone', ADMIN)).rejects.toMatchObject({ status: 404 });
+  });
+
+  describe('staffView', () => {
+    const STAFF = { id: 'staff-1', roles: [UserRole.FACILITY_STAFF] } as unknown as AuthUser;
+    const handover = (over: Record<string, unknown> = {}) => ({
+      id: 'insp-1',
+      contractId: 'contract-1',
+      type: InspectionType.PRE_HANDOVER,
+      inspectedBy: 'staff-1',
+      inspector: { fullName: 'Võ Kỹ Thuật' },
+      evidence: [],
+      damages: [],
+      ...over,
+    });
+    const returned = (over: Record<string, unknown> = {}) =>
+      handover({ id: 'insp-2', type: InspectionType.RETURN, ...over });
+
+    it('gives the assigned inspector files, handover and the latest return without terms or email', async () => {
+      qb.getOne.mockResolvedValueOnce(
+        contract({
+          documents: [{ fileKey: 'uploads/a.pdf', name: 'a.pdf', mimeType: 'application/pdf' }],
+        }),
+      );
+      inspections = [handover(), returned({ inspectedBy: 'staff-2' })];
+
+      const record = await service.staffView('contract-1', STAFF);
+
+      expect(record).toMatchObject({
+        id: 'contract-1',
+        documents: [{ fileKey: 'uploads/a.pdf' }],
+        handover: { id: 'insp-1' },
+        return: { id: 'insp-2' },
+        customer: { id: 'customer-1', full_name: 'Khách Demo', phone: '0900000005' },
+        permissions: { documents: true, handover: true, return: false },
+      });
+      expect(record).not.toHaveProperty('terms');
+      expect(record.customer).not.toHaveProperty('email');
+    });
+
+    it('lets staff assigned only to the return read the contract but not edit its files', async () => {
+      inspections = [handover({ inspectedBy: 'staff-2' }), returned()];
+      const record = await service.staffView('contract-1', STAFF);
+      expect(record.permissions).toEqual({ documents: false, handover: false, return: true });
+    });
+
+    it('lets a facility manager of the unit in, and ADMIN in any facility', async () => {
+      await expect(service.staffView('contract-1', MANAGER)).resolves.toMatchObject({
+        permissions: { documents: true, handover: false, return: false },
+      });
+      await expect(service.staffView('contract-1', ADMIN)).resolves.toMatchObject({
+        id: 'contract-1',
+      });
+    });
+
+    it('rejects staff who are not assigned and managers of another facility', async () => {
+      inspections = [handover({ inspectedBy: 'staff-2' })];
+      await expect(service.staffView('contract-1', STAFF)).rejects.toMatchObject({ status: 403 });
+      assignments[0].facilityId = 'fac-hn';
+      await expect(service.staffView('contract-1', MANAGER)).rejects.toMatchObject({ status: 403 });
+    });
+
+    it('returns 404 for a missing contract', async () => {
+      qb.getOne.mockResolvedValueOnce(null);
+      await expect(service.staffView('gone', STAFF)).rejects.toMatchObject({ status: 404 });
+    });
   });
 });

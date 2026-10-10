@@ -1,12 +1,15 @@
 import { Inspection } from '@entities/inspection.entity';
 import { InspectionType } from '@storage/types';
-import { type DataSource, In } from 'typeorm';
+import { type DataSource, type EntityManager, In } from 'typeorm';
 
 export type ContractInspections = { handover?: Inspection; return?: Inspection };
 
-/** Handover and the latest return of each contract, keyed by contract id. */
+/**
+ * Handover and the latest return of each contract, keyed by contract id.
+ * Pass an EntityManager to read inside a transaction.
+ */
 export async function loadContractInspections(
-  dataSource: DataSource,
+  dataSource: DataSource | EntityManager,
   contractIds: string[],
 ): Promise<Map<string, ContractInspections>> {
   const byContract = new Map<string, ContractInspections>();

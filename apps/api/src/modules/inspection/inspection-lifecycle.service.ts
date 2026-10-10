@@ -3,6 +3,7 @@ import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { CONTRACT_DOCUMENTS_REQUIRED_MESSAGE } from '@modules/contracts/contract-documents.service';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
@@ -87,6 +88,15 @@ export class InspectionLifecycleService {
           status: contract.status,
           requiredStatus: transition.contractFrom,
         });
+      }
+
+      if (inspection.type === InspectionType.PRE_HANDOVER && !contract.documents?.length) {
+        throw new DomainException(
+          ErrorCode.CONTRACT_DOCUMENTS_REQUIRED,
+          CONTRACT_DOCUMENTS_REQUIRED_MESSAGE,
+          HttpStatus.CONFLICT,
+          { contractId: contract.id },
+        );
       }
 
       await this.moveUnit(em, contract, transition, inspection);

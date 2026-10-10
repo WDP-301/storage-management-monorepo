@@ -23,7 +23,7 @@ export const ContractsApi = {
     }),
 };
 
-function normaliseContract(contract: CustomerContractResponse): ApiContract {
+export function normaliseContract(contract: CustomerContractResponse): ApiContract {
   return {
     id: contract.id,
     contractNo: contract.contract_no,
@@ -58,6 +58,7 @@ function normaliseContract(contract: CustomerContractResponse): ApiContract {
       : null,
     handover: contract.handover ? normaliseInspection(contract.handover) : null,
     return: contract.return ? normaliseInspection(contract.return) : null,
+    documents: (contract.documents ?? []).filter(isEvidenceFile),
   };
 }
 

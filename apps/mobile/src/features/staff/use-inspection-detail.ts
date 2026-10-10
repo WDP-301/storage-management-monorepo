@@ -15,6 +15,8 @@ export function staffErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof ApiError)) return fallback;
   if (error.code === 'FORBIDDEN' || error.statusCode === 403)
     return 'Bạn không có quyền với biên bản này.';
+  // The API message for this code is already Vietnamese and says exactly what is missing.
+  if (error.code === 'CONTRACT_DOCUMENTS_REQUIRED') return error.message;
   const reason = [
     ['already finalized', 'Biên bản đã được chốt trước đó.'],
     [

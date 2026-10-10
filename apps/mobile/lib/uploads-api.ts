@@ -21,13 +21,13 @@ export const UploadsApi = {
    * Presigns via the API then PUTs the bytes straight to S3 — the server signs `fileSize`
    * into the URL, so the declared size must equal the real byte count or S3 rejects the PUT.
    */
-  uploadImage: async (file: PickedFile): Promise<TicketAttachment> => {
+  uploadFile: async (file: PickedFile): Promise<TicketAttachment> => {
     // Measure the file on disk: the picker's `fileSize` can describe the original image rather
     // than the re-compressed copy (quality < 1), and a mismatch makes S3 reject the signed PUT.
     const info = await FileSystem.getInfoAsync(file.uri);
     const size = info.exists && info.size > 0 ? info.size : (file.size ?? 0);
     if (!size) {
-      throw new ApiError('Không đọc được kích thước ảnh.');
+      throw new ApiError('Không đọc được kích thước tệp.');
     }
 
     const presigned = await request<PresignedUploadUrlResponse>('/uploads/presigned-url', {
@@ -41,7 +41,7 @@ export const UploadsApi = {
       headers: { 'Content-Type': file.mimeType },
     });
     if (upload.status < 200 || upload.status >= 300) {
-      throw new ApiError('Tải ảnh lên thất bại. Thử lại sau.', upload.status);
+      throw new ApiError('Tải tệp lên thất bại. Thử lại sau.', upload.status);
     }
 
     return { fileKey: presigned.fileKey, name: file.name, mimeType: file.mimeType, size };

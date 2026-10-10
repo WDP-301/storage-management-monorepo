@@ -55,6 +55,8 @@ export type CustomerContractResponse = {
   facility: { id: string; code: string; name: string } | null;
   handover: InspectionSummaryResponse | null;
   return: InspectionSummaryResponse | null;
+  /** Signed contract files; absent on API versions that predate them. */
+  documents?: unknown[] | null;
 };
 
 /** Handover receipt (biên nhận) or return record (biên trả). Finalized = signed off by staff. */
@@ -100,4 +102,6 @@ export type ApiContract = {
   handover: ApiInspection | null;
   /** Latest return request; open (not finalized) while the customer waits to move out. */
   return: ApiInspection | null;
+  /** Signed contract scans/PDFs uploaded by staff. */
+  documents: EvidenceFile[];
 };

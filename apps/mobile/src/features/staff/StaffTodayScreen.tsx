@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { todayIso } from '../../../lib/rental-schedule';
-import type { InspectionKind } from '../../types/inspection-api';
+import type { InspectionKind, StaffInspection } from '../../types/inspection-api';
 import { ChipButton } from '../customer/FilterChips';
 import { InspectionListItem } from './InspectionListItem';
 import { groupBySchedule, SCHEDULE_GROUP_LABEL } from './inspection-display';
@@ -14,7 +14,7 @@ const SEGMENT_KIND: Record<Exclude<Segment, 'done'>, InspectionKind> = {
   return: 'RETURN',
 };
 
-type Props = { onOpen: (inspectionId: string) => void };
+type Props = { onOpen: (contractId: string) => void };
 
 /** Today tab: the handovers and returns to carry out, grouped by appointment day. */
 export function StaffTodayScreen({ onOpen }: Props) {
@@ -31,6 +31,10 @@ export function StaffTodayScreen({ onOpen }: Props) {
       items: bucket.items,
     }));
   }, [items, segment]);
+  const open = (item: StaffInspection) => {
+    if (item.contract) onOpen(item.contract.id);
+    else Alert.alert('Không mở được', 'Biên bản này chưa gắn với hợp đồng nào.');
+  };
   const isEmpty = groups.every((group) => group.items.length === 0);
 
   return (
@@ -86,11 +90,7 @@ export function StaffTodayScreen({ onOpen }: Props) {
                 </Text>
               ) : null}
               {group.items.map((item) => (
-                <InspectionListItem
-                  key={item.id}
-                  inspection={item}
-                  onPress={() => onOpen(item.id)}
-                />
+                <InspectionListItem key={item.id} inspection={item} onPress={() => open(item)} />
               ))}
             </View>
           ))

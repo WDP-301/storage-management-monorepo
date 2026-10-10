@@ -4,6 +4,8 @@ import { StaffTodayScreen } from '../../src/features/staff/StaffTodayScreen';
 export default function StaffTodayRoute() {
   const router = useRouter();
   return (
-    <StaffTodayScreen onOpen={(id) => router.navigate(`/(staff)/inspection-detail?id=${id}`)} />
+    <StaffTodayScreen
+      onOpen={(contractId) => router.navigate(`/(staff)/staff-contract?id=${contractId}`)}
+    />
   );
 }

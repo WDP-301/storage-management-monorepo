@@ -57,6 +57,7 @@ export function normaliseInspection(row: InspectionResponse): StaffInspection {
     customerPhone: row.contract?.customerSnapshot?.phone ?? null,
     contract: row.contract
       ? {
+          id: row.contract.id,
           contractNo: row.contract.contractNo,
           status: row.contract.status,
           effectiveAt: row.contract.effectiveAt,

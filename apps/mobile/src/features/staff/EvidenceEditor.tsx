@@ -1,4 +1,3 @@
-import * as ImagePicker from 'expo-image-picker';
 import { Button } from 'heroui-native';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Text, View } from 'react-native';
@@ -6,6 +5,7 @@ import { ApiError } from '../../../lib/api';
 import { type PickedFile, UploadsApi } from '../../../lib/uploads-api';
 import { EvidenceGallery } from '../../components/EvidenceGallery';
 import type { EvidenceFile } from '../../types/contract-api';
+import { pickImages } from './pick-files';
 
 type Props = {
   files: EvidenceFile[];
@@ -17,9 +17,6 @@ type Props = {
   max: number;
   readOnly?: boolean;
 };
-
-/** Smaller files upload faster on site over 4G; inspection photos do not need full quality. */
-const PHOTO_QUALITY = 0.6;
 
 /**
  * Inspection photos: shoot or pick, upload right away (the record stores file keys), remove.
@@ -37,12 +34,13 @@ export function EvidenceEditor({
   if (readOnly) return <EvidenceGallery files={files} />;
 
   const upload = async (picked: PickedFile[]) => {
+    if (picked.length === 0) return;
     const added: EvidenceFile[] = [];
     onUploadingChange(true);
     try {
       for (const [index, file] of picked.entries()) {
         setProgress(`Đang tải ảnh ${index + 1}/${picked.length}…`);
-        added.push(await UploadsApi.uploadImage(file));
+        added.push(await UploadsApi.uploadFile(file));
       }
     } catch (error) {
       Alert.alert('Tải ảnh thất bại', error instanceof ApiError ? error.message : 'Thử lại sau.');
@@ -54,33 +52,7 @@ export function EvidenceEditor({
   };
 
   const pick = async (source: 'camera' | 'library') => {
-    const remaining = max - files.length;
-    const permission =
-      source === 'camera'
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Chưa có quyền', 'Hãy cấp quyền camera/thư viện ảnh trong Cài đặt.');
-      return;
-    }
-    const result =
-      source === 'camera'
-        ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: PHOTO_QUALITY })
-        : await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            quality: PHOTO_QUALITY,
-            allowsMultipleSelection: true,
-            selectionLimit: remaining,
-          });
-    if (result.canceled) return;
-    await upload(
-      result.assets.slice(0, remaining).map((asset, index) => ({
-        uri: asset.uri,
-        name: asset.fileName ?? `inspection-${Date.now()}-${index + 1}.jpg`,
-        mimeType: asset.mimeType ?? 'image/jpeg',
-        size: asset.fileSize,
-      })),
-    );
+    await upload(await pickImages(source, max - files.length));
   };
 
   const choose = () =>

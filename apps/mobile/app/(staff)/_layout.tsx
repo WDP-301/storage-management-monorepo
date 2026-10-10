@@ -45,7 +45,7 @@ export default function StaffTabsLayout() {
         <RouterTabs.Screen name="scan" options={{ title: 'Quét mã' }} />
         <RouterTabs.Screen name="requests" options={{ title: 'Yêu cầu' }} />
         <RouterTabs.Screen name="settings" options={{ title: 'Cài đặt' }} />
-        <RouterTabs.Screen name="inspection-detail" options={{ title: 'Biên bản' }} />
+        <RouterTabs.Screen name="staff-contract" options={{ title: 'Hợp đồng' }} />
       </RouterTabs>
     </SafeAreaView>
   );
@@ -92,7 +92,7 @@ function StaffTabBar({
 }
 
 function toStaffTab(routeName: string | undefined): StaffTab {
-  if (routeName === 'inspection-detail') return 'today';
+  if (routeName === 'staff-contract') return 'today';
   if (routeName === 'scan' || routeName === 'requests' || routeName === 'settings') {
     return routeName;
   }

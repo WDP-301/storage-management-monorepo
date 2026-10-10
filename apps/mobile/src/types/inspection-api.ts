@@ -18,6 +18,7 @@ export type InspectionResponse = {
   createdAt: string;
   inspector?: { fullName: string } | null;
   contract?: {
+    id: string;
     contractNo: string;
     status: ContractStatus;
     effectiveAt: string;
@@ -52,6 +53,7 @@ export type StaffInspection = {
   customerName: string;
   customerPhone: string | null;
   contract: {
+    id: string;
     contractNo: string;
     status: ContractStatus;
     effectiveAt: string;

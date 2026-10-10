@@ -92,7 +92,7 @@ export default function TicketCreateRoute() {
     try {
       const attachments = [];
       for (const photo of form.photos) {
-        attachments.push(await UploadsApi.uploadImage(photo));
+        attachments.push(await UploadsApi.uploadFile(photo));
       }
       const ticket = await TicketsApi.create(
         {

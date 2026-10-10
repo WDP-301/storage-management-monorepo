@@ -13,6 +13,9 @@ export function localDayIso(timestamp: string): string {
   return toIsoDate(new Date(timestamp));
 }
 
+export const dayOf = (timestamp: string | null) =>
+  timestamp ? formatIsoDate(localDayIso(timestamp)) : null;
+
 export function contractStartIso(contract: ApiContract): string {
   return localDayIso(contract.effectiveAt);
 }

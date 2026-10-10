@@ -3,16 +3,18 @@ import { Booking } from '@entities/booking.entity';
 import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
+import { StorageUnit } from '@entities/storage-unit.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { BookingStatus, ContractStatus, InspectionType } from '@storage/types';
+import { BookingStatus, ContractStatus, InspectionType, StorageUnitStatus } from '@storage/types';
 import { DataSource, In, IsNull, Repository } from 'typeorm';
 import { loadContractInspections } from './contract-inspections.util';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
 import { persistContract } from './initial-contract.util';
 import { type CustomerContractRecord, toCustomerContractRecord } from './types/customer-contract';
+import { lockUnitClaimedOnlyBy } from './unit-claim.util';
 
 const CONTRACT_CREATION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -70,6 +72,12 @@ export class ContractsService {
       const effectiveAt = dto.effectiveAt ? new Date(dto.effectiveAt) : item.requestedStartAt;
       const endedAt = dto.endedAt ? new Date(dto.endedAt) : undefined;
       this.validateDates(effectiveAt, endedAt);
+
+      // A cancelled draft puts the unit back on the market — re-claim it for this item.
+      const unit = await lockUnitClaimedOnlyBy(manager, item);
+      if (unit.status === StorageUnitStatus.AVAILABLE) {
+        await manager.update(StorageUnit, { id: unit.id }, { status: StorageUnitStatus.BOOKED });
+      }
 
       return persistContract(manager, {
         item,

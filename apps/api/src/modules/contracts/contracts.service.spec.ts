@@ -3,7 +3,15 @@ import { Booking } from '@entities/booking.entity';
 import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
-import { BookingStatus, ContractKind, ContractStatus, InspectionType } from '@storage/types';
+import { StorageUnit } from '@entities/storage-unit.entity';
+import { UnitHold } from '@entities/unit-hold.entity';
+import {
+  BookingStatus,
+  ContractKind,
+  ContractStatus,
+  InspectionType,
+  StorageUnitStatus,
+} from '@storage/types';
 import { DataSource, In, IsNull, Repository } from 'typeorm';
 import { ContractsService } from './contracts.service';
 
@@ -11,12 +19,17 @@ describe('ContractsService', () => {
   const item = {
     id: 'item-1',
     bookingId: 'booking-1',
+    storageUnitId: 'unit-1',
     rentalMonths: 6,
     monthlyPriceSnapshot: '1000000.00',
     requestedStartAt: new Date('2026-10-01'),
     createdAt: new Date('2026-12-01T00:00:00+07:00'),
   };
   let booking: { id: string; customerId: string; status: BookingStatus; subtotal: string };
+  let unit: { id: string; status: StorageUnitStatus };
+  /** Claims on the unit by other bookings — none unless a test sets them. */
+  let otherHold: { bookingId: string } | null;
+  let otherContract: { id: string } | null;
   let service: ContractsService;
   let manager: {
     findOne: jest.Mock;
@@ -36,12 +49,18 @@ describe('ContractsService', () => {
       status: BookingStatus.CONFIRMED,
       subtotal: '18000000.00',
     };
+    unit = { id: 'unit-1', status: StorageUnitStatus.BOOKED };
+    otherHold = null;
+    otherContract = null;
     manager = {
       findOne: jest.fn(async (entity) => {
         if (entity === BookingItem) return item;
         if (entity === Booking) return booking;
         if (entity === AppUser)
           return { id: 'customer-1', fullName: 'Customer', email: 'c@example.com' };
+        if (entity === StorageUnit) return unit;
+        if (entity === UnitHold) return otherHold;
+        if (entity === Contract) return otherContract;
         return null;
       }),
       create: jest.fn((_entity, data) => data),
@@ -165,6 +184,56 @@ describe('ContractsService', () => {
       Booking,
       expect.objectContaining({ lock: { mode: 'pessimistic_write' } }),
     );
+  });
+
+  it('locks the unit before creating the contract', async () => {
+    await service.create({ bookingItemId: item.id });
+    expect(manager.findOne).toHaveBeenCalledWith(StorageUnit, {
+      where: { id: 'unit-1' },
+      lock: { mode: 'pessimistic_write' },
+    });
+  });
+
+  it('re-claims a unit a cancelled draft put back on the market', async () => {
+    unit.status = StorageUnitStatus.AVAILABLE;
+    await service.create({ bookingItemId: item.id });
+    expect(manager.update).toHaveBeenCalledWith(
+      StorageUnit,
+      { id: 'unit-1' },
+      { status: StorageUnitStatus.BOOKED },
+    );
+  });
+
+  it('leaves a unit already booked for this item as it is', async () => {
+    await service.create({ bookingItemId: item.id });
+    expect(manager.update).not.toHaveBeenCalledWith(
+      StorageUnit,
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('refuses a unit another booking is holding', async () => {
+    unit.status = StorageUnitStatus.HELD;
+    otherHold = { bookingId: 'booking-2' };
+    await expect(service.create({ bookingItemId: item.id })).rejects.toMatchObject({
+      status: 409,
+      response: {
+        code: 'UNIT_NOT_AVAILABLE',
+        details: { storageUnitId: 'unit-1', heldByBookingId: 'booking-2', contractId: null },
+      },
+    });
+    expect(manager.save).not.toHaveBeenCalled();
+    expect(manager.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses a unit another booking item already has a live contract on', async () => {
+    otherContract = { id: 'contract-2' };
+    await expect(service.create({ bookingItemId: item.id })).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'UNIT_NOT_AVAILABLE', details: { contractId: 'contract-2' } },
+    });
+    expect(manager.save).not.toHaveBeenCalled();
   });
 
   it('returns 404 for a missing booking item', async () => {

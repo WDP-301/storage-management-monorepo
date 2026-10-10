@@ -2,6 +2,7 @@ import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
+import { UnitHold } from '@entities/unit-hold.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { HttpStatus, Logger } from '@nestjs/common';
 import { ContractStatus, InspectionType, StorageUnitStatus, UserRole } from '@storage/types';
@@ -42,17 +43,24 @@ describe('InspectionLifecycleService.finalize', () => {
     save: jest.Mock;
   };
   let service: InspectionLifecycleService;
+  /** Claims on the unit by other bookings — none unless a test sets them. */
+  let otherHold: { bookingId: string } | null;
+  let otherContract: { id: string } | null;
 
   const stubRows = (inspection: Inspection, contract: Contract | null = buildContract()) => {
-    em.findOne.mockImplementation(async (entity) => {
+    em.findOne.mockImplementation(async (entity, { where }) => {
       if (entity === Inspection) return inspection;
-      if (entity === Contract) return contract;
+      // By id: the contract under inspection; otherwise the guard looking for another claim.
+      if (entity === Contract) return where.id ? contract : otherContract;
+      if (entity === UnitHold) return otherHold;
       if (entity === StorageUnit) return { id: 'unit-1', status: StorageUnitStatus.AVAILABLE };
       return null;
     });
   };
 
   beforeEach(() => {
+    otherHold = null;
+    otherContract = null;
     em = {
       // Manager-1 manages facility-1 only.
       find: jest.fn(async (_entity, { where }) =>
@@ -241,6 +249,43 @@ describe('InspectionLifecycleService.finalize', () => {
     });
     expect(em.update).not.toHaveBeenCalledWith(Contract, expect.anything(), expect.anything());
     expect(em.save).not.toHaveBeenCalled();
+  });
+
+  it('locks the unit before a handover moves it', async () => {
+    stubRows(buildInspection());
+
+    await service.finalize('insp-1', actor('staff-1'));
+
+    expect(em.findOne).toHaveBeenCalledWith(StorageUnit, {
+      where: { id: 'unit-1' },
+      lock: { mode: 'pessimistic_write' },
+    });
+  });
+
+  it.each([
+    ['holding', () => (otherHold = { bookingId: 'booking-2' })],
+    ['under contract on', () => (otherContract = { id: 'contract-2' })],
+  ])('refuses a handover of a unit another booking is %s', async (_label, claim) => {
+    stubRows(buildInspection());
+    claim();
+
+    await expect(service.finalize('insp-1', actor('staff-1'))).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+      response: { code: 'UNIT_NOT_AVAILABLE', details: { storageUnitId: 'unit-1' } },
+    });
+    expect(em.update).not.toHaveBeenCalled();
+    expect(em.save).not.toHaveBeenCalled();
+  });
+
+  it('does not run the claim check on a return', async () => {
+    stubRows(
+      buildInspection({ type: InspectionType.RETURN }),
+      buildContract({ status: ContractStatus.ACTIVE }),
+    );
+
+    await service.finalize('insp-1', actor('staff-1'));
+
+    expect(em.findOne).not.toHaveBeenCalledWith(UnitHold, expect.anything());
   });
 
   it('returns 404 for an unknown inspection', async () => {

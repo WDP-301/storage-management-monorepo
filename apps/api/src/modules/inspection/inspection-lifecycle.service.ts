@@ -4,6 +4,7 @@ import { Inspection } from '@entities/inspection.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { CONTRACT_DOCUMENTS_REQUIRED_MESSAGE } from '@modules/contracts/contract-documents.service';
+import { lockUnitClaimedOnlyBy } from '@modules/contracts/unit-claim.util';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
@@ -123,6 +124,8 @@ export class InspectionLifecycleService {
     inspection: Inspection,
   ): Promise<void> {
     const item = await em.findOneOrFail(BookingItem, { where: { id: contract.bookingItemId } });
+    // BOOKED/HELD do not say for whom — never hand over a unit another booking claims.
+    if (inspection.type === InspectionType.PRE_HANDOVER) await lockUnitClaimedOnlyBy(em, item);
     const result = await em.update(
       StorageUnit,
       { id: item.storageUnitId, status: In(transition.unitFrom) },

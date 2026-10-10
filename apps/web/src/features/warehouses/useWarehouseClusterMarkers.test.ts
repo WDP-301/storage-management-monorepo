@@ -125,7 +125,7 @@ describe('useWarehouseClusterMarkers', () => {
 
     const [sgMarker, tdMarker] = FakeMarker.live();
     expect(sgMarker.options).toEqual({ color: MAP_STATUS_GROUPS.available.color, scale: 1 });
-    expect(tdMarker.options).toEqual({ color: MAP_STATUS_GROUPS.occupied.color, scale: 1 });
+    expect(tdMarker.options).toEqual({ color: MAP_STATUS_GROUPS.rented.color, scale: 1 });
     expect(sgMarker.lngLat).toEqual([106.7, 10.77]);
 
     fireEvent.click(screen.getByRole('button', { name: 'Xem kho SG-01 trên bản đồ' }));

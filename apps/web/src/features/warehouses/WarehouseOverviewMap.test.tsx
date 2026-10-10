@@ -81,7 +81,14 @@ describe('WarehouseOverviewMap', () => {
       .getAllByRole('listitem')
       .map((row) => row.textContent);
     // The warehouse without coordinates is not on the map, so it is not counted.
-    expect(rows).toEqual(['Còn trống1', 'Có khách1', 'Bảo trì0', 'Ngưng hoạt động0']);
+    expect(rows).toEqual([
+      'Còn trống1',
+      'Đã cọc0',
+      'Đang thuê1',
+      'Giữ chỗ / chờ kiểm tra0',
+      'Bảo trì0',
+      'Ngưng hoạt động0',
+    ]);
   });
 
   it('fits the camera to every warehouse when nothing is selected', () => {
@@ -94,9 +101,11 @@ describe('WarehouseOverviewMap', () => {
   it('opens the focused warehouse with role actions and flies to it', async () => {
     renderMap({ focusedWarehouseId: 'td-01' });
 
-    expect(screen.getByRole('heading', { name: 'Kho td-01' })).toBeTruthy();
-    expect(screen.getByText('TD-01 · Cơ sở Hồ Chí Minh')).toBeTruthy();
-    expect(screen.getByText('Đang thuê')).toBeTruthy();
+    const card = screen
+      .getByRole('heading', { name: 'Kho td-01' })
+      .closest('div.absolute') as HTMLElement;
+    expect(within(card).getByText('TD-01 · Cơ sở Hồ Chí Minh')).toBeTruthy();
+    expect(within(card).getByText('Đang thuê')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Thao tác TD-01' })).toBeTruthy();
     await waitFor(() =>
       expect(map.flyTo).toHaveBeenCalledWith(

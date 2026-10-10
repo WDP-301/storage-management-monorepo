@@ -22,7 +22,7 @@ vi.mock('../../context/FacilityContext', () => ({
 const HCM: FacilityRecord = {
   id: 'f1',
   code: 'CN-HCM',
-  name: 'Cơ sở Hồ Chí Minh',
+  name: 'Chi nhánh Hồ Chí Minh',
   provinceCode: '79',
   status: 'ACTIVE',
   warehouseCount: 4,
@@ -30,7 +30,7 @@ const HCM: FacilityRecord = {
 const HN: FacilityRecord = {
   id: 'f2',
   code: 'CN-HN',
-  name: 'Cơ sở Hà Nội',
+  name: 'Chi nhánh Hà Nội',
   provinceCode: null,
   status: 'INACTIVE',
   warehouseCount: 0,
@@ -53,7 +53,7 @@ describe('FacilityManagementPage', () => {
 
   it('lists facilities with their warehouse count and region', async () => {
     render(<FacilityManagementPage />);
-    expect(await screen.findByText('Cơ sở Hồ Chí Minh')).toBeTruthy();
+    expect(await screen.findByText('Chi nhánh Hồ Chí Minh')).toBeTruthy();
     expect(screen.getByText('4 kho')).toBeTruthy();
     expect(screen.getByText('TP. Hồ Chí Minh')).toBeTruthy();
     expect(screen.getByText('Ngừng hoạt động')).toBeTruthy();
@@ -62,19 +62,23 @@ describe('FacilityManagementPage', () => {
   it('creates a facility from the dialog', async () => {
     const create = vi.spyOn(FacilitiesApi, 'create').mockResolvedValue(HCM);
     render(<FacilityManagementPage />);
-    await screen.findByText('Cơ sở Hồ Chí Minh');
+    await screen.findByText('Chi nhánh Hồ Chí Minh');
 
-    fireEvent.click(screen.getByRole('button', { name: /thêm cơ sở/i }));
-    fireEvent.change(await screen.findByLabelText('Mã cơ sở'), { target: { value: ' CN-DN ' } });
-    fireEvent.change(screen.getByLabelText('Tên cơ sở'), { target: { value: 'Cơ sở Đà Nẵng' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Tạo cơ sở' }));
+    fireEvent.click(screen.getByRole('button', { name: /thêm chi nhánh/i }));
+    fireEvent.change(await screen.findByLabelText('Mã chi nhánh'), {
+      target: { value: ' CN-DN ' },
+    });
+    fireEvent.change(screen.getByLabelText('Tên chi nhánh'), {
+      target: { value: 'Chi nhánh Đà Nẵng' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo chi nhánh' }));
 
     await waitFor(() =>
-      expect(create).toHaveBeenCalledWith({ code: 'CN-DN', name: 'Cơ sở Đà Nẵng' }),
+      expect(create).toHaveBeenCalledWith({ code: 'CN-DN', name: 'Chi nhánh Đà Nẵng' }),
     );
     // The header picker and warehouse forms must see the new facility without a reload.
     await waitFor(() => expect(refreshFacilities).toHaveBeenCalled());
-    expect(toast.notifyCreated).toHaveBeenCalledWith('cơ sở', 'CN-DN');
+    expect(toast.notifyCreated).toHaveBeenCalledWith('chi nhánh', 'CN-DN');
   });
 
   it('shows a Vietnamese message on a duplicate code', async () => {
@@ -82,17 +86,17 @@ describe('FacilityManagementPage', () => {
       Object.assign(new Error('Facility code already exists'), { status: 409 }),
     );
     render(<FacilityManagementPage />);
-    await screen.findByText('Cơ sở Hồ Chí Minh');
+    await screen.findByText('Chi nhánh Hồ Chí Minh');
 
-    fireEvent.click(screen.getByRole('button', { name: /thêm cơ sở/i }));
-    fireEvent.change(await screen.findByLabelText('Mã cơ sở'), { target: { value: 'CN-HCM' } });
-    fireEvent.change(screen.getByLabelText('Tên cơ sở'), { target: { value: 'Trùng' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Tạo cơ sở' }));
+    fireEvent.click(screen.getByRole('button', { name: /thêm chi nhánh/i }));
+    fireEvent.change(await screen.findByLabelText('Mã chi nhánh'), { target: { value: 'CN-HCM' } });
+    fireEvent.change(screen.getByLabelText('Tên chi nhánh'), { target: { value: 'Trùng' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo chi nhánh' }));
 
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(
-        'Lỗi tạo cơ sở',
-        expect.stringContaining('Mã cơ sở đã tồn tại'),
+        'Lỗi tạo chi nhánh',
+        expect.stringContaining('Mã chi nhánh đã tồn tại'),
       ),
     );
   });
@@ -102,9 +106,9 @@ describe('FacilityManagementPage', () => {
       .spyOn(FacilitiesApi, 'update')
       .mockResolvedValue({ ...HCM, status: 'INACTIVE' });
     render(<FacilityManagementPage />);
-    await screen.findByText('Cơ sở Hồ Chí Minh');
+    await screen.findByText('Chi nhánh Hồ Chí Minh');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Ngừng hoạt động cơ sở CN-HCM' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ngừng hoạt động chi nhánh CN-HCM' }));
     expect(update).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole('button', { name: 'Ngừng hoạt động' }));
 
@@ -114,9 +118,9 @@ describe('FacilityManagementPage', () => {
   it('reactivates an inactive facility directly', async () => {
     const update = vi.spyOn(FacilitiesApi, 'update').mockResolvedValue({ ...HN, status: 'ACTIVE' });
     render(<FacilityManagementPage />);
-    await screen.findByText('Cơ sở Hà Nội');
+    await screen.findByText('Chi nhánh Hà Nội');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Kích hoạt cơ sở CN-HN' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kích hoạt chi nhánh CN-HN' }));
     await waitFor(() => expect(update).toHaveBeenCalledWith('f2', { status: 'ACTIVE' }));
   });
 });

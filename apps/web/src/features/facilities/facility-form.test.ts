@@ -13,7 +13,7 @@ import {
 const facility: FacilityRecord = {
   id: 'f1',
   code: 'CN-HCM',
-  name: 'Cơ sở Hồ Chí Minh',
+  name: 'Chi nhánh Hồ Chí Minh',
   provinceCode: '79',
   status: 'ACTIVE',
   warehouseCount: 3,
@@ -21,8 +21,8 @@ const facility: FacilityRecord = {
 
 describe('facility form helpers', () => {
   it('requires a code and a name within API length limits', () => {
-    expect(validateFacilityForm(EMPTY_FACILITY_FORM)).toContain('mã cơ sở');
-    expect(validateFacilityForm({ ...EMPTY_FACILITY_FORM, code: 'A' })).toContain('tên cơ sở');
+    expect(validateFacilityForm(EMPTY_FACILITY_FORM)).toContain('mã chi nhánh');
+    expect(validateFacilityForm({ ...EMPTY_FACILITY_FORM, code: 'A' })).toContain('tên chi nhánh');
     expect(
       validateFacilityForm({ code: 'A'.repeat(51), name: 'x', provinceCode: NO_REGION }),
     ).toContain('50');
@@ -53,6 +53,6 @@ describe('facility form helpers', () => {
     const err = Object.assign(new Error('Facility code already exists'), {
       status: 409,
     }) as ApiError;
-    expect(describeFacilityError(err, 'f')).toContain('Mã cơ sở đã tồn tại');
+    expect(describeFacilityError(err, 'f')).toContain('Mã chi nhánh đã tồn tại');
   });
 });

@@ -14,7 +14,7 @@ export class CreateContactTourDto {
   @ApiProperty({
     format: 'uuid',
     example: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
-    description: '(Bắt buộc) Mã cơ sở kho khách hàng muốn đến tham quan, xem phòng',
+    description: '(Bắt buộc) Mã chi nhánh khách hàng muốn đến tham quan, xem phòng',
   })
   @IsUUID('all')
   facilityId: string;

@@ -230,7 +230,7 @@ export class BookingsService implements OnApplicationBootstrap {
         if (closedFacilityUnits.length > 0) {
           throw new DomainException(
             ErrorCode.UNIT_NOT_AVAILABLE,
-            'Cơ sở của một hoặc nhiều storage unit đang tạm ngừng hoạt động',
+            'Chi nhánh của một hoặc nhiều storage unit đang tạm ngừng hoạt động',
             HttpStatus.CONFLICT,
             { unavailableUnitIds: closedFacilityUnits.map((u) => u.id) },
           );

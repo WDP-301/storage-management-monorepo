@@ -93,7 +93,7 @@ const SETTINGS_METADATA: Record<string, SettingMetadata> = {
     group: 'booking',
   },
   'booking.search_radius_km': {
-    label: 'Bán kính tìm kiếm cơ sở lân cận',
+    label: 'Bán kính tìm kiếm kho lân cận',
     description:
       'Khoảng cách địa lý tối đa theo tọa độ (kinh độ, vĩ độ) để tự động đề xuất các kho gần nhau khi thuê nhiều kho.',
     unit: 'km',
@@ -123,7 +123,7 @@ const SETTINGS_METADATA: Record<string, SettingMetadata> = {
   'contract.inspection_required_on_checkout': {
     label: 'Bắt buộc kiểm tra biên bản hiện trạng khi trả kho',
     description:
-      'Yêu cầu nhân viên cơ sở chụp ảnh nghiệm thu và xác nhận biên bản tình trạng kho trước khi giải phóng cọc.',
+      'Yêu cầu nhân viên chi nhánh chụp ảnh nghiệm thu và xác nhận biên bản tình trạng kho trước khi giải phóng cọc.',
     group: 'contract',
   },
   'deposit.default_months': {

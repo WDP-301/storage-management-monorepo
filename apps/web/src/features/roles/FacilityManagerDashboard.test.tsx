@@ -42,7 +42,7 @@ vi.mock('../warehouses/WarehouseOverviewMap', () => ({
 
 const wh = (over: Partial<Warehouse>): Warehouse => ({
   id: 'w-1',
-  facility: { id: 'fac-1', code: 'CN-HCM', name: 'Cơ sở Hồ Chí Minh' },
+  facility: { id: 'fac-1', code: 'CN-HCM', name: 'Chi nhánh Hồ Chí Minh' },
   code: 'HCM-SG-01',
   name: 'Kho Sài Gòn',
   addressLine: '45 Lê Thánh Tôn',
@@ -88,7 +88,7 @@ const mockAuth = (role: UserRole) =>
 const FAC_HCM = {
   id: 'fac-1',
   code: 'CN-HCM',
-  name: 'Cơ sở Hồ Chí Minh',
+  name: 'Chi nhánh Hồ Chí Minh',
   provinceCode: '79',
   status: 'ACTIVE',
 };
@@ -238,7 +238,7 @@ describe('FacilityManagerDashboard', () => {
     const map = screen.getByRole('region', { name: 'Bản đồ kho (stub)' });
     expect(within(map).getByRole('button', { name: /báo bảo trì/i })).toBeTruthy();
 
-    mockFacility({ ...FAC_HCM, id: 'fac-2', name: 'Cơ sở Đà Nẵng' });
+    mockFacility({ ...FAC_HCM, id: 'fac-2', name: 'Chi nhánh Đà Nẵng' });
     view.rerender(
       <MemoryRouter>
         <FacilityManagerDashboard />
@@ -322,6 +322,6 @@ describe('FacilityManagerDashboard', () => {
     mockAuth(UserRole.FACILITY_MANAGER);
     vi.spyOn(WarehousesApi, 'listMine').mockResolvedValue([]);
     renderPage();
-    await waitFor(() => expect(screen.getByText('Cơ sở chưa có kho')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Chi nhánh chưa có kho')).toBeTruthy());
   });
 });

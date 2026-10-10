@@ -101,7 +101,7 @@ const sideProblem = (label: string, value: string): string | null => {
  * is not idle keeps its stored size, so those fields are not checked (the API never receives them).
  */
 export function validateForm(form: WarehouseFormState, frozen = false): string | null {
-  if (!form.facilityId) return 'Vui lòng chọn cơ sở cho kho.';
+  if (!form.facilityId) return 'Vui lòng chọn chi nhánh cho kho.';
   if (!form.code.trim()) return 'Vui lòng nhập mã kho.';
   if (!form.name.trim()) return 'Vui lòng nhập tên kho.';
   if (!form.addressLine.trim()) return 'Vui lòng nhập địa chỉ kho.';

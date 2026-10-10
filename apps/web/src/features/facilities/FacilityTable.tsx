@@ -40,8 +40,8 @@ export const FacilityTable: React.FC<Props> = ({
       <Table>
         <Table.Header>
           <Table.Row>
-            <Table.Head>Mã cơ sở</Table.Head>
-            <Table.Head>Tên cơ sở</Table.Head>
+            <Table.Head>Mã chi nhánh</Table.Head>
+            <Table.Head>Tên chi nhánh</Table.Head>
             <Table.Head>Khu vực</Table.Head>
             <Table.Head>Số kho</Table.Head>
             <Table.Head>Trạng thái</Table.Head>
@@ -55,11 +55,11 @@ export const FacilityTable: React.FC<Props> = ({
                 <Empty
                   size="sm"
                   icon={<Storefront className="w-8 h-8" />}
-                  title="Không có cơ sở nào"
+                  title="Không có chi nhánh nào"
                   description={
                     hasFilters
-                      ? 'Không có cơ sở nào khớp bộ lọc hiện tại.'
-                      : 'Chưa có cơ sở nào. Hãy thêm cơ sở đầu tiên.'
+                      ? 'Không có chi nhánh nào khớp bộ lọc hiện tại.'
+                      : 'Chưa có chi nhánh nào. Hãy thêm chi nhánh đầu tiên.'
                   }
                 />
               </Table.Cell>
@@ -87,7 +87,7 @@ export const FacilityTable: React.FC<Props> = ({
                       variant="secondary"
                       size="sm"
                       icon={<PencilSimple className="w-3.5 h-3.5" />}
-                      aria-label={`Chỉnh sửa cơ sở ${f.code}`}
+                      aria-label={`Chỉnh sửa chi nhánh ${f.code}`}
                       onClick={() => onEdit(f)}
                     >
                       Sửa
@@ -97,7 +97,7 @@ export const FacilityTable: React.FC<Props> = ({
                         variant="secondary-destructive"
                         size="sm"
                         icon={<Power className="w-3.5 h-3.5" />}
-                        aria-label={`Ngừng hoạt động cơ sở ${f.code}`}
+                        aria-label={`Ngừng hoạt động chi nhánh ${f.code}`}
                         onClick={() => onDeactivate(f)}
                       >
                         Ngừng
@@ -107,7 +107,7 @@ export const FacilityTable: React.FC<Props> = ({
                         variant="secondary"
                         size="sm"
                         icon={<Power className="w-3.5 h-3.5" />}
-                        aria-label={`Kích hoạt cơ sở ${f.code}`}
+                        aria-label={`Kích hoạt chi nhánh ${f.code}`}
                         disabled={busyId === f.id}
                         onClick={() => onActivate(f)}
                       >

@@ -20,8 +20,8 @@ export const WarehouseFacilityField: React.FC<Props> = ({
 }) => (
   <div className="space-y-1.5">
     <Select
-      label="Cơ sở"
-      placeholder="Chọn cơ sở"
+      label="Chi nhánh"
+      placeholder="Chọn chi nhánh"
       value={value || null}
       disabled={locked}
       onValueChange={(v) => onChange(String(v))}
@@ -31,7 +31,7 @@ export const WarehouseFacilityField: React.FC<Props> = ({
     />
     {isEdit && (
       <Text variant="secondary" size="xs">
-        Chỉ chuyển cơ sở khi kho đang trống.
+        Chỉ chuyển chi nhánh khi kho đang trống.
       </Text>
     )}
   </div>

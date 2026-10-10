@@ -79,11 +79,11 @@ export const WarehouseFilters: React.FC<Props> = ({
       </div>
       <div className="w-full lg:w-56">
         <Select
-          aria-label="Lọc theo cơ sở"
+          aria-label="Lọc theo chi nhánh"
           value={filters.facility}
           onValueChange={(v) => onChange({ facility: String(v) })}
           items={[
-            { value: ALL, label: 'Tất cả cơ sở' },
+            { value: ALL, label: 'Tất cả chi nhánh' },
             ...facilities.map((f) => ({ value: f.id, label: `${f.name} (${f.code})` })),
           ]}
         />

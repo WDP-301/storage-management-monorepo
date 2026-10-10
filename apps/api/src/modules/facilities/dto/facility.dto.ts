@@ -47,7 +47,7 @@ export class CreateFacilityDto {
   @MaxLength(50)
   code: string;
 
-  @ApiProperty({ example: 'Cơ sở Hồ Chí Minh' })
+  @ApiProperty({ example: 'Chi nhánh Hồ Chí Minh' })
   @IsString()
   @IsNotEmpty()
   @MaxLength(150)

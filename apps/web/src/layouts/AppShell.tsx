@@ -30,21 +30,21 @@ const ALL_FACILITIES = 'ALL';
 const ROLE_NAV: Record<UserRole, NavItem[]> = {
   [UserRole.ADMIN]: [
     { to: '/admin/users', label: 'Quản lý người dùng', icon: Users },
-    { to: '/admin/facilities', label: 'Quản lý cơ sở', icon: Storefront },
+    { to: '/admin/facilities', label: 'Quản lý chi nhánh', icon: Storefront },
     { to: '/admin/warehouses', label: 'Quản lý kho', icon: Buildings },
     { to: '/admin/settings', label: 'Cấu hình tham số', icon: Faders },
     { to: '/contracts', label: 'Hợp đồng', icon: FileText },
-    { to: '/facility-manager', label: 'Kho của cơ sở', icon: Warehouse },
+    { to: '/facility-manager', label: 'Kho của chi nhánh', icon: Warehouse },
     { to: '/facility-manager/tickets', label: 'Vé sự cố', icon: Lifebuoy },
     { to: '/facility-manager/inspections', label: 'Biên bản', icon: ClipboardText },
   ],
   [UserRole.OPERATIONS_MANAGER]: [
-    { to: '/admin/facilities', label: 'Quản lý cơ sở', icon: Storefront },
+    { to: '/admin/facilities', label: 'Quản lý chi nhánh', icon: Storefront },
     { to: '/admin/warehouses', label: 'Quản lý kho', icon: Buildings },
     { to: '/contracts', label: 'Hợp đồng', icon: FileText },
   ],
   [UserRole.FACILITY_MANAGER]: [
-    { to: '/facility-manager', label: 'Kho của cơ sở', icon: Warehouse },
+    { to: '/facility-manager', label: 'Kho của chi nhánh', icon: Warehouse },
     { to: '/facility-manager/tickets', label: 'Vé sự cố', icon: Lifebuoy },
     // Handover/return records are part of a contract: managers assign staff from its detail.
     { to: '/contracts', label: 'Hợp đồng', icon: FileText },
@@ -169,7 +169,7 @@ export const AppShell: React.FC = () => {
   const { user } = useAuth();
   const { facilities, selectedFacility, selectFacility, canSelectAll } = useFacility();
   const pickerItems = [
-    ...(canSelectAll ? [{ value: ALL_FACILITIES, label: 'Tất cả cơ sở' }] : []),
+    ...(canSelectAll ? [{ value: ALL_FACILITIES, label: 'Tất cả chi nhánh' }] : []),
     ...facilities.map((f) => ({ value: f.id, label: `${f.name} (${f.code})` })),
   ];
 
@@ -184,7 +184,7 @@ export const AppShell: React.FC = () => {
           {facilities.length > 0 && (
             <div className="w-56">
               <Select
-                aria-label="Cơ sở đang quản lý"
+                aria-label="Chi nhánh đang quản lý"
                 size="sm"
                 value={selectedFacility?.id ?? (canSelectAll ? ALL_FACILITIES : '')}
                 onValueChange={(val) => selectFacility(val === ALL_FACILITIES ? null : String(val))}

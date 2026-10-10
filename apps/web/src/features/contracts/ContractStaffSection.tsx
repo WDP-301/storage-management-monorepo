@@ -128,7 +128,7 @@ const StepRow: React.FC<{
             className="flex-1 h-9 px-3 text-sm bg-kumo-base border border-kumo-line rounded-lg"
           >
             <option value="">
-              {staff.length > 0 ? '-- Chọn nhân viên --' : 'Cơ sở chưa có nhân viên'}
+              {staff.length > 0 ? '-- Chọn nhân viên --' : 'Chi nhánh chưa có nhân viên'}
             </option>
             {staff.map((member) => (
               <option key={member.id} value={member.id}>

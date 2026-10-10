@@ -35,7 +35,7 @@ const wh = (id: string, over: Partial<Warehouse> = {}): Warehouse =>
     code: id.toUpperCase(),
     name: `Kho ${id}`,
     addressLine: `Địa chỉ ${id}`,
-    facility: { id: 'fac-1', code: 'CN-HCM', name: 'Cơ sở Hồ Chí Minh' },
+    facility: { id: 'fac-1', code: 'CN-HCM', name: 'Chi nhánh Hồ Chí Minh' },
     latitude: 10.77,
     longitude: 106.7,
     status: 'AVAILABLE',
@@ -104,7 +104,7 @@ describe('WarehouseOverviewMap', () => {
     const card = screen
       .getByRole('heading', { name: 'Kho td-01' })
       .closest('div.absolute') as HTMLElement;
-    expect(within(card).getByText('TD-01 · Cơ sở Hồ Chí Minh')).toBeTruthy();
+    expect(within(card).getByText('TD-01 · Chi nhánh Hồ Chí Minh')).toBeTruthy();
     expect(within(card).getByText('Đang thuê')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Thao tác TD-01' })).toBeTruthy();
     await waitFor(() =>

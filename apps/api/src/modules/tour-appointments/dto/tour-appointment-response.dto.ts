@@ -17,7 +17,7 @@ export class TourAppointmentFacilityInfoDto implements TourAppointmentFacilityIn
   @ApiProperty({ example: 'FAC-TD-01' })
   code: string;
 
-  @ApiProperty({ example: 'Cơ sở Kho Thủ Đức 1' })
+  @ApiProperty({ example: 'Chi nhánh Hồ Chí Minh' })
   name: string;
 }
 
@@ -60,7 +60,7 @@ export class TourAppointmentRecordDto implements TourAppointmentRecord {
   @ApiProperty({
     format: 'uuid',
     example: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
-    description: 'Mã cơ sở khách muốn đến xem',
+    description: 'Mã chi nhánh khách muốn đến xem',
   })
   facilityId: string;
 
@@ -129,14 +129,14 @@ export class TourAppointmentRecordDto implements TourAppointmentRecord {
     format: 'uuid',
     nullable: true,
     example: 'c1b48b61-d703-4f93-8ef4-9e3f225d3fa2',
-    description: 'Mã nhân viên cơ sở được phân công dẫn khách xem',
+    description: 'Mã nhân viên chi nhánh được phân công dẫn khách xem',
   })
   assignedTo?: string | null;
 
   @ApiProperty({
     nullable: true,
     example: 'Đã gọi điện xác nhận lúc 10h sáng, khách đồng ý lịch hẹn sáng thứ 7',
-    description: 'Ghi chú tiếp nhận và điều phối của Quản lý cơ sở (Facility Manager)',
+    description: 'Ghi chú tiếp nhận và điều phối của Quản lý chi nhánh (Facility Manager)',
   })
   managerNotes?: string | null;
 
@@ -144,7 +144,7 @@ export class TourAppointmentRecordDto implements TourAppointmentRecord {
     nullable: true,
     example:
       'Đã dẫn khách xem kho U-102 và U-105. Khách rất ưng ý U-102, dự kiến ký hợp đồng vào đầu tuần sau.',
-    description: 'Ghi chú kết quả tư vấn của Nhân viên cơ sở sau buổi dẫn xem',
+    description: 'Ghi chú kết quả tư vấn của Nhân viên chi nhánh sau buổi dẫn xem',
   })
   staffResultNotes?: string | null;
 

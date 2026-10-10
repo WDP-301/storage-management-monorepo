@@ -208,15 +208,15 @@ export const FacilityManagerDashboard: React.FC = () => {
           isAdmin
             ? 'Chưa có kho nào'
             : waitingForFacility
-              ? 'Chưa được gán cơ sở'
-              : 'Cơ sở chưa có kho'
+              ? 'Chưa được gán chi nhánh'
+              : 'Chi nhánh chưa có kho'
         }
         description={
           isAdmin
             ? 'Chưa có kho nào trong phạm vi đã chọn. Vui lòng thêm kho mới.'
             : waitingForFacility
-              ? 'Tài khoản của bạn chưa được gán phụ trách cơ sở nào. Liên hệ quản trị viên để được cấp quyền.'
-              : 'Cơ sở này chưa có kho nào. Liên hệ quản trị viên để thêm kho.'
+              ? 'Tài khoản của bạn chưa được gán phụ trách chi nhánh nào. Liên hệ quản trị viên để được cấp quyền.'
+              : 'Chi nhánh này chưa có kho nào. Liên hệ quản trị viên để thêm kho.'
         }
       />
     );
@@ -227,10 +227,10 @@ export const FacilityManagerDashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="grid gap-1.5">
           <Text as="h1" variant="heading" size="lg">
-            Kho của cơ sở
+            Kho của chi nhánh
           </Text>
           <Text variant="secondary">
-            {selectedFacility ? `${selectedFacility.name}: ` : 'Tất cả cơ sở: '}
+            {selectedFacility ? `${selectedFacility.name}: ` : 'Tất cả chi nhánh: '}
             theo dõi kho, trạng thái bảo trì và duyệt yêu cầu đổi kho của khách hàng.
           </Text>
         </div>

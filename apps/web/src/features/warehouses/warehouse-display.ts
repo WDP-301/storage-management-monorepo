@@ -17,7 +17,7 @@ export const WAREHOUSE_STATUS_LABEL: Record<
 };
 
 const FIELD_LABEL: Record<string, string> = {
-  facilityId: 'cơ sở',
+  facilityId: 'chi nhánh',
   code: 'mã kho',
   name: 'tên kho',
   addressLine: 'địa chỉ',
@@ -88,10 +88,10 @@ export function describeWarehouseError(err: unknown, fallback: string): string {
   const { status, details } = err as ApiError;
   if (status === 409 && details) {
     if (details.facilityStatus) {
-      return 'Cơ sở đang ngừng hoạt động, không thể thêm hoặc chuyển kho vào đó.';
+      return 'Chi nhánh đang ngừng hoạt động, không thể thêm hoặc chuyển kho vào đó.';
     }
     if (Number(details.openTickets ?? 0) > 0) {
-      return 'Kho còn yêu cầu hỗ trợ đang mở, hãy xử lý xong trước khi chuyển cơ sở.';
+      return 'Kho còn yêu cầu hỗ trợ đang mở, hãy xử lý xong trước khi chuyển chi nhánh.';
     }
     const current = WAREHOUSE_STATUS_LABEL[details.status as WarehouseStatus]?.label;
     if (Array.isArray(details.fields) && details.fields.length > 0) {
@@ -100,7 +100,7 @@ export function describeWarehouseError(err: unknown, fallback: string): string {
     }
     const tours = Number(details.openTours ?? 0);
     if (tours > 0) {
-      return `Kho còn ${tours} lịch xem kho đang mở. Hãy hủy hoặc hoàn tất các lịch này trước khi xóa kho hoặc chuyển sang cơ sở khác.`;
+      return `Kho còn ${tours} lịch xem kho đang mở. Hãy hủy hoặc hoàn tất các lịch này trước khi xóa kho hoặc chuyển sang chi nhánh khác.`;
     }
     if (current) return `Kho đang ở trạng thái "${current}" nên không thể thực hiện thao tác này.`;
   }
@@ -109,7 +109,7 @@ export function describeWarehouseError(err: unknown, fallback: string): string {
     if (described) return described;
   }
   if (status === 400 && /facility does not exist/i.test(err.message)) {
-    return 'Cơ sở đã chọn không tồn tại hoặc đã bị xóa.';
+    return 'Chi nhánh đã chọn không tồn tại hoặc đã bị xóa.';
   }
   if (status === 409) return 'Mã kho đã tồn tại hoặc dữ liệu bị xung đột. Vui lòng kiểm tra lại.';
   if (status === 400 && /does not belong to province/i.test(err.message)) {

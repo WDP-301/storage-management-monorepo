@@ -19,12 +19,12 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
   },
   [UserRole.FACILITY_MANAGER]: {
     role: UserRole.FACILITY_MANAGER,
-    title: 'Quản lý cơ sở',
+    title: 'Quản lý chi nhánh',
     defaultPath: '/facility-manager',
   },
   [UserRole.FACILITY_STAFF]: {
     role: UserRole.FACILITY_STAFF,
-    title: 'Nhân viên cơ sở',
+    title: 'Nhân viên chi nhánh',
     defaultPath: '/unassigned-role',
   },
   [UserRole.CUSTOMER]: {

@@ -10,7 +10,7 @@ const buildFacility = (overrides: Partial<Facility> = {}): Facility =>
   ({
     id: 'fac-1',
     code: 'CN-HCM',
-    name: 'Cơ sở HCM',
+    name: 'Chi nhánh HCM',
     status: FacilityStatus.ACTIVE,
     ...overrides,
   }) as Facility;

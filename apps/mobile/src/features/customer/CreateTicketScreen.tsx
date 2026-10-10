@@ -105,7 +105,7 @@ export function CreateTicketScreen({
       >
         <View className="px-4 pb-4">
           <Text className="font-body text-body-sm text-muted">
-            Mô tả vấn đề bạn gặp tại cơ sở đang thuê hoặc đã đặt cọc.
+            Mô tả vấn đề bạn gặp tại kho đang thuê hoặc đã đặt cọc.
           </Text>
         </View>
 
@@ -135,7 +135,7 @@ export function CreateTicketScreen({
           {options !== null && options.facilities.length > 0 ? (
             <>
               <View className="gap-2">
-                <Label className="font-ui">Cơ sở *</Label>
+                <Label className="font-ui">Chi nhánh *</Label>
                 <Select
                   presentation="bottom-sheet"
                   value={
@@ -155,7 +155,7 @@ export function CreateTicketScreen({
                   }}
                 >
                   <Select.Trigger>
-                    <Select.Value placeholder="Chọn cơ sở" />
+                    <Select.Value placeholder="Chọn chi nhánh" />
                     <Select.TriggerIndicator />
                   </Select.Trigger>
                   <Select.Portal>
@@ -175,7 +175,7 @@ export function CreateTicketScreen({
                   <View className="flex-row flex-wrap gap-2">
                     <FilterPill
                       isSelected={form.storageUnitId === null}
-                      label="Toàn cơ sở"
+                      label="Toàn chi nhánh"
                       onPress={() => onChange({ storageUnitId: null })}
                     />
                     {facility.units.map((unit) => (
@@ -207,7 +207,7 @@ export function CreateTicketScreen({
                 >
                   <Select.Trigger>
                     <Select.Value
-                      placeholder={facility ? 'Chọn loại yêu cầu' : 'Chọn cơ sở trước'}
+                      placeholder={facility ? 'Chọn loại yêu cầu' : 'Chọn chi nhánh trước'}
                     />
                     <Select.TriggerIndicator />
                   </Select.Trigger>

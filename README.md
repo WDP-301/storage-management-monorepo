@@ -84,7 +84,7 @@ SEED_ADMIN_EMAIL=admin@example.com SEED_ADMIN_PASSWORD='<min 8 chars>' SEED_ADMI
 #### Demo data (optional, destructive)
 
 `db:reset-demo` wipes business data (warehouses, bookings, contracts, payments, tickets…),
-applies migrations and seeds 3 facilities (cơ sở: `CN-HCM` Hồ Chí Minh, `CN-HN` Hà Nội, `CN-DN`
+applies migrations and seeds 3 facilities (chi nhánh: `CN-HCM` Hồ Chí Minh, `CN-HN` Hà Nội, `CN-DN`
 Đà Nẵng) owning 12 demo warehouses, plus demo accounts. It also works on an empty database.
 
 ```bash
@@ -97,10 +97,10 @@ pnpm --filter @storage/api db:reset-demo --yes --allow-remote=<db>  # remote: ne
 |---|---|---|
 | `admin@gmail.com` | ADMIN | all |
 | `ops@gmail.com` | OPERATIONS_MANAGER | all |
-| `manager.hcm@gmail.com` | FACILITY_MANAGER | Cơ sở Hồ Chí Minh (9 warehouses) |
-| `manager.hn@gmail.com` | FACILITY_MANAGER | Cơ sở Hà Nội (2 warehouses) |
-| `manager.dn@gmail.com` | FACILITY_MANAGER | Cơ sở Đà Nẵng (1 warehouse) |
-| `staff@gmail.com` | FACILITY_STAFF | Cơ sở Hồ Chí Minh (9 warehouses) |
+| `manager.hcm@gmail.com` | FACILITY_MANAGER | Chi nhánh Hồ Chí Minh (9 warehouses) |
+| `manager.hn@gmail.com` | FACILITY_MANAGER | Chi nhánh Hà Nội (2 warehouses) |
+| `manager.dn@gmail.com` | FACILITY_MANAGER | Chi nhánh Đà Nẵng (1 warehouse) |
+| `staff@gmail.com` | FACILITY_STAFF | Chi nhánh Hồ Chí Minh (9 warehouses) |
 | `customer@gmail.com` | CUSTOMER | – |
 
 The password is `Demo1234!` on a local database; remote targets must set `DEMO_PASSWORD`.

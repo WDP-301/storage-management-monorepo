@@ -23,10 +23,10 @@ export const toFacilityForm = (f: FacilityRecord): FacilityFormState => ({
 export function validateFacilityForm(form: FacilityFormState): string | null {
   const code = form.code.trim();
   const name = form.name.trim();
-  if (!code) return 'Vui lòng nhập mã cơ sở.';
-  if (code.length > 50) return 'Mã cơ sở tối đa 50 ký tự.';
-  if (!name) return 'Vui lòng nhập tên cơ sở.';
-  if (name.length > 150) return 'Tên cơ sở tối đa 150 ký tự.';
+  if (!code) return 'Vui lòng nhập mã chi nhánh.';
+  if (code.length > 50) return 'Mã chi nhánh tối đa 50 ký tự.';
+  if (!name) return 'Vui lòng nhập tên chi nhánh.';
+  if (name.length > 150) return 'Tên chi nhánh tối đa 150 ký tự.';
   return null;
 }
 
@@ -55,8 +55,8 @@ export function buildFacilityPatch(
 export function describeFacilityError(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) return fallback;
   const { status } = err as ApiError;
-  if (status === 409) return 'Mã cơ sở đã tồn tại. Vui lòng chọn mã khác.';
-  if (status === 404) return 'Không tìm thấy cơ sở. Vui lòng làm mới danh sách.';
+  if (status === 409) return 'Mã chi nhánh đã tồn tại. Vui lòng chọn mã khác.';
+  if (status === 404) return 'Không tìm thấy chi nhánh. Vui lòng làm mới danh sách.';
   if (status === 400 && /province/i.test(err.message)) {
     return 'Tỉnh/thành phố đã chọn không hợp lệ.';
   }

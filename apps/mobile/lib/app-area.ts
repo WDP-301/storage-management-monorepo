@@ -28,13 +28,13 @@ export const AREA_HOME: Record<AppArea, Href> = {
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   CUSTOMER: 'Khách hàng',
-  FACILITY_STAFF: 'Nhân viên cơ sở',
-  FACILITY_MANAGER: 'Quản lý cơ sở',
+  FACILITY_STAFF: 'Nhân viên chi nhánh',
+  FACILITY_MANAGER: 'Quản lý chi nhánh',
   OPERATIONS_MANAGER: 'Quản lý vận hành',
   ADMIN: 'Quản trị viên',
 };
 
-/** Label of the role that decided the user's area, e.g. "Quản lý cơ sở" over "Khách hàng". */
+/** Label of the role that decided the user's area, e.g. "Quản lý chi nhánh" over "Khách hàng". */
 export function primaryRoleLabel(roles: readonly UserRole[]): string {
   const priority: readonly UserRole[] = [
     'FACILITY_MANAGER',

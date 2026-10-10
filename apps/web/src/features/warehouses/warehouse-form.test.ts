@@ -12,7 +12,7 @@ import {
 
 const warehouse: Warehouse = {
   id: 'w',
-  facility: { id: 'fac-1', code: 'CN-HCM', name: 'Cơ sở Hồ Chí Minh' },
+  facility: { id: 'fac-1', code: 'CN-HCM', name: 'Chi nhánh Hồ Chí Minh' },
   code: 'A-01',
   name: 'Kho A',
   addressLine: 'Số 1',
@@ -117,7 +117,7 @@ describe('warehouse form helpers', () => {
   it('requires a facility and enforces side, price and decimal limits', () => {
     const ok = toFormState({ ...warehouse, status: 'AVAILABLE' });
     expect(validateForm(ok)).toBeNull();
-    expect(validateForm({ ...ok, facilityId: '' })).toContain('chọn cơ sở');
+    expect(validateForm({ ...ok, facilityId: '' })).toContain('chọn chi nhánh');
     expect(validateForm({ ...ok, widthM: '1000.5' })).toContain('tối đa 1000 m');
     expect(validateForm({ ...ok, lengthM: '3.456' })).toContain('2 chữ số thập phân');
     expect(validateForm({ ...ok, monthlyPrice: '100000000001' })).toContain('Giá thuê');
@@ -143,14 +143,14 @@ describe('warehouse form helpers', () => {
       details: { facilityStatus: 'INACTIVE', fields: ['facilityId'] },
     }) as ApiError;
     expect(describeWarehouseError(inactive, 'f')).toBe(
-      'Cơ sở đang ngừng hoạt động, không thể thêm hoặc chuyển kho vào đó.',
+      'Chi nhánh đang ngừng hoạt động, không thể thêm hoặc chuyển kho vào đó.',
     );
     const tickets = Object.assign(new Error('x'), {
       status: 409,
       details: { openTickets: 2 },
     }) as ApiError;
     expect(describeWarehouseError(tickets, 'f')).toBe(
-      'Kho còn yêu cầu hỗ trợ đang mở, hãy xử lý xong trước khi chuyển cơ sở.',
+      'Kho còn yêu cầu hỗ trợ đang mở, hãy xử lý xong trước khi chuyển chi nhánh.',
     );
   });
 
@@ -159,7 +159,7 @@ describe('warehouse form helpers', () => {
       status: 409,
       details: { status: 'RENTED', fields: ['facilityId'] },
     }) as ApiError;
-    expect(describeWarehouseError(move, 'f')).toContain('không thể đổi cơ sở');
+    expect(describeWarehouseError(move, 'f')).toContain('không thể đổi chi nhánh');
     const validation = Object.assign(new Error('Validation failed'), {
       status: 400,
       details: {

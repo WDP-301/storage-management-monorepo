@@ -5,7 +5,7 @@ import { WarehouseQueryService } from './warehouse-query.service';
 const unit = {
   id: 'unit-1',
   facilityId: 'fac-1',
-  facility: { id: 'fac-1', code: 'CN-HCM', name: 'Cơ sở HCM', status: FacilityStatus.ACTIVE },
+  facility: { id: 'fac-1', code: 'CN-HCM', name: 'Chi nhánh HCM', status: FacilityStatus.ACTIVE },
   code: 'HCM-01',
   name: 'Kho 1',
   addressLine: '1 Test',

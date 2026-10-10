@@ -43,7 +43,7 @@ vi.mock('./WarehouseOverviewMap', () => ({
 
 const base: Warehouse = {
   id: 'w-1',
-  facility: { id: 'fac-1', code: 'CN-HCM', name: 'Cơ sở Hồ Chí Minh' },
+  facility: { id: 'fac-1', code: 'CN-HCM', name: 'Chi nhánh Hồ Chí Minh' },
   code: 'HCM-SG-01',
   name: 'Kho mini Sài Gòn',
   addressLine: '45 Lê Thánh Tôn',
@@ -80,8 +80,14 @@ const WAREHOUSES: Warehouse[] = [
 ];
 
 const FACILITIES = [
-  { id: 'fac-1', code: 'CN-HCM', name: 'Cơ sở Hồ Chí Minh', provinceCode: '79', status: 'ACTIVE' },
-  { id: 'fac-2', code: 'CN-HN', name: 'Cơ sở Hà Nội', provinceCode: '01', status: 'ACTIVE' },
+  {
+    id: 'fac-1',
+    code: 'CN-HCM',
+    name: 'Chi nhánh Hồ Chí Minh',
+    provinceCode: '79',
+    status: 'ACTIVE',
+  },
+  { id: 'fac-2', code: 'CN-HN', name: 'Chi nhánh Hà Nội', provinceCode: '01', status: 'ACTIVE' },
 ];
 
 const mockFacility = (selectedFacility: (typeof FACILITIES)[number] | null) =>
@@ -238,7 +244,7 @@ describe('WarehouseManagementPage', () => {
     await waitFor(() =>
       expect(toast.warning).toHaveBeenCalledWith(
         'Thông tin chưa hợp lệ',
-        'Vui lòng chọn cơ sở cho kho.',
+        'Vui lòng chọn chi nhánh cho kho.',
       ),
     );
     expect(create).not.toHaveBeenCalled();
@@ -251,7 +257,7 @@ describe('WarehouseManagementPage', () => {
     await waitFor(() =>
       expect(listAdmin).toHaveBeenCalledWith(expect.objectContaining({ facilityId: 'fac-2' })),
     );
-    expect(screen.getAllByText('Cơ sở Hồ Chí Minh').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Chi nhánh Hồ Chí Minh').length).toBeGreaterThan(0);
   });
 
   it('plots every warehouse matching the filters, not only the table page', async () => {
@@ -467,8 +473,8 @@ describe('WarehouseManagementPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa kho HCM-TT-01' }));
     await waitFor(() => expect(screen.getByLabelText('Mã kho')).toBeTruthy());
     expect((screen.getByLabelText('Mã kho') as HTMLInputElement).disabled).toBe(true);
-    expect(screen.getByText('Chỉ chuyển cơ sở khi kho đang trống.')).toBeTruthy();
-    expect(screen.getByText(/không thể đổi cơ sở/)).toBeTruthy();
+    expect(screen.getByText('Chỉ chuyển chi nhánh khi kho đang trống.')).toBeTruthy();
+    expect(screen.getByText(/không thể đổi chi nhánh/)).toBeTruthy();
   });
 
   it('explains the 409 reason when deleting an occupied warehouse', async () => {

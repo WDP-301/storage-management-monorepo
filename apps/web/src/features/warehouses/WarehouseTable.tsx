@@ -31,7 +31,7 @@ export const WarehouseTable: React.FC<Props> = ({
     <Table>
       <Table.Header>
         <Table.Row>
-          <Table.Head>Cơ sở</Table.Head>
+          <Table.Head>Chi nhánh</Table.Head>
           <Table.Head>Mã kho</Table.Head>
           <Table.Head>Tên kho</Table.Head>
           <Table.Head>Địa chỉ</Table.Head>

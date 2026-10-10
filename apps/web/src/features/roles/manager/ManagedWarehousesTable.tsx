@@ -51,7 +51,7 @@ export const ManagedWarehousesTable: React.FC<Props> = ({
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div className="grid gap-1">
         <Text as="h3" variant="heading">
-          Danh sách kho của cơ sở
+          Danh sách kho của chi nhánh
         </Text>
         <Text variant="secondary">Theo dõi hiện trạng kho và chuyển trạng thái bảo trì.</Text>
       </div>
@@ -104,7 +104,7 @@ export const ManagedWarehousesTable: React.FC<Props> = ({
         <Table>
           <Table.Header>
             <Table.Row>
-              <Table.Head>Cơ sở</Table.Head>
+              <Table.Head>Chi nhánh</Table.Head>
               <Table.Head>Mã kho</Table.Head>
               <Table.Head>Tên kho</Table.Head>
               <Table.Head>Địa chỉ</Table.Head>

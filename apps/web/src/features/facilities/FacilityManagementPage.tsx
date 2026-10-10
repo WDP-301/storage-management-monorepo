@@ -60,7 +60,10 @@ export const FacilityManagementPage: React.FC = () => {
       setFacilities(res.facilities);
       setTotal(res.meta.total);
     } catch (err) {
-      toast.error('Lỗi tải dữ liệu', err instanceof Error ? err.message : 'Không tải được cơ sở.');
+      toast.error(
+        'Lỗi tải dữ liệu',
+        err instanceof Error ? err.message : 'Không tải được chi nhánh.',
+      );
     } finally {
       setIsLoading(false);
     }
@@ -81,10 +84,10 @@ export const FacilityManagementPage: React.FC = () => {
     setBusyId(f.id);
     try {
       await FacilitiesApi.update(f.id, { status: 'ACTIVE' });
-      toast.info('Kích hoạt cơ sở', `Đã kích hoạt lại cơ sở ${f.code}.`);
+      toast.info('Kích hoạt chi nhánh', `Đã kích hoạt lại chi nhánh ${f.code}.`);
       await reloadAll();
     } catch (err) {
-      toast.error('Không thể kích hoạt cơ sở', describeFacilityError(err, 'Vui lòng thử lại.'));
+      toast.error('Không thể kích hoạt chi nhánh', describeFacilityError(err, 'Vui lòng thử lại.'));
     } finally {
       setBusyId(null);
     }
@@ -97,11 +100,11 @@ export const FacilityManagementPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="grid gap-1.5">
           <Text as="h1" variant="heading" size="lg">
-            Quản lý cơ sở
+            Quản lý chi nhánh
           </Text>
           <Text variant="secondary">
-            Cơ sở là chi nhánh (ví dụ Cơ sở Hồ Chí Minh) quản lý nhiều kho. Quản lý và nhân viên
-            được gán theo cơ sở.
+            Mỗi chi nhánh (ví dụ Chi nhánh Hồ Chí Minh) quản lý nhiều kho. Quản lý và nhân viên được
+            gán theo chi nhánh.
           </Text>
         </div>
         <div className="flex items-center gap-2">
@@ -121,7 +124,7 @@ export const FacilityManagementPage: React.FC = () => {
               setFormOpen(true);
             }}
           >
-            Thêm cơ sở
+            Thêm chi nhánh
           </Button>
         </div>
       </div>
@@ -134,8 +137,8 @@ export const FacilityManagementPage: React.FC = () => {
             </InputGroup.Addon>
             <InputGroup.Input
               type="text"
-              placeholder="Tìm theo mã hoặc tên cơ sở..."
-              aria-label="Tìm kiếm cơ sở"
+              placeholder="Tìm theo mã hoặc tên chi nhánh..."
+              aria-label="Tìm kiếm chi nhánh"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -143,7 +146,7 @@ export const FacilityManagementPage: React.FC = () => {
         </div>
         <div className="w-full lg:w-48">
           <Select
-            aria-label="Lọc trạng thái cơ sở"
+            aria-label="Lọc trạng thái chi nhánh"
             value={statusFilter}
             onValueChange={(v) => {
               setStatusFilter(String(v));

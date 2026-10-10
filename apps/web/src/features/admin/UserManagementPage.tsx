@@ -245,8 +245,8 @@ export const UserManagementPage: React.FC = () => {
 
     if (roleRequiresFacility && !newFacilityId) {
       toast.warning(
-        'Thiếu thông tin cơ sở',
-        `Vai trò ${getRoleTitle(newRole)} bắt buộc phải chọn cơ sở phụ trách.`,
+        'Thiếu thông tin chi nhánh',
+        `Vai trò ${getRoleTitle(newRole)} bắt buộc phải chọn chi nhánh phụ trách.`,
       );
       return;
     }
@@ -346,15 +346,15 @@ export const UserManagementPage: React.FC = () => {
     { value: 'ALL', label: 'Tất cả vai trò' },
     { value: UserRole.ADMIN, label: 'Quản trị viên' },
     { value: UserRole.OPERATIONS_MANAGER, label: 'Quản lý vận hành' },
-    { value: UserRole.FACILITY_MANAGER, label: 'Quản lý cơ sở' },
-    { value: UserRole.FACILITY_STAFF, label: 'Nhân viên cơ sở' },
+    { value: UserRole.FACILITY_MANAGER, label: 'Quản lý chi nhánh' },
+    { value: UserRole.FACILITY_STAFF, label: 'Nhân viên chi nhánh' },
     { value: UserRole.CUSTOMER, label: 'Khách hàng' },
   ];
 
   // Role options for Assign Role Dialog
   const assignRoleOptions = [
-    { value: UserRole.FACILITY_STAFF, label: 'Nhân viên cơ sở (Cần chọn cơ sở)' },
-    { value: UserRole.FACILITY_MANAGER, label: 'Quản lý cơ sở (Cần chọn cơ sở)' },
+    { value: UserRole.FACILITY_STAFF, label: 'Nhân viên chi nhánh (Cần chọn chi nhánh)' },
+    { value: UserRole.FACILITY_MANAGER, label: 'Quản lý chi nhánh (Cần chọn chi nhánh)' },
     { value: UserRole.OPERATIONS_MANAGER, label: 'Quản lý vận hành (Toàn cục)' },
     { value: UserRole.ADMIN, label: 'Quản trị viên hệ thống (Toàn cục)' },
     { value: UserRole.CUSTOMER, label: 'Khách hàng (Toàn cục)' },
@@ -594,7 +594,7 @@ export const UserManagementPage: React.FC = () => {
                         <div className="flex flex-wrap gap-1.5 items-center">
                           {user.roles.map((assignment) => {
                             const facilityName = assignment.facilityId
-                              ? facilityNameMap.get(assignment.facilityId) || 'Cơ sở'
+                              ? facilityNameMap.get(assignment.facilityId) || 'Chi nhánh'
                               : null;
 
                             return (
@@ -602,7 +602,9 @@ export const UserManagementPage: React.FC = () => {
                                 key={assignment.id}
                                 className="inline-flex items-center gap-1"
                                 title={
-                                  facilityName ? `Cơ sở: ${facilityName}` : 'Phạm vi toàn hệ thống'
+                                  facilityName
+                                    ? `Chi nhánh: ${facilityName}`
+                                    : 'Phạm vi toàn hệ thống'
                                 }
                               >
                                 {getRoleBadge(assignment.role)}
@@ -857,8 +859,8 @@ export const UserManagementPage: React.FC = () => {
                     Cấp thêm vai trò mới cho người dùng
                   </span>
                   <Text variant="secondary" size="xs">
-                    Nhân viên cơ sở hoặc Quản lý cơ sở bắt buộc phải được gắn với một cơ sở và phụ
-                    trách toàn bộ kho của cơ sở đó.
+                    Nhân viên chi nhánh hoặc Quản lý chi nhánh bắt buộc phải được gắn với một chi
+                    nhánh và phụ trách toàn bộ kho của chi nhánh đó.
                   </Text>
                 </div>
 
@@ -887,11 +889,11 @@ export const UserManagementPage: React.FC = () => {
                         htmlFor="select-facility"
                         className="block text-xs font-medium text-kumo-default"
                       >
-                        Cơ sở phụ trách <span className="text-kumo-danger">*</span>
+                        Chi nhánh phụ trách <span className="text-kumo-danger">*</span>
                       </label>
                       <Select
                         id="select-facility"
-                        aria-label="Chọn cơ sở phụ trách"
+                        aria-label="Chọn chi nhánh phụ trách"
                         value={newFacilityId}
                         onValueChange={(val) => val && setNewFacilityId(String(val))}
                         items={facilities.map((f) => ({
@@ -906,7 +908,7 @@ export const UserManagementPage: React.FC = () => {
                         Phạm vi áp dụng
                       </span>
                       <div className="h-9 px-3 flex items-center bg-kumo-control rounded-md text-xs text-kumo-subtle">
-                        Toàn hệ thống (Không gắn với cơ sở riêng)
+                        Toàn hệ thống (Không gắn với chi nhánh riêng)
                       </div>
                     </div>
                   )}
@@ -995,7 +997,7 @@ export const UserManagementPage: React.FC = () => {
                 </p>
                 {assignmentToRevoke.facilityId && (
                   <p className="text-kumo-subtle">
-                    Cơ sở ảnh hưởng:{' '}
+                    Chi nhánh ảnh hưởng:{' '}
                     {facilityNameMap.get(assignmentToRevoke.facilityId) ||
                       assignmentToRevoke.facilityId}
                   </p>

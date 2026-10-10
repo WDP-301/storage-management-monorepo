@@ -60,7 +60,7 @@ export class ListTourAppointmentsQueryDto {
     required: false,
     format: 'uuid',
     example: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
-    description: '(Tùy chọn) Lọc theo cơ sở kho (Facility ID)',
+    description: '(Tùy chọn) Lọc theo chi nhánh (Facility ID)',
   })
   @IsOptional()
   @IsUUID('all')
@@ -70,7 +70,7 @@ export class ListTourAppointmentsQueryDto {
     required: false,
     format: 'uuid',
     example: 'c1b48b61-d703-4f93-8ef4-9e3f225d3fa2',
-    description: '(Tùy chọn) Lọc theo nhân viên cơ sở được phân công (Assigned To Staff ID)',
+    description: '(Tùy chọn) Lọc theo nhân viên chi nhánh được phân công (Assigned To Staff ID)',
   })
   @IsOptional()
   @IsUUID('all')

@@ -53,16 +53,16 @@ export const FacilityFormDialog: React.FC<Props> = ({ open, facility, onClose, o
       if (facility) {
         const patch = buildFacilityPatch(form, facility);
         if (Object.keys(patch).length > 0) await FacilitiesApi.update(facility.id, patch);
-        toast.notifyUpdated('cơ sở', form.code.trim());
+        toast.notifyUpdated('chi nhánh', form.code.trim());
       } else {
         await FacilitiesApi.create(buildFacilityCreate(form));
-        toast.notifyCreated('cơ sở', form.code.trim());
+        toast.notifyCreated('chi nhánh', form.code.trim());
       }
       onSaved();
     } catch (err) {
       toast.error(
-        isEdit ? 'Lỗi cập nhật cơ sở' : 'Lỗi tạo cơ sở',
-        describeFacilityError(err, 'Không thể lưu cơ sở. Vui lòng thử lại.'),
+        isEdit ? 'Lỗi cập nhật chi nhánh' : 'Lỗi tạo chi nhánh',
+        describeFacilityError(err, 'Không thể lưu chi nhánh. Vui lòng thử lại.'),
       );
     } finally {
       setIsSaving(false);
@@ -80,7 +80,7 @@ export const FacilityFormDialog: React.FC<Props> = ({ open, facility, onClose, o
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="flex items-center justify-between border-b border-kumo-line pb-3.5">
             <Dialog.Title className="text-base font-semibold text-kumo-default">
-              {isEdit ? `Chỉnh sửa cơ sở ${facility.code}` : 'Thêm cơ sở mới'}
+              {isEdit ? `Chỉnh sửa chi nhánh ${facility.code}` : 'Thêm chi nhánh mới'}
             </Dialog.Title>
             <Dialog.Close
               render={(props) => (
@@ -98,12 +98,12 @@ export const FacilityFormDialog: React.FC<Props> = ({ open, facility, onClose, o
 
           <div className="grid grid-cols-1 gap-3">
             <Input
-              label="Mã cơ sở"
+              label="Mã chi nhánh"
               value={form.code}
               onChange={(e) => set('code', e.target.value)}
             />
             <Input
-              label="Tên cơ sở"
+              label="Tên chi nhánh"
               value={form.name}
               onChange={(e) => set('name', e.target.value)}
             />
@@ -120,7 +120,7 @@ export const FacilityFormDialog: React.FC<Props> = ({ open, facility, onClose, o
               Hủy bỏ
             </Button>
             <Button type="submit" variant="primary" loading={isSaving}>
-              {isEdit ? 'Lưu thay đổi' : 'Tạo cơ sở'}
+              {isEdit ? 'Lưu thay đổi' : 'Tạo chi nhánh'}
             </Button>
           </div>
         </form>

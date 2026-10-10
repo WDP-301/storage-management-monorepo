@@ -46,7 +46,7 @@ describe('ContractsPage', () => {
   });
 
   it('scopes the list to the facility picked in the header', async () => {
-    mockSelectedFacility({ id: 'fac-dn', name: 'Cơ sở Đà Nẵng' });
+    mockSelectedFacility({ id: 'fac-dn', name: 'Chi nhánh Đà Nẵng' });
     render(<ContractsPage />);
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(expect.objectContaining({ facilityId: 'fac-dn' })),

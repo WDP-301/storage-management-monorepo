@@ -26,7 +26,7 @@ export type WarehouseImage = {
 /** A warehouse (kho). `id` is the storage unit id that bookings, holds and tickets reference. */
 export type Warehouse = {
   id: string;
-  /** The branch (cơ sở) the warehouse belongs to. */
+  /** The branch (chi nhánh) the warehouse belongs to. */
   facility: { id: string; code: string; name: string };
   code: string;
   name: string;

@@ -93,13 +93,13 @@ export function TicketDetailScreen({
                 </Text>
 
                 <View className="h-px bg-separator" />
-                <DetailRow label="Cơ sở" value={ticket.facility?.name ?? '—'} />
+                <DetailRow label="Chi nhánh" value={ticket.facility?.name ?? '—'} />
                 <DetailRow
                   label="Kho"
                   value={
                     ticket.storage_unit
                       ? `${ticket.storage_unit.name} (${ticket.storage_unit.code})`
-                      : 'Toàn cơ sở'
+                      : 'Toàn chi nhánh'
                   }
                 />
                 <DetailRow

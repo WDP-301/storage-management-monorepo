@@ -78,7 +78,7 @@ export function MyTicketsScreen({
         }
       />
       <Text className="font-body px-4 pb-3 text-body-sm text-muted">
-        Gửi và theo dõi các yêu cầu với cơ sở kho.
+        Gửi và theo dõi các yêu cầu với chi nhánh.
       </Text>
 
       <ScrollView
@@ -109,8 +109,8 @@ export function MyTicketsScreen({
         {options !== null && options.facilities.length === 0 ? (
           <View className="rounded-xl border border-border bg-surface p-3">
             <Text className="font-body text-body-sm leading-5 text-muted">
-              Bạn cần đặt cọc hoặc thuê kho để gửi yêu cầu hỗ trợ. Các yêu cầu gắn với cơ sở hoặc
-              kho của bạn.
+              Bạn cần đặt cọc hoặc thuê kho để gửi yêu cầu hỗ trợ. Các yêu cầu gắn với chi nhánh
+              hoặc kho của bạn.
             </Text>
           </View>
         ) : null}

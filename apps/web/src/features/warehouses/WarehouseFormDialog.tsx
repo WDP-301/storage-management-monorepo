@@ -168,7 +168,7 @@ export const WarehouseFormDialog: React.FC<Props> = ({
           {frozen && (
             <div className="p-3 bg-kumo-warning-tint text-kumo-warning rounded-lg text-xs">
               Kho đang {WAREHOUSE_STATUS_LABEL[warehouse.status].label.toLowerCase()} nên không thể
-              đổi cơ sở, mã kho, kích thước hay trạng thái. Giá, đặt cọc, địa chỉ và ghi chú vẫn
+              đổi chi nhánh, mã kho, kích thước hay trạng thái. Giá, đặt cọc, địa chỉ và ghi chú vẫn
               chỉnh được.
             </div>
           )}

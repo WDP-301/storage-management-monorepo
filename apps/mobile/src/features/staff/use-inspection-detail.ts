@@ -24,7 +24,7 @@ export function staffErrorMessage(error: unknown, fallback: string): string {
       'Biên bản chưa được phân công nhân viên — nhờ quản lý giao việc trước.',
     ],
     ['requires a', 'Hợp đồng không ở trạng thái phù hợp để chốt biên bản này.'],
-    ['expected state', 'Trạng thái kho không khớp — liên hệ quản lý cơ sở.'],
+    ['expected state', 'Trạng thái kho không khớp — liên hệ quản lý chi nhánh.'],
   ].find(([needle]) => error.message.includes(needle));
   if (reason) return reason[1];
   // Message substrings above are best-effort; the error code is the stable signal.

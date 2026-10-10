@@ -245,7 +245,7 @@ export const ManagerTicketsPage: React.FC = () => {
       const status = (err as { status?: number }).status;
       const msg =
         status === 403
-          ? 'Tài khoản không có quyền phân công (yêu cầu vai trò Quản lý cơ sở của cơ sở này).'
+          ? 'Tài khoản không có quyền phân công (yêu cầu vai trò Quản lý chi nhánh của chi nhánh này).'
           : status === 404
             ? 'Không tìm thấy phiếu sự cố hoặc nhân viên kỹ thuật trên hệ thống.'
             : err instanceof Error
@@ -278,7 +278,7 @@ export const ManagerTicketsPage: React.FC = () => {
       const status = (err as { status?: number }).status;
       const msg =
         status === 403
-          ? 'Tài khoản không có quyền xóa phiếu sự cố này (yêu cầu vai trò Quản trị viên hoặc Quản lý cơ sở của cơ sở này).'
+          ? 'Tài khoản không có quyền xóa phiếu sự cố này (yêu cầu vai trò Quản trị viên hoặc Quản lý chi nhánh của chi nhánh này).'
           : status === 404
             ? 'Không tìm thấy phiếu sự cố trên hệ thống.'
             : err instanceof Error
@@ -314,7 +314,7 @@ export const ManagerTicketsPage: React.FC = () => {
       const status = (err as { status?: number }).status;
       const msg =
         status === 403
-          ? 'Tài khoản không có quyền hủy phiếu sự cố này (yêu cầu vai trò Quản lý cơ sở của cơ sở này).'
+          ? 'Tài khoản không có quyền hủy phiếu sự cố này (yêu cầu vai trò Quản lý chi nhánh của chi nhánh này).'
           : status === 404
             ? 'Không tìm thấy phiếu sự cố trên hệ thống.'
             : status === 409
@@ -847,7 +847,7 @@ export const ManagerTicketsPage: React.FC = () => {
                   </Dialog.Title>
                   <div className="text-xs">
                     <Text variant="secondary">
-                      Chỉ định nhân viên chịu trách nhiệm xử lý sự cố tại cơ sở
+                      Chỉ định nhân viên chịu trách nhiệm xử lý sự cố tại chi nhánh
                     </Text>
                   </div>
                 </div>
@@ -889,7 +889,7 @@ export const ManagerTicketsPage: React.FC = () => {
                       </strong>
                     </div>
                     <div>
-                      Cơ sở:{' '}
+                      Chi nhánh:{' '}
                       <strong className="text-kumo-default">
                         {assignModalTicket.facility?.name}
                       </strong>
@@ -914,7 +914,7 @@ export const ManagerTicketsPage: React.FC = () => {
                   {facilityStaff === null ? (
                     <Text variant="secondary">Đang tải danh sách nhân viên…</Text>
                   ) : facilityStaff.length === 0 ? (
-                    <Text variant="secondary">Cơ sở này chưa có nhân viên đang làm việc.</Text>
+                    <Text variant="secondary">Chi nhánh này chưa có nhân viên đang làm việc.</Text>
                   ) : (
                     <select
                       id="staff-select"
@@ -924,7 +924,7 @@ export const ManagerTicketsPage: React.FC = () => {
                       className="w-full h-10 px-3 text-sm bg-kumo-base border border-kumo-line text-kumo-default rounded-lg focus:outline-none focus:ring-2 focus:ring-kumo-brand/30"
                     >
                       <option value="">
-                        -- Chọn nhân viên của cơ sở ({facilityStaff.length} người) --
+                        -- Chọn nhân viên của chi nhánh ({facilityStaff.length} người) --
                       </option>
                       {facilityStaff.map((staff) => (
                         <option key={staff.id} value={staff.id}>

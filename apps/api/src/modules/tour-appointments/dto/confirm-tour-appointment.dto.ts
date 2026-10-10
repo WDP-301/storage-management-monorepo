@@ -29,7 +29,7 @@ export class ConfirmTourAppointmentDto {
     required: false,
     example:
       'Đã gọi điện cho anh Khách lúc 09:30, thống nhất lùi sang chiều 14h vì sáng khách bận họp.',
-    description: '(Tùy chọn) Ghi chú xác nhận của Quản lý cơ sở (Facility Manager)',
+    description: '(Tùy chọn) Ghi chú xác nhận của Quản lý chi nhánh (Facility Manager)',
   })
   @IsOptional()
   @IsString()

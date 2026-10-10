@@ -27,21 +27,21 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
   },
   {
     email: 'manager.hcm@gmail.com',
-    fullName: 'Quản lý Cơ sở Hồ Chí Minh',
+    fullName: 'Quản lý Chi nhánh Hồ Chí Minh',
     phone: '0900000003',
     role: UserRole.FACILITY_MANAGER,
     facilityCodes: ['CN-HCM'],
   },
   {
     email: 'manager.hn@gmail.com',
-    fullName: 'Quản lý Cơ sở Hà Nội',
+    fullName: 'Quản lý Chi nhánh Hà Nội',
     phone: '0900000006',
     role: UserRole.FACILITY_MANAGER,
     facilityCodes: ['CN-HN'],
   },
   {
     email: 'manager.dn@gmail.com',
-    fullName: 'Quản lý Cơ sở Đà Nẵng',
+    fullName: 'Quản lý Chi nhánh Đà Nẵng',
     phone: '0900000007',
     role: UserRole.FACILITY_MANAGER,
     facilityCodes: ['CN-DN'],
@@ -68,11 +68,11 @@ export interface DemoFacility {
   provinceCode: string;
 }
 
-/** Branches (cơ sở) that own the demo warehouses. */
+/** Branches (chi nhánh) that own the demo warehouses. */
 export const DEMO_FACILITIES: DemoFacility[] = [
-  { code: 'CN-HCM', name: 'Cơ sở Hồ Chí Minh', provinceCode: '79' },
-  { code: 'CN-HN', name: 'Cơ sở Hà Nội', provinceCode: '01' },
-  { code: 'CN-DN', name: 'Cơ sở Đà Nẵng', provinceCode: '48' },
+  { code: 'CN-HCM', name: 'Chi nhánh Hồ Chí Minh', provinceCode: '79' },
+  { code: 'CN-HN', name: 'Chi nhánh Hà Nội', provinceCode: '01' },
+  { code: 'CN-DN', name: 'Chi nhánh Đà Nẵng', provinceCode: '48' },
 ];
 
 export interface DemoWarehouse {

@@ -15,15 +15,18 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ApiErrorResponseDto } from '@shared/models/api-response';
 import { UserRole } from '@storage/types';
 import { ContractCancelService } from './contract-cancel.service';
+import { ContractQueryService } from './contract-query.service';
 import { ContractReturnService } from './contract-return.service';
 import { ContractsService } from './contracts.service';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
+import { ListContractsQueryDto } from './dto/list-contracts-query.dto';
 import { ReturnRequestDto } from './dto/return-request.dto';
 import { UploadContractEvidenceDto } from './dto/upload-contract-evidence.dto';
 
@@ -43,11 +46,11 @@ export class ContractsController {
     private readonly contractsService: ContractsService,
     private readonly contractReturn: ContractReturnService,
     private readonly contractCancel: ContractCancelService,
+    private readonly contractQuery: ContractQueryService,
   ) {}
 
-  // Contracts carry customer PII (customerSnapshot) and writes can strand units —
-  // system-wide roles only. Facility staff and managers work through the
-  // facility-scoped /inspections endpoints instead.
+  // Writes can strand units, so they stay with system-wide roles. Contracts carry
+  // customer PII: facility managers read only their own facilities, staff not at all.
   @Post()
   @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
   @ApiOperation({ summary: 'Create a contract from a confirmed booking item' })
@@ -61,10 +64,13 @@ export class ContractsController {
   }
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
-  @ApiOperation({ summary: 'List contracts excluding soft-deleted records' })
-  findAll() {
-    return this.contractsService.findAll();
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER, UserRole.FACILITY_MANAGER)
+  @ApiOperation({
+    summary: 'List contracts with unit, facility, customer and inspections (paginated)',
+    description: 'Facility managers only see the facilities they manage.',
+  })
+  findAll(@Query() query: ListContractsQueryDto, @CurrentUser() user: AuthUser) {
+    return this.contractQuery.list(user, query);
   }
 
   @Get('mine')
@@ -96,10 +102,11 @@ export class ContractsController {
   }
 
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER)
-  @ApiOperation({ summary: 'Get a contract by ID' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.contractsService.findById(id);
+  @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER, UserRole.FACILITY_MANAGER)
+  @ApiOperation({ summary: 'Get a contract with unit, facility, customer and inspections' })
+  @ApiResponse({ status: 403, description: 'Manager of another facility' })
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.contractQuery.detail(id, user);
   }
 
   // Editing or deleting a contract can strand its unit (BOOKED/RENTED) — system-wide roles only.

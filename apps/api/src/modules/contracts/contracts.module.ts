@@ -7,6 +7,7 @@ import { AuthModule } from '@modules/auth/auth.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ContractCancelService } from './contract-cancel.service';
+import { ContractQueryService } from './contract-query.service';
 import { ContractReturnService } from './contract-return.service';
 import { ContractsController } from './contracts.controller';
 import { ContractsService } from './contracts.service';
@@ -17,7 +18,7 @@ import { ContractsService } from './contracts.service';
     AuthModule,
   ],
   controllers: [ContractsController],
-  providers: [ContractsService, ContractReturnService, ContractCancelService],
+  providers: [ContractsService, ContractQueryService, ContractReturnService, ContractCancelService],
   exports: [ContractsService],
 })
 export class ContractsModule {}

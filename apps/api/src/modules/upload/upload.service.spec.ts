@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream';
-import { UploadService } from './upload.service';
+import { buildUploadKey, UploadService } from './upload.service';
 
 describe('UploadService error contract', () => {
   const config = {
@@ -62,4 +62,13 @@ describe('UploadService error contract', () => {
       expect(send).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('buildUploadKey', () => {
+  it('keeps keys under uploads/ with a sanitised name and an unguessable part', () => {
+    const a = buildUploadKey('Hợp đồng ký.pdf');
+    const b = buildUploadKey('Hợp đồng ký.pdf');
+    expect(a).toMatch(/^uploads\/\d+-[0-9a-f]{16}-H_p___ng_k_\.pdf$/);
+    expect(a).not.toBe(b);
+  });
 });

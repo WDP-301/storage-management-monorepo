@@ -33,7 +33,7 @@ import {
   PresignedUploadUrlResponseDto,
   UploadResultDto,
 } from './dto/upload-response.dto';
-import { UploadService } from './upload.service';
+import { buildUploadKey, UploadService } from './upload.service';
 
 @ApiTags('Uploads (S3)')
 @Controller('uploads')
@@ -84,11 +84,8 @@ export class UploadController {
       });
     }
 
-    const cleanName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const fileKey = `uploads/${Date.now()}-${cleanName}`;
-
     return this.uploadService.uploadBuffer(
-      fileKey,
+      buildUploadKey(file.originalname),
       file.buffer,
       file.mimetype || 'application/octet-stream',
     );

@@ -9,6 +9,7 @@ import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { BookingStatus, ContractStatus, InspectionType } from '@storage/types';
 import { DataSource, In, IsNull, Repository } from 'typeorm';
+import { loadContractInspections } from './contract-inspections.util';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
 import { UploadContractEvidenceDto } from './dto/upload-contract-evidence.dto';
 import { persistContract } from './initial-contract.util';
@@ -84,10 +85,6 @@ export class ContractsService {
     });
   }
 
-  findAll(): Promise<Contract[]> {
-    return this.contracts.find({ where: { deletedAt: IsNull() }, order: { createdAt: 'DESC' } });
-  }
-
   async findMine(customerId: string): Promise<CustomerContractRecord[]> {
     const contracts = await this.contracts.find({
       where: { customerId, deletedAt: IsNull() },
@@ -95,23 +92,10 @@ export class ContractsService {
       order: { effectiveAt: 'DESC' },
     });
     if (contracts.length === 0) return [];
-
-    // Oldest first, so the latest RETURN wins when several exist for one contract.
-    const inspections = await this.dataSource.getRepository(Inspection).find({
-      where: {
-        contractId: In(contracts.map((c) => c.id)),
-        type: In([InspectionType.PRE_HANDOVER, InspectionType.RETURN]),
-      },
-      relations: { inspector: true },
-      order: { createdAt: 'ASC' },
-    });
-    const byContract = new Map<string, { handover?: Inspection; return?: Inspection }>();
-    for (const inspection of inspections) {
-      const entry = byContract.get(inspection.contractId) ?? {};
-      if (inspection.type === InspectionType.PRE_HANDOVER) entry.handover = inspection;
-      else entry.return = inspection;
-      byContract.set(inspection.contractId, entry);
-    }
+    const byContract = await loadContractInspections(
+      this.dataSource,
+      contracts.map((c) => c.id),
+    );
     return contracts.map((c) => toCustomerContractRecord(c, byContract.get(c.id)));
   }
 
@@ -167,6 +151,14 @@ export class ContractsService {
       const changes = { ...fields, ...dates };
       if (Object.keys(changes).length > 0) {
         await em.update(Contract, { id, deletedAt: IsNull() }, changes);
+      }
+      // The handover appointment is booked on the effective date; keep an open one in step.
+      if (dates.effectiveAt) {
+        await em.update(
+          Inspection,
+          { contractId: id, type: InspectionType.PRE_HANDOVER, finalizedAt: IsNull() },
+          { scheduledAt: dates.effectiveAt },
+        );
       }
       return em.findOneOrFail(Contract, { where: { id } });
     });

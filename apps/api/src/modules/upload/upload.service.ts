@@ -20,6 +20,15 @@ export interface PresignedUploadUrlResponse {
   publicUrl: string;
 }
 
+/**
+ * Storage key for a new upload. The random part keeps keys unguessable from the upload time and
+ * file name, and stops two same-named uploads in one millisecond from overwriting each other.
+ */
+export function buildUploadKey(fileName: string): string {
+  const cleanFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+  return `uploads/${Date.now()}-${randomBytes(8).toString('hex')}-${cleanFileName}`;
+}
+
 @Injectable()
 export class UploadService implements OnModuleInit {
   private readonly logger = new Logger(UploadService.name);
@@ -85,8 +94,7 @@ export class UploadService implements OnModuleInit {
     mimeType: string,
     fileSize: number,
   ): Promise<PresignedUploadUrlResponse> {
-    const cleanFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const fileKey = `uploads/${Date.now()}-${randomBytes(4).toString('hex')}-${cleanFileName}`;
+    const fileKey = buildUploadKey(fileName);
 
     try {
       // ContentLength is signed into the URL — S3 rejects the PUT if the

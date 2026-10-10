@@ -7,6 +7,7 @@ import { createApiValidationPipe } from '@shared/pipes/api-validation.pipe';
 import { UserRole } from '@storage/types';
 import { ContractsController } from './contracts.controller';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
+import { ListContractsQueryDto } from './dto/list-contracts-query.dto';
 
 describe('Contract access and input validation', () => {
   const guard = new RolesGuard(new Reflector());
@@ -25,10 +26,8 @@ describe('Contract access and input validation', () => {
     }
   };
 
-  // Contracts carry customer PII and writes can strand units — all management
-  // endpoints are system-wide only. Facility roles go through /inspections,
-  // which is scoped to the facilities they work at.
-  it.each(['create', 'findAll', 'findOne', 'uploadEvidence', 'update', 'remove'] as const)(
+  // Writes can strand units, so they stay system-wide only.
+  it.each(['create', 'uploadEvidence', 'update', 'remove'] as const)(
     '%s is limited to admin and operations',
     (method) => {
       expect(Reflect.getMetadata(GUARDS_METADATA, ContractsController)).toEqual([
@@ -44,6 +43,31 @@ describe('Contract access and input validation', () => {
       expect(() => guard.canActivate(context(method))).toThrow();
     },
   );
+
+  // Contracts carry customer PII: managers read (scoped to their facilities in the
+  // service), staff and customers do not.
+  it.each(['findAll', 'findOne'] as const)('%s is readable by managers only', (method) => {
+    expect(allows(method, UserRole.ADMIN)).toBe(true);
+    expect(allows(method, UserRole.OPERATIONS_MANAGER)).toBe(true);
+    expect(allows(method, UserRole.FACILITY_MANAGER)).toBe(true);
+    expect(allows(method, UserRole.FACILITY_STAFF)).toBe(false);
+    expect(allows(method, UserRole.CUSTOMER)).toBe(false);
+  });
+
+  it.each([
+    { status: 'SIGNED' },
+    { facilityId: 'not-a-uuid' },
+    { limit: '101' },
+    { page: '0' },
+    { page: '1000000000000000000' },
+  ])('rejects invalid list filters: %j', async (query) => {
+    await expect(
+      createApiValidationPipe().transform(query, {
+        type: 'query',
+        metatype: ListContractsQueryDto,
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
 
   it('cancel is open to managers but not to staff or customers', () => {
     expect(allows('cancel', UserRole.ADMIN)).toBe(true);

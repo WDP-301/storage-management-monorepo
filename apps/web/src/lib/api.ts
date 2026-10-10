@@ -16,6 +16,7 @@ import type {
   RevokeRoleResponse,
 } from '../types/admin-user';
 import { AuthUser, LoginInput, LoginResponse } from '../types/auth';
+import type { ContractListQuery, ContractListResponse, ContractPatch } from '../types/contract';
 import type {
   FacilityStaffMember,
   InspectionRecord,
@@ -280,13 +281,48 @@ export const InspectionsApi = {
 };
 
 export const ContractsApi = {
+  /** Paginated; a facility manager only gets the facilities they manage. */
+  list: async (query: ContractListQuery = {}): Promise<ContractListResponse> => {
+    const res = await apiClient.get<ApiResponse<ContractListResponse>>('/contracts', {
+      params: query,
+    });
+    return res.data.data;
+  },
+
   /** Drops a DRAFT contract the customer never collected and frees its unit. */
   cancel: async (id: string): Promise<void> => {
     await apiClient.post(`/contracts/${id}/cancel`);
   },
+
+  update: async (id: string, patch: ContractPatch): Promise<void> => {
+    await apiClient.patch(`/contracts/${id}`, patch);
+  },
+
+  /** Stores the link of a file already uploaded through UploadsApi.upload. */
+  setEvidence: async (id: string, evidenceUrl: string): Promise<void> => {
+    await apiClient.put(`/contracts/${id}/evidence`, { evidenceUrl });
+  },
+
+  /** Only ENDED or CANCELLED contracts can be deleted. */
+  remove: async (id: string): Promise<void> => {
+    await apiClient.delete(`/contracts/${id}`);
+  },
 };
 
 export const UploadsApi = {
+  /** Sends the file through the API to private storage. */
+  upload: async (file: File): Promise<{ key: string; publicUrl: string }> => {
+    const body = new FormData();
+    body.append('file', file);
+    const res = await apiClient.post<ApiResponse<{ key: string; publicUrl: string }>>(
+      '/uploads/direct',
+      body,
+      // A non-JSON type keeps axios from serialising the form; the browser adds the boundary.
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return res.data.data;
+  },
+
   /** Presigned GET for a private object; links expire, so resolve right before opening. */
   downloadUrl: async (fileKey: string): Promise<string> => {
     const res = await apiClient.get<ApiResponse<{ downloadUrl: string }>>('/uploads/download-url', {

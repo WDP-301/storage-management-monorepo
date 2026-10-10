@@ -2,6 +2,7 @@ import { AppUser } from '@entities/app-user.entity';
 import { Booking } from '@entities/booking.entity';
 import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
+import { Inspection } from '@entities/inspection.entity';
 import { BookingStatus, ContractKind, ContractStatus, InspectionType } from '@storage/types';
 import { DataSource, In, IsNull, Repository } from 'typeorm';
 import { ContractsService } from './contracts.service';
@@ -182,12 +183,6 @@ describe('ContractsService', () => {
   });
 
   it('excludes soft-deleted contracts from reads', async () => {
-    repo.find.mockResolvedValue([]);
-    await expect(service.findAll()).resolves.toEqual([]);
-    expect(repo.find).toHaveBeenCalledWith({
-      where: { deletedAt: IsNull() },
-      order: { createdAt: 'DESC' },
-    });
     repo.findOne.mockResolvedValue(null);
     await expect(service.findById('deleted')).rejects.toMatchObject({ status: 404 });
     expect(repo.findOne).toHaveBeenCalledWith({ where: { id: 'deleted', deletedAt: IsNull() } });
@@ -205,6 +200,24 @@ describe('ContractsService', () => {
       Contract,
       { id: 'contract-1', deletedAt: IsNull() },
       { months: 12 },
+    );
+  });
+
+  it('moves an open handover appointment along with the effective date', async () => {
+    manager.findOne.mockResolvedValue({ id: 'contract-1', effectiveAt: item.requestedStartAt });
+    await service.update('contract-1', { effectiveAt: '2026-10-20T00:00:00.000Z' });
+    expect(manager.update).toHaveBeenCalledWith(
+      Inspection,
+      { contractId: 'contract-1', type: InspectionType.PRE_HANDOVER, finalizedAt: IsNull() },
+      { scheduledAt: new Date('2026-10-20T00:00:00.000Z') },
+    );
+
+    manager.update.mockClear();
+    await service.update('contract-1', { months: 12 });
+    expect(manager.update).not.toHaveBeenCalledWith(
+      Inspection,
+      expect.anything(),
+      expect.anything(),
     );
   });
 

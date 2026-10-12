@@ -1,12 +1,13 @@
 import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
+import { Invoice } from '@entities/invoice.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { managesFacility } from '@modules/inspection/inspection-access.util';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { ContractStatus, StorageUnitStatus } from '@storage/types';
+import { ContractStatus, InvoiceStatus, StorageUnitStatus } from '@storage/types';
 import { DataSource, type EntityManager, In, IsNull } from 'typeorm';
 
 @Injectable()
@@ -48,6 +49,12 @@ export class ContractCancelService {
         StorageUnit,
         { id: item.storageUnitId, status: In([StorageUnitStatus.BOOKED, StorageUnitStatus.HELD]) },
         { status: StorageUnitStatus.AVAILABLE },
+      );
+      // An unpaid first-month invoice is void; money already taken stays for a manual refund.
+      await em.update(
+        Invoice,
+        { contractId: contract.id, status: InvoiceStatus.ISSUED },
+        { status: InvoiceStatus.VOID },
       );
       this.logger.log(`Contract ${contract.contractNo} cancelled by ${actor.id}`);
       return { ...contract, status: ContractStatus.CANCELLED };

@@ -1,6 +1,7 @@
 import type { Contract } from '@entities/contract.entity';
 import type { Inspection } from '@entities/inspection.entity';
 import type { ContractPermissions } from '../contract-access.util';
+import type { FirstRentSummary } from '../first-rent.util';
 import { type CustomerContractRecord, toCustomerContractRecord } from './customer-contract';
 
 /** Who signed, as captured when the contract was created. */
@@ -16,6 +17,8 @@ export interface BackOfficeContractRecord extends CustomerContractRecord {
   customer: ContractCustomer;
   terms: Record<string, unknown>;
   created_at: string | Date;
+  /** First month's rent invoice; null until staff issue it at check-in. */
+  first_rent: FirstRentSummary | null;
 }
 
 const text = (value: unknown): string | null => (typeof value === 'string' ? value : null);
@@ -23,6 +26,7 @@ const text = (value: unknown): string | null => (typeof value === 'string' ? val
 export function toBackOfficeContractRecord(
   contract: Contract,
   inspections: { handover?: Inspection; return?: Inspection } = {},
+  firstRent: FirstRentSummary | null = null,
 ): BackOfficeContractRecord {
   const snapshot = contract.customerSnapshot ?? {};
   return {
@@ -35,6 +39,7 @@ export function toBackOfficeContractRecord(
     },
     terms: contract.termsSnapshot ?? {},
     created_at: contract.createdAt,
+    first_rent: firstRent,
   };
 }
 
@@ -51,8 +56,13 @@ export function toStaffContractRecord(
   contract: Contract,
   inspections: { handover?: Inspection; return?: Inspection },
   permissions: ContractPermissions,
+  firstRent: FirstRentSummary | null = null,
 ): StaffContractRecord {
-  const { terms: _terms, customer, ...record } = toBackOfficeContractRecord(contract, inspections);
+  const {
+    terms: _terms,
+    customer,
+    ...record
+  } = toBackOfficeContractRecord(contract, inspections, firstRent);
   const { email: _email, ...staffCustomer } = customer;
   return { ...record, customer: staffCustomer, permissions };
 }

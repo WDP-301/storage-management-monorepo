@@ -1,11 +1,18 @@
 import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
+import { Invoice } from '@entities/invoice.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { HttpStatus, Logger } from '@nestjs/common';
-import { ContractStatus, InspectionType, StorageUnitStatus, UserRole } from '@storage/types';
+import {
+  ContractStatus,
+  InspectionType,
+  InvoiceStatus,
+  StorageUnitStatus,
+  UserRole,
+} from '@storage/types';
 import { In } from 'typeorm';
 import { InspectionLifecycleService } from './inspection-lifecycle.service';
 
@@ -46,6 +53,8 @@ describe('InspectionLifecycleService.finalize', () => {
   /** Claims on the unit by other bookings — none unless a test sets them. */
   let otherHold: { bookingId: string } | null;
   let otherContract: { id: string } | null;
+  /** The first-month invoice; paid unless a test says otherwise. */
+  let firstRent: { id: string; status: InvoiceStatus; months: number } | null;
 
   const stubRows = (inspection: Inspection, contract: Contract | null = buildContract()) => {
     em.findOne.mockImplementation(async (entity, { where }) => {
@@ -53,6 +62,7 @@ describe('InspectionLifecycleService.finalize', () => {
       // By id: the contract under inspection; otherwise the guard looking for another claim.
       if (entity === Contract) return where.id ? contract : otherContract;
       if (entity === UnitHold) return otherHold;
+      if (entity === Invoice) return firstRent;
       if (entity === StorageUnit) return { id: 'unit-1', status: StorageUnitStatus.AVAILABLE };
       return null;
     });
@@ -61,6 +71,7 @@ describe('InspectionLifecycleService.finalize', () => {
   beforeEach(() => {
     otherHold = null;
     otherContract = null;
+    firstRent = { id: 'inv-1', status: InvoiceStatus.PAID, months: 1 };
     em = {
       // Manager-1 manages facility-1 only.
       find: jest.fn(async (_entity, { where }) =>
@@ -113,6 +124,51 @@ describe('InspectionLifecycleService.finalize', () => {
     });
     expect(em.update).not.toHaveBeenCalled();
     expect(em.save).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['was never issued', null],
+    ['is still unpaid', InvoiceStatus.ISSUED],
+    ['is only partly paid', InvoiceStatus.PARTIALLY_PAID],
+  ])('refuses to finalize a handover while the first month %s', async (_label, status) => {
+    firstRent = status ? { id: 'inv-1', status, months: 1 } : null;
+    stubRows(buildInspection());
+
+    await expect(service.finalize('insp-1', actor('staff-1'))).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+      response: {
+        code: 'FIRST_RENT_UNPAID',
+        details: { contractId: 'contract-1', invoiceStatus: status },
+      },
+    });
+    expect(em.update).not.toHaveBeenCalled();
+    expect(em.save).not.toHaveBeenCalled();
+  });
+
+  it('starts the paid first month on the handover day', async () => {
+    stubRows(buildInspection());
+
+    const result = await service.finalize('insp-1', actor('staff-1'));
+
+    const endAt = new Date(result.finalizedAt as Date);
+    endAt.setMonth(endAt.getMonth() + 1);
+    expect(em.update).toHaveBeenCalledWith(
+      Invoice,
+      { id: 'inv-1' },
+      { startAt: result.finalizedAt, endAt },
+    );
+  });
+
+  it('does not require the first month to finalize a return', async () => {
+    firstRent = null;
+    stubRows(
+      buildInspection({ type: InspectionType.RETURN }),
+      buildContract({ status: ContractStatus.ACTIVE }),
+    );
+
+    await expect(service.finalize('insp-1', actor('staff-1'))).resolves.toEqual(
+      expect.objectContaining({ finalizedAt: expect.any(Date) }),
+    );
   });
 
   it('does not require contract files to finalize a return', async () => {

@@ -10,14 +10,13 @@ import type { AuthUser } from '@modules/auth/types/auth-user';
 import { persistContract } from '@modules/contracts/initial-contract.util';
 import { generatePaymentNo } from '@modules/payments/payment-no.util';
 import { PAYMENT_EVENTS, PaymentReceivedEvent } from '@modules/payments/types/payment';
-import { buildVietQrUrl } from '@modules/payments/vietqr.util';
+import { buildPaymentQrUrl, paymentQrConfigured } from '@modules/payments/vietqr.util';
 import { SettingsService } from '@modules/settings/settings.service';
 import { HttpStatus, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ENV_KEY } from '@shared/constants';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { canonicalStringify } from '@shared/utils/canonical-json.util';
@@ -78,7 +77,7 @@ export class BookingsService implements OnApplicationBootstrap {
 
   /** Release any holds that expired while the server was down. */
   async onApplicationBootstrap(): Promise<void> {
-    if (!this.paymentQrConfigured()) {
+    if (!paymentQrConfigured(this.configService)) {
       this.logger.warn('SEPAY_BANK_ID/SEPAY_ACCOUNT_NO/SEPAY_ACCOUNT_NAME not set — no payment QR');
     }
     await this.releaseExpiredHolds();
@@ -675,22 +674,7 @@ export class BookingsService implements OnApplicationBootstrap {
    * the SePay webhook can match the transfer. Null when the bank account env is not configured.
    */
   private buildPaymentQrUrl(bookingNo: string, depositTotal: string): string | null {
-    if (!this.paymentQrConfigured()) return null;
-    return buildVietQrUrl({
-      bankId: this.configService.get<string>(ENV_KEY.SEPAY_BANK_ID) as string,
-      accountNo: this.configService.get<string>(ENV_KEY.SEPAY_ACCOUNT_NO) as string,
-      accountName: this.configService.get<string>(ENV_KEY.SEPAY_ACCOUNT_NAME) as string,
-      amount: new Decimal(depositTotal).toFixed(0),
-      addInfo: bookingNo,
-    });
-  }
-
-  private paymentQrConfigured(): boolean {
-    return Boolean(
-      this.configService.get<string>(ENV_KEY.SEPAY_BANK_ID) &&
-        this.configService.get<string>(ENV_KEY.SEPAY_ACCOUNT_NO) &&
-        this.configService.get<string>(ENV_KEY.SEPAY_ACCOUNT_NAME),
-    );
+    return buildPaymentQrUrl(this.configService, depositTotal, bookingNo);
   }
 
   // ---------------------------------------------------------------------------

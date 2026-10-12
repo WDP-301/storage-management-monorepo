@@ -5,12 +5,16 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
 @Entity('invoices')
+// Partial unique index (contract_id, period_no) WHERE status <> 'VOID' — created by migration,
+// metadata kept sync-off so schema sync never manages the WHERE clause.
+@Index('UQ_invoices_contract_period', { synchronize: false })
 export class Invoice {
   @PrimaryGeneratedColumn('uuid')
   id: string;

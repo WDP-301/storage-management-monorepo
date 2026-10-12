@@ -12,6 +12,8 @@ export interface ContractPermissions {
   documents: boolean;
   handover: boolean;
   return: boolean;
+  /** Issue the first month's rent QR and confirm cash for it. */
+  first_rent: boolean;
 }
 
 export interface ContractAccess {
@@ -30,7 +32,8 @@ const isOpenAssignee = (inspection: Inspection | undefined, actorId: string): bo
 /**
  * Pure permission rules. Managers (global, or of the unit's facility) edit anything still
  * open; staff edit only inspections assigned to them that are not yet finalized, and the
- * contract files only while the contract is a DRAFT awaiting that handover.
+ * contract files and the first month's rent only while the contract is a DRAFT awaiting
+ * that handover.
  */
 export function computeContractPermissions(
   status: ContractStatus,
@@ -40,13 +43,16 @@ export function computeContractPermissions(
 ): ContractPermissions {
   const open = (inspection: Inspection | undefined) =>
     !!inspection && !inspection.finalizedAt && (isManager || isOpenAssignee(inspection, actorId));
+  const handover = open(inspections.handover);
   return {
     documents:
       EDITABLE_DOCUMENT_STATUSES.includes(status) &&
       (isManager ||
         (status === ContractStatus.DRAFT && isOpenAssignee(inspections.handover, actorId))),
-    handover: open(inspections.handover),
+    handover,
     return: open(inspections.return),
+    // Collected at check-in, by whoever may sign the handover off.
+    first_rent: status === ContractStatus.DRAFT && handover,
   };
 }
 

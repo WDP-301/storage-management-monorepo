@@ -5,6 +5,7 @@ import {
   loadManagedFacilityIds,
 } from '@modules/inspection/inspection-access.util';
 import { HttpStatus, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
@@ -14,6 +15,7 @@ import { DataSource, Repository, type SelectQueryBuilder } from 'typeorm';
 import { resolveContractAccess } from './contract-access.util';
 import { loadContractInspections } from './contract-inspections.util';
 import type { ListContractsQueryDto } from './dto/list-contracts-query.dto';
+import { loadFirstRentSummaries, withPaymentQr } from './first-rent.util';
 import {
   type BackOfficeContractRecord,
   type StaffContractRecord,
@@ -30,6 +32,7 @@ export class ContractQueryService {
   constructor(
     @InjectRepository(Contract) private readonly contracts: Repository<Contract>,
     private readonly dataSource: DataSource,
+    private readonly config: ConfigService,
   ) {}
 
   async list(
@@ -60,12 +63,15 @@ export class ContractQueryService {
       .take(limit)
       .getManyAndCount();
 
-    const inspections = await loadContractInspections(
-      this.dataSource,
-      contracts.map((c) => c.id),
-    );
+    const ids = contracts.map((c) => c.id);
+    const [inspections, firstRents] = await Promise.all([
+      loadContractInspections(this.dataSource, ids),
+      loadFirstRentSummaries(this.dataSource, ids),
+    ]);
     return {
-      contracts: contracts.map((c) => toBackOfficeContractRecord(c, inspections.get(c.id))),
+      contracts: contracts.map((c) =>
+        toBackOfficeContractRecord(c, inspections.get(c.id), firstRents.get(c.id) ?? null),
+      ),
       meta: buildPaginationMeta(page, limit, total),
     };
   }
@@ -82,8 +88,15 @@ export class ContractQueryService {
         HttpStatus.FORBIDDEN,
       );
     }
-    const inspections = await loadContractInspections(this.dataSource, [contract.id]);
-    return toBackOfficeContractRecord(contract, inspections.get(contract.id));
+    const [inspections, firstRents] = await Promise.all([
+      loadContractInspections(this.dataSource, [contract.id]),
+      loadFirstRentSummaries(this.dataSource, [contract.id]),
+    ]);
+    return toBackOfficeContractRecord(
+      contract,
+      inspections.get(contract.id),
+      firstRents.get(contract.id) ?? null,
+    );
   }
 
   /**
@@ -101,7 +114,16 @@ export class ContractQueryService {
         HttpStatus.FORBIDDEN,
       );
     }
-    return toStaffContractRecord(contract, access.inspections, access.permissions);
+    // Staff get the transfer QR too: they show it to the customer at check-in.
+    const firstRent = (await loadFirstRentSummaries(this.dataSource, [contract.id])).get(
+      contract.id,
+    );
+    return toStaffContractRecord(
+      contract,
+      access.inspections,
+      access.permissions,
+      firstRent ? withPaymentQr(firstRent, this.config) : null,
+    );
   }
 
   /** Facility ids the actor may read; undefined means every facility. */

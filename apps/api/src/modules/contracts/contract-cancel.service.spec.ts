@@ -1,9 +1,10 @@
 import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
+import { Invoice } from '@entities/invoice.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { ContractStatus, StorageUnitStatus, UserRole } from '@storage/types';
+import { ContractStatus, InvoiceStatus, StorageUnitStatus, UserRole } from '@storage/types';
 import { In } from 'typeorm';
 import { ContractCancelService } from './contract-cancel.service';
 
@@ -64,6 +65,12 @@ describe('ContractCancelService.cancelDraft', () => {
       StorageUnit,
       { id: 'unit-1', status: In([StorageUnitStatus.BOOKED, StorageUnitStatus.HELD]) },
       { status: StorageUnitStatus.AVAILABLE },
+    );
+    // Only an invoice nobody paid is voided; money taken waits for a manual refund.
+    expect(em.update).toHaveBeenCalledWith(
+      Invoice,
+      { contractId: 'contract-1', status: InvoiceStatus.ISSUED },
+      { status: InvoiceStatus.VOID },
     );
   });
 

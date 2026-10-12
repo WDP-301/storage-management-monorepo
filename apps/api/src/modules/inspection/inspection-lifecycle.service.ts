@@ -1,14 +1,19 @@
 import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
+import { Invoice } from '@entities/invoice.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { CONTRACT_DOCUMENTS_REQUIRED_MESSAGE } from '@modules/contracts/contract-documents.service';
+import {
+  FIRST_RENT_UNPAID_MESSAGE,
+  findFirstRentInvoice,
+} from '@modules/contracts/first-rent.util';
 import { lockUnitClaimedOnlyBy } from '@modules/contracts/unit-claim.util';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { ContractStatus, InspectionType, StorageUnitStatus } from '@storage/types';
+import { ContractStatus, InspectionType, InvoiceStatus, StorageUnitStatus } from '@storage/types';
 import { DataSource, type EntityManager, In } from 'typeorm';
 import { assertInspectorOrManager, assertNotFinalized } from './inspection-access.util';
 
@@ -48,7 +53,8 @@ export class InspectionLifecycleService {
   constructor(private readonly dataSource: DataSource) {}
 
   /**
-   * Signs off an inspection and moves the contract and unit along with it:
+   * Signs off an inspection and moves the contract and unit along with it (a handover first
+   * needs the signed files and the first month paid):
    * handover DRAFT → ACTIVE / unit RENTED, return ACTIVE → ENDED / unit AVAILABLE or
    * MAINTENANCE. Everything changes in one transaction under row locks, so a concurrent
    * finalize sees the committed finalizedAt and gets 409.
@@ -91,17 +97,19 @@ export class InspectionLifecycleService {
         });
       }
 
-      if (inspection.type === InspectionType.PRE_HANDOVER && !contract.documents?.length) {
-        throw new DomainException(
-          ErrorCode.CONTRACT_DOCUMENTS_REQUIRED,
-          CONTRACT_DOCUMENTS_REQUIRED_MESSAGE,
-          HttpStatus.CONFLICT,
-          { contractId: contract.id },
-        );
-      }
+      const firstRent =
+        inspection.type === InspectionType.PRE_HANDOVER
+          ? await this.assertReadyForHandover(em, contract)
+          : null;
 
       await this.moveUnit(em, contract, transition, inspection);
       const now = new Date();
+      // The first paid month runs from the day the customer actually took the unit.
+      if (firstRent) {
+        const endAt = new Date(now);
+        endAt.setMonth(endAt.getMonth() + firstRent.months);
+        await em.update(Invoice, { id: firstRent.id }, { startAt: now, endAt });
+      }
       await em.update(
         Contract,
         { id: contract.id },
@@ -115,6 +123,29 @@ export class InspectionLifecycleService {
       );
       return saved;
     });
+  }
+
+  /** Handover needs the signed contract files and the first month's rent paid. */
+  private async assertReadyForHandover(em: EntityManager, contract: Contract): Promise<Invoice> {
+    if (!contract.documents?.length) {
+      throw new DomainException(
+        ErrorCode.CONTRACT_DOCUMENTS_REQUIRED,
+        CONTRACT_DOCUMENTS_REQUIRED_MESSAGE,
+        HttpStatus.CONFLICT,
+        { contractId: contract.id },
+      );
+    }
+    // Locked so a concurrent void or payment cannot change it under the handover.
+    const invoice = await findFirstRentInvoice(em, contract.id, { lock: true });
+    if (invoice?.status !== InvoiceStatus.PAID) {
+      throw new DomainException(
+        ErrorCode.FIRST_RENT_UNPAID,
+        FIRST_RENT_UNPAID_MESSAGE,
+        HttpStatus.CONFLICT,
+        { contractId: contract.id, invoiceStatus: invoice?.status ?? null },
+      );
+    }
+    return invoice;
   }
 
   private async moveUnit(

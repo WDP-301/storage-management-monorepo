@@ -110,8 +110,15 @@ export class InspectionController {
   @ApiOperation({
     summary:
       'Finalize an inspection — handover activates the contract, return ends it and frees the unit',
+    description:
+      "A handover needs the signed contract files and the first month's rent paid (POST /contracts/:id/first-rent).",
   })
-  @ApiResponse({ status: 409, type: ApiErrorResponseDto })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Already finalized, wrong contract status, CONTRACT_DOCUMENTS_REQUIRED or FIRST_RENT_UNPAID',
+    type: ApiErrorResponseDto,
+  })
   finalize(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.lifecycle.finalize(id, user);
   }

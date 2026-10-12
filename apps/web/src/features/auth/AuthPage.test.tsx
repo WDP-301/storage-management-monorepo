@@ -17,7 +17,6 @@ const defaultAuthContext: AuthContextType = {
   refreshUser: mockRefreshUser,
 };
 
-// Mock useAuth
 vi.mock('../../context/AuthContext', () => ({
   useAuth: () => defaultAuthContext,
 }));
@@ -63,13 +62,30 @@ describe('AuthPage Form Validation and Interaction', () => {
     expect(mockLogin).not.toHaveBeenCalled();
   });
 
+  it('toggles password visibility when eye button is clicked', async () => {
+    renderComponent('/login');
+
+    const passwordInput = screen.getByPlaceholderText('Nhập mật khẩu của bạn');
+    expect(passwordInput.getAttribute('type')).toBe('password');
+
+    const toggleBtn = screen.getByRole('button', { name: /hiện mật khẩu/i });
+    fireEvent.click(toggleBtn);
+
+    expect(passwordInput.getAttribute('type')).toBe('text');
+
+    const hideBtn = screen.getByRole('button', { name: /ẩn mật khẩu/i });
+    fireEvent.click(hideBtn);
+
+    expect(passwordInput.getAttribute('type')).toBe('password');
+  });
+
   it('calls login when valid credentials are submitted', async () => {
     mockLogin.mockResolvedValueOnce({
       id: 'usr-1',
       email: 'test@example.com',
       fullName: 'Test User',
       status: 'ACTIVE',
-      roles: ['CUSTOMER'],
+      roles: ['ADMIN'],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -93,8 +109,12 @@ describe('AuthPage Form Validation and Interaction', () => {
     });
   });
 
-  it('displays server error message on login failure', async () => {
-    mockLogin.mockRejectedValueOnce(new Error('Email hoặc mật khẩu không chính xác.'));
+  it('displays Vietnamese error message on 401 INVALID_CREDENTIALS failure', async () => {
+    mockLogin.mockRejectedValueOnce({
+      status: 401,
+      code: 'INVALID_CREDENTIALS',
+      message: 'Invalid email or password',
+    });
 
     renderComponent('/login');
 
@@ -108,6 +128,10 @@ describe('AuthPage Form Validation and Interaction', () => {
     fireEvent.click(submitBtn);
 
     expect(await screen.findByText('Email hoặc mật khẩu không chính xác.')).toBeTruthy();
+
+    // Clears on typing
+    fireEvent.change(passwordInput, { target: { value: 'anotherpassword' } });
+    expect(screen.queryByText('Email hoặc mật khẩu không chính xác.')).toBeNull();
   });
 
   it('redirects to location.state.from after successful login when provided', async () => {

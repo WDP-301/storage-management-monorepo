@@ -1,5 +1,16 @@
 import type { LayoutElementType } from '@storage/types';
-import { Check, Column, CreateDateColumn, Entity, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Check,
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { AppUser } from './app-user.entity';
+import { StorageUnit } from './storage-unit.entity';
 
 /** A rectangle of grid cells, 0-based from the top-left. */
 export interface LayoutRect {
@@ -64,4 +75,13 @@ export class ShelfLayout {
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamp with time zone' })
   updatedAt: Date;
+
+  // Declared so schema tooling keeps the migration's foreign keys instead of dropping them.
+  @ManyToOne(() => StorageUnit, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'warehouse_id', foreignKeyConstraintName: 'FK_shelf_layouts_warehouse' })
+  warehouse?: StorageUnit;
+
+  @ManyToOne(() => AppUser, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'updated_by', foreignKeyConstraintName: 'FK_shelf_layouts_updated_by' })
+  updater?: AppUser | null;
 }

@@ -27,14 +27,18 @@ export class ShelfWarehouses1791900000000 implements MigrationInterface {
     );
   }
 
-  /** Refuses to run while shelf rows exist: contracts reference them and must not be orphaned. */
+  /**
+   * Refuses to run while shelf rows exist, soft-deleted ones included: contracts reference them
+   * and must not be orphaned, so they have to be hard-deleted (or converted) by hand first.
+   */
   async down(queryRunner: QueryRunner): Promise<void> {
     const [{ shelfRows }] = await queryRunner.query(
       `SELECT count(*)::int AS "shelfRows" FROM "storage_units" WHERE "kind" <> 'SELF_STORAGE'`,
     );
     if (shelfRows > 0) {
       throw new Error(
-        `${shelfRows} shelf warehouse/shelf rows exist; delete the shelf warehouses first, then revert.`,
+        `${shelfRows} shelf warehouse/shelf rows exist (soft-deleted included); hard-delete them or ` +
+          `convert them to SELF_STORAGE first, then revert.`,
       );
     }
     await queryRunner.query(`DROP INDEX "IDX_storage_units_parent"`);

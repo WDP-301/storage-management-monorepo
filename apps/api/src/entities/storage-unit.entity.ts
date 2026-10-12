@@ -1,6 +1,14 @@
 import { AuditWithTimezone } from '@shared/models/audit.model';
 import { StorageUnitKind, StorageUnitStatus } from '@storage/types';
-import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Check,
+  Column,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { Facility } from './facility.entity';
 
 /** A photo of the warehouse; `fileKey` is an `uploads/` object key in the private bucket. */
@@ -19,6 +27,12 @@ export interface WarehouseImage {
 @Index('UQ_storage_units_code', ['code'], { unique: true, where: '"deleted_at" IS NULL' })
 @Index('IDX_storage_units_facility', ['facilityId'])
 @Index('IDX_storage_units_parent', ['parentId'], { where: '"parent_id" IS NOT NULL' })
+@Check('CK_storage_units_kind', `"kind" IN ('SELF_STORAGE', 'SHELF_WAREHOUSE', 'SHELF')`)
+@Check('CK_storage_units_parent', `("kind" = 'SHELF') = ("parent_id" IS NOT NULL)`)
+@Check(
+  'CK_storage_units_shelf_warehouse_status',
+  `"kind" <> 'SHELF_WAREHOUSE' OR "status" IN ('AVAILABLE', 'MAINTENANCE', 'INACTIVE')`,
+)
 export class StorageUnit extends AuditWithTimezone {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -116,6 +130,6 @@ export class StorageUnit extends AuditWithTimezone {
   facility: Facility;
 
   @ManyToOne(() => StorageUnit, { nullable: true, onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'parent_id' })
+  @JoinColumn({ name: 'parent_id', foreignKeyConstraintName: 'FK_storage_units_parent' })
   parent?: StorageUnit | null;
 }

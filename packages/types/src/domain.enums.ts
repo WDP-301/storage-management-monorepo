@@ -32,6 +32,14 @@ export const StorageUnitStatus = {
 } as const;
 export type StorageUnitStatus = (typeof StorageUnitStatus)[keyof typeof StorageUnitStatus];
 
+/** SELF_STORAGE: a whole rentable warehouse; SHELF_WAREHOUSE: a building rented per shelf; SHELF: a rentable child of it. */
+export const StorageUnitKind = {
+  SELF_STORAGE: 'SELF_STORAGE',
+  SHELF_WAREHOUSE: 'SHELF_WAREHOUSE',
+  SHELF: 'SHELF',
+} as const;
+export type StorageUnitKind = (typeof StorageUnitKind)[keyof typeof StorageUnitKind];
+
 export const BookingStatus = {
   DRAFT: 'DRAFT',
   HOLDING: 'HOLDING',

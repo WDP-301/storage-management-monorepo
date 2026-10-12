@@ -1,5 +1,5 @@
 import { AuditWithTimezone } from '@shared/models/audit.model';
-import { StorageUnitStatus } from '@storage/types';
+import { StorageUnitKind, StorageUnitStatus } from '@storage/types';
 import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Facility } from './facility.entity';
 
@@ -18,6 +18,7 @@ export interface WarehouseImage {
 @Entity('storage_units')
 @Index('UQ_storage_units_code', ['code'], { unique: true, where: '"deleted_at" IS NULL' })
 @Index('IDX_storage_units_facility', ['facilityId'])
+@Index('IDX_storage_units_parent', ['parentId'], { where: '"parent_id" IS NOT NULL' })
 export class StorageUnit extends AuditWithTimezone {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -102,7 +103,19 @@ export class StorageUnit extends AuditWithTimezone {
   @Column({ type: 'jsonb', default: () => "'[]'" })
   images: WarehouseImage[];
 
+  /** Shelf warehouses are rented per shelf; their shelves point back through `parentId`. */
+  @Column({ type: 'varchar', length: 20, default: StorageUnitKind.SELF_STORAGE })
+  kind: StorageUnitKind;
+
+  /** Set exactly when `kind` is SHELF: the shelf warehouse that holds it. */
+  @Column({ type: 'uuid', nullable: true, name: 'parent_id' })
+  parentId: string | null;
+
   @ManyToOne(() => Facility)
   @JoinColumn({ name: 'facility_id' })
   facility: Facility;
+
+  @ManyToOne(() => StorageUnit, { nullable: true, onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'parent_id' })
+  parent?: StorageUnit | null;
 }

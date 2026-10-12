@@ -1,5 +1,6 @@
 import { Facility } from '@entities/facility.entity';
 import { ServiceTicket } from '@entities/service-ticket.entity';
+import { ShelfLayout } from '@entities/shelf-layout.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { TourAppointment } from '@entities/tour-appointment.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
@@ -53,6 +54,7 @@ describe('WarehouseCommandService', () => {
     save: jest.Mock;
     update: jest.Mock;
     softDelete: jest.Mock;
+    delete: jest.Mock;
   };
   let query: jest.Mock;
   const lockCalls: string[] = [];
@@ -77,6 +79,7 @@ describe('WarehouseCommandService', () => {
       save: jest.fn(async (data) => ({ id: 'wh-new', ...data })),
       update: jest.fn().mockResolvedValue(undefined),
       softDelete: jest.fn().mockResolvedValue(undefined),
+      delete: jest.fn().mockResolvedValue(undefined),
     };
     stubWarehouse(buildFacility(), buildUnit());
     const units = { manager: { transaction: jest.fn((work) => work(manager)) } };
@@ -536,6 +539,7 @@ describe('WarehouseCommandService', () => {
 
       expect(manager.softDelete).toHaveBeenCalledWith(StorageUnit, ['s1', 's2']);
       expect(manager.softDelete).toHaveBeenCalledWith(StorageUnit, 'p1');
+      expect(manager.delete).toHaveBeenCalledWith(ShelfLayout, { warehouseId: 'p1' });
     });
 
     it('refuses to retire a shelf warehouse that has a booked shelf', async () => {

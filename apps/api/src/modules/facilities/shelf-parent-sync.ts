@@ -1,3 +1,4 @@
+import { ShelfLayout } from '@entities/shelf-layout.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { HttpStatus } from '@nestjs/common';
 import { DomainException } from '@shared/exceptions/domain.exception';
@@ -149,5 +150,8 @@ export async function softDeleteWithShelves(
     );
   }
   if (shelfIds.length > 0) await manager.softDelete(StorageUnit, shelfIds);
+  // The floor plan is unreachable once its warehouse is gone; the FK cascade only fires on a hard
+  // delete, so it is removed here.
+  await manager.delete(ShelfLayout, { warehouseId: parent.id });
   await manager.softDelete(StorageUnit, parent.id);
 }

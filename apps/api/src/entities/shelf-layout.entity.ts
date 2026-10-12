@@ -23,6 +23,8 @@ export interface ShelfPlacement extends LayoutRect {
 /**
  * The floor plan of a shelf warehouse (primary key = the warehouse). `elements` and `placements`
  * are replaced as one document; `version` counts saves and guards concurrent editors.
+ * A removed plan keeps its row with `deletedAt` set so the version keeps counting across a
+ * remove and redraw; it reads as "no layout".
  */
 @Entity('shelf_layouts')
 @Check('CK_shelf_layouts_rows', '"rows" BETWEEN 1 AND 100')
@@ -52,6 +54,10 @@ export class ShelfLayout {
 
   @Column({ type: 'uuid', nullable: true, name: 'updated_by' })
   updatedBy: string | null;
+
+  // A plain column, not @DeleteDateColumn: the write path must lock and read removed rows too.
+  @Column({ type: 'timestamp with time zone', nullable: true, name: 'deleted_at' })
+  deletedAt: Date | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp with time zone' })
   createdAt: Date;

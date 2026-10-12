@@ -44,6 +44,7 @@ const stored = (over: Partial<ShelfLayout> = {}) =>
     placements: [{ shelfId: SHELF_1, row: 0, col: 0, rowSpan: 1, colSpan: 1 }],
     updatedBy: 'admin-1',
     updatedAt: new Date(0),
+    deletedAt: null,
     ...over,
   }) as ShelfLayout;
 
@@ -185,10 +186,24 @@ describe('LayoutService', () => {
       expect(em.insert).not.toHaveBeenCalled();
     });
 
+    it('redraws a removed plan from version 0, continuing its version count', async () => {
+      locked = stored({ version: 4, deletedAt: new Date() });
+
+      await service.save('wh-1', dto({ version: 0 }), admin);
+
+      expect(em.update).toHaveBeenCalledWith(
+        ShelfLayout,
+        { warehouseId: 'wh-1' },
+        expect.objectContaining({ version: 5, deletedAt: null }),
+      );
+      expect(em.insert).not.toHaveBeenCalled();
+    });
+
     it.each([
       ['a stale version', stored({ version: 5 }), 2, 5],
       ['version 0 over an existing layout', stored({ version: 5 }), 0, 5],
       ['a version over a missing layout', null, 3, 0],
+      ['the old version over a removed plan', stored({ version: 4, deletedAt: new Date() }), 3, 0],
     ])('answers 409 with the current version for %s', async (_name, row, sent, current) => {
       locked = row;
 
@@ -277,15 +292,24 @@ describe('LayoutService', () => {
   });
 
   describe('remove', () => {
-    it('deletes the layout at the matching version', async () => {
+    it('marks the layout removed at the matching version and bumps the version', async () => {
       locked = stored({ version: 2 });
       await service.remove('wh-1', 2, admin);
-      expect(em.delete).toHaveBeenCalledWith(ShelfLayout, { warehouseId: 'wh-1' });
+      expect(em.update).toHaveBeenCalledWith(
+        ShelfLayout,
+        { warehouseId: 'wh-1' },
+        { deletedAt: expect.any(Date), version: 3, updatedBy: 'admin-1' },
+      );
+      expect(em.delete).not.toHaveBeenCalled();
     });
 
-    it('answers 404 when there is no layout to delete', async () => {
+    it.each([
+      ['there is no layout', null],
+      ['the layout was already removed', stored({ version: 3, deletedAt: new Date() })],
+    ])('answers 404 when %s', async (_name, row) => {
+      locked = row;
       await expect(service.remove('wh-1', 0, admin)).rejects.toMatchObject({ status: 404 });
-      expect(em.delete).not.toHaveBeenCalled();
+      expect(em.update).not.toHaveBeenCalled();
     });
 
     it('answers 409 for a stale version', async () => {
@@ -294,7 +318,7 @@ describe('LayoutService', () => {
         status: 409,
         response: { details: { currentVersion: 4 } },
       });
-      expect(em.delete).not.toHaveBeenCalled();
+      expect(em.update).not.toHaveBeenCalled();
     });
 
     it('forbids a manager of another facility', async () => {

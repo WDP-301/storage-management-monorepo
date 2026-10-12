@@ -1,3 +1,4 @@
+import { ShelfLayout } from '@entities/shelf-layout.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { TourAppointment } from '@entities/tour-appointment.entity';
 import { StorageUnitKind, StorageUnitStatus } from '@storage/types';
@@ -29,6 +30,7 @@ function buildManager(shelves: StorageUnit[], openTours = 0) {
     }),
     update: jest.fn().mockResolvedValue(undefined),
     softDelete: jest.fn().mockResolvedValue(undefined),
+    delete: jest.fn().mockResolvedValue(undefined),
   };
   return { manager: manager as never, mock: manager, order };
 }
@@ -168,7 +170,7 @@ describe('cascadeParentLocation', () => {
 });
 
 describe('softDeleteWithShelves', () => {
-  it('retires the live shelves and the building after locking the shelves', async () => {
+  it('retires the live shelves, the floor plan and the building after locking the shelves', async () => {
     const { manager, mock, order } = buildManager([
       shelf('s1'),
       shelf('s2', StorageUnitStatus.INACTIVE),
@@ -180,6 +182,7 @@ describe('softDeleteWithShelves', () => {
     expect(order[0]).toBe('lockShelves');
     expect(mock.softDelete).toHaveBeenNthCalledWith(1, StorageUnit, ['s1', 's2']);
     expect(mock.softDelete).toHaveBeenNthCalledWith(2, StorageUnit, 'p1');
+    expect(mock.delete).toHaveBeenCalledWith(ShelfLayout, { warehouseId: 'p1' });
   });
 
   it('refuses with the blocking shelf ids when one is booked', async () => {
@@ -190,6 +193,7 @@ describe('softDeleteWithShelves', () => {
       response: { details: { shelfIds: ['s2'], openTours: 0 } },
     });
     expect(mock.softDelete).not.toHaveBeenCalled();
+    expect(mock.delete).not.toHaveBeenCalled();
   });
 
   it('refuses while a tour is open', async () => {

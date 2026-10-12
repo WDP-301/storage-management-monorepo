@@ -22,6 +22,14 @@ export interface LayoutDraft extends LayoutDocument {
 
 const SHELF_WAREHOUSE = 'Shelf warehouse';
 
+/** Removed plans keep their row (and version) but read as "no layout". */
+const LIVE = { deletedAt: IsNull() };
+
+/** The version an editor must send: the live plan's, or 0 when there is none. */
+function liveVersion(layout: ShelfLayout | null): number {
+  return layout && layout.deletedAt === null ? layout.version : 0;
+}
+
 function versionMismatch(currentVersion: number): DomainException {
   return new DomainException(
     ErrorCode.CONFLICT,
@@ -49,7 +57,7 @@ export class LayoutService {
   async getLayout(warehouseId: string, actor?: AuthUser): Promise<LayoutView> {
     // Checks the warehouse (404 unless a live shelf warehouse) and the actor's facility scope.
     const shelves = await this.query.listShelves(warehouseId, { includeInactive: true, actor });
-    const layout = await this.layouts.findOne({ where: { warehouseId } });
+    const layout = await this.layouts.findOne({ where: { warehouseId, ...LIVE } });
     return toLayoutView(warehouseId, layout, shelves, { backOffice: actor !== undefined });
   }
 
@@ -85,10 +93,11 @@ export class LayoutService {
           updatedBy: actor.id,
         };
         if (current) {
+          // Continues from the stored version, also when redrawing a removed plan.
           await manager.update(
             ShelfLayout,
             { warehouseId },
-            { ...document, version: dto.version + 1 },
+            { ...document, version: current.version + 1, deletedAt: null },
           );
         } else {
           await manager.insert(ShelfLayout, { ...document, warehouseId, version: 1 });
@@ -105,8 +114,13 @@ export class LayoutService {
   async remove(warehouseId: string, version: number, actor: AuthUser): Promise<void> {
     await this.units.manager.transaction(async (manager) => {
       const current = await this.lockForWrite(manager, warehouseId, version, actor);
-      if (!current) notFound('Layout', warehouseId);
-      await manager.delete(ShelfLayout, { warehouseId });
+      if (liveVersion(current) === 0) notFound('Layout', warehouseId);
+      // Kept as a removed row so the version keeps counting; see ShelfLayout.
+      await manager.update(
+        ShelfLayout,
+        { warehouseId },
+        { deletedAt: new Date(), version: version + 1, updatedBy: actor.id },
+      );
     });
   }
 
@@ -132,13 +146,13 @@ export class LayoutService {
         HttpStatus.CONFLICT,
       );
     }
-    const current = await this.layouts.findOne({ where: { warehouseId } });
+    const current = await this.layouts.findOne({ where: { warehouseId, ...LIVE } });
     return { ...draft, basedOnVersion: current?.version ?? 0 };
   }
 
   /**
    * Locks facility, warehouse and layout row, checks scope and that the editor saw the latest
-   * version (no row counts as version 0), and returns the locked layout if there is one.
+   * version (no live plan counts as version 0), and returns the locked row, removed or not.
    */
   private async lockForWrite(
     manager: EntityManager,
@@ -154,12 +168,12 @@ export class LayoutService {
       where: { warehouseId },
       lock: { mode: 'pessimistic_write' },
     });
-    if ((current?.version ?? 0) !== version) throw versionMismatch(current?.version ?? 0);
+    if (liveVersion(current) !== version) throw versionMismatch(liveVersion(current));
     return current;
   }
 
   private async currentMismatch(warehouseId: string): Promise<DomainException> {
-    const current = await this.layouts.findOne({ where: { warehouseId } });
+    const current = await this.layouts.findOne({ where: { warehouseId, ...LIVE } });
     return versionMismatch(current?.version ?? 0);
   }
 }

@@ -103,6 +103,15 @@ describe('CheckInService.verify', () => {
     expect(params).toEqual([hashSessionToken(token)]);
   });
 
+  it('judges expiry and stamps use by the wall clock, not the transaction start', async () => {
+    await service.verify(staff, `${payload}\r\n`);
+
+    const sqls = em.query.mock.calls.map(([sql]) => sql as string);
+    expect(sqls[0]).toContain('"expires_at" <= clock_timestamp()');
+    expect(sqls.find((sql) => sql.startsWith('UPDATE'))).toContain('"used_at" = clock_timestamp()');
+    expect(sqls.join('\n')).not.toContain('now()');
+  });
+
   it('rejects an unknown pass', async () => {
     pass = null;
     await expect(service.verify(staff, payload)).rejects.toMatchObject(reason('NOT_FOUND'));

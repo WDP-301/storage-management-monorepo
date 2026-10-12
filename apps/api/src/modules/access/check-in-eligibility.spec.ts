@@ -46,6 +46,10 @@ describe('parsePayload', () => {
     expect(parsePayload(buildPayload(token))).toBe(token);
   });
 
+  it('ignores whitespace a scanner adds around the payload', () => {
+    expect(parsePayload(` ${buildPayload(token)}\r\n`)).toBe(token);
+  });
+
   it.each([
     '',
     token,

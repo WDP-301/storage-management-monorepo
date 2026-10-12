@@ -51,11 +51,12 @@ export class CheckInService {
     const tokenHash = hashSessionToken(token);
 
     return this.dataSource.transaction(async (em) => {
-      // Expiry is evaluated by the database so pass creation and scan share one clock.
+      // Expiry is evaluated by the database so pass creation and scan share one clock. It reads
+      // clock_timestamp(), not now(): the transaction may have started before waiting on this lock.
       const [pass]: PassRow[] = await em.query(
         `SELECT "id", "contract_id" AS "contractId", "storage_unit_id" AS "storageUnitId",
                 "facility_id" AS "facilityId", "used_at" AS "usedAt", "verified_by" AS "verifiedBy",
-                ("expires_at" <= now()) AS "expired"
+                ("expires_at" <= clock_timestamp()) AS "expired"
            FROM "access_events"
           WHERE "qr_token_hash" = $1 AND "event_type" = 'CHECK_IN'
           FOR UPDATE`,
@@ -107,7 +108,7 @@ export class CheckInService {
 
       // The postgres driver returns UPDATE … RETURNING as [rows, affectedCount], unlike SELECT/INSERT.
       const [[{ usedAt }]]: [{ usedAt: Date }[], number] = await em.query(
-        `UPDATE "access_events" SET "used_at" = now(), "verified_by" = $2
+        `UPDATE "access_events" SET "used_at" = clock_timestamp(), "verified_by" = $2
           WHERE "id" = $1 RETURNING "used_at" AS "usedAt"`,
         [pass.id, actor.id],
       );

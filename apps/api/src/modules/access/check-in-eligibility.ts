@@ -13,9 +13,12 @@ const PAYLOAD_PATTERN = /^SMCI1:([A-Za-z0-9_-]{43})$/;
 
 export const buildPayload = (token: string): string => `${QR_PREFIX}${token}`;
 
-/** Extracts the token from a scanned payload, or null when it is not one of ours. */
+/**
+ * Extracts the token from a scanned payload, or null when it is not one of ours. Surrounding
+ * whitespace is dropped: keyboard-wedge scanners often append a newline.
+ */
 export function parsePayload(payload: string): string | null {
-  return PAYLOAD_PATTERN.exec(payload)?.[1] ?? null;
+  return PAYLOAD_PATTERN.exec(payload.trim())?.[1] ?? null;
 }
 
 export type CheckInRefusalReason = 'CONTRACT_NOT_ACTIVE' | 'CONTRACT_NOT_STARTED' | 'NOT_SHELF';

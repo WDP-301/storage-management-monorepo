@@ -38,7 +38,7 @@ storage-management-monorepo/
 
 | Application / Package | Technology Stack | Default Port | Description |
 | :--- | :--- | :--- | :--- |
-| **Backend API (`apps/api`)** | NestJS 11, TypeORM, PostgreSQL (`pg`), AWS SDK v3 S3, Swagger | `3001` | REST API, Warehouse Inventory CRUD & S3 Presigned URL services |
+| **Backend API (`apps/api`)** | NestJS 11, TypeORM, PostgreSQL (`pg`), AWS SDK v3 S3, Swagger | `3001` | REST API, Warehouse Inventory CRUD (incl. shelf warehouses), QR access check-ins & S3 Presigned URL services |
 | **Web App (`apps/web`)** | React 19, Vite 8, Tailwind CSS v4, Lucide React, Axios | `3000` | Operations & Admin desktop dashboard SPA (Pure React Hooks) |
 | **Mobile App (`apps/mobile`)** | React Native, Expo SDK 54, MapLibre + Goong, Metro monorepo | `8081` | Customer booking flow, warehouse map & KPI view (dev client, **không chạy Expo Go**) |
 | **Shared Types (`packages/types`)** | TypeScript | N/A | DTOs, entity interfaces, and API response contracts |

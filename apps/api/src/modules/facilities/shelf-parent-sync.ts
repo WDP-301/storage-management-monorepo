@@ -3,6 +3,7 @@ import { StorageUnit } from '@entities/storage-unit.entity';
 import { HttpStatus } from '@nestjs/common';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
+import { StorageUnitStatus } from '@storage/types';
 import type { EntityManager } from 'typeorm';
 import type { UpdateWarehouseDto } from './dto/warehouse.dto';
 import { isIdleUnitStatus } from './unit-status';
@@ -93,7 +94,11 @@ export const lockShelves = (manager: EntityManager, parentId: string): Promise<S
 
 const liveShelves = (shelves: StorageUnit[]) => shelves.filter((shelf) => !shelf.deletedAt);
 
-function occupiedConflict(message: string, shelfIds: string[], openTours: number): DomainException {
+function occupiedConflict(
+  message: string,
+  shelfIds: string[],
+  openTours?: number,
+): DomainException {
   return new DomainException(ErrorCode.CONFLICT, message, HttpStatus.CONFLICT, {
     shelfIds,
     openTours,
@@ -120,6 +125,29 @@ export async function assertParentMovable(
   }
   await assertNoOpenTours(manager, unitIds);
   await assertNoOpenTickets(manager, unitIds);
+}
+
+/**
+ * Taking the building out of service (maintenance or retired) is refused while a customer holds,
+ * books or rents one of its shelves: those rentals would carry on inside a closed building.
+ * The shelves are locked, so a booking waiting on the building cannot slip in afterwards.
+ */
+export async function assertParentClosable(
+  manager: EntityManager,
+  parent: StorageUnit,
+  nextStatus: StorageUnitStatus | undefined,
+): Promise<void> {
+  if (!nextStatus || nextStatus === StorageUnitStatus.AVAILABLE || nextStatus === parent.status) {
+    return;
+  }
+  const shelves = liveShelves(await lockShelves(manager, parent.id));
+  const occupied = shelves.filter((shelf) => !isIdleUnitStatus(shelf.status));
+  if (occupied.length > 0) {
+    throw occupiedConflict(
+      'Cannot take a shelf warehouse out of service while its shelves are occupied',
+      occupied.map((shelf) => shelf.id),
+    );
+  }
 }
 
 /** Copies the building's new location onto every shelf in one statement, soft-deleted rows included. */

@@ -13,6 +13,7 @@ import type {
 } from './dto/warehouse.dto';
 import {
   assertNoParentPricing,
+  assertParentClosable,
   assertParentMovable,
   assertParentPatchAllowed,
   assertShelfPatchAllowed,
@@ -102,6 +103,7 @@ export class WarehouseCommandService {
       }
 
       assertNotFrozen(dto, unit);
+      if (isParent) await assertParentClosable(manager, unit, dto.status);
       if (targetFacility && changes(dto, 'facilityId', unit)) {
         assertFacilityActive(targetFacility);
         if (isParent) {
@@ -150,6 +152,9 @@ export class WarehouseCommandService {
           `Cannot change status of a ${unit.status} warehouse`,
           HttpStatus.CONFLICT,
         );
+      }
+      if (unit.kind === StorageUnitKind.SHELF_WAREHOUSE) {
+        await assertParentClosable(manager, unit, dto.status);
       }
       await manager.update(StorageUnit, unit.id, { status: dto.status });
     });

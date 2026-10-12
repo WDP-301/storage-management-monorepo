@@ -451,6 +451,18 @@ describe('WarehouseCommandService', () => {
       expect(manager.update).not.toHaveBeenCalled();
     });
 
+    it('refuses to retire the building while a shelf is rented', async () => {
+      stubWarehouse(buildFacility(), parentRow());
+      manager.find.mockResolvedValue([
+        { id: 's1', status: StorageUnitStatus.RENTED, deletedAt: null },
+      ]);
+
+      await expect(
+        service.update('p1', { status: StorageUnitStatus.INACTIVE }),
+      ).rejects.toMatchObject({ status: 409, response: { details: { shelfIds: ['s1'] } } });
+      expect(manager.update).not.toHaveBeenCalled();
+    });
+
     it('freezes the building code once it has shelves and refuses a price', async () => {
       stubWarehouse(buildFacility(), parentRow());
       manager.count.mockResolvedValue(4);
@@ -492,6 +504,24 @@ describe('WarehouseCommandService', () => {
       expect(manager.find).toHaveBeenCalledWith(UserRoleAssignment, {
         where: { userId: 'mgr-1', facilityId: 'fac-1', role: UserRole.FACILITY_MANAGER },
       });
+    });
+
+    it('refuses to take a shelf warehouse out of service while a shelf is booked', async () => {
+      stubWarehouse(
+        buildFacility(),
+        buildUnit({ id: 'p1', kind: StorageUnitKind.SHELF_WAREHOUSE }),
+      );
+      manager.find.mockResolvedValue([
+        { id: 's1', status: StorageUnitStatus.BOOKED, deletedAt: null },
+      ]);
+
+      await expect(
+        service.updateStatus('p1', { status: StorageUnitStatus.MAINTENANCE }, {
+          id: 'ops',
+          roles: [UserRole.OPERATIONS_MANAGER],
+        } as never),
+      ).rejects.toMatchObject({ status: 409, response: { details: { shelfIds: ['s1'] } } });
+      expect(manager.update).not.toHaveBeenCalled();
     });
 
     it('lets operations take an available warehouse out of service', async () => {

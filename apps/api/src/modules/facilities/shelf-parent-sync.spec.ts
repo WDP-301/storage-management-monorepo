@@ -3,6 +3,7 @@ import { StorageUnit } from '@entities/storage-unit.entity';
 import { TourAppointment } from '@entities/tour-appointment.entity';
 import { StorageUnitKind, StorageUnitStatus } from '@storage/types';
 import {
+  assertParentClosable,
   assertParentMovable,
   assertParentPatchAllowed,
   assertShelfPatchAllowed,
@@ -137,6 +138,54 @@ describe('assertParentMovable', () => {
     const { manager } = buildManager([shelf('s1')], 2);
 
     await expect(assertParentMovable(manager, parent)).rejects.toMatchObject({ status: 409 });
+  });
+});
+
+describe('assertParentClosable', () => {
+  const open = { ...parent, status: StorageUnitStatus.AVAILABLE } as StorageUnit;
+
+  it.each([StorageUnitStatus.MAINTENANCE, StorageUnitStatus.INACTIVE])(
+    'refuses %s while a shelf is held, booked or rented, naming those shelves',
+    async (next) => {
+      const { manager } = buildManager([
+        shelf('s1'),
+        shelf('s2', StorageUnitStatus.HELD),
+        shelf('s3', StorageUnitStatus.RENTED),
+        shelf('s4', StorageUnitStatus.RENTED, new Date()),
+      ]);
+
+      await expect(assertParentClosable(manager, open, next)).rejects.toMatchObject({
+        status: 409,
+        response: { details: { shelfIds: ['s2', 's3'] } },
+      });
+    },
+  );
+
+  it('lets the building close once its shelves are idle', async () => {
+    const { manager, mock } = buildManager([
+      shelf('s1'),
+      shelf('s2', StorageUnitStatus.MAINTENANCE),
+    ]);
+
+    await expect(
+      assertParentClosable(manager, open, StorageUnitStatus.MAINTENANCE),
+    ).resolves.toBeUndefined();
+    expect(mock.find).toHaveBeenCalledWith(
+      StorageUnit,
+      expect.objectContaining({ lock: { mode: 'pessimistic_write' } }),
+    );
+  });
+
+  it.each([
+    ['no status change', StorageUnitStatus.AVAILABLE, undefined],
+    ['reopening', StorageUnitStatus.MAINTENANCE, StorageUnitStatus.AVAILABLE],
+    ['the status it already has', StorageUnitStatus.MAINTENANCE, StorageUnitStatus.MAINTENANCE],
+  ])('takes no lock for %s', async (_label, current, next) => {
+    const { manager, mock } = buildManager([shelf('s1', StorageUnitStatus.RENTED)]);
+
+    await assertParentClosable(manager, { ...parent, status: current } as StorageUnit, next);
+
+    expect(mock.find).not.toHaveBeenCalled();
   });
 });
 

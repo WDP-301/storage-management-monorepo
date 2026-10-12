@@ -40,6 +40,15 @@ export const StorageUnitKind = {
 } as const;
 export type StorageUnitKind = (typeof StorageUnitKind)[keyof typeof StorageUnitKind];
 
+/** Non-shelf things drawn on a shelf warehouse floor plan; shelves are placements, not elements. */
+export const LayoutElementType = {
+  DOOR: 'DOOR',
+  AISLE: 'AISLE',
+  OBSTACLE: 'OBSTACLE',
+  LABEL: 'LABEL',
+} as const;
+export type LayoutElementType = (typeof LayoutElementType)[keyof typeof LayoutElementType];
+
 export const BookingStatus = {
   DRAFT: 'DRAFT',
   HOLDING: 'HOLDING',

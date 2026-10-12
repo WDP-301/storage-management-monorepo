@@ -9,6 +9,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { FacilitiesController } from './facilities.controller';
 import { FacilitiesService } from './facilities.service';
 import { FacilityCommandService } from './facility-command.service';
+import { ShelfCommandService } from './shelf-command.service';
+import { ShelvesController } from './shelves.controller';
 import { WarehouseCommandService } from './warehouse-command.service';
 import { WarehouseQueryService } from './warehouse-query.service';
 import { WarehousesController } from './warehouses.controller';
@@ -20,12 +22,13 @@ import { WarehousesController } from './warehouses.controller';
     SettingsModule,
     UploadModule, // presigns warehouse photo links
   ],
-  controllers: [FacilitiesController, WarehousesController],
+  controllers: [FacilitiesController, WarehousesController, ShelvesController],
   providers: [
     FacilitiesService,
     FacilityCommandService,
     WarehouseQueryService,
     WarehouseCommandService,
+    ShelfCommandService,
   ],
   exports: [FacilitiesService, WarehouseQueryService],
 })

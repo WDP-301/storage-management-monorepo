@@ -6,13 +6,20 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { StorageUnitStatus, UserRole } from '@storage/types';
+import { StorageUnitKind, StorageUnitStatus, UserRole } from '@storage/types';
 import { Repository } from 'typeorm';
 import type {
   CreateWarehouseDto,
   UpdateWarehouseDto,
   UpdateWarehouseStatusDto,
 } from './dto/warehouse.dto';
+import {
+  assertParentMovable,
+  assertParentPatchAllowed,
+  assertShelfPatchAllowed,
+  cascadeParentLocation,
+  softDeleteWithShelves,
+} from './shelf-parent-sync';
 import { isIdleUnitStatus } from './unit-status';
 import type { WarehouseView } from './warehouse.view';
 import {
@@ -21,37 +28,19 @@ import {
   handleDbError,
   pick,
   resolveAddressCodes,
+  UNIT_FIELDS,
 } from './warehouse-command.helpers';
 import {
   assertFacilityActive,
   assertNoOpenTickets,
   assertNoOpenTours,
+  assertNotFrozen,
   changes,
   countOpenTours,
-  FROZEN_WHEN_OCCUPIED,
   lockFacility,
   lockUnit,
 } from './warehouse-command.locks';
 import { WarehouseQueryService } from './warehouse-query.service';
-
-const UNIT_FIELDS = [
-  'code',
-  'name',
-  'addressLine',
-  'wardCode',
-  'provinceCode',
-  'latitude',
-  'longitude',
-  'monthlyPrice',
-  'widthM',
-  'lengthM',
-  'heightM',
-  'depositMonths',
-  'notes',
-  'status',
-  'facilityId',
-  'images',
-] as const;
 
 /**
  * Write side of warehouses (storage units). Lock order is facility rows first, then the unit
@@ -69,6 +58,9 @@ export class WarehouseCommandService {
 
   async create(dto: CreateWarehouseDto): Promise<WarehouseView> {
     assertRealLocation(dto.latitude, dto.longitude);
+    // A shelf warehouse is priced per shelf, so it never carries a rent or deposit of its own.
+    const kind = dto.kind ?? StorageUnitKind.SELF_STORAGE;
+    const perShelf = kind === StorageUnitKind.SHELF_WAREHOUSE;
     const id = await this.units.manager.transaction(async (manager) => {
       const address = await resolveAddressCodes(manager, dto.wardCode, dto.provinceCode);
       assertFacilityActive(await lockFacility(manager, dto.facilityId));
@@ -77,7 +69,9 @@ export class WarehouseCommandService {
           manager.create(StorageUnit, {
             ...pick(dto, UNIT_FIELDS),
             ...address,
-            depositMonths: dto.depositMonths ?? null,
+            kind,
+            monthlyPrice: perShelf ? 0 : dto.monthlyPrice,
+            depositMonths: perShelf ? null : (dto.depositMonths ?? null),
             status: dto.status ?? StorageUnitStatus.AVAILABLE,
           }),
         );
@@ -93,31 +87,30 @@ export class WarehouseCommandService {
    * Price, deposit, address, notes and photos stay editable — bookings and contracts keep their own
    * snapshots. Code, dimensions, status and facility are frozen while a customer is attached;
    * moving to another facility also requires an active target facility and no open tour or service ticket.
+   * A shelf warehouse moves with all its shelves (refused while any is occupied); a shelf's own
+   * location and photos come from its shelf warehouse and cannot be edited on the shelf.
    */
   async update(id: string, dto: UpdateWarehouseDto): Promise<WarehouseView> {
-    assertNoNullRequiredFields(dto);
     await this.units.manager.transaction(async (manager) => {
       const targetFacility = dto.facilityId ? await lockFacility(manager, dto.facilityId) : null;
       const unit = await lockUnit(manager, id);
+      assertNoNullRequiredFields(dto, unit.kind);
+      if (unit.kind === StorageUnitKind.SHELF) assertShelfPatchAllowed(dto);
+      const isParent = unit.kind === StorageUnitKind.SHELF_WAREHOUSE;
+      if (isParent) await assertParentPatchAllowed(manager, dto, unit);
       if (dto.latitude !== undefined || dto.longitude !== undefined) {
         assertRealLocation(dto.latitude ?? unit.latitude, dto.longitude ?? unit.longitude);
       }
 
-      if (!isIdleUnitStatus(unit.status)) {
-        const frozen = FROZEN_WHEN_OCCUPIED.filter((field) => changes(dto, field, unit));
-        if (frozen.length > 0) {
-          throw new DomainException(
-            ErrorCode.CONFLICT,
-            `Cannot change ${frozen.join(', ')} of a ${unit.status} warehouse`,
-            HttpStatus.CONFLICT,
-            { status: unit.status, fields: [...frozen] },
-          );
-        }
-      }
+      assertNotFrozen(dto, unit);
       if (targetFacility && changes(dto, 'facilityId', unit)) {
         assertFacilityActive(targetFacility);
-        await assertNoOpenTours(manager, unit.id);
-        await assertNoOpenTickets(manager, unit.id);
+        if (isParent) {
+          await assertParentMovable(manager, unit);
+        } else {
+          await assertNoOpenTours(manager, unit.id);
+          await assertNoOpenTickets(manager, unit.id);
+        }
       }
 
       const patch: Partial<StorageUnit> = pick(dto, UNIT_FIELDS);
@@ -128,7 +121,10 @@ export class WarehouseCommandService {
       }
 
       try {
-        if (Object.keys(patch).length > 0) await manager.update(StorageUnit, unit.id, patch);
+        if (Object.keys(patch).length > 0) {
+          await manager.update(StorageUnit, unit.id, patch);
+          if (isParent) await cascadeParentLocation(manager, unit.id, patch);
+        }
       } catch (err) {
         handleDbError(err);
       }
@@ -161,10 +157,16 @@ export class WarehouseCommandService {
     return this.query.findOne(id);
   }
 
-  /** Refused while a customer is attached or a tour is still expected on this warehouse. */
+  /**
+   * Refused while a customer is attached or a tour is still expected on this warehouse. A shelf
+   * warehouse is retired with its shelves, and only when none of them is occupied.
+   */
   async softDelete(id: string): Promise<void> {
     await this.units.manager.transaction(async (manager) => {
       const unit = await lockUnit(manager, id);
+      if (unit.kind === StorageUnitKind.SHELF_WAREHOUSE) {
+        return softDeleteWithShelves(manager, unit);
+      }
       const openTours = await countOpenTours(manager, unit.id);
 
       if (!isIdleUnitStatus(unit.status) || openTours > 0) {

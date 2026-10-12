@@ -36,9 +36,22 @@ describe('computeContractPermissions', () => {
       documents: true,
       handover: true,
       return: false,
+      first_rent: true,
     });
     expect(
       computeContractPermissions(ContractStatus.ACTIVE, false, open, 'staff-1').documents,
+    ).toBe(false);
+  });
+
+  it('lets whoever may sign the handover off collect the first month, only before handover', () => {
+    expect(
+      computeContractPermissions(ContractStatus.DRAFT, false, open, 'staff-2').first_rent,
+    ).toBe(false);
+    expect(computeContractPermissions(ContractStatus.DRAFT, true, open, 'fm-1').first_rent).toBe(
+      true,
+    );
+    expect(
+      computeContractPermissions(ContractStatus.CANCELLED, true, open, 'fm-1').first_rent,
     ).toBe(false);
   });
 
@@ -50,6 +63,7 @@ describe('computeContractPermissions', () => {
       documents: false,
       handover: false,
       return: false,
+      first_rent: false,
     });
   });
 
@@ -99,7 +113,12 @@ describe('resolveContractAccess', () => {
   it('does not treat a manager of another facility as a manager', async () => {
     const access = await resolveContractAccess(build([], 'fac-hn'), contract(), FM);
     expect(access).toMatchObject({ isManager: false, canView: false });
-    expect(access.permissions).toEqual({ documents: false, handover: false, return: false });
+    expect(access.permissions).toEqual({
+      documents: false,
+      handover: false,
+      return: false,
+      first_rent: false,
+    });
   });
 
   it('lets staff on an open handover view and edit the files of a DRAFT', async () => {
@@ -109,7 +128,12 @@ describe('resolveContractAccess', () => {
       STAFF,
     );
     expect(access).toMatchObject({ isManager: false, canView: true });
-    expect(access.permissions).toEqual({ documents: true, handover: true, return: false });
+    expect(access.permissions).toEqual({
+      documents: true,
+      handover: true,
+      return: false,
+      first_rent: true,
+    });
   });
 
   it('lets staff with a finalized handover still view but not edit', async () => {
@@ -119,7 +143,12 @@ describe('resolveContractAccess', () => {
       STAFF,
     );
     expect(access.canView).toBe(true);
-    expect(access.permissions).toEqual({ documents: false, handover: false, return: false });
+    expect(access.permissions).toEqual({
+      documents: false,
+      handover: false,
+      return: false,
+      first_rent: false,
+    });
   });
 
   it('lets staff assigned only to the return view it without file or handover rights', async () => {
@@ -135,7 +164,12 @@ describe('resolveContractAccess', () => {
       STAFF,
     );
     expect(access.canView).toBe(true);
-    expect(access.permissions).toEqual({ documents: false, handover: false, return: true });
+    expect(access.permissions).toEqual({
+      documents: false,
+      handover: false,
+      return: true,
+      first_rent: false,
+    });
   });
 
   it('hides the contract from staff who are not assigned to it', async () => {

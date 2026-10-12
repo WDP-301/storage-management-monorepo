@@ -28,8 +28,10 @@ import { ContractReturnService } from './contract-return.service';
 import { ContractsService } from './contracts.service';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
 import { ReplaceContractDocumentsDto } from './dto/contract-documents.dto';
+import { FirstRentResponseDto } from './dto/first-rent-response.dto';
 import { ListContractsQueryDto } from './dto/list-contracts-query.dto';
 import { ReturnRequestDto } from './dto/return-request.dto';
+import { FirstRentService } from './first-rent.service';
 
 @ApiTags('Contracts')
 @Controller('contracts')
@@ -49,6 +51,7 @@ export class ContractsController {
     private readonly contractCancel: ContractCancelService,
     private readonly contractQuery: ContractQueryService,
     private readonly contractDocuments: ContractDocumentsService,
+    private readonly firstRent: FirstRentService,
   ) {}
 
   // Writes can strand units, so they stay with system-wide roles. Contracts carry
@@ -136,6 +139,39 @@ export class ContractsController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.contractDocuments.replace(id, dto.documents, user);
+  }
+
+  @Post(':id/first-rent')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Issue the first month's rent invoice and its transfer QR (idempotent)",
+    description:
+      'Assigned handover inspector or managers of the unit facility, while the contract is DRAFT. Returns the existing invoice when one was already issued.',
+  })
+  @ApiResponse({ status: 200, type: FirstRentResponseDto })
+  @ApiResponse({ status: 403, type: ApiErrorResponseDto })
+  @ApiResponse({ status: 404, type: ApiErrorResponseDto })
+  @ApiResponse({ status: 409, description: 'Contract is not DRAFT', type: ApiErrorResponseDto })
+  issueFirstRent(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.firstRent.issue(id, user);
+  }
+
+  @Post(':id/first-rent/cash')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Confirm the customer paid the first month's rent in cash",
+    description: 'Records the amount still due as a CASH payment and settles the invoice.',
+  })
+  @ApiResponse({ status: 200, type: FirstRentResponseDto })
+  @ApiResponse({ status: 403, type: ApiErrorResponseDto })
+  @ApiResponse({ status: 404, type: ApiErrorResponseDto })
+  @ApiResponse({
+    status: 409,
+    description: 'Contract is not DRAFT, or no first-month invoice was issued yet',
+    type: ApiErrorResponseDto,
+  })
+  confirmFirstRentCash(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.firstRent.confirmCash(id, user);
   }
 
   @Get(':id')

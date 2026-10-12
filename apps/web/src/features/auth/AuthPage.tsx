@@ -1,11 +1,18 @@
-import { Button, Input, Text } from '@cloudflare/kumo';
-import { WarningCircle } from '@phosphor-icons/react';
+import { Button, Input, InputGroup, Text } from '@cloudflare/kumo';
+import { Eye, EyeSlash, WarningCircle } from '@phosphor-icons/react';
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getRoleDefaultPath } from '../../lib/roles';
 
 type FieldErrors = Partial<Record<'email' | 'password', string>>;
+
+interface ApiError {
+  status?: number;
+  statusCode?: number;
+  code?: string;
+  message?: string;
+}
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -16,6 +23,7 @@ export const AuthPage: React.FC = () => {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
@@ -61,10 +69,16 @@ export const AuthPage: React.FC = () => {
       const targetPath = isValidRedirect ? fromPath : getRoleDefaultPath(loggedUser.roles?.[0]);
       navigate(targetPath, { replace: true });
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setServerError(err.message);
+      const apiErr = err as ApiError;
+      const is401 = apiErr.status === 401 || apiErr.statusCode === 401;
+      const isInvalidCreds =
+        apiErr.code === 'INVALID_CREDENTIALS' ||
+        apiErr.message?.toLowerCase().includes('invalid email or password');
+
+      if (is401 || isInvalidCreds) {
+        setServerError('Email hoặc mật khẩu không chính xác.');
       } else {
-        setServerError('Có lỗi xảy ra trong quá trình xác thực.');
+        setServerError(apiErr.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
       }
     } finally {
       setIsSubmitting(false);
@@ -73,7 +87,7 @@ export const AuthPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-1.5">
+      <div className="grid gap-1.5 text-center">
         <Text as="h2" variant="heading" size="lg">
           Chào mừng trở lại
         </Text>
@@ -99,21 +113,44 @@ export const AuthPage: React.FC = () => {
           label="Email"
           placeholder="you@example.com"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            if (fieldErrors.email) setFieldErrors((prev) => ({ ...prev, email: undefined }));
+            if (serverError) setServerError(null);
+          }}
           error={fieldErrors.email}
           autoComplete="email"
         />
 
-        <Input
+        <InputGroup
           id="auth-password"
-          type="password"
           label="Mật khẩu"
-          placeholder="Nhập mật khẩu của bạn"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          error={fieldErrors.password}
-          autoComplete="current-password"
-        />
+          error={fieldErrors.password ? { message: fieldErrors.password, match: true } : undefined}
+          size="base"
+        >
+          <InputGroup.Input
+            id="auth-password"
+            aria-label="Mật khẩu"
+            type={showPassword ? 'text' : 'password'}
+            placeholder="Nhập mật khẩu của bạn"
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              if (fieldErrors.password)
+                setFieldErrors((prev) => ({ ...prev, password: undefined }));
+              if (serverError) setServerError(null);
+            }}
+            autoComplete="current-password"
+          />
+          <InputGroup.Addon align="end">
+            <InputGroup.Button
+              type="button"
+              aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+              icon={showPassword ? EyeSlash : Eye}
+              onClick={() => setShowPassword((prev) => !prev)}
+            />
+          </InputGroup.Addon>
+        </InputGroup>
 
         <div className="pt-2">
           <Button

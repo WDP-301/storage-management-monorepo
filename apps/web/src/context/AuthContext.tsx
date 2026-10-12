@@ -47,7 +47,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = async (credentials: LoginInput): Promise<AuthUser> => {
-    setIsLoading(true);
     try {
       const loggedInUser = await AuthApi.login(credentials);
       setUser(loggedInUser);
@@ -66,8 +65,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       throw err;
-    } finally {
-      setIsLoading(false);
     }
   };
 

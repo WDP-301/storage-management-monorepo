@@ -1,6 +1,15 @@
 import { Contract } from '@entities/contract.entity';
+import { Inspection } from '@entities/inspection.entity';
+import { Invoice } from '@entities/invoice.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { ContractKind, ContractStatus, InspectionType, UserRole } from '@storage/types';
+import {
+  ContractKind,
+  ContractStatus,
+  InspectionType,
+  InvoiceStatus,
+  PaymentMethod,
+  UserRole,
+} from '@storage/types';
 import type { DataSource, Repository } from 'typeorm';
 import { ContractQueryService } from './contract-query.service';
 
@@ -40,6 +49,9 @@ describe('ContractQueryService', () => {
   let qb: Record<string, jest.Mock>;
   let assignments: { facilityId: string | null; startsAt: Date; endsAt: Date | null }[];
   let inspections: unknown[];
+  let invoices: unknown[];
+  let payments: unknown[];
+  let config: { get: jest.Mock };
   let service: ContractQueryService;
 
   beforeEach(() => {
@@ -58,7 +70,12 @@ describe('ContractQueryService', () => {
     qb.getOne = jest.fn(async () => contract());
     assignments = [{ facilityId: 'fac-hcm', startsAt: SINCE, endsAt: null }];
     inspections = [];
-    const getRepository = jest.fn(() => ({ find: jest.fn(async () => inspections) }));
+    invoices = [];
+    payments = [];
+    const rows = (entity: unknown) =>
+      entity === Inspection ? inspections : entity === Invoice ? invoices : payments;
+    const getRepository = jest.fn((entity) => ({ find: jest.fn(async () => rows(entity)) }));
+    config = { get: jest.fn((key: string) => `cfg-${key}`) };
     const dataSource = {
       manager: { find: jest.fn(async () => assignments), getRepository },
       getRepository,
@@ -66,6 +83,7 @@ describe('ContractQueryService', () => {
     service = new ContractQueryService(
       { createQueryBuilder: jest.fn(() => qb) } as unknown as Repository<Contract>,
       dataSource as unknown as DataSource,
+      config as never,
     );
   });
 
@@ -211,7 +229,7 @@ describe('ContractQueryService', () => {
         handover: { id: 'insp-1' },
         return: { id: 'insp-2' },
         customer: { id: 'customer-1', full_name: 'Khách Demo', phone: '0900000005' },
-        permissions: { documents: true, handover: true, return: false },
+        permissions: { documents: true, handover: true, return: false, first_rent: true },
       });
       expect(record).not.toHaveProperty('terms');
       expect(record.customer).not.toHaveProperty('email');
@@ -220,15 +238,74 @@ describe('ContractQueryService', () => {
     it('lets staff assigned only to the return read the contract but not edit its files', async () => {
       inspections = [handover({ inspectedBy: 'staff-2' }), returned()];
       const record = await service.staffView('contract-1', STAFF);
-      expect(record.permissions).toEqual({ documents: false, handover: false, return: true });
+      expect(record.permissions).toEqual({
+        documents: false,
+        handover: false,
+        return: true,
+        first_rent: false,
+      });
     });
 
     it('lets a facility manager of the unit in, and ADMIN in any facility', async () => {
       await expect(service.staffView('contract-1', MANAGER)).resolves.toMatchObject({
-        permissions: { documents: true, handover: false, return: false },
+        permissions: { documents: true, handover: false, return: false, first_rent: false },
       });
       await expect(service.staffView('contract-1', ADMIN)).resolves.toMatchObject({
         id: 'contract-1',
+      });
+    });
+
+    it('shows the first-month invoice with a QR for the amount still due', async () => {
+      inspections = [handover()];
+      invoices = [
+        {
+          id: 'inv-1',
+          invoiceNo: 'INV-1790760804609-6618',
+          contractId: 'contract-1',
+          status: InvoiceStatus.PARTIALLY_PAID,
+          total: '3200000.00',
+        },
+      ];
+      payments = [
+        { invoiceId: 'inv-1', amount: '1000000.00', method: PaymentMethod.BANK_TRANSFER },
+      ];
+
+      const record = await service.staffView('contract-1', STAFF);
+
+      expect(record.first_rent).toEqual({
+        invoice_id: 'inv-1',
+        invoice_no: 'INV-1790760804609-6618',
+        status: InvoiceStatus.PARTIALLY_PAID,
+        total: 3200000,
+        paid_amount: 1000000,
+        amount_due: 2200000,
+        paid_at: null,
+        method: PaymentMethod.BANK_TRANSFER,
+        payment_qr_url: expect.stringContaining('amount=2200000&addInfo=INV-1790760804609-6618'),
+      });
+    });
+
+    it('offers no QR once the first month is paid, and none before an invoice exists', async () => {
+      inspections = [handover()];
+      expect((await service.staffView('contract-1', STAFF)).first_rent).toBeNull();
+
+      const paidAt = new Date('2026-10-12T03:00:00Z');
+      invoices = [
+        {
+          id: 'inv-1',
+          invoiceNo: 'INV-1',
+          contractId: 'contract-1',
+          status: InvoiceStatus.PAID,
+          total: 100,
+        },
+      ];
+      payments = [{ invoiceId: 'inv-1', amount: 100, method: PaymentMethod.CASH, paidAt }];
+
+      expect((await service.staffView('contract-1', STAFF)).first_rent).toMatchObject({
+        amount_due: 0,
+        paid_at: paidAt,
+        method: PaymentMethod.CASH,
+        payment_qr_url: null,
       });
     });
 

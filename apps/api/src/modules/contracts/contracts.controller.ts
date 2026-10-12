@@ -28,6 +28,7 @@ import { ContractReturnService } from './contract-return.service';
 import { ContractsService } from './contracts.service';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
 import { ReplaceContractDocumentsDto } from './dto/contract-documents.dto';
+import { FirstRentResponseDto } from './dto/first-rent-response.dto';
 import { ListContractsQueryDto } from './dto/list-contracts-query.dto';
 import { ReturnRequestDto } from './dto/return-request.dto';
 import { FirstRentService } from './first-rent.service';
@@ -147,6 +148,7 @@ export class ContractsController {
     description:
       'Assigned handover inspector or managers of the unit facility, while the contract is DRAFT. Returns the existing invoice when one was already issued.',
   })
+  @ApiResponse({ status: 200, type: FirstRentResponseDto })
   @ApiResponse({ status: 403, type: ApiErrorResponseDto })
   @ApiResponse({ status: 404, type: ApiErrorResponseDto })
   @ApiResponse({ status: 409, description: 'Contract is not DRAFT', type: ApiErrorResponseDto })
@@ -160,6 +162,7 @@ export class ContractsController {
     summary: "Confirm the customer paid the first month's rent in cash",
     description: 'Records the amount still due as a CASH payment and settles the invoice.',
   })
+  @ApiResponse({ status: 200, type: FirstRentResponseDto })
   @ApiResponse({ status: 403, type: ApiErrorResponseDto })
   @ApiResponse({ status: 404, type: ApiErrorResponseDto })
   @ApiResponse({

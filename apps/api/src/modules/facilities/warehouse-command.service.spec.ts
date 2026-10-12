@@ -2,6 +2,7 @@ import { Facility } from '@entities/facility.entity';
 import { ServiceTicket } from '@entities/service-ticket.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { TourAppointment } from '@entities/tour-appointment.entity';
+import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { FacilityStatus, StorageUnitKind, StorageUnitStatus, UserRole } from '@storage/types';
 import { WarehouseCommandService } from './warehouse-command.service';
@@ -55,7 +56,6 @@ describe('WarehouseCommandService', () => {
   };
   let query: jest.Mock;
   const lockCalls: string[] = [];
-  let roleAssignments: { find: jest.Mock };
   let queries: { findOne: jest.Mock };
   let service: WarehouseCommandService;
 
@@ -80,13 +80,8 @@ describe('WarehouseCommandService', () => {
     };
     stubWarehouse(buildFacility(), buildUnit());
     const units = { manager: { transaction: jest.fn((work) => work(manager)) } };
-    roleAssignments = { find: jest.fn().mockResolvedValue([]) };
     queries = { findOne: jest.fn().mockResolvedValue({ id: 'unit-1' }) };
-    service = new WarehouseCommandService(
-      units as never,
-      roleAssignments as never,
-      queries as never,
-    );
+    service = new WarehouseCommandService(units as never, queries as never);
   });
 
   describe('create', () => {
@@ -475,7 +470,7 @@ describe('WarehouseCommandService', () => {
     });
 
     it('refuses to toggle a held warehouse', async () => {
-      roleAssignments.find.mockResolvedValue([{ startsAt: new Date(0), endsAt: null }]);
+      manager.find.mockResolvedValue([{ startsAt: new Date(0), endsAt: null }]);
       stubWarehouse(buildFacility(), buildUnit({ status: StorageUnitStatus.HELD }));
 
       await expect(
@@ -485,13 +480,13 @@ describe('WarehouseCommandService', () => {
     });
 
     it('forbids a manager of another facility, using the facility read under lock', async () => {
-      roleAssignments.find.mockResolvedValue([]);
+      manager.find.mockResolvedValue([]);
 
       await service
         .updateStatus('unit-1', { status: StorageUnitStatus.MAINTENANCE }, manager1)
         .catch(() => undefined);
 
-      expect(roleAssignments.find).toHaveBeenCalledWith({
+      expect(manager.find).toHaveBeenCalledWith(UserRoleAssignment, {
         where: { userId: 'mgr-1', facilityId: 'fac-1', role: UserRole.FACILITY_MANAGER },
       });
     });

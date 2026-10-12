@@ -1,12 +1,10 @@
 import { StorageUnit } from '@entities/storage-unit.entity';
-import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
-import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { StorageUnitKind, StorageUnitStatus, UserRole } from '@storage/types';
+import { StorageUnitKind, StorageUnitStatus } from '@storage/types';
 import { Repository } from 'typeorm';
 import type {
   CreateWarehouseDto,
@@ -33,6 +31,7 @@ import {
 } from './warehouse-command.helpers';
 import {
   assertFacilityActive,
+  assertManagesFacility,
   assertNoOpenTickets,
   assertNoOpenTours,
   assertNotFrozen,
@@ -52,8 +51,6 @@ export class WarehouseCommandService {
   constructor(
     @InjectRepository(StorageUnit)
     private readonly units: Repository<StorageUnit>,
-    @InjectRepository(UserRoleAssignment)
-    private readonly roleAssignments: Repository<UserRoleAssignment>,
     private readonly query: WarehouseQueryService,
   ) {}
 
@@ -142,7 +139,7 @@ export class WarehouseCommandService {
   ): Promise<WarehouseView> {
     await this.units.manager.transaction(async (manager) => {
       const unit = await lockUnit(manager, id);
-      await this.assertManages(actor, unit.facilityId);
+      await assertManagesFacility(manager, actor, unit.facilityId);
       const toggleable: StorageUnitStatus[] = [
         StorageUnitStatus.AVAILABLE,
         StorageUnitStatus.MAINTENANCE,
@@ -181,21 +178,5 @@ export class WarehouseCommandService {
       }
       await manager.softDelete(StorageUnit, unit.id);
     });
-  }
-
-  private async assertManages(actor: AuthUser, facilityId: string): Promise<void> {
-    if (actor.roles.includes(UserRole.ADMIN) || actor.roles.includes(UserRole.OPERATIONS_MANAGER)) {
-      return;
-    }
-    const assignments = await this.roleAssignments.find({
-      where: { userId: actor.id, facilityId, role: UserRole.FACILITY_MANAGER },
-    });
-    if (!assignments.some((assignment) => isAssignmentActive(assignment))) {
-      throw new DomainException(
-        ErrorCode.FORBIDDEN,
-        'You do not manage this warehouse',
-        HttpStatus.FORBIDDEN,
-      );
-    }
   }
 }

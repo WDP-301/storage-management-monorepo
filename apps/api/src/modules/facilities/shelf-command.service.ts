@@ -1,19 +1,15 @@
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  DomainException,
-  fieldValidationError,
-  notFound,
-} from '@shared/exceptions/domain.exception';
+import { DomainException, fieldValidationError } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { StorageUnitKind, StorageUnitStatus } from '@storage/types';
-import { type EntityManager, IsNull, type Repository } from 'typeorm';
+import type { Repository } from 'typeorm';
 import type { BulkCreateShelvesDto, CreateShelfDto } from './dto/shelf.dto';
 import { MAX_BULK_SHELVES, MAX_UNIT_CODE_LENGTH, type ShelfSpecDto } from './dto/shelf.dto';
 import type { WarehouseView } from './warehouse.view';
 import { handleDbError } from './warehouse-command.helpers';
-import { assertFacilityActive, lockFacility } from './warehouse-command.locks';
+import { assertFacilityActive, lockShelfParent } from './warehouse-command.locks';
 import { WarehouseQueryService } from './warehouse-query.service';
 
 const MAX_NAME_LENGTH = 150;
@@ -89,7 +85,15 @@ export class ShelfCommandService {
     draftsFor: (parent: StorageUnit) => ShelfDraft[],
   ): Promise<StorageUnit[]> {
     return this.units.manager.transaction(async (manager) => {
-      const parent = await this.lockParent(manager, parentId);
+      const { parent, facility } = await lockShelfParent(manager, parentId);
+      if (parent.kind !== StorageUnitKind.SHELF_WAREHOUSE) {
+        throw new DomainException(
+          ErrorCode.BAD_REQUEST,
+          'Shelves can only be added to a shelf warehouse',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      assertFacilityActive(facility);
       const rows = draftsFor(parent).map((draft) =>
         manager.create(StorageUnit, {
           kind: StorageUnitKind.SHELF,
@@ -117,37 +121,5 @@ export class ShelfCommandService {
         handleDbError(err);
       }
     });
-  }
-
-  /**
-   * The facility is only known from the building, so it is read first, locked, and the building is
-   * then re-read under FOR SHARE; if it moved to another facility in between, the caller retries.
-   */
-  private async lockParent(manager: EntityManager, parentId: string): Promise<StorageUnit> {
-    const where = { id: parentId, deletedAt: IsNull() };
-    const unlocked = await manager.findOne(StorageUnit, { where });
-    if (!unlocked) notFound('Shelf warehouse', parentId);
-    const facility = await lockFacility(manager, unlocked.facilityId);
-    const parent = await manager.findOne(StorageUnit, {
-      where,
-      lock: { mode: 'pessimistic_read' },
-    });
-    if (!parent) notFound('Shelf warehouse', parentId);
-    if (parent.facilityId !== unlocked.facilityId) {
-      throw new DomainException(
-        ErrorCode.CONFLICT,
-        'Shelf warehouse was moved to another facility, retry',
-        HttpStatus.CONFLICT,
-      );
-    }
-    if (parent.kind !== StorageUnitKind.SHELF_WAREHOUSE) {
-      throw new DomainException(
-        ErrorCode.BAD_REQUEST,
-        'Shelves can only be added to a shelf warehouse',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-    assertFacilityActive(facility);
-    return parent;
   }
 }

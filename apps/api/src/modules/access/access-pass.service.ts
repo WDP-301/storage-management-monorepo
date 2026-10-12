@@ -52,6 +52,13 @@ export class AccessPassService {
 
       await assertCheckInAllowed(em, contract, unit, new Date());
 
+      // Every screen visit issues a pass, so unused ones would pile up forever. Passes that expired
+      // over a day ago are dropped here; recent ones stay so a stale scan still reads "expired".
+      await em.query(
+        `DELETE FROM "access_events"
+          WHERE "contract_id" = $1 AND "used_at" IS NULL AND "expires_at" < now() - interval '1 day'`,
+        [contract.id],
+      );
       await em.query(
         `UPDATE "access_events" SET "expires_at" = now() - interval '1 second'
           WHERE "contract_id" = $1 AND "used_at" IS NULL AND "expires_at" > now()`,

@@ -128,7 +128,8 @@ export class CreateWarehouseDto {
 
   @ApiPropertyOptional({
     example: 6500000,
-    description: 'Monthly rent in VND; required except for a shelf warehouse (stored as 0)',
+    description:
+      'Monthly rent in VND; required, except it must be omitted for a shelf warehouse (priced per shelf)',
   })
   @ValidateIf((dto: CreateWarehouseDto) => dto.kind !== StorageUnitKind.SHELF_WAREHOUSE)
   @IsNumber({ maxDecimalPlaces: 2 })

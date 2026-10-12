@@ -45,9 +45,13 @@ describe('AccessPassService.createPass', () => {
       }),
       query: jest.fn(async (sql: string) => {
         if (sql.includes('FROM "invoices"')) return overdue;
+        if (sql.startsWith('DELETE')) {
+          order.push('prune');
+          return [[], 0];
+        }
         if (sql.startsWith('UPDATE')) {
           order.push('expire');
-          return [];
+          return [[], 0];
         }
         order.push('insert');
         return [{ id: 'pass-1', expires_at: new Date(Date.now() + 600_000) }];
@@ -76,11 +80,23 @@ describe('AccessPassService.createPass', () => {
     });
   });
 
-  it('locks the contract, then expires older passes, then inserts', async () => {
+  it('locks the contract, prunes stale passes, expires older ones, then inserts', async () => {
     await service.createPass(user, 'c-1');
 
     expect(em.findOne.mock.calls[0][1].lock).toEqual({ mode: 'pessimistic_write' });
-    expect(order).toEqual(['lock', 'expire', 'insert']);
+    expect(order).toEqual(['lock', 'prune', 'expire', 'insert']);
+  });
+
+  it('prunes only unused passes of this contract that expired over a day ago', async () => {
+    await service.createPass(user, 'c-1');
+
+    const [sql, params] = em.query.mock.calls.find(([q]) => q.startsWith('DELETE')) as [
+      string,
+      unknown[],
+    ];
+    expect(sql).toContain('"used_at" IS NULL');
+    expect(sql).toContain(`"expires_at" < now() - interval '1 day'`);
+    expect(params).toEqual(['c-1']);
   });
 
   it("answers 404 for another customer's contract", async () => {

@@ -29,6 +29,21 @@ const validationError = (fields: { field: string; code: string; message: string 
     fields,
   });
 
+/** Refuses a rent or deposit on a shelf warehouse, on create and on update alike. */
+export function assertNoParentPricing(dto: {
+  monthlyPrice?: unknown;
+  depositMonths?: unknown;
+}): void {
+  const fields = PARENT_FORBIDDEN_FIELDS.filter((field) => dto[field] !== undefined).map(
+    (field) => ({
+      field,
+      code: 'isSetPerShelf',
+      message: `${field} is set per shelf, not on the shelf warehouse`,
+    }),
+  );
+  if (fields.length > 0) throw validationError(fields);
+}
+
 export function assertShelfPatchAllowed(dto: UpdateWarehouseDto): void {
   const fields = SHELF_READONLY_FIELDS.filter((field) => dto[field] !== undefined).map((field) => ({
     field,
@@ -47,14 +62,7 @@ export async function assertParentPatchAllowed(
   dto: UpdateWarehouseDto,
   parent: StorageUnit,
 ): Promise<void> {
-  const fields = PARENT_FORBIDDEN_FIELDS.filter((field) => dto[field] !== undefined).map(
-    (field) => ({
-      field,
-      code: 'isSetPerShelf',
-      message: `${field} is set per shelf, not on the shelf warehouse`,
-    }),
-  );
-  if (fields.length > 0) throw validationError(fields);
+  assertNoParentPricing(dto);
 
   if (dto.code !== undefined && dto.code !== parent.code) {
     const shelves = await manager.count(StorageUnit, { where: { parentId: parent.id } });

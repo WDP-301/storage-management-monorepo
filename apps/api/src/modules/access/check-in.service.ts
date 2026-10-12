@@ -116,10 +116,10 @@ export class CheckInService {
         id: pass.id,
         contractId: contract.id,
         usedAt,
-        contract: { ...contract, customer } as Contract,
-        storageUnit: { ...unit, parent: warehouse } as StorageUnit,
-        facility,
-      } as never);
+        contract: { ...contract, customer: customer ?? undefined },
+        storageUnit: { ...unit, parent: warehouse },
+        facility: facility ?? undefined,
+      });
       return view;
     });
   }

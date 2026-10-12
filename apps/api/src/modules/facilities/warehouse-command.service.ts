@@ -14,6 +14,7 @@ import type {
   UpdateWarehouseStatusDto,
 } from './dto/warehouse.dto';
 import {
+  assertNoParentPricing,
   assertParentMovable,
   assertParentPatchAllowed,
   assertShelfPatchAllowed,
@@ -61,6 +62,7 @@ export class WarehouseCommandService {
     // A shelf warehouse is priced per shelf, so it never carries a rent or deposit of its own.
     const kind = dto.kind ?? StorageUnitKind.SELF_STORAGE;
     const perShelf = kind === StorageUnitKind.SHELF_WAREHOUSE;
+    if (perShelf) assertNoParentPricing(dto);
     const id = await this.units.manager.transaction(async (manager) => {
       const address = await resolveAddressCodes(manager, dto.wardCode, dto.provinceCode);
       assertFacilityActive(await lockFacility(manager, dto.facilityId));
@@ -71,7 +73,7 @@ export class WarehouseCommandService {
             ...address,
             kind,
             monthlyPrice: perShelf ? 0 : dto.monthlyPrice,
-            depositMonths: perShelf ? null : (dto.depositMonths ?? null),
+            depositMonths: dto.depositMonths ?? null,
             status: dto.status ?? StorageUnitStatus.AVAILABLE,
           }),
         );

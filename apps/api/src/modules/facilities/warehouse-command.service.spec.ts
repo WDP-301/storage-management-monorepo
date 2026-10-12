@@ -111,11 +111,7 @@ describe('WarehouseCommandService', () => {
     it('stores a shelf warehouse with no price or deposit of its own', async () => {
       const { monthlyPrice: _price, ...withoutPrice } = createDto;
 
-      await service.create({
-        ...withoutPrice,
-        kind: StorageUnitKind.SHELF_WAREHOUSE,
-        depositMonths: 3,
-      });
+      await service.create({ ...withoutPrice, kind: StorageUnitKind.SHELF_WAREHOUSE });
 
       expect(manager.create).toHaveBeenCalledWith(
         StorageUnit,
@@ -125,6 +121,19 @@ describe('WarehouseCommandService', () => {
           depositMonths: null,
         }),
       );
+    });
+
+    it('refuses a price or deposit on a new shelf warehouse instead of dropping it', async () => {
+      const { monthlyPrice: _price, ...withoutPrice } = createDto;
+      const parent = { ...withoutPrice, kind: StorageUnitKind.SHELF_WAREHOUSE };
+
+      await expect(service.create({ ...parent, monthlyPrice: 500_000 })).rejects.toMatchObject({
+        status: 400,
+      });
+      await expect(service.create({ ...parent, depositMonths: 3 })).rejects.toMatchObject({
+        status: 400,
+      });
+      expect(manager.create).not.toHaveBeenCalledWith(StorageUnit, expect.anything());
     });
 
     it('defaults to self storage', async () => {

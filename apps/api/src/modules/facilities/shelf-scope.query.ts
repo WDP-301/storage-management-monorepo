@@ -83,9 +83,10 @@ export function applyUnitScope(
   if (mode === 'catalogue' || shelfClauses.length > 0) {
     const exists = shelfExists(mode, shelfClauses);
     // The building itself can be out of service too, so an admin status filter also matches it.
-    // An active building is always AVAILABLE, so "available" must come from its shelves alone.
+    // "Available" needs both: an open building and a free shelf in it.
     const matchesOwnStatus =
       status && status !== StorageUnitStatus.AVAILABLE && onShelf.conditions.length === 0;
+    if (status === StorageUnitStatus.AVAILABLE) parentBranch.push('unit.status = :status');
     parentBranch.push(matchesOwnStatus ? `(unit.status = :status OR ${exists})` : exists);
   }
 

@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsLatitude,
   IsLongitude,
   IsNotEmpty,
@@ -64,4 +65,13 @@ export class NearbyQueryDto {
   @Max(50)
   @Type(() => Number)
   radius?: number = 5;
+
+  @ApiPropertyOptional({
+    default: false,
+    description: 'Also return shelf warehouses (for clients that support per-shelf rental)',
+  })
+  @Transform(({ obj, key }) => obj[key] === true || obj[key] === 'true')
+  @IsBoolean()
+  @IsOptional()
+  includeShelfWarehouses?: boolean;
 }

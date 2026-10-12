@@ -1,11 +1,12 @@
 import { EvidenceFileDto } from '@modules/inspection/dto/inspection-evidence.dto';
 import { ApiProperty, ApiPropertyOptional, OmitType, PartialType } from '@nestjs/swagger';
 import { StorageUnitKind, StorageUnitStatus } from '@storage/types';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayUnique,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsLatitude,
@@ -265,6 +266,17 @@ export class WarehouseListQueryDto {
   @IsIn(WAREHOUSE_SORTS)
   @IsOptional()
   sort?: WarehouseSort;
+
+  @ApiPropertyOptional({
+    default: false,
+    description:
+      'Catalogue only: also list shelf warehouses. Clients that do not understand per-shelf ' +
+      'rental leave it off and never see a shelf warehouse.',
+  })
+  @Transform(({ obj, key }) => obj[key] === true || obj[key] === 'true')
+  @IsBoolean()
+  @IsOptional()
+  includeShelfWarehouses?: boolean;
 
   @ApiPropertyOptional({ default: 1, minimum: 1 })
   @Type(() => Number)

@@ -1,5 +1,6 @@
 import type { StorageUnit } from '@entities/storage-unit.entity';
 import { FacilityStatus, StorageUnitKind, StorageUnitStatus, UserRole } from '@storage/types';
+import { In } from 'typeorm';
 import { WarehouseQueryService } from './warehouse-query.service';
 
 const unit = {
@@ -68,7 +69,9 @@ function build(options: {
   main: ReturnType<typeof fakeQb>;
   summaryRows?: unknown[];
   assignments?: unknown[];
-  parent?: Partial<StorageUnit> | null;
+  parent?:
+    | (Partial<Omit<StorageUnit, 'facility'>> & { facility?: Partial<StorageUnit['facility']> })
+    | null;
 }) {
   const summary = fakeQb({ raw: options.summaryRows });
   const units = {
@@ -147,7 +150,11 @@ describe('WarehouseQueryService', () => {
         ],
       });
 
-      const { warehouses, meta } = await service.listPublic({ page: 1, limit: 20 });
+      const { warehouses, meta } = await service.listPublic({
+        page: 1,
+        limit: 20,
+        includeShelfWarehouses: true,
+      });
 
       const sql = main.where();
       expect(sql).toContain('unit.kind = :selfKind');
@@ -155,6 +162,7 @@ describe('WarehouseQueryService', () => {
         "s.parent_id = unit.id AND s.deleted_at IS NULL AND s.status = 'AVAILABLE'",
       );
       expect(sql).not.toContain("'SHELF'");
+      expect(sql).not.toContain('unit.kind <> :hiddenKind');
       expect(meta.total).toBe(1);
       expect(warehouses[0].shelfSummary).toMatchObject({
         total: 20,
@@ -230,6 +238,15 @@ describe('WarehouseQueryService', () => {
       expect(main.called('andWhere').at(-1)?.[1][1]).toMatchObject({ status: 'RENTED' });
     });
 
+    it('an AVAILABLE filter needs an open building as well as a free shelf', async () => {
+      const main = fakeQb({ many: [], count: 0 });
+      await build({ main }).service.listAdmin({ status: StorageUnitStatus.AVAILABLE });
+
+      expect(main.where()).toContain(
+        '(unit.kind = :parentKind AND unit.status = :status AND EXISTS (SELECT 1 FROM storage_units s',
+      );
+    });
+
     it('keeps every building when no filter narrows the shelves', async () => {
       const main = fakeQb({ many: [], count: 0 });
       await build({ main }).service.listAdmin({});
@@ -253,8 +270,31 @@ describe('WarehouseQueryService', () => {
     ]);
   });
 
+  it.each([
+    ['catalogue', (service: WarehouseQueryService) => service.listPublic({ page: 1, limit: 20 })],
+    ['nearby search', (service: WarehouseQueryService) => service.listAvailable()],
+  ])('hides shelf warehouses from the %s unless the client opts in', async (_label, list) => {
+    const main = fakeQb({ many: [], count: 0 });
+    await list(build({ main }).service);
+
+    expect(main.called('andWhere')).toContainEqual([
+      'andWhere',
+      ['unit.kind <> :hiddenKind', { hiddenKind: StorageUnitKind.SHELF_WAREHOUSE }],
+    ]);
+
+    const optedIn = fakeQb({ many: [], count: 0 });
+    await build({ main: optedIn }).service.listAvailable(true);
+    expect(optedIn.where()).not.toContain('unit.kind <> :hiddenKind');
+  });
+
   describe('listShelves', () => {
-    const parent = { id: 'parent-1', kind: StorageUnitKind.SHELF_WAREHOUSE, facilityId: 'fac-1' };
+    const parent = {
+      id: 'parent-1',
+      kind: StorageUnitKind.SHELF_WAREHOUSE,
+      status: StorageUnitStatus.AVAILABLE,
+      facilityId: 'fac-1',
+      facility: { status: FacilityStatus.ACTIVE },
+    };
 
     it('is 404 for a unit that is not a shelf warehouse', async () => {
       const { service } = build({
@@ -279,6 +319,39 @@ describe('WarehouseQueryService', () => {
         actor: { id: 'ops', roles: [UserRole.OPERATIONS_MANAGER] } as never,
       });
       expect(adminQb.where()).not.toContain('unit.status <> :inactive');
+    });
+
+    it.each([
+      ['a warehouse under maintenance', { status: StorageUnitStatus.MAINTENANCE }],
+      ['a retired warehouse', { status: StorageUnitStatus.INACTIVE }],
+      ['a warehouse in a closed facility', { facility: { status: FacilityStatus.INACTIVE } }],
+    ])('is 404 to customers for %s but visible to back office', async (_label, extra) => {
+      const closed = { ...parent, ...extra };
+      await expect(
+        build({ main: fakeQb({ many: [] }), parent: closed }).service.listShelves('parent-1', {
+          includeInactive: false,
+        }),
+      ).rejects.toMatchObject({ status: 404 });
+
+      await expect(
+        build({ main: fakeQb({ many: [] }), parent: closed }).service.listShelves('parent-1', {
+          includeInactive: true,
+          actor: { id: 'ops', roles: [UserRole.OPERATIONS_MANAGER] } as never,
+        }),
+      ).resolves.toEqual([]);
+    });
+
+    it('only counts facility manager assignments, not staff ones', async () => {
+      const { service, roleAssignments } = build({ main: fakeQb({}), parent });
+      await expect(
+        service.listShelves('parent-1', {
+          includeInactive: true,
+          actor: { id: 'fm', roles: [UserRole.FACILITY_MANAGER] } as never,
+        }),
+      ).rejects.toMatchObject({ status: 403 });
+      expect(roleAssignments.find).toHaveBeenCalledWith({
+        where: { userId: 'fm', role: In([UserRole.FACILITY_MANAGER]) },
+      });
     });
 
     it('forbids a facility manager of another facility', async () => {

@@ -35,9 +35,16 @@ export class WarehouseQueryService {
     private readonly uploads: UploadService,
   ) {}
 
-  /** Customer catalogue: only warehouses that can be rented right now, shelf warehouses via their free shelves. */
+  /**
+   * Customer catalogue: only warehouses that can be rented right now, shelf warehouses via their
+   * free shelves — and those only for clients that opt in, since older apps would show them as
+   * rentable at 0 đ.
+   */
   async listPublic(query: WarehouseListQueryDto) {
-    const qb = applyFilters(this.availableQuery(query), query);
+    const qb = applyFilters(
+      this.availableQuery(query, query.includeShelfWarehouses === true),
+      query,
+    );
     return this.paginate(qb, query, query.sort ?? 'price_asc', 'catalogue');
   }
 
@@ -67,22 +74,33 @@ export class WarehouseQueryService {
   }
 
   /** Every rentable warehouse, unpaginated — the nearby search ranks them by distance. */
-  async listAvailable(): Promise<WarehouseView[]> {
-    return this.toViews(await this.availableQuery({}).getMany());
+  async listAvailable(includeShelfWarehouses = false): Promise<WarehouseView[]> {
+    return this.toViews(await this.availableQuery({}, includeShelfWarehouses).getMany());
   }
 
   /**
-   * The shelves of a shelf warehouse, by code. Customers never see retired (INACTIVE) shelves;
+   * The shelves of a shelf warehouse, by code. Customers never see retired (INACTIVE) shelves,
+   * nor a warehouse that is out of service (maintenance or retired) or in a closed facility;
    * back office passes `actor` to see them, and a facility manager only for their own facilities.
    */
   async listShelves(
     parentId: string,
     options: { includeInactive: boolean; actor?: AuthUser },
   ): Promise<WarehouseView[]> {
-    const parent = await this.units.findOne({ where: { id: parentId } });
+    const parent = await this.units.findOne({
+      where: { id: parentId },
+      relations: { facility: true },
+    });
     if (!parent || parent.kind !== StorageUnitKind.SHELF_WAREHOUSE)
       notFound('Shelf warehouse', parentId);
-    if (options.actor) await this.assertCanSeeFacility(options.actor, parent.facilityId);
+    if (options.actor) {
+      await this.assertCanSeeFacility(options.actor, parent.facilityId);
+    } else if (
+      parent.status !== StorageUnitStatus.AVAILABLE ||
+      parent.facility?.status !== FacilityStatus.ACTIVE
+    ) {
+      notFound('Shelf warehouse', parentId);
+    }
 
     const qb = this.baseQuery().andWhere('unit.parentId = :parentId', { parentId });
     if (!options.includeInactive) {
@@ -107,10 +125,8 @@ export class WarehouseQueryService {
     if (actor.roles.includes(UserRole.ADMIN) || actor.roles.includes(UserRole.OPERATIONS_MANAGER)) {
       return;
     }
-    const ids = await this.assignedFacilityIds(actor.id, [
-      UserRole.FACILITY_MANAGER,
-      UserRole.FACILITY_STAFF,
-    ]);
+    // Staff assignments do not count: these back-office reads are for facility managers only.
+    const ids = await this.assignedFacilityIds(actor.id, [UserRole.FACILITY_MANAGER]);
     if (!ids.includes(facilityId)) {
       throw new DomainException(
         ErrorCode.FORBIDDEN,
@@ -130,11 +146,17 @@ export class WarehouseQueryService {
       .addSelect(['parent.id', 'parent.code', 'parent.name']);
   }
 
-  private availableQuery(query: AdminWarehouseListQueryDto): SelectQueryBuilder<StorageUnit> {
+  private availableQuery(
+    query: AdminWarehouseListQueryDto,
+    includeShelfWarehouses: boolean,
+  ): SelectQueryBuilder<StorageUnit> {
     const qb = this.baseQuery()
       .andWhere('unit.status = :available', { available: StorageUnitStatus.AVAILABLE })
       .andWhere('facility.status = :active', { active: FacilityStatus.ACTIVE });
     applyUnitScope(qb, query, 'catalogue');
+    if (!includeShelfWarehouses) {
+      qb.andWhere('unit.kind <> :hiddenKind', { hiddenKind: StorageUnitKind.SHELF_WAREHOUSE });
+    }
     return qb;
   }
 

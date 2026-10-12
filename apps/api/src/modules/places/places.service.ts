@@ -106,7 +106,9 @@ export class PlacesService {
   async findNearby(query: NearbyQueryDto): Promise<NearbyResult> {
     const location = await this.resolveCenter(query);
 
-    const nearby: NearbyWarehouse[] = (await this.warehouses.listAvailable())
+    const nearby: NearbyWarehouse[] = (
+      await this.warehouses.listAvailable(query.includeShelfWarehouses === true)
+    )
       .map((warehouse) => ({
         ...warehouse,
         distanceKm: this.haversine(

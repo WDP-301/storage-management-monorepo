@@ -109,6 +109,17 @@ describe('SettingsService', () => {
     });
   });
 
+  describe('getCheckInQrTtlMinutes', () => {
+    it('reads the QR lifetime setting as a number', async () => {
+      repo.findOne.mockResolvedValue(buildSetting('access.check_in_qr_ttl_minutes', 10));
+
+      await expect(service.getCheckInQrTtlMinutes()).resolves.toBe(10);
+      expect(repo.findOne).toHaveBeenCalledWith({
+        where: { key: 'access.check_in_qr_ttl_minutes' },
+      });
+    });
+  });
+
   describe('update', () => {
     it('updates only value and updated_by, then returns the updated records', async () => {
       repo.find.mockResolvedValue([buildSetting('booking.hold_minutes', 10)]);

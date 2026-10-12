@@ -5,12 +5,17 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
 @Entity('invoices')
+// Serves the overdue lookup run on every check-in pass and scan.
+@Index('IDX_invoices_customer_open', ['customerId', 'dueAt'], {
+  where: `"status" IN ('ISSUED', 'PARTIALLY_PAID')`,
+})
 export class Invoice {
   @PrimaryGeneratedColumn('uuid')
   id: string;

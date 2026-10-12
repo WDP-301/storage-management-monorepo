@@ -38,7 +38,7 @@ import Decimal from 'decimal.js';
 import { DataSource, DeepPartial, In, LessThan, MoreThan, Not, Repository } from 'typeorm';
 import { extractBookingNos, generateBookingNo } from './booking-no.util';
 import { BookingResponseDto, CreateBookingDto } from './dto/booking.dto';
-import { findUnrentable } from './rentable-units.util';
+import { findUnrentable, lockShelfParents } from './rentable-units.util';
 
 const STATUSES_AWAITING_DEPOSIT: BookingStatus[] = [
   BookingStatus.HOLDING,
@@ -194,6 +194,7 @@ export class BookingsService implements OnApplicationBootstrap {
       const sortedUnitIds = [...unitIds].sort();
 
       const responseBody = await this.dataSource.transaction(async (em) => {
+        await lockShelfParents(em, preCheckUnits);
         // Lock rows in deterministic ascending ID order to prevent PostgreSQL deadlocks (40P01)
         const units = await em
           .getRepository(StorageUnit)
@@ -216,7 +217,7 @@ export class BookingsService implements OnApplicationBootstrap {
 
         // Second availability check inside the lock
         // A shelf warehouse is never rentable itself and a shelf follows its parent's status
-        // (the parent is read through the join, only the unit rows are locked).
+        // (the parent is read through the join, under the shared lock taken above).
         const stillUnavailable = new Set([
           ...units.filter((u) => u.status !== StorageUnitStatus.AVAILABLE).map((u) => u.id),
           ...findUnrentable(units),

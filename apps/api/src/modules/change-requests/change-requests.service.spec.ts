@@ -1,5 +1,6 @@
 import { BookingItem } from '@entities/booking-item.entity';
 import { Facility } from '@entities/facility.entity';
+import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
@@ -12,6 +13,7 @@ import {
   StorageUnitStatus,
   UserRole,
 } from '@storage/types';
+import { In } from 'typeorm';
 import { ChangeRequestsService } from './change-requests.service';
 
 const FACILITY_ID = 'facility-1';
@@ -94,6 +96,7 @@ describe('ChangeRequestsService', () => {
   let storageUnits: { findOne: jest.Mock };
   let roleAssignments: { find: jest.Mock };
   let txManager: {
+    find: jest.Mock;
     createQueryBuilder: jest.Mock;
     update: jest.Mock;
     save: jest.Mock;
@@ -129,6 +132,7 @@ describe('ChangeRequestsService', () => {
     storageUnits = { findOne: jest.fn() };
     roleAssignments = { find: jest.fn().mockResolvedValue([activeAssignment()]) };
     txManager = {
+      find: jest.fn().mockResolvedValue([]),
       createQueryBuilder: jest.fn(),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       save: jest.fn(async (v) => v),
@@ -260,6 +264,25 @@ describe('ChangeRequestsService', () => {
     expect(condition).toContain('p.deleted_at IS NULL');
     expect(params).toMatchObject({ shelfWarehouse: StorageUnitKind.SHELF_WAREHOUSE });
     expect(txManager.save).not.toHaveBeenCalled();
+  });
+
+  it('approve share-locks the target shelf warehouse before claiming the shelf', async () => {
+    const request = buildRequest();
+    request.newUnit = { ...request.newUnit, parentId: 'parent-1' } as StorageUnit;
+    requests.findOne.mockResolvedValue(request);
+
+    await service.decide('req-1', { decision: 'APPROVED' }, manager);
+
+    expect(txManager.find).toHaveBeenCalledWith(
+      StorageUnit,
+      expect.objectContaining({
+        where: { id: In(['parent-1']) },
+        lock: { mode: 'pessimistic_read' },
+      }),
+    );
+    expect(txManager.find.mock.invocationCallOrder[0]).toBeLessThan(
+      txManager.createQueryBuilder.mock.invocationCallOrder[0],
+    );
   });
 
   it('approve performs the swap and completes the request', async () => {

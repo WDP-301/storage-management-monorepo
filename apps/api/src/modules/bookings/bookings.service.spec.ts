@@ -515,7 +515,13 @@ describe('BookingsService.create — shelf rules', () => {
 
   let preCheckFind: jest.Mock;
   let lockedUnits: unknown[];
-  let em: { getRepository: jest.Mock; create: jest.Mock; save: jest.Mock; update: jest.Mock };
+  let em: {
+    find: jest.Mock;
+    getRepository: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    update: jest.Mock;
+  };
   let service: BookingsService;
 
   beforeEach(() => {
@@ -535,6 +541,7 @@ describe('BookingsService.create — shelf rules', () => {
       getOne: jest.fn().mockResolvedValue(null),
     };
     em = {
+      find: jest.fn().mockResolvedValue([]),
       getRepository: jest.fn((entity: unknown) => ({
         createQueryBuilder: () => (entity === StorageUnit ? unitQuery : holdQuery),
       })),
@@ -631,5 +638,27 @@ describe('BookingsService.create — shelf rules', () => {
       { id: In(['shelf-1']), status: StorageUnitStatus.AVAILABLE },
       { status: StorageUnitStatus.HELD },
     );
+  });
+
+  it('share-locks the parent warehouse before locking the shelf rows', async () => {
+    const shelf = unit('shelf-1', {
+      kind: StorageUnitKind.SHELF,
+      parentId: 'parent-1',
+      parent: parent(StorageUnitStatus.AVAILABLE),
+    });
+    preCheckFind.mockResolvedValue([shelf]);
+    lockedUnits = [shelf];
+
+    await service.create(dto('shelf-1'), user, 'key-1');
+
+    expect(em.find).toHaveBeenCalledWith(
+      StorageUnit,
+      expect.objectContaining({
+        where: { id: In(['parent-1']) },
+        lock: { mode: 'pessimistic_read' },
+      }),
+    );
+    const firstUnitLock = em.getRepository.mock.invocationCallOrder[0];
+    expect(em.find.mock.invocationCallOrder[0]).toBeLessThan(firstUnitLock);
   });
 });

@@ -4,7 +4,7 @@ import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
-import { findUnrentable } from '@modules/bookings/rentable-units.util';
+import { findUnrentable, lockShelfParents } from '@modules/bookings/rentable-units.util';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
@@ -74,11 +74,17 @@ export class ContractsService {
       const endedAt = dto.endedAt ? new Date(dto.endedAt) : undefined;
       this.validateDates(effectiveAt, endedAt);
 
+      // Re-claiming puts a shelf under a parent that may have closed since it was booked; the
+      // parent is share-locked before the unit so a concurrent close cannot slip in between.
+      const unlocked = await manager.findOne(StorageUnit, {
+        where: { id: item.storageUnitId },
+        select: { id: true, parentId: true },
+      });
+      if (unlocked) await lockShelfParents(manager, [unlocked]);
+
       // A cancelled draft puts the unit back on the market — re-claim it for this item.
       const unit = await lockUnitClaimedOnlyBy(manager, item);
       if (unit.status === StorageUnitStatus.AVAILABLE) {
-        // Re-claiming puts a shelf under a parent that may have closed since it was booked.
-        // The parent is read unlocked: the locked unit query cannot join it (outer join).
         const withParent = await manager.findOne(StorageUnit, {
           where: { id: unit.id },
           relations: { parent: true },

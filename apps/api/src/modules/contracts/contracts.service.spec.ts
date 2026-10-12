@@ -27,12 +27,19 @@ describe('ContractsService', () => {
     createdAt: new Date('2026-12-01T00:00:00+07:00'),
   };
   let booking: { id: string; customerId: string; status: BookingStatus; subtotal: string };
-  let unit: { id: string; status: StorageUnitStatus; kind?: StorageUnitKind; parent?: unknown };
+  let unit: {
+    id: string;
+    status: StorageUnitStatus;
+    kind?: StorageUnitKind;
+    parentId?: string | null;
+    parent?: unknown;
+  };
   /** Claims on the unit by other bookings — none unless a test sets them. */
   let otherHold: { bookingId: string } | null;
   let otherContract: { id: string } | null;
   let service: ContractsService;
   let manager: {
+    find: jest.Mock;
     findOne: jest.Mock;
     findOneOrFail: jest.Mock;
     create: jest.Mock;
@@ -54,6 +61,7 @@ describe('ContractsService', () => {
     otherHold = null;
     otherContract = null;
     manager = {
+      find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn(async (entity) => {
         if (entity === BookingItem) return item;
         if (entity === Booking) return booking;
@@ -249,6 +257,31 @@ describe('ContractsService', () => {
       StorageUnit,
       { id: 'unit-1' },
       { status: StorageUnitStatus.BOOKED },
+    );
+  });
+
+  it('share-locks the parent warehouse before locking the shelf it re-claims', async () => {
+    unit = {
+      id: 'unit-1',
+      status: StorageUnitStatus.AVAILABLE,
+      kind: StorageUnitKind.SHELF,
+      parentId: 'parent-1',
+      parent: { status: StorageUnitStatus.AVAILABLE },
+    };
+    await service.create({ bookingItemId: item.id });
+
+    expect(manager.find).toHaveBeenCalledWith(
+      StorageUnit,
+      expect.objectContaining({
+        where: { id: In(['parent-1']) },
+        lock: { mode: 'pessimistic_read' },
+      }),
+    );
+    const unitLock = manager.findOne.mock.calls.findIndex(
+      ([entity, options]) => entity === StorageUnit && options.lock,
+    );
+    expect(manager.find.mock.invocationCallOrder[0]).toBeLessThan(
+      manager.findOne.mock.invocationCallOrder[unitLock],
     );
   });
 

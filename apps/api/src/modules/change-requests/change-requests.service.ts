@@ -7,7 +7,7 @@ import { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { activeFacilityIds } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { findUnrentable } from '@modules/bookings/rentable-units.util';
+import { findUnrentable, lockShelfParents } from '@modules/bookings/rentable-units.util';
 import { SettingsService } from '@modules/settings/settings.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -283,6 +283,10 @@ export class ChangeRequestsService {
           HttpStatus.CONFLICT,
         );
       }
+
+      // A shelf's building is share-locked before the claim (building before shelves, as in
+      // warehouse writes), so closing it concurrently waits and the EXISTS below sees the result.
+      await lockShelfParents(manager, [request.newUnit]);
 
       // Claim the target unit atomically — if someone else took or moved it, bail out.
       const claimed = await manager

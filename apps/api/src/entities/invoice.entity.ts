@@ -12,6 +12,10 @@ import {
 } from 'typeorm';
 
 @Entity('invoices')
+// Serves the overdue lookup run on every check-in pass and scan.
+@Index('IDX_invoices_customer_open', ['customerId', 'dueAt'], {
+  where: `"status" IN ('ISSUED', 'PARTIALLY_PAID')`,
+})
 // Partial unique index (contract_id, period_no) WHERE status <> 'VOID' — created by migration,
 // metadata kept sync-off so schema sync never manages the WHERE clause.
 @Index('UQ_invoices_contract_period', { synchronize: false })

@@ -6,6 +6,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { validateEnv } from './config/env.validation';
+import { AccessModule } from './modules/access/access.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
@@ -55,6 +56,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
       inject: [ConfigService],
     }),
     AuthModule,
+    AccessModule,
     AdminModule,
     FacilitiesModule,
     BookingsModule,

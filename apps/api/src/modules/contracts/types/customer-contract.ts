@@ -1,6 +1,6 @@
 import type { Contract, ContractDocument } from '@entities/contract.entity';
 import type { Inspection } from '@entities/inspection.entity';
-import type { ContractKind, ContractStatus } from '@storage/types';
+import type { ContractKind, ContractStatus, StorageUnitKind } from '@storage/types';
 
 export interface CustomerContractUnit {
   id: string;
@@ -13,6 +13,10 @@ export interface CustomerContractUnit {
   height_m: number | null;
   volume_m3: number | null;
   status: string;
+  /** SHELF units are rented per shelf and need the warehouse check-in QR. */
+  kind: StorageUnitKind;
+  /** The shelf warehouse holding this unit; null unless it is a shelf. */
+  parent: { id: string; code: string; name: string } | null;
 }
 
 export interface CustomerContractFacility {
@@ -99,6 +103,10 @@ export function toCustomerContractRecord(
           height_m: unit.heightM === null ? null : Number(unit.heightM),
           volume_m3: unit.volumeM3 === null ? null : Number(unit.volumeM3),
           status: unit.status,
+          kind: unit.kind,
+          parent: unit.parent
+            ? { id: unit.parent.id, code: unit.parent.code, name: unit.parent.name }
+            : null,
         }
       : null,
     facility: unit?.facility

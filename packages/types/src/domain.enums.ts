@@ -32,6 +32,23 @@ export const StorageUnitStatus = {
 } as const;
 export type StorageUnitStatus = (typeof StorageUnitStatus)[keyof typeof StorageUnitStatus];
 
+/** SELF_STORAGE: a whole rentable warehouse; SHELF_WAREHOUSE: a building rented per shelf; SHELF: a rentable child of it. */
+export const StorageUnitKind = {
+  SELF_STORAGE: 'SELF_STORAGE',
+  SHELF_WAREHOUSE: 'SHELF_WAREHOUSE',
+  SHELF: 'SHELF',
+} as const;
+export type StorageUnitKind = (typeof StorageUnitKind)[keyof typeof StorageUnitKind];
+
+/** Non-shelf things drawn on a shelf warehouse floor plan; shelves are placements, not elements. */
+export const LayoutElementType = {
+  DOOR: 'DOOR',
+  AISLE: 'AISLE',
+  OBSTACLE: 'OBSTACLE',
+  LABEL: 'LABEL',
+} as const;
+export type LayoutElementType = (typeof LayoutElementType)[keyof typeof LayoutElementType];
+
 export const BookingStatus = {
   DRAFT: 'DRAFT',
   HOLDING: 'HOLDING',

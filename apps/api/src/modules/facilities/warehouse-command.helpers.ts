@@ -8,8 +8,29 @@ import {
   PG_UNIQUE_VIOLATION,
   pgErrorCode,
 } from '@shared/utils/pg-error.util';
+import { StorageUnitKind } from '@storage/types';
 import type { EntityManager } from 'typeorm';
 import type { UpdateWarehouseDto } from './dto/warehouse.dto';
+
+/** Columns a create/update payload may write directly. */
+export const UNIT_FIELDS = [
+  'code',
+  'name',
+  'addressLine',
+  'wardCode',
+  'provinceCode',
+  'latitude',
+  'longitude',
+  'monthlyPrice',
+  'widthM',
+  'lengthM',
+  'heightM',
+  'depositMonths',
+  'notes',
+  'status',
+  'facilityId',
+  'images',
+] as const;
 
 export function pick<T extends object, K extends keyof T>(
   source: T,
@@ -24,11 +45,14 @@ export function pick<T extends object, K extends keyof T>(
 
 /** Fields a client may clear with `null`; every other field must be omitted or given a value. */
 const CLEARABLE_FIELDS = new Set(['depositMonths', 'notes', 'wardCode']);
+/** A shelf may be created without a height, so its height can be cleared again. */
+const SHELF_CLEARABLE_FIELDS = new Set([...CLEARABLE_FIELDS, 'heightM']);
 
 // `@IsOptional` lets `null` through validation, which would otherwise reach a NOT NULL column.
-export function assertNoNullRequiredFields(dto: UpdateWarehouseDto): void {
+export function assertNoNullRequiredFields(dto: UpdateWarehouseDto, kind: StorageUnitKind): void {
+  const clearable = kind === StorageUnitKind.SHELF ? SHELF_CLEARABLE_FIELDS : CLEARABLE_FIELDS;
   const fields = Object.entries(dto)
-    .filter(([key, value]) => value === null && !CLEARABLE_FIELDS.has(key))
+    .filter(([key, value]) => value === null && !clearable.has(key))
     .map(([field]) => ({ field, code: 'isNotEmpty', message: `${field} cannot be null` }));
   if (fields.length > 0) {
     throw new DomainException(

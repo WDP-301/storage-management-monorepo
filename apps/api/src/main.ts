@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory, Reflector } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AllExceptionsFilter } from '@shared/filters/http-exception.filter';
 import { HttpLoggingInterceptor } from '@shared/interceptors/http-logging.interceptor';
@@ -10,7 +11,10 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
+  // Above Express's 100kb default: a full shelf floor plan (up to 1000 placements + 500 elements)
+  // is sent as one JSON document.
+  app.useBodyParser('json', { limit: '256kb' });
 
   // Trust the first proxy hop (Render/Cloudflare) so req.ip is the real client IP —
   // ThrottlerGuard and session context depend on it.

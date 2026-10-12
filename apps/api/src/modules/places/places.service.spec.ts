@@ -63,6 +63,18 @@ describe('PlacesService', () => {
       expect(fetchSpy).not.toHaveBeenCalled();
     });
 
+    it('passes the shelf-warehouse opt-in through, off by default', async () => {
+      await service.findNearby({ lat: 10.7769, lng: 106.7009, radius: 5 });
+      await service.findNearby({
+        lat: 10.7769,
+        lng: 106.7009,
+        radius: 5,
+        includeShelfWarehouses: true,
+      });
+
+      expect(warehouses.listAvailable.mock.calls).toEqual([[false], [true]]);
+    });
+
     it('rejects when neither place_id nor a complete lat/lng pair is provided', async () => {
       await expect(service.findNearby({ radius: 5 })).rejects.toMatchObject({ status: 400 });
       await expect(service.findNearby({ lat: 10.7, radius: 5 })).rejects.toMatchObject({

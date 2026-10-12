@@ -1,9 +1,11 @@
 import { Facility } from '@entities/facility.entity';
 import { ServiceTicket } from '@entities/service-ticket.entity';
+import { ShelfLayout } from '@entities/shelf-layout.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { TourAppointment } from '@entities/tour-appointment.entity';
+import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { DomainException } from '@shared/exceptions/domain.exception';
-import { FacilityStatus, StorageUnitStatus, UserRole } from '@storage/types';
+import { FacilityStatus, StorageUnitKind, StorageUnitStatus, UserRole } from '@storage/types';
 import { WarehouseCommandService } from './warehouse-command.service';
 
 const buildFacility = (overrides: Partial<Facility> = {}): Facility =>
@@ -47,14 +49,15 @@ describe('WarehouseCommandService', () => {
     query: jest.Mock;
     findOne: jest.Mock;
     count: jest.Mock;
+    find: jest.Mock;
     create: jest.Mock;
     save: jest.Mock;
     update: jest.Mock;
     softDelete: jest.Mock;
+    delete: jest.Mock;
   };
   let query: jest.Mock;
   const lockCalls: string[] = [];
-  let roleAssignments: { find: jest.Mock };
   let queries: { findOne: jest.Mock };
   let service: WarehouseCommandService;
 
@@ -71,20 +74,17 @@ describe('WarehouseCommandService', () => {
       query,
       findOne: jest.fn(),
       count: jest.fn().mockResolvedValue(0),
+      find: jest.fn().mockResolvedValue([]),
       create: jest.fn((_entity, data) => data),
       save: jest.fn(async (data) => ({ id: 'wh-new', ...data })),
       update: jest.fn().mockResolvedValue(undefined),
       softDelete: jest.fn().mockResolvedValue(undefined),
+      delete: jest.fn().mockResolvedValue(undefined),
     };
     stubWarehouse(buildFacility(), buildUnit());
     const units = { manager: { transaction: jest.fn((work) => work(manager)) } };
-    roleAssignments = { find: jest.fn().mockResolvedValue([]) };
     queries = { findOne: jest.fn().mockResolvedValue({ id: 'unit-1' }) };
-    service = new WarehouseCommandService(
-      units as never,
-      roleAssignments as never,
-      queries as never,
-    );
+    service = new WarehouseCommandService(units as never, queries as never);
   });
 
   describe('create', () => {
@@ -104,6 +104,43 @@ describe('WarehouseCommandService', () => {
         }),
       );
       expect(manager.create).not.toHaveBeenCalledWith(Facility, expect.anything());
+    });
+
+    it('stores a shelf warehouse with no price or deposit of its own', async () => {
+      const { monthlyPrice: _price, ...withoutPrice } = createDto;
+
+      await service.create({ ...withoutPrice, kind: StorageUnitKind.SHELF_WAREHOUSE });
+
+      expect(manager.create).toHaveBeenCalledWith(
+        StorageUnit,
+        expect.objectContaining({
+          kind: StorageUnitKind.SHELF_WAREHOUSE,
+          monthlyPrice: 0,
+          depositMonths: null,
+        }),
+      );
+    });
+
+    it('refuses a price or deposit on a new shelf warehouse instead of dropping it', async () => {
+      const { monthlyPrice: _price, ...withoutPrice } = createDto;
+      const parent = { ...withoutPrice, kind: StorageUnitKind.SHELF_WAREHOUSE };
+
+      await expect(service.create({ ...parent, monthlyPrice: 500_000 })).rejects.toMatchObject({
+        status: 400,
+      });
+      await expect(service.create({ ...parent, depositMonths: 3 })).rejects.toMatchObject({
+        status: 400,
+      });
+      expect(manager.create).not.toHaveBeenCalledWith(StorageUnit, expect.anything());
+    });
+
+    it('defaults to self storage', async () => {
+      await service.create(createDto);
+
+      expect(manager.create).toHaveBeenCalledWith(
+        StorageUnit,
+        expect.objectContaining({ kind: StorageUnitKind.SELF_STORAGE }),
+      );
     });
 
     it('rejects a missing or deleted facility', async () => {
@@ -293,6 +330,20 @@ describe('WarehouseCommandService', () => {
       expect(manager.update).toHaveBeenCalledWith(StorageUnit, 'unit-1', { depositMonths: null });
     });
 
+    it('lets a shelf clear its height but keeps a self-storage height required', async () => {
+      await expect(service.update('unit-1', { heightM: null } as never)).rejects.toMatchObject({
+        status: 400,
+      });
+
+      stubWarehouse(
+        buildFacility(),
+        buildUnit({ kind: StorageUnitKind.SHELF, parentId: 'parent-1' }),
+      );
+      await service.update('unit-1', { heightM: null } as never);
+
+      expect(manager.update).toHaveBeenCalledWith(StorageUnit, 'unit-1', { heightM: null });
+    });
+
     it('returns 404 for a deleted or unknown warehouse', async () => {
       stubWarehouse(null, null);
 
@@ -323,6 +374,107 @@ describe('WarehouseCommandService', () => {
     });
   });
 
+  describe('update of shelves and shelf warehouses', () => {
+    const shelfRow = (overrides: Partial<StorageUnit> = {}) =>
+      buildUnit({ kind: StorageUnitKind.SHELF, parentId: 'p1', ...overrides });
+    const parentRow = (overrides: Partial<StorageUnit> = {}) =>
+      buildUnit({ id: 'p1', kind: StorageUnitKind.SHELF_WAREHOUSE, code: 'KK1', ...overrides });
+
+    it.each([
+      [{ latitude: 11 }, 'latitude'],
+      [{ facilityId: 'fac-2' }, 'facilityId'],
+      [{ images: [] }, 'images'],
+    ])('rejects %o on a shelf as validation of %s', async (dto, field) => {
+      stubWarehouse(buildFacility({ id: 'fac-2' }), shelfRow());
+
+      await expect(service.update('unit-1', dto)).rejects.toMatchObject({
+        status: 400,
+        response: { details: { fields: [expect.objectContaining({ field })] } },
+      });
+      expect(manager.update).not.toHaveBeenCalled();
+    });
+
+    it('lets a shelf change its price', async () => {
+      stubWarehouse(buildFacility(), shelfRow());
+
+      await service.update('unit-1', { monthlyPrice: 350_000 });
+
+      expect(manager.update).toHaveBeenCalledWith(StorageUnit, 'unit-1', { monthlyPrice: 350_000 });
+    });
+
+    it('cascades a new address to the shelves with the same values', async () => {
+      stubWarehouse(buildFacility(), parentRow());
+
+      await service.update('p1', { addressLine: '99 Mới', latitude: 10.8, name: 'Tên mới' });
+
+      expect(manager.update).toHaveBeenCalledWith(StorageUnit, 'p1', {
+        addressLine: '99 Mới',
+        latitude: 10.8,
+        name: 'Tên mới',
+      });
+      expect(manager.update).toHaveBeenCalledWith(
+        StorageUnit,
+        { parentId: 'p1' },
+        { addressLine: '99 Mới', latitude: 10.8 },
+      );
+    });
+
+    it('moves the facility with the shelves once they are locked and idle', async () => {
+      stubWarehouse(buildFacility({ id: 'fac-2' }), parentRow());
+      manager.find.mockResolvedValue([
+        { id: 's1', status: StorageUnitStatus.AVAILABLE, deletedAt: null },
+      ]);
+
+      await service.update('p1', { facilityId: 'fac-2' });
+
+      expect(manager.find).toHaveBeenCalledWith(
+        StorageUnit,
+        expect.objectContaining({ lock: { mode: 'pessimistic_write' }, withDeleted: true }),
+      );
+      expect(manager.update).toHaveBeenCalledWith(
+        StorageUnit,
+        { parentId: 'p1' },
+        { facilityId: 'fac-2' },
+      );
+    });
+
+    it('refuses to move the facility while a shelf is rented', async () => {
+      stubWarehouse(buildFacility({ id: 'fac-2' }), parentRow());
+      manager.find.mockResolvedValue([
+        { id: 's1', status: StorageUnitStatus.RENTED, deletedAt: null },
+      ]);
+
+      await expect(service.update('p1', { facilityId: 'fac-2' })).rejects.toMatchObject({
+        status: 409,
+        response: { details: { shelfIds: ['s1'] } },
+      });
+      expect(manager.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses to retire the building while a shelf is rented', async () => {
+      stubWarehouse(buildFacility(), parentRow());
+      manager.find.mockResolvedValue([
+        { id: 's1', status: StorageUnitStatus.RENTED, deletedAt: null },
+      ]);
+
+      await expect(
+        service.update('p1', { status: StorageUnitStatus.INACTIVE }),
+      ).rejects.toMatchObject({ status: 409, response: { details: { shelfIds: ['s1'] } } });
+      expect(manager.update).not.toHaveBeenCalled();
+    });
+
+    it('freezes the building code once it has shelves and refuses a price', async () => {
+      stubWarehouse(buildFacility(), parentRow());
+      manager.count.mockResolvedValue(4);
+
+      await expect(service.update('p1', { code: 'KK2' })).rejects.toMatchObject({ status: 409 });
+      await expect(service.update('p1', { monthlyPrice: 1 })).rejects.toMatchObject({
+        status: 400,
+      });
+      expect(manager.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('updateStatus', () => {
     const manager1 = { id: 'mgr-1', roles: [UserRole.FACILITY_MANAGER] } as never;
 
@@ -333,7 +485,7 @@ describe('WarehouseCommandService', () => {
     });
 
     it('refuses to toggle a held warehouse', async () => {
-      roleAssignments.find.mockResolvedValue([{ startsAt: new Date(0), endsAt: null }]);
+      manager.find.mockResolvedValue([{ startsAt: new Date(0), endsAt: null }]);
       stubWarehouse(buildFacility(), buildUnit({ status: StorageUnitStatus.HELD }));
 
       await expect(
@@ -343,15 +495,33 @@ describe('WarehouseCommandService', () => {
     });
 
     it('forbids a manager of another facility, using the facility read under lock', async () => {
-      roleAssignments.find.mockResolvedValue([]);
+      manager.find.mockResolvedValue([]);
 
       await service
         .updateStatus('unit-1', { status: StorageUnitStatus.MAINTENANCE }, manager1)
         .catch(() => undefined);
 
-      expect(roleAssignments.find).toHaveBeenCalledWith({
+      expect(manager.find).toHaveBeenCalledWith(UserRoleAssignment, {
         where: { userId: 'mgr-1', facilityId: 'fac-1', role: UserRole.FACILITY_MANAGER },
       });
+    });
+
+    it('refuses to take a shelf warehouse out of service while a shelf is booked', async () => {
+      stubWarehouse(
+        buildFacility(),
+        buildUnit({ id: 'p1', kind: StorageUnitKind.SHELF_WAREHOUSE }),
+      );
+      manager.find.mockResolvedValue([
+        { id: 's1', status: StorageUnitStatus.BOOKED, deletedAt: null },
+      ]);
+
+      await expect(
+        service.updateStatus('p1', { status: StorageUnitStatus.MAINTENANCE }, {
+          id: 'ops',
+          roles: [UserRole.OPERATIONS_MANAGER],
+        } as never),
+      ).rejects.toMatchObject({ status: 409, response: { details: { shelfIds: ['s1'] } } });
+      expect(manager.update).not.toHaveBeenCalled();
     });
 
     it('lets operations take an available warehouse out of service', async () => {
@@ -383,6 +553,36 @@ describe('WarehouseCommandService', () => {
       manager.count.mockResolvedValue(1);
 
       await expect(service.softDelete('unit-1')).rejects.toMatchObject({ status: 409 });
+    });
+
+    it('retires a shelf warehouse together with its shelves', async () => {
+      stubWarehouse(
+        buildFacility(),
+        buildUnit({ id: 'p1', kind: StorageUnitKind.SHELF_WAREHOUSE }),
+      );
+      manager.find.mockResolvedValue([
+        { id: 's1', status: StorageUnitStatus.AVAILABLE, deletedAt: null },
+        { id: 's2', status: StorageUnitStatus.INACTIVE, deletedAt: null },
+      ]);
+
+      await service.softDelete('p1');
+
+      expect(manager.softDelete).toHaveBeenCalledWith(StorageUnit, ['s1', 's2']);
+      expect(manager.softDelete).toHaveBeenCalledWith(StorageUnit, 'p1');
+      expect(manager.delete).toHaveBeenCalledWith(ShelfLayout, { warehouseId: 'p1' });
+    });
+
+    it('refuses to retire a shelf warehouse that has a booked shelf', async () => {
+      stubWarehouse(
+        buildFacility(),
+        buildUnit({ id: 'p1', kind: StorageUnitKind.SHELF_WAREHOUSE }),
+      );
+      manager.find.mockResolvedValue([
+        { id: 's1', status: StorageUnitStatus.BOOKED, deletedAt: null },
+      ]);
+
+      await expect(service.softDelete('p1')).rejects.toMatchObject({ status: 409 });
+      expect(manager.softDelete).not.toHaveBeenCalled();
     });
 
     it('retires only the unit and counts tours on this warehouse', async () => {

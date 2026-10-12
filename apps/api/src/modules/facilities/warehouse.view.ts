@@ -1,9 +1,21 @@
 import type { StorageUnit, WarehouseImage } from '@entities/storage-unit.entity';
-import type { StorageUnitStatus } from '@storage/types';
+import type { StorageUnitKind, StorageUnitStatus } from '@storage/types';
 
 /** A stored photo plus a presigned GET link; links expire, so clients refetch rather than keep them. */
 export interface WarehouseImageView extends WarehouseImage {
   url: string;
+}
+
+/** Live-shelf rollup of a shelf warehouse; min/max cover AVAILABLE shelves only. */
+export interface ShelfSummary {
+  total: number;
+  available: number;
+  minMonthlyPrice: number | null;
+  statusCounts: Partial<Record<StorageUnitStatus, number>>;
+  minAreaM2: number | null;
+  maxAreaM2: number | null;
+  minVolumeM3: number | null;
+  maxVolumeM3: number | null;
 }
 
 /**
@@ -13,6 +25,12 @@ export interface WarehouseImageView extends WarehouseImage {
 export interface WarehouseView {
   id: string;
   facility: { id: string; code: string; name: string };
+  kind: StorageUnitKind;
+  parentId: string | null;
+  /** The shelf warehouse holding this shelf; null for other kinds or when the relation is not loaded. */
+  parent: { id: string; code: string; name: string } | null;
+  /** Non-null for shelf warehouses only. */
+  shelfSummary: ShelfSummary | null;
   code: string;
   name: string;
   addressLine: string;
@@ -41,16 +59,21 @@ export interface WarehouseView {
 const toNumberOrNull = (value: unknown): number | null =>
   value === null || value === undefined ? null : Number(value);
 
-/** `unit.facility` must be loaded. Postgres decimals arrive as strings and are normalised. */
+/** `unit.facility` must be loaded; `unit.parent` is read only when loaded. Postgres decimals arrive as strings and are normalised. */
 export function toWarehouseView(
   unit: StorageUnit,
   effectiveDepositMonths: number,
   images: WarehouseImageView[] = [],
+  shelfSummary: ShelfSummary | null = null,
 ): WarehouseView {
-  const { facility } = unit;
+  const { facility, parent } = unit;
   return {
     id: unit.id,
     facility: { id: facility.id, code: facility.code, name: facility.name },
+    kind: unit.kind,
+    parentId: unit.parentId ?? null,
+    parent: parent ? { id: parent.id, code: parent.code, name: parent.name } : null,
+    shelfSummary,
     code: unit.code,
     name: unit.name,
     addressLine: unit.addressLine,

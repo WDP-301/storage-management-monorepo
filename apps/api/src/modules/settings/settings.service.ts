@@ -92,6 +92,10 @@ export class SettingsService {
     return this.getNumber('deposit.default_months');
   }
 
+  async getCheckInQrTtlMinutes(): Promise<number> {
+    return this.getNumber('access.check_in_qr_ttl_minutes');
+  }
+
   /** A unit's own deposit level wins; units without one follow the system-wide setting. */
   async getDepositMonthsFor(unit: Pick<StorageUnit, 'depositMonths'>): Promise<number> {
     return unit.depositMonths ?? this.getDepositDefaultMonths();

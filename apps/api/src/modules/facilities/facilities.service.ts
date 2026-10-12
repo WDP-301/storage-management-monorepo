@@ -92,12 +92,12 @@ export class FacilitiesService {
     };
   }
 
-  /** Live (not soft-deleted) warehouses per facility. */
+  /** Live (not soft-deleted) warehouses per facility; shelves belong to a warehouse, not counted as one. */
   private async warehouseCounts(facilityIds: string[]): Promise<Map<string, number>> {
     if (facilityIds.length === 0) return new Map();
     const rows: { facility_id: string; count: string }[] = await this.facilityRepo.manager.query(
       `SELECT facility_id, count(*) AS count FROM storage_units
-       WHERE deleted_at IS NULL AND facility_id = ANY($1) GROUP BY facility_id`,
+       WHERE deleted_at IS NULL AND kind <> 'SHELF' AND facility_id = ANY($1) GROUP BY facility_id`,
       [facilityIds],
     );
     return new Map(rows.map((row) => [row.facility_id, Number(row.count)]));

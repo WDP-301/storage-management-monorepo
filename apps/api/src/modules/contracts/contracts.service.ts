@@ -4,6 +4,7 @@ import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
+import { findUnrentable, lockShelfParents } from '@modules/bookings/rentable-units.util';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
@@ -73,9 +74,29 @@ export class ContractsService {
       const endedAt = dto.endedAt ? new Date(dto.endedAt) : undefined;
       this.validateDates(effectiveAt, endedAt);
 
+      // Re-claiming puts a shelf under a parent that may have closed since it was booked; the
+      // parent is share-locked before the unit so a concurrent close cannot slip in between.
+      const unlocked = await manager.findOne(StorageUnit, {
+        where: { id: item.storageUnitId },
+        select: { id: true, parentId: true },
+      });
+      if (unlocked) await lockShelfParents(manager, [unlocked]);
+
       // A cancelled draft puts the unit back on the market — re-claim it for this item.
       const unit = await lockUnitClaimedOnlyBy(manager, item);
       if (unit.status === StorageUnitStatus.AVAILABLE) {
+        const withParent = await manager.findOne(StorageUnit, {
+          where: { id: unit.id },
+          relations: { parent: true },
+        });
+        if (!withParent || findUnrentable([withParent]).length > 0) {
+          throw new DomainException(
+            ErrorCode.UNIT_NOT_AVAILABLE,
+            'The storage unit can no longer be rented',
+            HttpStatus.CONFLICT,
+            { storageUnitId: unit.id },
+          );
+        }
         await manager.update(StorageUnit, { id: unit.id }, { status: StorageUnitStatus.BOOKED });
       }
 
@@ -94,7 +115,7 @@ export class ContractsService {
   async findMine(customerId: string): Promise<CustomerContractRecord[]> {
     const contracts = await this.contracts.find({
       where: { customerId, deletedAt: IsNull() },
-      relations: { bookingItem: { storageUnit: { facility: true } } },
+      relations: { bookingItem: { storageUnit: { facility: true, parent: true } } },
       order: { effectiveAt: 'DESC' },
     });
     if (contracts.length === 0) return [];

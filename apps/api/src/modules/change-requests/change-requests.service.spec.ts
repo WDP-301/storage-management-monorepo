@@ -1,5 +1,6 @@
 import { BookingItem } from '@entities/booking-item.entity';
 import { Facility } from '@entities/facility.entity';
+import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
@@ -8,9 +9,11 @@ import {
   ChangeRequestStatus,
   ContractStatus,
   FacilityStatus,
+  StorageUnitKind,
   StorageUnitStatus,
   UserRole,
 } from '@storage/types';
+import { In } from 'typeorm';
 import { ChangeRequestsService } from './change-requests.service';
 
 const FACILITY_ID = 'facility-1';
@@ -93,6 +96,7 @@ describe('ChangeRequestsService', () => {
   let storageUnits: { findOne: jest.Mock };
   let roleAssignments: { find: jest.Mock };
   let txManager: {
+    find: jest.Mock;
     createQueryBuilder: jest.Mock;
     update: jest.Mock;
     save: jest.Mock;
@@ -128,6 +132,7 @@ describe('ChangeRequestsService', () => {
     storageUnits = { findOne: jest.fn() };
     roleAssignments = { find: jest.fn().mockResolvedValue([activeAssignment()]) };
     txManager = {
+      find: jest.fn().mockResolvedValue([]),
       createQueryBuilder: jest.fn(),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       save: jest.fn(async (v) => v),
@@ -193,6 +198,91 @@ describe('ChangeRequestsService', () => {
     await expect(
       service.create({ contractId: 'contract-1', newUnitId: 'unit-new', reason: 'x' }, customer),
     ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it.each([
+    ['a shelf warehouse', { kind: StorageUnitKind.SHELF_WAREHOUSE, parent: null }],
+    [
+      'a shelf under a closed warehouse',
+      { kind: StorageUnitKind.SHELF, parent: { status: StorageUnitStatus.MAINTENANCE } },
+    ],
+  ])('create rejects %s as the target', async (_label, extra) => {
+    storageUnits.findOne.mockResolvedValue({
+      id: 'unit-new',
+      facilityId: FACILITY_ID,
+      facility: { id: FACILITY_ID, status: FacilityStatus.ACTIVE },
+      status: StorageUnitStatus.AVAILABLE,
+      monthlyPrice: '950000.00',
+      ...extra,
+    });
+
+    await expect(
+      service.create({ contractId: 'contract-1', newUnitId: 'unit-new', reason: 'x' }, customer),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(requests.save).not.toHaveBeenCalled();
+  });
+
+  it('create allows moving onto a shelf of an open warehouse', async () => {
+    storageUnits.findOne.mockResolvedValue({
+      id: 'unit-new',
+      facilityId: FACILITY_ID,
+      facility: { id: FACILITY_ID, status: FacilityStatus.ACTIVE },
+      status: StorageUnitStatus.AVAILABLE,
+      kind: StorageUnitKind.SHELF,
+      parent: { status: StorageUnitStatus.AVAILABLE },
+      monthlyPrice: '950000.00',
+    });
+    requests.createQueryBuilder.mockReturnValue({
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getCount: jest.fn().mockResolvedValue(0),
+    });
+
+    await service.create(
+      { contractId: 'contract-1', newUnitId: 'unit-new', reason: 'x' },
+      customer,
+    );
+
+    expect(requests.save).toHaveBeenCalled();
+  });
+
+  it('approve pins the claim to a rentable kind and an open parent warehouse', async () => {
+    const claim = {
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({ affected: 0 }),
+    };
+    txManager.createQueryBuilder.mockReturnValue(claim);
+
+    await expect(service.decide('req-1', { decision: 'APPROVED' }, manager)).rejects.toMatchObject({
+      status: 409,
+    });
+    const [condition, params] = claim.where.mock.calls[0];
+    expect(condition).toContain('kind <> :shelfWarehouse');
+    expect(condition).toContain('p.status = :available');
+    expect(condition).toContain('p.deleted_at IS NULL');
+    expect(params).toMatchObject({ shelfWarehouse: StorageUnitKind.SHELF_WAREHOUSE });
+    expect(txManager.save).not.toHaveBeenCalled();
+  });
+
+  it('approve share-locks the target shelf warehouse before claiming the shelf', async () => {
+    const request = buildRequest();
+    request.newUnit = { ...request.newUnit, parentId: 'parent-1' } as StorageUnit;
+    requests.findOne.mockResolvedValue(request);
+
+    await service.decide('req-1', { decision: 'APPROVED' }, manager);
+
+    expect(txManager.find).toHaveBeenCalledWith(
+      StorageUnit,
+      expect.objectContaining({
+        where: { id: In(['parent-1']) },
+        lock: { mode: 'pessimistic_read' },
+      }),
+    );
+    expect(txManager.find.mock.invocationCallOrder[0]).toBeLessThan(
+      txManager.createQueryBuilder.mock.invocationCallOrder[0],
+    );
   });
 
   it('approve performs the swap and completes the request', async () => {

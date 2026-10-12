@@ -7,6 +7,7 @@ import { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { activeFacilityIds } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { findUnrentable } from '@modules/bookings/rentable-units.util';
 import { SettingsService } from '@modules/settings/settings.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -17,6 +18,7 @@ import {
   ContractStatus,
   FacilityStatus,
   InspectionType,
+  StorageUnitKind,
   StorageUnitStatus,
   UserRole,
 } from '@storage/types';
@@ -138,7 +140,7 @@ export class ChangeRequestsService {
     const oldUnit = contract.bookingItem.storageUnit;
     const newUnit = await this.storageUnits.findOne({
       where: { id: dto.newUnitId, deletedAt: IsNull() },
-      relations: { facility: true },
+      relations: { facility: true, parent: true },
     });
     if (!newUnit) {
       throw this.fieldError('newUnitId', 'notFound', 'Storage unit does not exist');
@@ -150,6 +152,10 @@ export class ChangeRequestsService {
       throw this.fieldError('newUnitId', 'notAvailable', 'New unit is not available');
     }
     if (newUnit.facility?.status !== FacilityStatus.ACTIVE) {
+      throw this.fieldError('newUnitId', 'notAvailable', 'New unit is not available');
+    }
+    // A shelf warehouse is only a container; a shelf is closed together with its parent.
+    if (findUnrentable([newUnit]).length > 0) {
       throw this.fieldError('newUnitId', 'notAvailable', 'New unit is not available');
     }
 
@@ -284,11 +290,17 @@ export class ChangeRequestsService {
         .update(StorageUnit)
         .set({ status: StorageUnitStatus.RENTED })
         .where(
-          'id = :id AND facility_id = :facilityId AND status = :available AND deleted_at IS NULL',
+          `id = :id AND facility_id = :facilityId AND status = :available AND deleted_at IS NULL
+           AND kind <> :shelfWarehouse
+           AND (parent_id IS NULL OR EXISTS (
+             SELECT 1 FROM storage_units p
+             WHERE p.id = storage_units.parent_id AND p.status = :available AND p.deleted_at IS NULL
+           ))`,
           {
             id: request.newUnitId,
             facilityId: targetFacility.id,
             available: StorageUnitStatus.AVAILABLE,
+            shelfWarehouse: StorageUnitKind.SHELF_WAREHOUSE,
           },
         )
         .execute();

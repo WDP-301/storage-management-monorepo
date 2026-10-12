@@ -4,6 +4,11 @@ jest.mock('@nestjs/schedule', () => ({
   CronExpression: { EVERY_MINUTE: '* * * * *' },
 }));
 
+jest.mock('@shared/utils/idempotency-key.util', () => ({
+  claimIdempotencyKey: jest.fn().mockResolvedValue(null),
+  releaseIdempotencyKey: jest.fn().mockResolvedValue(undefined),
+}));
+
 import { AppUser } from '@entities/app-user.entity';
 import { Booking } from '@entities/booking.entity';
 import { BookingItem } from '@entities/booking-item.entity';
@@ -25,6 +30,7 @@ import {
   InspectionType,
   PaymentStatus,
   PaymentType,
+  StorageUnitKind,
   StorageUnitStatus,
 } from '@storage/types';
 import { In } from 'typeorm';
@@ -481,5 +487,149 @@ describe('BookingsService.cancel', () => {
       status: HttpStatus.FORBIDDEN,
     });
     expect(dataSource.transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('BookingsService.create — shelf rules', () => {
+  const user = { id: 'customer-1' } as AuthUser;
+  const dto = (...ids: string[]) =>
+    ({
+      items: ids.map((storageUnitId) => ({
+        storageUnitId,
+        rentalMonths: 3,
+        requestedStartAt: new Date().toISOString(),
+      })),
+    }) as never;
+
+  const unit = (id: string, overrides: Record<string, unknown> = {}) => ({
+    id,
+    status: StorageUnitStatus.AVAILABLE,
+    kind: StorageUnitKind.SELF_STORAGE,
+    parent: null,
+    monthlyPrice: '1000000.00',
+    depositMonths: 1,
+    facility: { status: 'ACTIVE' },
+    ...overrides,
+  });
+  const parent = (status: StorageUnitStatus) => ({ id: 'parent-1', status });
+
+  let preCheckFind: jest.Mock;
+  let lockedUnits: unknown[];
+  let em: { getRepository: jest.Mock; create: jest.Mock; save: jest.Mock; update: jest.Mock };
+  let service: BookingsService;
+
+  beforeEach(() => {
+    preCheckFind = jest.fn();
+    lockedUnits = [];
+    const unitQuery = {
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      whereInIds: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      setLock: jest.fn().mockReturnThis(),
+      getMany: jest.fn(async () => lockedUnits),
+    };
+    const holdQuery = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(null),
+    };
+    em = {
+      getRepository: jest.fn((entity: unknown) => ({
+        createQueryBuilder: () => (entity === StorageUnit ? unitQuery : holdQuery),
+      })),
+      create: jest.fn((_entity, data) => ({ ...data })),
+      save: jest.fn(async (_entity, data) => (Array.isArray(data) ? data : { id: 'b-1', ...data })),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
+    const updateQuery = {
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({}),
+    };
+    const dataSource = {
+      getRepository: jest.fn(() => ({ find: preCheckFind })),
+      transaction: jest.fn((cb: (e: unknown) => unknown) =>
+        cb({ ...em, createQueryBuilder: () => updateQuery }),
+      ),
+    };
+    const settings = {
+      getIdempotencyTtlHours: jest.fn().mockResolvedValue(24),
+      getIdempotencyStaleSeconds: jest.fn().mockResolvedValue(60),
+      getBookingHoldMinutes: jest.fn().mockResolvedValue(30),
+      getBookingLeadDays: jest.fn().mockResolvedValue(30),
+      getBookingMinRentalMonths: jest.fn().mockResolvedValue(1),
+      getBookingMaxRentalMonths: jest.fn().mockResolvedValue(12),
+      getBookingMaxUnitsPerBooking: jest.fn().mockResolvedValue(4),
+      getDepositDefaultMonths: jest.fn().mockResolvedValue(1),
+    };
+    service = new BookingsService(
+      {} as never,
+      {} as never,
+      dataSource as never,
+      { get: jest.fn() } as never,
+      settings as never,
+    );
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('refuses a shelf warehouse before taking any lock', async () => {
+    preCheckFind.mockResolvedValue([unit('wh-1', { kind: StorageUnitKind.SHELF_WAREHOUSE })]);
+
+    await expect(service.create(dto('wh-1'), user, 'key-1')).rejects.toMatchObject({
+      status: 409,
+      response: { code: ErrorCode.UNIT_NOT_AVAILABLE, details: { unavailableUnitIds: ['wh-1'] } },
+    });
+    expect(em.getRepository).not.toHaveBeenCalled();
+  });
+
+  it('refuses a shelf whose parent warehouse is closed', async () => {
+    preCheckFind.mockResolvedValue([
+      unit('shelf-1', {
+        kind: StorageUnitKind.SHELF,
+        parent: parent(StorageUnitStatus.MAINTENANCE),
+      }),
+    ]);
+
+    await expect(service.create(dto('shelf-1'), user, 'key-1')).rejects.toMatchObject({
+      status: 409,
+      response: { details: { unavailableUnitIds: ['shelf-1'] } },
+    });
+  });
+
+  it('re-checks the shelf rules inside the lock when the parent closed after the pre-check', async () => {
+    const open = unit('shelf-1', {
+      kind: StorageUnitKind.SHELF,
+      parent: parent(StorageUnitStatus.AVAILABLE),
+    });
+    preCheckFind.mockResolvedValue([open]);
+    lockedUnits = [{ ...open, parent: parent(StorageUnitStatus.MAINTENANCE) }];
+
+    await expect(service.create(dto('shelf-1'), user, 'key-1')).rejects.toMatchObject({
+      status: 409,
+      response: { details: { unavailableUnitIds: ['shelf-1'] } },
+    });
+    expect(em.update).not.toHaveBeenCalled();
+  });
+
+  it('holds a shelf under an available parent like any other unit', async () => {
+    const shelf = unit('shelf-1', {
+      kind: StorageUnitKind.SHELF,
+      parent: parent(StorageUnitStatus.AVAILABLE),
+    });
+    preCheckFind.mockResolvedValue([shelf]);
+    lockedUnits = [shelf];
+
+    const { data } = await service.create(dto('shelf-1'), user, 'key-1');
+
+    expect(data).toMatchObject({ status: BookingStatus.HOLDING });
+    expect(em.update).toHaveBeenCalledWith(
+      StorageUnit,
+      { id: In(['shelf-1']), status: StorageUnitStatus.AVAILABLE },
+      { status: StorageUnitStatus.HELD },
+    );
   });
 });

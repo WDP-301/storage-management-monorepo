@@ -8,6 +8,7 @@ import {
   ChangeRequestStatus,
   ContractStatus,
   FacilityStatus,
+  StorageUnitKind,
   StorageUnitStatus,
   UserRole,
 } from '@storage/types';
@@ -193,6 +194,72 @@ describe('ChangeRequestsService', () => {
     await expect(
       service.create({ contractId: 'contract-1', newUnitId: 'unit-new', reason: 'x' }, customer),
     ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it.each([
+    ['a shelf warehouse', { kind: StorageUnitKind.SHELF_WAREHOUSE, parent: null }],
+    [
+      'a shelf under a closed warehouse',
+      { kind: StorageUnitKind.SHELF, parent: { status: StorageUnitStatus.MAINTENANCE } },
+    ],
+  ])('create rejects %s as the target', async (_label, extra) => {
+    storageUnits.findOne.mockResolvedValue({
+      id: 'unit-new',
+      facilityId: FACILITY_ID,
+      facility: { id: FACILITY_ID, status: FacilityStatus.ACTIVE },
+      status: StorageUnitStatus.AVAILABLE,
+      monthlyPrice: '950000.00',
+      ...extra,
+    });
+
+    await expect(
+      service.create({ contractId: 'contract-1', newUnitId: 'unit-new', reason: 'x' }, customer),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(requests.save).not.toHaveBeenCalled();
+  });
+
+  it('create allows moving onto a shelf of an open warehouse', async () => {
+    storageUnits.findOne.mockResolvedValue({
+      id: 'unit-new',
+      facilityId: FACILITY_ID,
+      facility: { id: FACILITY_ID, status: FacilityStatus.ACTIVE },
+      status: StorageUnitStatus.AVAILABLE,
+      kind: StorageUnitKind.SHELF,
+      parent: { status: StorageUnitStatus.AVAILABLE },
+      monthlyPrice: '950000.00',
+    });
+    requests.createQueryBuilder.mockReturnValue({
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getCount: jest.fn().mockResolvedValue(0),
+    });
+
+    await service.create(
+      { contractId: 'contract-1', newUnitId: 'unit-new', reason: 'x' },
+      customer,
+    );
+
+    expect(requests.save).toHaveBeenCalled();
+  });
+
+  it('approve pins the claim to a rentable kind and an open parent warehouse', async () => {
+    const claim = {
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({ affected: 0 }),
+    };
+    txManager.createQueryBuilder.mockReturnValue(claim);
+
+    await expect(service.decide('req-1', { decision: 'APPROVED' }, manager)).rejects.toMatchObject({
+      status: 409,
+    });
+    const [condition, params] = claim.where.mock.calls[0];
+    expect(condition).toContain('kind <> :shelfWarehouse');
+    expect(condition).toContain('p.status = :available');
+    expect(condition).toContain('p.deleted_at IS NULL');
+    expect(params).toMatchObject({ shelfWarehouse: StorageUnitKind.SHELF_WAREHOUSE });
+    expect(txManager.save).not.toHaveBeenCalled();
   });
 
   it('approve performs the swap and completes the request', async () => {

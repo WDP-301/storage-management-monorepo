@@ -38,6 +38,7 @@ import Decimal from 'decimal.js';
 import { DataSource, DeepPartial, In, LessThan, MoreThan, Not, Repository } from 'typeorm';
 import { extractBookingNos, generateBookingNo } from './booking-no.util';
 import { BookingResponseDto, CreateBookingDto } from './dto/booking.dto';
+import { findUnrentable } from './rentable-units.util';
 
 const STATUSES_AWAITING_DEPOSIT: BookingStatus[] = [
   BookingStatus.HOLDING,
@@ -165,7 +166,7 @@ export class BookingsService implements OnApplicationBootstrap {
       const unitIds = dto.items.map((i) => i.storageUnitId);
       const preCheckUnits = await this.dataSource.getRepository(StorageUnit).find({
         where: { id: In(unitIds) },
-        select: ['id', 'status'],
+        relations: { parent: true },
       });
 
       if (preCheckUnits.length !== unitIds.length) {
@@ -176,15 +177,16 @@ export class BookingsService implements OnApplicationBootstrap {
         );
       }
 
-      const preCheckUnavailable = preCheckUnits.filter(
-        (u) => u.status !== StorageUnitStatus.AVAILABLE,
-      );
-      if (preCheckUnavailable.length > 0) {
+      const preCheckUnavailable = new Set([
+        ...preCheckUnits.filter((u) => u.status !== StorageUnitStatus.AVAILABLE).map((u) => u.id),
+        ...findUnrentable(preCheckUnits),
+      ]);
+      if (preCheckUnavailable.size > 0) {
         throw new DomainException(
           ErrorCode.UNIT_NOT_AVAILABLE,
           'Một hoặc nhiều storage unit không còn available',
           HttpStatus.CONFLICT,
-          { unavailableUnitIds: preCheckUnavailable.map((u) => u.id) },
+          { unavailableUnitIds: [...preCheckUnavailable] },
         );
       }
 
@@ -197,6 +199,7 @@ export class BookingsService implements OnApplicationBootstrap {
           .getRepository(StorageUnit)
           .createQueryBuilder('unit')
           .innerJoinAndSelect('unit.facility', 'facility')
+          .leftJoinAndSelect('unit.parent', 'parent')
           .whereInIds(sortedUnitIds)
           .orderBy('unit.id', 'ASC')
           .setLock('pessimistic_write', undefined, ['unit'])
@@ -212,13 +215,18 @@ export class BookingsService implements OnApplicationBootstrap {
         }
 
         // Second availability check inside the lock
-        const stillUnavailable = units.filter((u) => u.status !== StorageUnitStatus.AVAILABLE);
-        if (stillUnavailable.length > 0) {
+        // A shelf warehouse is never rentable itself and a shelf follows its parent's status
+        // (the parent is read through the join, only the unit rows are locked).
+        const stillUnavailable = new Set([
+          ...units.filter((u) => u.status !== StorageUnitStatus.AVAILABLE).map((u) => u.id),
+          ...findUnrentable(units),
+        ]);
+        if (stillUnavailable.size > 0) {
           throw new DomainException(
             ErrorCode.UNIT_NOT_AVAILABLE,
             'Một hoặc nhiều storage unit không còn available',
             HttpStatus.CONFLICT,
-            { unavailableUnitIds: stillUnavailable.map((u) => u.id) },
+            { unavailableUnitIds: [...stillUnavailable] },
           );
         }
 

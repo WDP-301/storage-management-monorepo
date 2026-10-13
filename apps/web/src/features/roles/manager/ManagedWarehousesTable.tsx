@@ -1,12 +1,14 @@
 import { Badge, Button, Empty, InputGroup, LayerCard, Select, Table, Text } from '@cloudflare/kumo';
-import { List, MagnifyingGlass, MapPin, MapTrifold } from '@phosphor-icons/react';
+import { List, MagnifyingGlass, MapPin, MapTrifold, Rows } from '@phosphor-icons/react';
 import React from 'react';
 import type { Warehouse, WarehouseStatus } from '../../../types/warehouse';
 import { hasValidCoordinates } from '../../warehouses/goong-map';
 import {
   formatArea,
   formatDimensions,
-  formatVnd,
+  formatShelfSummary,
+  formatWarehousePrice,
+  isShelfWarehouse,
   WAREHOUSE_STATUS_LABEL,
 } from '../../warehouses/warehouse-display';
 import { MaintenanceToggleButton } from './MaintenanceToggleButton';
@@ -27,6 +29,7 @@ interface Props {
   onStatusFilterChange: (value: string) => void;
   busyId: string | null;
   onToggleMaintenance: (w: Warehouse) => void;
+  onManageShelves?: (w: Warehouse) => void;
   view: 'list' | 'map';
   onViewChange: (view: 'list' | 'map') => void;
   onViewMap: (w: Warehouse) => void;
@@ -42,6 +45,7 @@ export const ManagedWarehousesTable: React.FC<Props> = ({
   onStatusFilterChange,
   busyId,
   onToggleMaintenance,
+  onManageShelves,
   view,
   onViewChange,
   onViewMap,
@@ -53,7 +57,9 @@ export const ManagedWarehousesTable: React.FC<Props> = ({
         <Text as="h3" variant="heading">
           Danh sách kho của chi nhánh
         </Text>
-        <Text variant="secondary">Theo dõi hiện trạng kho và chuyển trạng thái bảo trì.</Text>
+        <Text variant="secondary">
+          Theo dõi hiện trạng kho, sơ đồ kệ và chuyển trạng thái bảo trì.
+        </Text>
       </div>
       <div className="flex items-center gap-2">
         <div className="w-56">
@@ -115,48 +121,70 @@ export const ManagedWarehousesTable: React.FC<Props> = ({
             </Table.Row>
           </Table.Header>
           <Table.Body>
-            {warehouses.map((w) => (
-              <Table.Row key={w.id}>
-                <Table.Cell className="whitespace-nowrap text-kumo-default">
-                  {w.facility.name}
-                </Table.Cell>
-                <Table.Cell className="whitespace-nowrap font-mono font-semibold text-kumo-default">
-                  {w.code}
-                </Table.Cell>
-                <Table.Cell className="font-medium text-kumo-default">{w.name}</Table.Cell>
-                <Table.Cell className="text-kumo-subtle min-w-[200px]">{w.addressLine}</Table.Cell>
-                <Table.Cell className="whitespace-nowrap text-kumo-default">
-                  {formatDimensions(w)} ({formatArea(w.areaM2)})
-                </Table.Cell>
-                <Table.Cell className="whitespace-nowrap font-medium text-kumo-default">
-                  {formatVnd(w.monthlyPrice)}
-                </Table.Cell>
-                <Table.Cell className="whitespace-nowrap">
-                  <Badge variant={WAREHOUSE_STATUS_LABEL[w.status].variant}>
-                    {WAREHOUSE_STATUS_LABEL[w.status].label}
-                  </Badge>
-                </Table.Cell>
-                <Table.Cell className="whitespace-nowrap text-right">
-                  <div className="inline-flex items-center gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      icon={<MapPin className="w-3.5 h-3.5" />}
-                      aria-label={`Xem kho ${w.code} trên bản đồ`}
-                      disabled={!hasValidCoordinates(w)}
-                      onClick={() => onViewMap(w)}
-                    >
-                      Bản đồ
-                    </Button>
-                    <MaintenanceToggleButton
-                      warehouse={w}
-                      busy={busyId === w.id}
-                      onToggle={onToggleMaintenance}
-                    />
-                  </div>
-                </Table.Cell>
-              </Table.Row>
-            ))}
+            {warehouses.map((w) => {
+              const shelfCount = formatShelfSummary(w);
+              return (
+                <Table.Row key={w.id}>
+                  <Table.Cell className="whitespace-nowrap text-kumo-default">
+                    {w.facility.name}
+                  </Table.Cell>
+                  <Table.Cell className="whitespace-nowrap font-mono font-semibold text-kumo-default">
+                    {w.code}
+                  </Table.Cell>
+                  <Table.Cell className="font-medium text-kumo-default">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span>{w.name}</span>
+                      {isShelfWarehouse(w) && <Badge variant="primary">Kho kệ</Badge>}
+                    </div>
+                    {shelfCount && <div className="text-xs text-kumo-subtle">{shelfCount}</div>}
+                  </Table.Cell>
+                  <Table.Cell className="text-kumo-subtle min-w-[200px]">
+                    {w.addressLine}
+                  </Table.Cell>
+                  <Table.Cell className="whitespace-nowrap text-kumo-default">
+                    {formatDimensions(w)} ({formatArea(w.areaM2)})
+                  </Table.Cell>
+                  <Table.Cell className="whitespace-nowrap font-medium text-kumo-default">
+                    {formatWarehousePrice(w)}
+                  </Table.Cell>
+                  <Table.Cell className="whitespace-nowrap">
+                    <Badge variant={WAREHOUSE_STATUS_LABEL[w.status].variant}>
+                      {WAREHOUSE_STATUS_LABEL[w.status].label}
+                    </Badge>
+                  </Table.Cell>
+                  <Table.Cell className="whitespace-nowrap text-right">
+                    <div className="inline-flex items-center gap-2">
+                      {isShelfWarehouse(w) && onManageShelves && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={<Rows className="w-3.5 h-3.5" />}
+                          aria-label={`Quản lý kệ kho ${w.code}`}
+                          onClick={() => onManageShelves(w)}
+                        >
+                          Kệ & Sơ đồ
+                        </Button>
+                      )}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        icon={<MapPin className="w-3.5 h-3.5" />}
+                        aria-label={`Xem kho ${w.code} trên bản đồ`}
+                        disabled={!hasValidCoordinates(w)}
+                        onClick={() => onViewMap(w)}
+                      >
+                        Bản đồ
+                      </Button>
+                      <MaintenanceToggleButton
+                        warehouse={w}
+                        busy={busyId === w.id}
+                        onToggle={onToggleMaintenance}
+                      />
+                    </div>
+                  </Table.Cell>
+                </Table.Row>
+              );
+            })}
             {warehouses.length === 0 && (
               <Table.Row>
                 <Table.Cell className="p-0" colSpan={8}>

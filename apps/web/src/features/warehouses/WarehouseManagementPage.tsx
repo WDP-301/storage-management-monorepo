@@ -6,6 +6,7 @@ import {
   MapTrifold,
   PencilSimple,
   Plus,
+  Rows,
   Stack,
   Warehouse as WarehouseIcon,
   Wrench,
@@ -20,6 +21,7 @@ import type {
   WarehouseListQuery,
   WarehouseStatus,
 } from '../../types/warehouse';
+import { ShelfManagementDialog } from './ShelfManagementDialog';
 import { WarehouseDeleteDialog } from './WarehouseDeleteDialog';
 import {
   ALL,
@@ -30,6 +32,7 @@ import {
 import { WarehouseFormDialog } from './WarehouseFormDialog';
 import { WarehouseOverviewMap } from './WarehouseOverviewMap';
 import { WarehouseTable } from './WarehouseTable';
+import { isShelfWarehouse } from './warehouse-display';
 
 const PAGE_SIZE = 20;
 
@@ -76,6 +79,7 @@ export const WarehouseManagementPage: React.FC = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Warehouse | null>(null);
   const [deleting, setDeleting] = useState<Warehouse | null>(null);
+  const [managingShelves, setManagingShelves] = useState<Warehouse | null>(null);
   const [view, setView] = useState<'list' | 'map'>('list');
   // Once opened, the map stays mounted (hidden in list view) so toggling does not reload it.
   const [mapOpened, setMapOpened] = useState(false);
@@ -275,7 +279,8 @@ export const WarehouseManagementPage: React.FC = () => {
             Quản lý kho
           </Text>
           <Text variant="secondary">
-            Quản lý danh mục kho cho thuê: địa chỉ, kích thước, giá thuê và mức đặt cọc.
+            Quản lý danh mục kho cho thuê: địa chỉ, kích thước, giá thuê, đặt cọc và cấu hình kho
+            kệ.
           </Text>
         </div>
         <div className="flex items-center gap-2">
@@ -364,6 +369,7 @@ export const WarehouseManagementPage: React.FC = () => {
           onEdit={editWarehouse}
           onViewMap={(warehouse) => openMap(warehouse.id)}
           onDelete={setDeleting}
+          onManageShelves={setManagingShelves}
         />
       )}
       {mapOpened && (
@@ -374,14 +380,26 @@ export const WarehouseManagementPage: React.FC = () => {
             visible={view === 'map'}
             focusedWarehouseId={focusedWarehouseId}
             renderActions={(warehouse) => (
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<PencilSimple className="h-3.5 w-3.5" />}
-                onClick={() => editWarehouse(warehouse)}
-              >
-                Sửa kho
-              </Button>
+              <div className="flex items-center gap-2">
+                {isShelfWarehouse(warehouse) && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<Rows className="h-3.5 w-3.5" />}
+                    onClick={() => setManagingShelves(warehouse)}
+                  >
+                    Kệ & Sơ đồ
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={<PencilSimple className="h-3.5 w-3.5" />}
+                  onClick={() => editWarehouse(warehouse)}
+                >
+                  Sửa kho
+                </Button>
+              </div>
             )}
           />
         </div>
@@ -419,6 +437,12 @@ export const WarehouseManagementPage: React.FC = () => {
           setDeleting(null);
           refreshAll();
         }}
+      />
+      <ShelfManagementDialog
+        warehouse={managingShelves}
+        canManageShelves
+        onClose={() => setManagingShelves(null)}
+        onChanged={refreshAll}
       />
     </div>
   );

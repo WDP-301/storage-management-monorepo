@@ -20,7 +20,7 @@ const parent = {
 const spec = { widthM: 1, lengthM: 0.6, monthlyPrice: 300_000 };
 
 describe('ShelfCommandService', () => {
-  let manager: { findOne: jest.Mock; create: jest.Mock; save: jest.Mock };
+  let manager: { findOne: jest.Mock; find: jest.Mock; create: jest.Mock; save: jest.Mock };
   let calls: string[];
   let queries: { findOne: jest.Mock };
   let service: ShelfCommandService;
@@ -49,6 +49,7 @@ describe('ShelfCommandService', () => {
     calls = [];
     manager = {
       findOne: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
       create: jest.fn((_entity, data) => data),
       save: jest.fn(async (rows: StorageUnit[]) =>
         rows.map((row, i) => ({ id: `s${i + 1}`, ...row })),
@@ -140,7 +141,17 @@ describe('ShelfCommandService', () => {
       manager.save.mockRejectedValue({ driverError: { code: '23505' }, code: '23505' });
       await expect(service.createShelf('p1', { code: 'A', ...spec })).rejects.toMatchObject({
         status: 409,
+        response: { message: 'Shelf code already exists' },
       });
+    });
+
+    it('names the taken code before inserting', async () => {
+      manager.find.mockResolvedValue([{ code: 'KK1-A-01' }]);
+      await expect(service.createShelf('p1', { code: 'KK1-A-01', ...spec })).rejects.toMatchObject({
+        status: 409,
+        response: { details: { codes: ['KK1-A-01'] } },
+      });
+      expect(manager.save).not.toHaveBeenCalled();
     });
   });
 
@@ -183,6 +194,24 @@ describe('ShelfCommandService', () => {
       await expect(
         service.bulkCreate('p1', { prefix: 'A', from: 1, to: 200, ...spec }),
       ).resolves.toMatchObject({ created: 200 });
+    });
+
+    it('lists every taken code and inserts nothing', async () => {
+      manager.find.mockResolvedValue([{ code: 'KK1-A-03' }, { code: 'KK1-A-01' }]);
+      await expect(
+        service.bulkCreate('p1', { prefix: 'A', from: 1, to: 3, ...spec }),
+      ).rejects.toMatchObject({
+        status: 409,
+        response: {
+          message: 'Shelf code already exists: KK1-A-01, KK1-A-03',
+          details: { codes: ['KK1-A-01', 'KK1-A-03'] },
+        },
+      });
+      expect(manager.find).toHaveBeenCalledWith(
+        StorageUnit,
+        expect.objectContaining({ select: { code: true } }),
+      );
+      expect(manager.save).not.toHaveBeenCalled();
     });
 
     it('is all-or-nothing on a clashing code: 409 and no result', async () => {

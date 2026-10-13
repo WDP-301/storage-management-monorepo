@@ -37,9 +37,16 @@ import type {
   UpdateTicketDto,
 } from '../types/service-tickets';
 import type {
+  BulkCreateShelvesInput,
+  BulkCreateShelvesResult,
+  LayoutDraft,
+  LayoutView,
   PlaceDetail,
   PlacePrediction,
   Province,
+  SaveLayoutInput,
+  ShelfCreateInput,
+  ShelfUpdateInput,
   Ward,
   Warehouse,
   WarehouseInput,
@@ -390,7 +397,10 @@ export const WarehousesApi = {
     return res.data.data;
   },
 
-  update: async (id: string, input: Partial<WarehouseInput>): Promise<Warehouse> => {
+  update: async (
+    id: string,
+    input: Partial<WarehouseInput> | ShelfUpdateInput,
+  ): Promise<Warehouse> => {
     const res = await apiClient.patch<ApiResponse<Warehouse>>(`/warehouses/${id}`, input);
     return res.data.data;
   },
@@ -404,6 +414,65 @@ export const WarehousesApi = {
 
   remove: async (id: string): Promise<void> => {
     await apiClient.delete(`/warehouses/${id}`);
+  },
+
+  /** Back-office list of every shelf in a shelf warehouse (ADMIN, OPERATIONS_MANAGER, FACILITY_MANAGER). */
+  listShelvesAdmin: async (warehouseId: string): Promise<Warehouse[]> => {
+    const res = await apiClient.get<ApiResponse<Warehouse[]>>(
+      `/warehouses/${warehouseId}/shelves/admin`,
+    );
+    return res.data.data;
+  },
+
+  /** Create a single shelf under a shelf warehouse (ADMIN, OPERATIONS_MANAGER). */
+  createShelf: async (warehouseId: string, input: ShelfCreateInput): Promise<Warehouse> => {
+    const res = await apiClient.post<ApiResponse<Warehouse>>(
+      `/warehouses/${warehouseId}/shelves`,
+      input,
+    );
+    return res.data.data;
+  },
+
+  /** Create a numbered batch of identical shelves under a shelf warehouse (ADMIN, OPERATIONS_MANAGER). */
+  bulkCreateShelves: async (
+    warehouseId: string,
+    input: BulkCreateShelvesInput,
+  ): Promise<BulkCreateShelvesResult> => {
+    const res = await apiClient.post<ApiResponse<BulkCreateShelvesResult>>(
+      `/warehouses/${warehouseId}/shelves/bulk`,
+      input,
+    );
+    return res.data.data;
+  },
+
+  /** Back-office floor plan layout for a shelf warehouse (ADMIN, OPERATIONS_MANAGER, FACILITY_MANAGER). */
+  getLayoutAdmin: async (warehouseId: string): Promise<LayoutView> => {
+    const res = await apiClient.get<ApiResponse<LayoutView>>(
+      `/warehouses/${warehouseId}/layout/admin`,
+    );
+    return res.data.data;
+  },
+
+  /** Save the floor plan layout of a shelf warehouse with optimistic concurrency version. */
+  saveLayout: async (warehouseId: string, input: SaveLayoutInput): Promise<LayoutView> => {
+    const res = await apiClient.put<ApiResponse<LayoutView>>(
+      `/warehouses/${warehouseId}/layout`,
+      input,
+    );
+    return res.data.data;
+  },
+
+  /** Remove the floor plan layout of a shelf warehouse (shelves themselves stay intact). */
+  deleteLayout: async (warehouseId: string, version: number): Promise<void> => {
+    await apiClient.delete(`/warehouses/${warehouseId}/layout`, { params: { version } });
+  },
+
+  /** Generate an unsaved draft floor plan from shelf codes. */
+  draftLayout: async (warehouseId: string): Promise<LayoutDraft> => {
+    const res = await apiClient.post<ApiResponse<LayoutDraft>>(
+      `/warehouses/${warehouseId}/layout/draft`,
+    );
+    return res.data.data;
   },
 };
 

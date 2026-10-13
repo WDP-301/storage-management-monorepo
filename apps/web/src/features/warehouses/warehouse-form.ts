@@ -1,5 +1,6 @@
 import type {
   Warehouse,
+  WarehouseCreatableKind,
   WarehouseIdleStatus,
   WarehouseImage,
   WarehouseInput,
@@ -8,6 +9,7 @@ import type {
 export const DEPOSIT_DEFAULT = 'default';
 
 export interface WarehouseFormState {
+  kind: WarehouseCreatableKind;
   facilityId: string;
   code: string;
   name: string;
@@ -27,6 +29,7 @@ export interface WarehouseFormState {
 }
 
 export const EMPTY_FORM: WarehouseFormState = {
+  kind: 'SELF_STORAGE',
   facilityId: '',
   code: '',
   name: '',
@@ -51,6 +54,7 @@ export const isIdleStatus = (status: string): status is WarehouseIdleStatus =>
   (IDLE_STATUSES as string[]).includes(status);
 
 export const toFormState = (w: Warehouse): WarehouseFormState => ({
+  kind: w.kind === 'SHELF_WAREHOUSE' ? 'SHELF_WAREHOUSE' : 'SELF_STORAGE',
   facilityId: w.facility.id,
   code: w.code,
   name: w.name,
@@ -117,17 +121,21 @@ export function validateForm(form: WarehouseFormState, frozen = false): string |
   if (!(lat >= -90 && lat <= 90) || !(lng >= -180 && lng <= 180) || (lat === 0 && lng === 0)) {
     return 'Vui lòng chọn địa chỉ gợi ý hoặc nhập tọa độ hợp lệ.';
   }
-  const price = num(form.monthlyPrice);
-  if (!(price > 0)) return 'Giá thuê theo tháng phải lớn hơn 0.';
-  if (price > MAX_MONTHLY_PRICE) {
-    return `Giá thuê theo tháng tối đa ${MAX_MONTHLY_PRICE.toLocaleString('vi-VN')} đ.`;
+  if (form.kind !== 'SHELF_WAREHOUSE') {
+    const price = num(form.monthlyPrice);
+    if (!(price > 0)) return 'Giá thuê theo tháng phải lớn hơn 0.';
+    if (price > MAX_MONTHLY_PRICE) {
+      return `Giá thuê theo tháng tối đa ${MAX_MONTHLY_PRICE.toLocaleString('vi-VN')} đ.`;
+    }
+    if (!hasAtMostTwoDecimals(price)) return 'Giá thuê chỉ được tối đa 2 chữ số thập phân.';
   }
-  if (!hasAtMostTwoDecimals(price)) return 'Giá thuê chỉ được tối đa 2 chữ số thập phân.';
   return null;
 }
 
 export function buildPayload(form: WarehouseFormState): WarehouseInput {
+  const perShelf = form.kind === 'SHELF_WAREHOUSE';
   return {
+    ...(perShelf ? { kind: 'SHELF_WAREHOUSE' as const } : {}),
     facilityId: form.facilityId,
     code: form.code.trim(),
     name: form.name.trim(),
@@ -139,8 +147,12 @@ export function buildPayload(form: WarehouseFormState): WarehouseInput {
     widthM: Number(form.widthM),
     lengthM: Number(form.lengthM),
     heightM: Number(form.heightM),
-    monthlyPrice: Number(form.monthlyPrice),
-    depositMonths: form.depositMonths === DEPOSIT_DEFAULT ? null : Number(form.depositMonths),
+    ...(perShelf
+      ? {}
+      : {
+          monthlyPrice: Number(form.monthlyPrice),
+          depositMonths: form.depositMonths === DEPOSIT_DEFAULT ? null : Number(form.depositMonths),
+        }),
     ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
     status: form.status,
     images: form.images.map(({ fileKey, name, mimeType, size }) => ({
@@ -160,7 +172,9 @@ export function buildPatch(form: WarehouseFormState, original: Warehouse): Parti
   const before = buildPayload(toFormState(original));
   const patch: Record<string, unknown> = {};
   for (const key of Object.keys(next) as (keyof WarehouseInput)[]) {
-    if (key !== 'images' && next[key] !== before[key]) patch[key] = next[key];
+    if (key !== 'images' && key !== 'kind' && next[key] !== before[key]) {
+      patch[key] = next[key];
+    }
   }
   // Sent only when the set or order changed — the order decides the cover.
   if (imageOrder(form.images) !== imageOrder(original.images ?? [])) patch.images = next.images;
@@ -171,6 +185,9 @@ export function buildPatch(form: WarehouseFormState, original: Warehouse): Parti
   if (!isIdleStatus(original.status)) {
     delete patch.status;
     delete patch.facilityId;
+  }
+  if (original.kind === 'SHELF_WAREHOUSE' && (original.shelfSummary?.total ?? 0) > 0) {
+    delete patch.code;
   }
   return patch as Partial<WarehouseInput>;
 }

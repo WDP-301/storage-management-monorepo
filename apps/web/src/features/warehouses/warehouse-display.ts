@@ -127,6 +127,11 @@ export function describeWarehouseError(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) return fallback;
   const { status, details } = err as ApiError;
   if (status === 409 && details) {
+    if (Array.isArray(details.codes) && details.codes.length > 0) {
+      const shown = details.codes.slice(0, 5).join(', ');
+      const more = details.codes.length > 5 ? ` và ${details.codes.length - 5} mã khác` : '';
+      return `Mã kệ đã tồn tại: ${shown}${more}. Vui lòng chọn mã hoặc khoảng số thứ tự khác.`;
+    }
     if (details.facilityStatus) {
       return 'Chi nhánh đang ngừng hoạt động, không thể thêm hoặc chuyển kho vào đó.';
     }

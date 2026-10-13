@@ -181,6 +181,40 @@ export function previewBulkShelfCodes(
   return { count, firstCode, lastCode };
 }
 
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * First free number after the highest `<parentCode>-<prefix>-<n>` already in the building, so the
+ * suggested range never collides with existing shelves (deleted gaps are left alone on purpose).
+ */
+export function nextShelfNumber(
+  shelves: readonly Pick<Warehouse, 'code'>[],
+  parentCode: string,
+  prefix: string,
+): number {
+  const pattern = new RegExp(
+    `^${escapeRegExp(parentCode)}-${escapeRegExp(prefix.trim())}-(\\d+)$`,
+    'i',
+  );
+  let highest = 0;
+  for (const { code } of shelves) {
+    const match = pattern.exec(code);
+    if (match) highest = Math.max(highest, Number(match[1]));
+  }
+  return highest + 1;
+}
+
+/** Re-anchors the bulk range on the next free number for `prefix`, keeping its size. */
+export function withNextBulkRange(
+  form: BulkShelfFormState,
+  shelves: readonly Pick<Warehouse, 'code'>[],
+  parentCode: string,
+): BulkShelfFormState {
+  const span = Math.max(0, num(form.to) - num(form.from)) || 0;
+  const from = nextShelfNumber(shelves, parentCode, form.prefix);
+  return { ...form, from: String(from), to: String(from + span) };
+}
+
 export function validateBulkShelfForm(parentCode: string, form: BulkShelfFormState): string | null {
   const prefix = form.prefix.trim();
   if (!/^[A-Za-z0-9]{1,10}$/.test(prefix)) {

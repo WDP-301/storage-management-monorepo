@@ -40,11 +40,13 @@ import {
   defaultShelfNamePreview,
   EMPTY_BULK_SHELF_FORM,
   EMPTY_SHELF_FORM,
+  nextShelfNumber,
   previewBulkShelfCodes,
   type ShelfFormState,
   toShelfFormState,
   validateBulkShelfForm,
   validateShelfForm,
+  withNextBulkRange,
 } from './shelf-form';
 import {
   describeWarehouseError,
@@ -152,10 +154,8 @@ export const ShelfManagementDialog: React.FC<Props> = ({
   const openCreateSingle = () => {
     setDeletingShelf(null);
     setEditingShelf(null);
-    setShelfForm({
-      ...EMPTY_SHELF_FORM,
-      code: `${warehouse.code}-A-${String(shelves.length + 1).padStart(2, '0')}`,
-    });
+    const next = String(nextShelfNumber(shelves, warehouse.code, 'A')).padStart(2, '0');
+    setShelfForm({ ...EMPTY_SHELF_FORM, code: `${warehouse.code}-A-${next}` });
     setFormMode('create');
   };
 
@@ -169,7 +169,7 @@ export const ShelfManagementDialog: React.FC<Props> = ({
   const openBulkCreate = () => {
     setDeletingShelf(null);
     setEditingShelf(null);
-    setBulkForm(EMPTY_BULK_SHELF_FORM);
+    setBulkForm(withNextBulkRange(EMPTY_BULK_SHELF_FORM, shelves, warehouse.code));
     setFormMode('bulk');
   };
 
@@ -603,7 +603,13 @@ export const ShelfManagementDialog: React.FC<Props> = ({
                         label="Tiền tố dãy (VD: A, B1)"
                         value={bulkForm.prefix}
                         onChange={(e) =>
-                          setBulkForm((prev) => ({ ...prev, prefix: e.target.value }))
+                          setBulkForm((prev) =>
+                            withNextBulkRange(
+                              { ...prev, prefix: e.target.value },
+                              shelves,
+                              warehouse.code,
+                            ),
+                          )
                         }
                       />
                       <Input

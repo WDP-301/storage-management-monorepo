@@ -198,6 +198,62 @@ describe('ShelfManagementDialog & ShelfLayoutEditor', () => {
     );
   });
 
+  it('suggests codes after the highest existing shelf of the chosen prefix', async () => {
+    render(
+      <ShelfManagementDialog
+        warehouse={parentWarehouse}
+        canManageShelves={true}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText('HCM-KE-01-A-02')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm kệ lẻ' }));
+    expect((screen.getByLabelText('Mã kệ') as HTMLInputElement).value).toBe('HCM-KE-01-A-03');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo dãy kệ hàng loạt' }));
+    const from = () => (screen.getByLabelText('Từ số thứ tự') as HTMLInputElement).value;
+    const to = () => (screen.getByLabelText('Đến số thứ tự') as HTMLInputElement).value;
+    expect([from(), to()]).toEqual(['3', '12']);
+
+    fireEvent.change(screen.getByLabelText('Tiền tố dãy (VD: A, B1)'), {
+      target: { value: 'B' },
+    });
+    expect([from(), to()]).toEqual(['1', '10']);
+  });
+
+  it('names the taken shelf codes when bulk create hits a 409', async () => {
+    const conflict = Object.assign(new Error('Shelf code already exists: HCM-KE-01-A-01'), {
+      status: 409,
+      details: { codes: ['HCM-KE-01-A-01'] },
+    });
+    vi.spyOn(WarehousesApi, 'bulkCreateShelves').mockRejectedValue(conflict);
+    render(
+      <ShelfManagementDialog
+        warehouse={parentWarehouse}
+        canManageShelves={true}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText('HCM-KE-01-A-01')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo dãy kệ hàng loạt' }));
+    fireEvent.change(screen.getByLabelText('Từ số thứ tự'), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText('Chiều rộng mỗi kệ (m)'), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText('Chiều dài mỗi kệ (m)'), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText('Giá thuê mỗi kệ / tháng (VND)'), {
+      target: { value: '100000' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo hàng loạt' }));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        'Không tạo được dãy kệ',
+        'Mã kệ đã tồn tại: HCM-KE-01-A-01. Vui lòng chọn mã hoặc khoảng số thứ tự khác.',
+      ),
+    );
+  });
+
   it('hides create/edit/delete shelf actions when canManageShelves is false (Facility Manager)', async () => {
     const updateStatusSpy = vi
       .spyOn(WarehousesApi, 'updateStatus')

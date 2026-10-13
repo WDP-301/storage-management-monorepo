@@ -85,12 +85,13 @@ export function assertRealLocation(
   );
 }
 
-export function handleDbError(err: unknown): never {
+/** `entity` names what was being written so a clash on a shelf does not read as a warehouse clash. */
+export function handleDbError(err: unknown, entity: 'Warehouse' | 'Shelf' = 'Warehouse'): never {
   const code = pgErrorCode(err);
   if (code === PG_UNIQUE_VIOLATION) {
     throw new DomainException(
       ErrorCode.CONFLICT,
-      'Warehouse code already exists',
+      `${entity} code already exists`,
       HttpStatus.CONFLICT,
     );
   }

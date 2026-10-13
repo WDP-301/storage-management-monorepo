@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, fieldValidationError } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { StorageUnitKind, StorageUnitStatus } from '@storage/types';
-import type { Repository } from 'typeorm';
+import { type EntityManager, In, IsNull, type Repository } from 'typeorm';
 import type { BulkCreateShelvesDto, CreateShelfDto } from './dto/shelf.dto';
 import { MAX_BULK_SHELVES, MAX_UNIT_CODE_LENGTH, type ShelfSpecDto } from './dto/shelf.dto';
 import type { WarehouseView } from './warehouse.view';
@@ -51,6 +51,28 @@ export function bulkShelfDrafts(parent: StorageUnit, dto: BulkCreateShelvesDto):
 }
 
 /**
+ * Codes are unique across all live units, not just this building, so the clash may be anywhere.
+ * Reporting every taken code lets the client say which ones to skip instead of a bare 409.
+ * The unique index stays the source of truth: a concurrent insert still lands in `handleDbError`.
+ */
+async function assertCodesFree(manager: EntityManager, codes: string[]): Promise<void> {
+  const taken = await manager.find(StorageUnit, {
+    where: { code: In(codes), deletedAt: IsNull() },
+    select: { code: true },
+  });
+  if (taken.length === 0) return;
+  const takenCodes = taken.map((unit) => unit.code).sort();
+  const shown = takenCodes.slice(0, 5).join(', ');
+  const more = takenCodes.length > 5 ? ` (+${takenCodes.length - 5} more)` : '';
+  throw new DomainException(
+    ErrorCode.CONFLICT,
+    `Shelf code already exists: ${shown}${more}`,
+    HttpStatus.CONFLICT,
+    { codes: takenCodes },
+  );
+}
+
+/**
  * Creates shelves under a shelf warehouse. Lock order matches the rest of the module: facility,
  * then the building, with the building held FOR SHARE so a concurrent location update (which takes
  * it FOR UPDATE) waits for the insert — the location copied onto the shelves is never stale.
@@ -94,7 +116,12 @@ export class ShelfCommandService {
         );
       }
       assertFacilityActive(facility);
-      const rows = draftsFor(parent).map((draft) =>
+      const drafts = draftsFor(parent);
+      await assertCodesFree(
+        manager,
+        drafts.map((draft) => draft.code),
+      );
+      const rows = drafts.map((draft) =>
         manager.create(StorageUnit, {
           kind: StorageUnitKind.SHELF,
           parentId: parent.id,
@@ -118,7 +145,7 @@ export class ShelfCommandService {
       try {
         return await manager.save(rows);
       } catch (err) {
-        handleDbError(err);
+        handleDbError(err, 'Shelf');
       }
     });
   }

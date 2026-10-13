@@ -1,5 +1,5 @@
 import { AppUser } from '@entities/app-user.entity';
-import { NotificationChannel, NotificationStatus } from '@storage/types';
+import { NotificationStatus } from '@storage/types';
 import {
   Column,
   CreateDateColumn,
@@ -16,9 +16,6 @@ export class Notification {
 
   @Column({ type: 'uuid', name: 'user_id' })
   userId: string;
-
-  @Column({ type: 'varchar', length: 15 })
-  channel: NotificationChannel;
 
   @Column({ type: 'varchar', length: 50 })
   type: string;

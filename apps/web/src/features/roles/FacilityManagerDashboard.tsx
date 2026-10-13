@@ -3,6 +3,7 @@ import {
   Buildings,
   CheckCircle,
   Lifebuoy,
+  Rows,
   Stack,
   WarningCircle,
   Wrench,
@@ -20,7 +21,9 @@ import {
 } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
 import type { Warehouse } from '../../types/warehouse';
+import { ShelfManagementDialog } from '../warehouses/ShelfManagementDialog';
 import { WarehouseOverviewMap } from '../warehouses/WarehouseOverviewMap';
+import { isShelfWarehouse } from '../warehouses/warehouse-display';
 import { ChangeRequestsTable } from './manager/ChangeRequestsTable';
 import { MaintenanceToggleButton } from './manager/MaintenanceToggleButton';
 import { ManagedWarehousesTable } from './manager/ManagedWarehousesTable';
@@ -45,10 +48,17 @@ const KpiCard: React.FC<{
 
 /** Vietnamese reason for a failed manager action; the list is refreshed afterwards. */
 const describeActionError = (err: unknown): string => {
-  const status = (err as ApiError | undefined)?.status;
+  const apiErr = err as ApiError | undefined;
+  const status = apiErr?.status;
+  const details = apiErr?.details;
   if (status === 403) return 'Bạn không có quyền thực hiện thao tác này.';
   if (status === 404) return 'Không tìm thấy dữ liệu. Danh sách đã được làm mới.';
-  if (status === 409) return 'Dữ liệu đã thay đổi hoặc đã được xử lý. Danh sách đã được làm mới.';
+  if (status === 409) {
+    if (Array.isArray(details?.shelfIds) && details.shelfIds.length > 0) {
+      return `Kho kệ đang có ${details.shelfIds.length} kệ đang được thuê hoặc giữ chỗ nên không thể báo bảo trì. Danh sách đã được làm mới.`;
+    }
+    return 'Dữ liệu đã thay đổi hoặc đã được xử lý. Danh sách đã được làm mới.';
+  }
   return 'Không thể thực hiện thao tác. Danh sách đã được làm mới, vui lòng thử lại.';
 };
 
@@ -69,6 +79,7 @@ export const FacilityManagerDashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [managingShelves, setManagingShelves] = useState<Warehouse | null>(null);
   const [view, setView] = useState<'list' | 'map'>('list');
   // Once opened, the map stays mounted (hidden in list view) so toggling does not reload it.
   const [mapOpened, setMapOpened] = useState(false);
@@ -231,7 +242,7 @@ export const FacilityManagerDashboard: React.FC = () => {
           </Text>
           <Text variant="secondary">
             {selectedFacility ? `${selectedFacility.name}: ` : 'Tất cả chi nhánh: '}
-            theo dõi kho, trạng thái bảo trì và duyệt yêu cầu đổi kho của khách hàng.
+            theo dõi kho, trạng thái bảo trì, sơ đồ kệ và duyệt yêu cầu đổi kho của khách hàng.
           </Text>
         </div>
         <div className="flex items-center gap-3">
@@ -292,6 +303,7 @@ export const FacilityManagerDashboard: React.FC = () => {
         onStatusFilterChange={setStatusFilter}
         busyId={busyId}
         onToggleMaintenance={toggleMaintenance}
+        onManageShelves={setManagingShelves}
         view={view}
         onViewChange={changeView}
         onViewMap={viewOnMap}
@@ -303,16 +315,35 @@ export const FacilityManagerDashboard: React.FC = () => {
                 visible={view === 'map'}
                 focusedWarehouseId={focusedWarehouseId}
                 renderActions={(w) => (
-                  <MaintenanceToggleButton
-                    warehouse={w}
-                    busy={busyId === w.id}
-                    onToggle={toggleMaintenance}
-                  />
+                  <div className="flex items-center gap-2">
+                    {isShelfWarehouse(w) && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        icon={<Rows className="h-3.5 w-3.5" />}
+                        onClick={() => setManagingShelves(w)}
+                      >
+                        Kệ & Sơ đồ
+                      </Button>
+                    )}
+                    <MaintenanceToggleButton
+                      warehouse={w}
+                      busy={busyId === w.id}
+                      onToggle={toggleMaintenance}
+                    />
+                  </div>
                 )}
               />
             </div>
           )
         }
+      />
+
+      <ShelfManagementDialog
+        warehouse={managingShelves}
+        canManageShelves={isAdmin}
+        onClose={() => setManagingShelves(null)}
+        onChanged={() => void load(false)}
       />
     </div>
   );

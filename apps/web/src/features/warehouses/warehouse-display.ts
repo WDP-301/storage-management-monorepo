@@ -1,5 +1,5 @@
 import type { ApiError } from '../../lib/api';
-import type { Warehouse, WarehouseStatus } from '../../types/warehouse';
+import type { StorageUnitKind, Warehouse, WarehouseStatus } from '../../types/warehouse';
 
 export type BadgeVariant = 'success' | 'primary' | 'error' | 'warning' | 'neutral';
 
@@ -16,8 +16,18 @@ export const WAREHOUSE_STATUS_LABEL: Record<
   INACTIVE: { label: 'Ngưng hoạt động', variant: 'neutral' },
 };
 
+export const WAREHOUSE_KIND_LABEL: Record<StorageUnitKind, { label: string; badge: string }> = {
+  SELF_STORAGE: { label: 'Kho tự quản (nguyên căn)', badge: 'Kho tự quản' },
+  SHELF_WAREHOUSE: { label: 'Kho kệ (thuê theo kệ)', badge: 'Kho kệ' },
+  SHELF: { label: 'Kệ lưu trữ', badge: 'Kệ' },
+};
+
+export const isShelfWarehouse = (w: Pick<Warehouse, 'kind'>): boolean =>
+  w.kind === 'SHELF_WAREHOUSE';
+
 const FIELD_LABEL: Record<string, string> = {
   facilityId: 'chi nhánh',
+  kind: 'loại hình kho',
   code: 'mã kho',
   name: 'tên kho',
   addressLine: 'địa chỉ',
@@ -32,6 +42,10 @@ const FIELD_LABEL: Record<string, string> = {
   depositMonths: 'số tháng đặt cọc',
   notes: 'mô tả',
   status: 'trạng thái',
+  prefix: 'tiền tố dãy kệ',
+  from: 'số thứ tự bắt đầu',
+  to: 'số thứ tự kết thúc',
+  pad: 'độ dài số thứ tự',
 };
 
 const CONSTRAINT_REASON: Record<string, string> = {
@@ -48,6 +62,11 @@ const CONSTRAINT_REASON: Record<string, string> = {
   isLongitude: 'phải nằm trong khoảng -180 đến 180',
   isInt: 'phải là số nguyên',
   isIn: 'không hợp lệ',
+  isSetPerShelf: 'được thiết lập riêng trên từng kệ, không đặt trên kho kệ',
+  isInheritedFromParent: 'kế thừa từ kho kệ cha, chỉ chỉnh sửa ở kho kệ',
+  isGreaterOrEqualToFrom: 'phải lớn hơn hoặc bằng số thứ tự bắt đầu',
+  maxShelves: 'vượt quá giới hạn tối đa 200 kệ mỗi lần tạo hàng loạt',
+  matches: 'chỉ được chứa chữ cái và chữ số (tối đa 10 ký tự)',
 };
 
 const fieldLabel = (field: unknown) => FIELD_LABEL[String(field)] ?? String(field);
@@ -82,6 +101,27 @@ export const formatDeposit = (w: Pick<Warehouse, 'depositMonths' | 'effectiveDep
     ? `Mặc định (${w.effectiveDepositMonths} tháng)`
     : `${w.depositMonths} tháng`;
 
+/** Display price for a warehouse row; shelf warehouses show the lowest available shelf price. */
+export const formatWarehousePrice = (w: Warehouse): string => {
+  if (isShelfWarehouse(w)) {
+    const min = w.shelfSummary?.minMonthlyPrice;
+    return min !== null && min !== undefined ? `Từ ${formatVnd(min)}` : 'Theo kệ';
+  }
+  return formatVnd(w.monthlyPrice);
+};
+
+/** Display deposit for a warehouse row; shelf warehouses configure deposit per shelf. */
+export const formatWarehouseDeposit = (w: Warehouse): string =>
+  isShelfWarehouse(w) ? 'Theo từng kệ' : formatDeposit(w);
+
+/** Short availability summary for a shelf warehouse, e.g. "12/20 kệ trống". */
+export const formatShelfSummary = (w: Warehouse): string | null => {
+  if (!isShelfWarehouse(w)) return null;
+  const total = w.shelfSummary?.total ?? 0;
+  const avail = w.shelfSummary?.available ?? 0;
+  return total === 0 ? 'Chưa có kệ' : `${avail}/${total} kệ trống`;
+};
+
 /** Vietnamese reason for a failed create/update/delete/status call. */
 export function describeWarehouseError(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) return fallback;
@@ -92,6 +132,20 @@ export function describeWarehouseError(err: unknown, fallback: string): string {
     }
     if (Number(details.openTickets ?? 0) > 0) {
       return 'Kho còn yêu cầu hỗ trợ đang mở, hãy xử lý xong trước khi chuyển chi nhánh.';
+    }
+    if (
+      typeof details.shelves === 'number' &&
+      Array.isArray(details.fields) &&
+      details.fields.includes('code')
+    ) {
+      return `Kho kệ đã có ${details.shelves} kệ nên không thể đổi mã kho.`;
+    }
+    if (Array.isArray(details.shelfIds) && details.shelfIds.length > 0) {
+      const tours = Number(details.openTours ?? 0);
+      if (tours > 0) {
+        return `Kho kệ đang có ${details.shelfIds.length} kệ có khách và ${tours} lịch xem kho đang mở. Hãy hoàn tất trước khi thực hiện thao tác này.`;
+      }
+      return `Kho kệ đang có ${details.shelfIds.length} kệ đang được thuê hoặc giữ chỗ nên không thể thực hiện thao tác này.`;
     }
     const current = WAREHOUSE_STATUS_LABEL[details.status as WarehouseStatus]?.label;
     if (Array.isArray(details.fields) && details.fields.length > 0) {

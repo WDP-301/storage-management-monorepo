@@ -3,7 +3,7 @@ import { X } from '@phosphor-icons/react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { type FacilityRecord, LocationsApi, WarehousesApi } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
-import type { Province, Ward, Warehouse } from '../../types/warehouse';
+import type { Province, Ward, Warehouse, WarehouseCreatableKind } from '../../types/warehouse';
 import { WarehouseAddressPicker } from './WarehouseAddressPicker';
 import { WarehouseFacilityField } from './WarehouseFacilityField';
 import { WarehouseImagesField } from './WarehouseImagesField';
@@ -12,6 +12,7 @@ import {
   describeWarehouseError,
   formatArea,
   formatVolume,
+  WAREHOUSE_KIND_LABEL,
   WAREHOUSE_STATUS_LABEL,
 } from './warehouse-display';
 import {
@@ -38,6 +39,11 @@ interface Props {
   /** `created` is true for a new warehouse, false for an edit. */
   onSaved: (saved: Warehouse, created: boolean) => void;
 }
+
+const KIND_ITEMS: { value: WarehouseCreatableKind; label: string }[] = [
+  { value: 'SELF_STORAGE', label: WAREHOUSE_KIND_LABEL.SELF_STORAGE.label },
+  { value: 'SHELF_WAREHOUSE', label: WAREHOUSE_KIND_LABEL.SHELF_WAREHOUSE.label },
+];
 
 const DEPOSIT_ITEMS = [
   { value: DEPOSIT_DEFAULT, label: 'Mặc định (theo cấu hình hệ thống)' },
@@ -67,6 +73,9 @@ export const WarehouseFormDialog: React.FC<Props> = ({
 
   const isEdit = warehouse !== null;
   const frozen = isEdit && !isIdleStatus(warehouse.status);
+  const hasShelves =
+    isEdit && warehouse.kind === 'SHELF_WAREHOUSE' && (warehouse.shelfSummary?.total ?? 0) > 0;
+  const isShelfWarehouse = form.kind === 'SHELF_WAREHOUSE';
 
   useEffect(() => {
     if (!open) return;
@@ -173,20 +182,36 @@ export const WarehouseFormDialog: React.FC<Props> = ({
             </div>
           )}
 
-          <WarehouseFacilityField
-            facilities={facilities}
-            value={form.facilityId}
-            onChange={(v) => set('facilityId', v)}
-            locked={frozen}
-            isEdit={isEdit}
-          />
+          {hasShelves && !frozen && (
+            <div className="p-3 bg-kumo-tint text-kumo-default rounded-lg text-xs ring ring-kumo-line">
+              Kho kệ này đã có {warehouse.shelfSummary?.total} kệ nên mã kho đã được khóa. Địa chỉ
+              và tọa độ khi cập nhật sẽ tự động đồng bộ xuống toàn bộ kệ bên trong.
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Select
+              label="Loại hình kho"
+              value={form.kind}
+              disabled={isEdit}
+              onValueChange={(v) => set('kind', v as WarehouseCreatableKind)}
+              items={KIND_ITEMS}
+            />
+            <WarehouseFacilityField
+              facilities={facilities}
+              value={form.facilityId}
+              onChange={(v) => set('facilityId', v)}
+              locked={frozen}
+              isEdit={isEdit}
+            />
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label="Mã kho"
               className="w-full"
               value={form.code}
-              disabled={frozen}
+              disabled={frozen || hasShelves}
               onChange={(e) => set('code', e.target.value)}
             />
             <Input
@@ -308,22 +333,29 @@ export const WarehouseFormDialog: React.FC<Props> = ({
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input
-              label="Giá thuê / tháng (VND)"
-              className="w-full"
-              type="number"
-              min="0"
-              value={form.monthlyPrice}
-              onChange={(e) => set('monthlyPrice', e.target.value)}
-            />
-            <Select
-              label="Số tháng đặt cọc"
-              value={form.depositMonths}
-              onValueChange={(v) => set('depositMonths', String(v))}
-              items={DEPOSIT_ITEMS}
-            />
-          </div>
+          {isShelfWarehouse ? (
+            <div className="p-3 rounded-lg bg-kumo-tint text-kumo-default text-xs ring ring-kumo-line">
+              Kho kệ cho thuê theo từng kệ nhỏ bên trong. Giá thuê và số tháng đặt cọc được thiết
+              lập riêng cho từng kệ tại mục <strong>Quản lý kệ</strong> sau khi tạo kho.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input
+                label="Giá thuê / tháng (VND)"
+                className="w-full"
+                type="number"
+                min="0"
+                value={form.monthlyPrice}
+                onChange={(e) => set('monthlyPrice', e.target.value)}
+              />
+              <Select
+                label="Số tháng đặt cọc"
+                value={form.depositMonths}
+                onValueChange={(v) => set('depositMonths', String(v))}
+                items={DEPOSIT_ITEMS}
+              />
+            </div>
+          )}
 
           {!frozen && (
             <Select
@@ -350,7 +382,9 @@ export const WarehouseFormDialog: React.FC<Props> = ({
 
           <div className="flex items-center justify-between gap-2.5 pt-3 border-t border-kumo-line">
             <Text variant="secondary" size="xs">
-              Tiền cọc = giá thuê tháng × số tháng cọc.
+              {isShelfWarehouse
+                ? 'Sau khi tạo kho kệ, hãy thêm kệ và vẽ sơ đồ mặt bằng cho kho.'
+                : 'Tiền cọc = giá thuê tháng × số tháng cọc.'}
             </Text>
             <div className="flex items-center gap-2.5">
               <Button variant="secondary" onClick={onClose} disabled={isSaving}>

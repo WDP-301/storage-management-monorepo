@@ -1,10 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import type { ApiError } from '../../lib/api';
 import type { Warehouse } from '../../types/warehouse';
-import { describeWarehouseError } from './warehouse-display';
+import {
+  buildBulkShelfPayload,
+  buildShelfCreatePayload,
+  buildShelfUpdatePatch,
+  EMPTY_BULK_SHELF_FORM,
+  EMPTY_SHELF_FORM,
+  previewBulkShelfCodes,
+  toShelfFormState,
+  validateBulkShelfForm,
+  validateShelfForm,
+} from './shelf-form';
+import {
+  describeWarehouseError,
+  formatShelfSummary,
+  formatWarehouseDeposit,
+  formatWarehousePrice,
+} from './warehouse-display';
 import {
   buildLocateQuery,
   buildPatch,
+  buildPayload,
   computeDerived,
   toFormState,
   validateForm,
@@ -173,5 +190,139 @@ describe('warehouse form helpers', () => {
     expect(text).toContain('Chiều rộng vượt quá');
     expect(text).toContain('Giá thuê chỉ được tối đa 2 chữ số thập phân');
     expect(text).not.toContain('Validation failed');
+  });
+
+  it('omits monthlyPrice and depositMonths for SHELF_WAREHOUSE payload and patch', () => {
+    const shelfWarehouse: Warehouse = {
+      ...warehouse,
+      kind: 'SHELF_WAREHOUSE',
+      status: 'AVAILABLE',
+      monthlyPrice: 0,
+      depositMonths: null,
+      shelfSummary: {
+        total: 10,
+        available: 8,
+        minMonthlyPrice: 450000,
+        statusCounts: { AVAILABLE: 8, HELD: 0, RENTED: 2, MAINTENANCE: 0 },
+        minAreaM2: 2,
+        maxAreaM2: 4,
+        minVolumeM3: 4,
+        maxVolumeM3: 8,
+      },
+    };
+    const form = {
+      ...toFormState(shelfWarehouse),
+      monthlyPrice: '',
+    };
+    expect(validateForm(form)).toBeNull();
+
+    const payload = buildPayload(form);
+    expect(payload.kind).toBe('SHELF_WAREHOUSE');
+    expect(payload).not.toHaveProperty('monthlyPrice');
+    expect(payload).not.toHaveProperty('depositMonths');
+
+    // Code is frozen once shelves exist (shelfSummary.total > 0)
+    const patch = buildPatch({ ...form, code: 'NEW-CODE', name: 'Kho Kệ Mới' }, shelfWarehouse);
+    expect(patch).toEqual({ name: 'Kho Kệ Mới' });
+
+    expect(formatWarehousePrice(shelfWarehouse)).toContain('Từ');
+    expect(formatWarehouseDeposit(shelfWarehouse)).toBe('Theo từng kệ');
+    expect(formatShelfSummary(shelfWarehouse)).toBe('8/10 kệ trống');
+  });
+
+  it('validates and builds payloads for single shelf and bulk shelves', () => {
+    const single = {
+      ...EMPTY_SHELF_FORM,
+      code: ' A-01 ',
+      name: ' Kệ A1 ',
+      widthM: '1.2',
+      lengthM: '2.5',
+      heightM: '2',
+      monthlyPrice: '500000',
+      depositMonths: '2',
+    };
+    expect(validateShelfForm(single)).toBeNull();
+    expect(buildShelfCreatePayload(single)).toEqual({
+      code: 'A-01',
+      name: 'Kệ A1',
+      widthM: 1.2,
+      lengthM: 2.5,
+      heightM: 2,
+      monthlyPrice: 500000,
+      depositMonths: 2,
+      status: 'AVAILABLE',
+    });
+
+    const existingShelf: Warehouse = {
+      ...warehouse,
+      kind: 'SHELF',
+      status: 'AVAILABLE',
+      code: 'A-01',
+      name: 'Kệ A1',
+      widthM: 1.2,
+      lengthM: 2.5,
+      heightM: 2,
+      monthlyPrice: 500000,
+      depositMonths: 2,
+    };
+    const shelfForm = {
+      ...toShelfFormState(existingShelf),
+      heightM: '',
+      monthlyPrice: '550000',
+    };
+    expect(buildShelfUpdatePatch(shelfForm, existingShelf)).toEqual({
+      heightM: null,
+      monthlyPrice: 550000,
+    });
+
+    const bulk = {
+      ...EMPTY_BULK_SHELF_FORM,
+      prefix: ' B ',
+      from: '1',
+      to: '5',
+      pad: '2',
+      widthM: '1.5',
+      lengthM: '2',
+      heightM: '',
+      monthlyPrice: '450000',
+    };
+    expect(validateBulkShelfForm('HCM-KE-01', bulk)).toBeNull();
+    expect(buildBulkShelfPayload(bulk)).toEqual({
+      prefix: 'B',
+      from: 1,
+      to: 5,
+      pad: 2,
+      widthM: 1.5,
+      lengthM: 2,
+      monthlyPrice: 450000,
+      depositMonths: null,
+    });
+    expect(previewBulkShelfCodes('HCM-KE-01', bulk)).toEqual({
+      count: 5,
+      firstCode: 'HCM-KE-01-B-01',
+      lastCode: 'HCM-KE-01-B-05',
+    });
+  });
+
+  it('translates shelf warehouse conflict and validation errors to Vietnamese', () => {
+    const busyShelves = Object.assign(new Error('x'), {
+      status: 409,
+      details: { shelfIds: ['s1', 's2'] },
+    }) as ApiError;
+    expect(describeWarehouseError(busyShelves, 'f')).toContain('2 kệ đang được thuê');
+
+    const hasShelves = Object.assign(new Error('x'), {
+      status: 409,
+      details: { shelves: 5, fields: ['code'] },
+    }) as ApiError;
+    expect(describeWarehouseError(hasShelves, 'f')).toContain('không thể đổi mã kho');
+
+    const perShelfErr = Object.assign(new Error('Validation failed'), {
+      status: 400,
+      details: {
+        fields: [{ field: 'monthlyPrice', code: 'isSetPerShelf', message: 'x' }],
+      },
+    }) as ApiError;
+    expect(describeWarehouseError(perShelfErr, 'f')).toContain('được thiết lập riêng trên từng kệ');
   });
 });

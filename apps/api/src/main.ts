@@ -6,7 +6,9 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AllExceptionsFilter } from '@shared/filters/http-exception.filter';
 import { HttpLoggingInterceptor } from '@shared/interceptors/http-logging.interceptor';
 import { HttpResponseInterceptor } from '@shared/interceptors/http-response.interceptor';
+import { ApiSuccessResponseDto } from '@shared/models/api-response';
 import { createApiValidationPipe } from '@shared/pipes/api-validation.pipe';
+import { applySuccessEnvelope } from '@shared/utils/swagger-envelope.util';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 
@@ -61,7 +63,9 @@ async function bootstrap() {
       .addBearerAuth()
       .build();
 
-    const document = SwaggerModule.createDocument(app, config);
+    const document = applySuccessEnvelope(
+      SwaggerModule.createDocument(app, config, { extraModels: [ApiSuccessResponseDto] }),
+    );
     SwaggerModule.setup('docs', app, document, {
       swaggerOptions: {
         persistAuthorization: true,

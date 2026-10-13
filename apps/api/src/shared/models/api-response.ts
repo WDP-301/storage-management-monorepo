@@ -58,6 +58,33 @@ export interface ApiErrorResponse {
   path: string;
 }
 
+/**
+ * Swagger model of the success envelope. `data` is left out on purpose: it differs per route, so
+ * the document transform fills it in from each route's declared response type.
+ */
+export class ApiSuccessResponseDto implements Omit<ApiSuccessResponse<unknown>, 'data'> {
+  @ApiProperty({ example: true })
+  success: true;
+
+  @ApiProperty({ example: 200 })
+  statusCode: number;
+
+  @ApiProperty({ enum: ['SUCCESS'], example: 'SUCCESS' })
+  code: 'SUCCESS';
+
+  @ApiProperty({ example: 'Request successful' })
+  message: string;
+
+  @ApiProperty({ format: 'uuid' })
+  requestId: string;
+
+  @ApiProperty({ format: 'date-time' })
+  timestamp: string;
+
+  @ApiProperty({ example: '/api/v1/auth/me' })
+  path: string;
+}
+
 export class ValidationFieldDetailDto implements ValidationFieldDetail {
   @ApiProperty({ example: 'email' })
   field: string;

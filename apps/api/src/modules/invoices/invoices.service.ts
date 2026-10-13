@@ -2,6 +2,7 @@ import { Contract } from '@entities/contract.entity';
 import { Invoice } from '@entities/invoice.entity';
 import { InvoiceItem } from '@entities/invoice-item.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { NotificationsService } from '@modules/notifications/notifications.service';
 import { generateInvoiceNo } from '@modules/payments/invoice-no.util';
 import { buildPaymentQrUrl } from '@modules/payments/vietqr.util';
 import { QueueService } from '@modules/queue/queue.service';
@@ -19,6 +20,7 @@ import {
 } from '@storage/types';
 import Decimal from 'decimal.js';
 import { DataSource, Not, Repository } from 'typeorm';
+import { formatDateStr, formatVndCurrency } from './invoice-pdf.service';
 
 export interface InvoiceWithQrResponse extends Invoice {
   paymentQrUrl?: string | null;
@@ -39,6 +41,7 @@ export class InvoicesService {
     private readonly dataSource: DataSource,
     private readonly queueService: QueueService,
     private readonly configService: ConfigService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -118,7 +121,7 @@ export class InvoicesService {
     monthlyPrice: Decimal,
     now: Date,
   ): Promise<Invoice | null> {
-    return this.dataSource.transaction(async (em) => {
+    const savedInvoice = await this.dataSource.transaction(async (em) => {
       const existing = await em.findOne(Invoice, {
         where: {
           contractId: contract.id,
@@ -151,14 +154,14 @@ export class InvoicesService {
         billingInfo: {},
       });
 
-      const savedInvoice = await em.save(Invoice, invoice);
+      const saved = await em.save(Invoice, invoice);
 
       const unitCode = contract.bookingItem?.storageUnit?.code ?? '';
       const description =
         `Tiền thuê kỳ ${periodNo} — Kho ${unitCode} (HĐ: ${contract.contractNo})`.trim();
 
       const item = em.create(InvoiceItem, {
-        invoiceId: savedInvoice.id,
+        invoiceId: saved.id,
         storageUnitId: contract.bookingItem?.storageUnitId,
         itemType: InvoiceItemType.RENT,
         description,
@@ -170,11 +173,39 @@ export class InvoicesService {
       await em.save(InvoiceItem, item);
 
       this.logger.log(
-        `Issued recurring invoice ${savedInvoice.invoiceNo} for contract ${contract.contractNo}, period ${periodNo}`,
+        `Issued recurring invoice ${saved.invoiceNo} for contract ${contract.contractNo}, period ${periodNo}`,
       );
 
-      return savedInvoice;
+      return saved;
     });
+
+    if (savedInvoice) {
+      await this.notifyInvoiceIssued(savedInvoice);
+    }
+
+    return savedInvoice;
+  }
+
+  private async notifyInvoiceIssued(invoice: Invoice): Promise<void> {
+    try {
+      await this.notificationsService.create({
+        userId: invoice.customerId,
+        title: `Hóa đơn tiền thuê kho kỳ ${invoice.periodNo}`,
+        body: `Hóa đơn ${invoice.invoiceNo} với số tiền ${formatVndCurrency(invoice.total)} đã được phát hành. Hạn thanh toán đến ${formatDateStr(invoice.dueAt)}. Vui lòng thanh toán đúng hạn.`,
+        type: 'INVOICE_ISSUED',
+        data: {
+          invoiceId: invoice.id,
+          invoiceNo: invoice.invoiceNo,
+          total: invoice.total,
+          dueAt: invoice.dueAt ? invoice.dueAt.toISOString() : null,
+        },
+      });
+    } catch (err: any) {
+      this.logger.error(
+        `Failed to send INVOICE_ISSUED notification for invoice ${invoice.invoiceNo}: ${err?.message || err}`,
+        err?.stack,
+      );
+    }
   }
 
   /**

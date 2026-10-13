@@ -10,6 +10,7 @@ describe('InvoicesService', () => {
   let dataSource: any;
   let queueService: any;
   let configService: any;
+  let notificationsService: any;
   let em: any;
 
   beforeEach(() => {
@@ -52,6 +53,10 @@ describe('InvoicesService', () => {
       }),
     };
 
+    notificationsService = {
+      create: jest.fn().mockResolvedValue({ id: 'notif-1' }),
+    };
+
     service = new InvoicesService(
       invoicesRepo,
       invoiceItemsRepo,
@@ -59,6 +64,7 @@ describe('InvoicesService', () => {
       dataSource,
       queueService,
       configService as ConfigService,
+      notificationsService,
     );
   });
 
@@ -86,6 +92,12 @@ describe('InvoicesService', () => {
       const result = await service.generateRecurringInvoices(5);
 
       expect(result.issuedCount).toBe(1);
+      expect(notificationsService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'customer-1',
+          type: 'INVOICE_ISSUED',
+        }),
+      );
       expect(queueService.send).toHaveBeenCalledWith('invoice.render-pdf', {
         invoiceId: 'new-inv-id',
       });
@@ -115,6 +127,7 @@ describe('InvoicesService', () => {
       const result = await service.generateRecurringInvoices(5);
 
       expect(result.issuedCount).toBe(0);
+      expect(notificationsService.create).not.toHaveBeenCalled();
       expect(queueService.send).not.toHaveBeenCalled();
 
       jest.useRealTimers();

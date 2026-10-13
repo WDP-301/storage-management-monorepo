@@ -1,11 +1,10 @@
 import { Invoice } from '@entities/invoice.entity';
 import { InvoiceItem } from '@entities/invoice-item.entity';
-import { NotificationsService } from '@modules/notifications/notifications.service';
 import { QueueService } from '@modules/queue/queue.service';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { formatDateStr, formatVndCurrency, InvoicePdfService } from './invoice-pdf.service';
+import { InvoicePdfService } from './invoice-pdf.service';
 
 @Injectable()
 export class InvoicePdfWorker implements OnModuleInit {
@@ -14,7 +13,6 @@ export class InvoicePdfWorker implements OnModuleInit {
   constructor(
     private readonly queueService: QueueService,
     private readonly invoicePdfService: InvoicePdfService,
-    private readonly notificationsService: NotificationsService,
     @InjectRepository(Invoice)
     private readonly invoices: Repository<Invoice>,
     @InjectRepository(InvoiceItem)
@@ -57,27 +55,12 @@ export class InvoicePdfWorker implements OnModuleInit {
       };
       await this.invoices.save(invoice);
 
-      // 3. Send in-app notification to the customer
-      await this.notificationsService.create({
-        userId: invoice.customerId,
-        title: `Hóa đơn tiền thuê kho kỳ ${invoice.periodNo}`,
-        body: `Hóa đơn ${invoice.invoiceNo} với số tiền ${formatVndCurrency(invoice.total)} đã được phát hành. Hạn thanh toán đến ${formatDateStr(invoice.dueAt)}. Vui lòng thanh toán đúng hạn.`,
-        type: 'INVOICE_ISSUED',
-        data: {
-          invoiceId: invoice.id,
-          invoiceNo: invoice.invoiceNo,
-          pdfUrl,
-          total: invoice.total,
-          dueAt: invoice.dueAt ? invoice.dueAt.toISOString() : null,
-        },
-      });
-
       this.logger.log(
-        `PDF generation and customer notification completed for invoice ${invoice.invoiceNo}`,
+        `PDF generation completed for invoice ${invoice.invoiceNo} (pdfUrl: ${pdfUrl})`,
       );
     } catch (err: any) {
       this.logger.error(
-        `Failed to render PDF or notify customer for invoice ${invoice.invoiceNo}: ${err?.message || err}`,
+        `Failed to render PDF for invoice ${invoice.invoiceNo}: ${err?.message || err}`,
         err?.stack,
       );
       throw err; // Re-throw so pg-boss can track failure / retry

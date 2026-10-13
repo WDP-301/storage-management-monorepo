@@ -4,12 +4,15 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
 @Entity('notifications')
+// Inbox lookup: one user's notifications, newest first (created in migration — DESC order).
+@Index('IDX_notifications_user_created', { synchronize: false })
 export class Notification {
   @PrimaryGeneratedColumn('uuid')
   id: string;

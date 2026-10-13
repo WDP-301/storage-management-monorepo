@@ -9,6 +9,8 @@ import { TicketType } from '@entities/ticket-type.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { NotificationsService } from '@modules/notifications/notifications.service';
+import type { NotificationPayload } from '@modules/notifications/types/notification';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
@@ -19,12 +21,13 @@ import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import {
   ContractStatus,
   IdempotencyStatus,
+  NotificationType,
   TicketPriority,
   TicketStatus,
   UserRole,
   UserStatus,
 } from '@storage/types';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { DataSource, type EntityManager, IsNull, Repository } from 'typeorm';
 import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { DEFAULT_PAGE_SIZE, ListTicketsQueryDto } from './dto/list-tickets-query.dto';
@@ -32,6 +35,7 @@ import { UpdateTicketDto } from './dto/update-ticket.dto';
 import type {
   ServiceTicketDeleteResponse,
   ServiceTicketListResponse,
+  ServiceTicketRecord,
   ServiceTicketResponse,
   TicketFacilityInfo,
   TicketFormOptionsResponse,
@@ -88,6 +92,51 @@ const TICKET_RELATIONS = {
   assignee: true,
 } as const;
 
+/** One field changed by `update()` — stored in the TICKET_UPDATED notification's data. */
+interface TicketChange {
+  field: 'status' | 'priority' | 'resolution' | 'attachments';
+  from?: string;
+  to?: string;
+}
+
+const CHANGE_LABELS: Record<TicketChange['field'], string> = {
+  status: 'status',
+  priority: 'priority',
+  resolution: 'resolution',
+  attachments: 'attachments',
+};
+
+function ticketCreatedNotification(ticket: ServiceTicketRecord): NotificationPayload {
+  return {
+    type: NotificationType.TICKET_CREATED,
+    title: `New ticket #${ticket.ticket_no}`,
+    body: `A customer submitted ticket "${ticket.subject}" (priority: ${ticket.priority}).`,
+    data: {
+      ticketId: ticket.id,
+      ticketNo: ticket.ticket_no,
+      facilityId: ticket.facility_id,
+      priority: ticket.priority,
+      status: ticket.status,
+    },
+  };
+}
+
+function ticketUpdatedNotification(
+  ticket: Pick<ServiceTicket, 'id' | 'ticketNo' | 'subject' | 'status'>,
+  changes: TicketChange[],
+): NotificationPayload {
+  const status = changes.find((change) => change.field === 'status');
+  const summary = changes.map((change) => CHANGE_LABELS[change.field]).join(', ');
+  return {
+    type: NotificationType.TICKET_UPDATED,
+    title: `Ticket #${ticket.ticketNo} was updated`,
+    body: status
+      ? `Ticket "${ticket.subject}" moved from ${status.from} to ${status.to}.`
+      : `Ticket "${ticket.subject}" was updated: ${summary}.`,
+    data: { ticketId: ticket.id, ticketNo: ticket.ticketNo, status: ticket.status, changes },
+  };
+}
+
 @Injectable()
 export class ServiceTicketsService {
   constructor(
@@ -108,6 +157,7 @@ export class ServiceTicketsService {
     @InjectRepository(IdempotencyKey)
     private readonly idempotencyKeys: Repository<IdempotencyKey>,
     private readonly dataSource: DataSource,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -137,8 +187,14 @@ export class ServiceTicketsService {
       const type = await this.validateTicketReferences(dto);
       await this.assertCustomerCanFile(actor.id, dto, type);
 
-      // Ticket insert and the DONE marker commit in one transaction; each ticket_no
-      // retry runs a fresh transaction because a failed statement aborts the current one.
+      // The facility's managers are told about the new ticket. Their notifications are
+      // inserted in the same transaction as the ticket, so both exist or neither does.
+      const managerIds = (await this.loadActiveManagerIds(dto.facilityId)).filter(
+        (id) => id !== actor.id,
+      );
+
+      // Ticket insert, its notifications and the DONE marker commit in one transaction; each
+      // ticket_no retry runs a fresh transaction because a failed statement aborts the current one.
       const data = await this.saveWithTicketNoRetry(
         {
           typeId: dto.typeId,
@@ -153,6 +209,12 @@ export class ServiceTicketsService {
         },
         idempotencyKey,
         actor.id,
+        (em, ticket) =>
+          this.notificationsService.createForUsers(
+            em,
+            managerIds,
+            ticketCreatedNotification(ticket),
+          ),
       );
 
       isCommitted = true;
@@ -427,8 +489,12 @@ export class ServiceTicketsService {
       );
     }
 
+    // What this update really changes — drives the owner's TICKET_UPDATED notification.
+    const changes: TicketChange[] = [];
+
     if (dto.status !== undefined && dto.status !== ticket.status) {
       const previousStatus = ticket.status;
+      changes.push({ field: 'status', from: previousStatus, to: dto.status });
       ticket.status = dto.status;
       ticket.resolvedAt = dto.status === TicketStatus.RESOLVED ? new Date() : null;
       ticket.history = [
@@ -438,6 +504,7 @@ export class ServiceTicketsService {
     }
 
     if (dto.priority !== undefined && dto.priority !== ticket.priority) {
+      changes.push({ field: 'priority', from: ticket.priority, to: dto.priority });
       ticket.history = [
         ...(ticket.history ?? []),
         this.historyEntry('PRIORITY_CHANGED', ticket.priority, dto.priority, actor.id),
@@ -445,14 +512,37 @@ export class ServiceTicketsService {
       ticket.priority = dto.priority;
     }
 
+    if (dto.resolution !== undefined && dto.resolution !== (ticket.resolution ?? null)) {
+      changes.push({ field: 'resolution' });
+    }
     if (dto.resolution !== undefined) {
       ticket.resolution = dto.resolution;
+    }
+    if (
+      dto.attachments !== undefined &&
+      JSON.stringify(dto.attachments) !== JSON.stringify(ticket.attachments ?? [])
+    ) {
+      changes.push({ field: 'attachments' });
     }
     if (dto.attachments !== undefined) {
       ticket.attachments = dto.attachments;
     }
 
-    const saved = await this.tickets.save(ticket);
+    // The ticket owner is told what changed. The notification is inserted in the same
+    // transaction as the ticket save, so both exist or neither does.
+    const recipients =
+      changes.length > 0 && ticket.customerId && ticket.customerId !== actor.id
+        ? [ticket.customerId]
+        : [];
+    const saved = await this.dataSource.transaction(async (em) => {
+      const row = await em.getRepository(ServiceTicket).save(ticket);
+      await this.notificationsService.createForUsers(
+        em,
+        recipients,
+        ticketUpdatedNotification(row, changes),
+      );
+      return row;
+    });
     return { ticket: toServiceTicketRecord(await this.findTicketOrFail(saved.id)) };
   }
 
@@ -610,6 +700,20 @@ export class ServiceTicketsService {
     }
   }
 
+  /** Users holding an active FACILITY_MANAGER assignment for the facility. */
+  private async loadActiveManagerIds(facilityId: string): Promise<string[]> {
+    const assignments = await this.roleAssignments.find({
+      where: { role: UserRole.FACILITY_MANAGER, facilityId },
+    });
+    return [
+      ...new Set(
+        assignments
+          .filter((assignment) => isAssignmentActive(assignment))
+          .map((assignment) => assignment.userId),
+      ),
+    ];
+  }
+
   /** Active FACILITY_MANAGER assignments of a user → the facility ids they manage. */
   private async loadManagedFacilityIds(userId: string): Promise<string[]> {
     const assignments = await this.roleAssignments.find({
@@ -664,6 +768,7 @@ export class ServiceTicketsService {
     values: Partial<ServiceTicket>,
     idempotencyKey: string,
     userId: string,
+    afterInsert: (em: EntityManager, ticket: ServiceTicketRecord) => Promise<unknown>,
   ): Promise<ServiceTicketResponse> {
     for (let attempt = 1; ; attempt++) {
       const ticket = this.tickets.create({ ...values, ticketNo: this.generateTicketNo() });
@@ -675,6 +780,7 @@ export class ServiceTicketsService {
             relations: TICKET_RELATIONS,
           });
           const body = { ticket: toServiceTicketRecord(full) };
+          await afterInsert(em, body.ticket);
           await em.update(
             IdempotencyKey,
             { key: idempotencyKey, userId },

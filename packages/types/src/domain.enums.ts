@@ -260,6 +260,8 @@ export type NotificationStatus = (typeof NotificationStatus)[keyof typeof Notifi
 export const NotificationType = {
   TICKET_CREATED: 'TICKET_CREATED',
   TICKET_UPDATED: 'TICKET_UPDATED',
+  INVOICE_ISSUED: 'INVOICE_ISSUED',
+  INVOICE_PAID: 'INVOICE_PAID',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 

@@ -256,6 +256,13 @@ export const NotificationStatus = {
 } as const;
 export type NotificationStatus = (typeof NotificationStatus)[keyof typeof NotificationStatus];
 
+/** What happened — stored in `notifications.type` so clients can pick an icon / deep link. */
+export const NotificationType = {
+  TICKET_CREATED: 'TICKET_CREATED',
+  TICKET_UPDATED: 'TICKET_UPDATED',
+} as const;
+export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
+
 export const DocumentType = {
   IDENTITY: 'IDENTITY',
   CONTRACT: 'CONTRACT',

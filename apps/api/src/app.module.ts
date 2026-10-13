@@ -17,6 +17,7 @@ import { FacilitiesModule } from './modules/facilities/facilities.module';
 import { HealthModule } from './modules/health/health.module';
 import { InspectionModule } from './modules/inspection/inspection.module';
 import { LocationsModule } from './modules/locations/locations.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PlacesModule } from './modules/places/places.module';
 import { ServiceTicketsModule } from './modules/service-tickets/service-tickets.module';
@@ -65,6 +66,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
     InspectionModule,
     HealthModule,
     LocationsModule,
+    NotificationsModule,
     UploadModule,
     CustomerModule,
     PlacesModule,

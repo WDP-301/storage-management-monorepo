@@ -1,5 +1,6 @@
 import { Invoice } from '@entities/invoice.entity';
 import { Payment } from '@entities/payment.entity';
+import { NotificationsService } from '@modules/notifications/notifications.service';
 import { extractInvoiceNos } from '@modules/payments/invoice-no.util';
 import { generatePaymentNo } from '@modules/payments/payment-no.util';
 import { PAYMENT_EVENTS, PaymentReceivedEvent } from '@modules/payments/types/payment';
@@ -20,7 +21,10 @@ import { PAYABLE_INVOICE_STATUSES, sumInvoicePayments } from './first-rent.util'
 export class FirstRentPaymentListener {
   private readonly logger = new Logger(FirstRentPaymentListener.name);
 
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   @OnEvent(PAYMENT_EVENTS.RECEIVED, { async: true })
   async handlePaymentReceived(event: PaymentReceivedEvent): Promise<void> {
@@ -73,6 +77,20 @@ export class FirstRentPaymentListener {
       this.logger.log(
         `Payment sepayId=${event.sepayId} amount=${event.amount} for ${invoices[0].invoiceNo}: ${outcome}`,
       );
+
+      if (outcome === InvoiceStatus.PAID) {
+        await this.notificationsService.create({
+          userId: invoices[0].customerId,
+          title: 'Thanh toán hóa đơn thành công',
+          body: `Hóa đơn ${invoices[0].invoiceNo} đã được thanh toán thành công số tiền ${Number(event.amount).toLocaleString('vi-VN')} VND. Cảm ơn Quý khách!`,
+          type: 'INVOICE_PAID',
+          data: {
+            invoiceId: invoices[0].id,
+            invoiceNo: invoices[0].invoiceNo,
+            amount: event.amount,
+          },
+        });
+      }
     } catch (err) {
       // The partial unique index on provider_ref caught a concurrent duplicate delivery.
       if (!isUniqueViolation(err)) throw err;

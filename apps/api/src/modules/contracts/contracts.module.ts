@@ -7,6 +7,7 @@ import { Invoice } from '@entities/invoice.entity';
 import { InvoiceItem } from '@entities/invoice-item.entity';
 import { Payment } from '@entities/payment.entity';
 import { AuthModule } from '@modules/auth/auth.module';
+import { NotificationsModule } from '@modules/notifications/notifications.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ContractCancelService } from './contract-cancel.service';
@@ -31,6 +32,7 @@ import { FirstRentPaymentListener } from './first-rent-payment.listener';
       Payment,
     ]),
     AuthModule,
+    NotificationsModule,
   ],
   controllers: [ContractsController],
   providers: [

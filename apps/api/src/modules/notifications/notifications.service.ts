@@ -24,12 +24,32 @@ import {
  * can see another user's notifications. Someone else's id answers 404, same as a missing one,
  * so its existence is not leaked.
  */
+export interface CreateNotificationDto {
+  userId: string;
+  title: string;
+  body: string;
+  type?: string;
+  data?: Record<string, unknown>;
+}
+
 @Injectable()
 export class NotificationsService {
   constructor(
     @InjectRepository(Notification)
     private readonly notifications: Repository<Notification>,
   ) {}
+
+  /**
+   * Convenience helper to create a single notification using the repository manager.
+   */
+  async create(dto: CreateNotificationDto): Promise<void> {
+    await this.createForUsers(this.notifications.manager, [dto.userId], {
+      type: (dto.type ?? 'INVOICE_ISSUED') as any,
+      title: dto.title,
+      body: dto.body,
+      data: dto.data,
+    });
+  }
 
   /**
    * Stores one notification per recipient through the caller's EntityManager, so the rows

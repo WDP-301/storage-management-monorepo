@@ -4,7 +4,10 @@
   "sourceRoot": "src",
   "compilerOptions": {
     "deleteOutDir": true,
-    "assets": [{ "include": "migrations/**/*.sql", "outDir": "dist/" }],
+    "assets": [
+      { "include": "migrations/**/*.sql", "outDir": "dist/" },
+      { "include": "assets/**/*", "outDir": "dist/" }
+    ],
     "plugins": [{ "name": "@nestjs/swagger", "options": { "introspectComments": true } }]
   }
 }

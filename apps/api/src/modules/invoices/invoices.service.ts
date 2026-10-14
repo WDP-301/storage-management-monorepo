@@ -3,6 +3,7 @@ import { Invoice } from '@entities/invoice.entity';
 import { InvoiceItem } from '@entities/invoice-item.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { NotificationsService } from '@modules/notifications/notifications.service';
+import type { NotificationPayload } from '@modules/notifications/types/notification';
 import { generateInvoiceNo } from '@modules/payments/invoice-no.util';
 import { buildPaymentQrUrl } from '@modules/payments/vietqr.util';
 import { QueueService } from '@modules/queue/queue.service';
@@ -15,12 +16,27 @@ import {
   ContractStatus,
   InvoiceItemType,
   InvoiceStatus,
+  NotificationType,
   RentalPeriodKind,
   UserRole,
 } from '@storage/types';
 import Decimal from 'decimal.js';
 import { DataSource, Not, Repository } from 'typeorm';
 import { formatDateStr, formatVndCurrency } from './invoice-pdf.service';
+
+function invoiceIssuedNotification(invoice: Invoice): NotificationPayload {
+  return {
+    type: NotificationType.INVOICE_ISSUED,
+    title: `Hóa đơn tiền thuê kho kỳ ${invoice.periodNo}`,
+    body: `Hóa đơn ${invoice.invoiceNo} với số tiền ${formatVndCurrency(invoice.total)} đã được phát hành. Hạn thanh toán đến ${formatDateStr(invoice.dueAt)}. Vui lòng thanh toán đúng hạn.`,
+    data: {
+      invoiceId: invoice.id,
+      invoiceNo: invoice.invoiceNo,
+      total: invoice.total,
+      dueAt: invoice.dueAt ? invoice.dueAt.toISOString() : null,
+    },
+  };
+}
 
 export interface InvoiceWithQrResponse extends Invoice {
   paymentQrUrl?: string | null;
@@ -172,6 +188,12 @@ export class InvoicesService {
 
       await em.save(InvoiceItem, item);
 
+      await this.notificationsService.createForUsers(
+        em,
+        [saved.customerId],
+        invoiceIssuedNotification(saved),
+      );
+
       this.logger.log(
         `Issued recurring invoice ${saved.invoiceNo} for contract ${contract.contractNo}, period ${periodNo}`,
       );
@@ -179,33 +201,7 @@ export class InvoicesService {
       return saved;
     });
 
-    if (savedInvoice) {
-      await this.notifyInvoiceIssued(savedInvoice);
-    }
-
     return savedInvoice;
-  }
-
-  private async notifyInvoiceIssued(invoice: Invoice): Promise<void> {
-    try {
-      await this.notificationsService.create({
-        userId: invoice.customerId,
-        title: `Hóa đơn tiền thuê kho kỳ ${invoice.periodNo}`,
-        body: `Hóa đơn ${invoice.invoiceNo} với số tiền ${formatVndCurrency(invoice.total)} đã được phát hành. Hạn thanh toán đến ${formatDateStr(invoice.dueAt)}. Vui lòng thanh toán đúng hạn.`,
-        type: 'INVOICE_ISSUED',
-        data: {
-          invoiceId: invoice.id,
-          invoiceNo: invoice.invoiceNo,
-          total: invoice.total,
-          dueAt: invoice.dueAt ? invoice.dueAt.toISOString() : null,
-        },
-      });
-    } catch (err: any) {
-      this.logger.error(
-        `Failed to send INVOICE_ISSUED notification for invoice ${invoice.invoiceNo}: ${err?.message || err}`,
-        err?.stack,
-      );
-    }
   }
 
   /**

@@ -40,4 +40,7 @@ test('handoverBlockedReason blocks without files or while saving, otherwise allo
   assert.match(handoverBlockedReason(0, false), /file hợp đồng/);
   assert.match(handoverBlockedReason(2, true), /Đang lưu/);
   assert.equal(handoverBlockedReason(2, false), undefined);
+  assert.match(handoverBlockedReason(2, false, null), /thu tiền thuê tháng đầu/);
+  assert.match(handoverBlockedReason(2, false, 'ISSUED'), /thu tiền thuê tháng đầu/);
+  assert.equal(handoverBlockedReason(2, false, 'PAID'), undefined);
 });

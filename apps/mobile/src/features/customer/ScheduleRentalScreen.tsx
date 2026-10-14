@@ -17,6 +17,7 @@ import {
   rentalEndIso,
   todayIso,
 } from '../../../lib/rental-schedule';
+import { rentalName } from '../../../lib/shelf-rental';
 import { warehouseDeposit } from '../../../lib/warehouse-query';
 import type { Warehouse } from '../../types/storage-api';
 import { RentalDatePickerSheet } from './RentalDatePickerSheet';
@@ -51,7 +52,12 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
   const totalRent = monthlyRent * durationMonths;
   const totalArea = warehouses.reduce((sum, item) => sum + item.areaM2, 0);
 
-  const warehouseNames = warehouses.map((item) => item.name).join(', ');
+  const warehouseNames = warehouses.map(rentalName).join(', ');
+  const unitNoun = warehouses.every((item) => item.kind === 'SHELF')
+    ? 'kệ'
+    : warehouses.every((item) => item.kind === 'SELF_STORAGE')
+      ? 'kho'
+      : 'vị trí';
 
   return (
     <View className="flex-1">
@@ -89,7 +95,7 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
               {warehouseNames}
             </Text>
             <Text className="font-body text-body-sm text-muted" numberOfLines={1}>
-              {warehouses.length} kho, tổng {formatNumber(totalArea)} m²
+              {warehouses.length} {unitNoun}, tổng {formatNumber(totalArea)} m²
             </Text>
           </View>
           <View className="items-end">
@@ -147,7 +153,7 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
               what stops someone believing the whole rental is due up front. */}
           <CostRow
             caption="Hoàn lại 100% khi trả kho"
-            label={`Tiền cọc giữ ${warehouses.length} kho`}
+            label={`Tiền cọc giữ ${warehouses.length} ${unitNoun}`}
             value={formatMoney(deposit)}
           />
           <View className="h-px bg-separator" />

@@ -10,6 +10,13 @@
     "plugins": [
       "expo-router",
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Cho phép quét mã QR vào kho của khách thuê kệ.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
         "expo-media-library",
         {
           "savePhotosPermission": "Cho phép lưu mã QR thanh toán vào thư viện ảnh để bạn quét bằng app ngân hàng.",

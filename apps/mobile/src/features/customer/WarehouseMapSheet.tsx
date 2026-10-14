@@ -9,6 +9,7 @@ import { ArrowRight, Check, MapPin, Plus } from 'phosphor-react-native';
 import { type RefObject, useCallback } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { formatMoney, formatNumber } from '../../../lib/format-vi';
+import { displayMonthlyPrice, isShelfWarehouse } from '../../../lib/shelf-rental';
 import { MAX_WAREHOUSES_PER_BOOKING } from '../../../lib/warehouse-query';
 import { WarehousePhotoStrip } from '../../components/WarehousePhotos';
 import type { Warehouse } from '../../types/storage-api';
@@ -104,7 +105,10 @@ export function WarehouseMapSheet({
               </View>
               <View className="flex-row items-baseline gap-1">
                 <Text className="font-numeric-strong text-accent text-num-lg">
-                  {formatMoney(warehouse.monthlyPrice)}
+                  {isShelfWarehouse(warehouse) ? 'Từ ' : ''}
+                  {displayMonthlyPrice(warehouse) === null
+                    ? 'Liên hệ'
+                    : formatMoney(displayMonthlyPrice(warehouse) ?? 0)}
                 </Text>
                 <Text className="font-body text-caption text-muted">/tháng</Text>
               </View>
@@ -115,29 +119,31 @@ export function WarehouseMapSheet({
                 <Text className="font-body text-body-sm text-muted">{warehouse.notes}</Text>
               ) : null}
             </View>
-            <Pressable
-              accessibilityRole="checkbox"
-              accessibilityLabel={`${isSelected ? 'Bỏ chọn' : 'Chọn'} kho ${warehouse.name}`}
-              accessibilityState={{ checked: isSelected, disabled: isDisabled }}
-              disabled={isDisabled}
-              style={({ pressed }) => ({ opacity: isDisabled ? 0.4 : pressed ? 0.7 : 1 })}
-              onPress={() => onToggle(warehouse)}
-            >
-              <View
-                className={`min-h-11 flex-row items-center justify-center gap-1.5 rounded-full px-3 py-2 ${isSelected ? 'bg-foreground' : 'bg-surface-secondary'}`}
+            {!isShelfWarehouse(warehouse) ? (
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityLabel={`${isSelected ? 'Bỏ chọn' : 'Chọn'} kho ${warehouse.name}`}
+                accessibilityState={{ checked: isSelected, disabled: isDisabled }}
+                disabled={isDisabled}
+                style={({ pressed }) => ({ opacity: isDisabled ? 0.4 : pressed ? 0.7 : 1 })}
+                onPress={() => onToggle(warehouse)}
               >
-                {isSelected ? (
-                  <Check color={onAccent} size={14} weight="bold" />
-                ) : (
-                  <Plus color={muted} size={14} />
-                )}
-                <Text
-                  className={`font-ui text-body-sm ${isSelected ? 'text-accent-foreground' : 'text-foreground'}`}
+                <View
+                  className={`min-h-11 flex-row items-center justify-center gap-1.5 rounded-full px-3 py-2 ${isSelected ? 'bg-foreground' : 'bg-surface-secondary'}`}
                 >
-                  {isSelected ? 'Đã chọn kho này' : 'Chọn kho này'}
-                </Text>
-              </View>
-            </Pressable>
+                  {isSelected ? (
+                    <Check color={onAccent} size={14} weight="bold" />
+                  ) : (
+                    <Plus color={muted} size={14} />
+                  )}
+                  <Text
+                    className={`font-ui text-body-sm ${isSelected ? 'text-accent-foreground' : 'text-foreground'}`}
+                  >
+                    {isSelected ? 'Đã chọn kho này' : 'Chọn kho này'}
+                  </Text>
+                </View>
+              </Pressable>
+            ) : null}
             {selected.length > 0 ? (
               <View className="flex-row flex-wrap items-center justify-between gap-2 rounded-xl bg-surface-secondary p-3">
                 <View className="gap-1">

@@ -37,6 +37,8 @@ export function normaliseContract(contract: CustomerContractResponse): ApiContra
     deposit: Number(contract.deposit),
     unit: contract.unit
       ? {
+          kind: contract.unit.kind,
+          parent: contract.unit.parent,
           id: contract.unit.id,
           code: contract.unit.code,
           name: contract.unit.name,

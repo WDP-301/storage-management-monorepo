@@ -23,9 +23,24 @@ export type WarehouseImage = {
   url: string;
 };
 
-/** A warehouse (kho). `id` is the storage unit id that bookings, holds and tickets reference. */
+export type ShelfSummary = {
+  total: number;
+  available: number;
+  minMonthlyPrice: number | null;
+  statusCounts: Partial<Record<WarehouseStatus, number>>;
+  minAreaM2: number | null;
+  maxAreaM2: number | null;
+  minVolumeM3: number | null;
+  maxVolumeM3: number | null;
+};
+
+/** A warehouse or shelf. Only SELF_STORAGE and SHELF are directly rentable. */
 export type Warehouse = {
   id: string;
+  kind: 'SELF_STORAGE' | 'SHELF_WAREHOUSE' | 'SHELF';
+  parentId: string | null;
+  parent: { id: string; code: string; name: string } | null;
+  shelfSummary: ShelfSummary | null;
   /** The branch (chi nhánh) the warehouse belongs to. */
   facility: { id: string; code: string; name: string };
   code: string;
@@ -48,6 +63,31 @@ export type Warehouse = {
   notes: string | null;
   /** Display order; the first one is the cover. */
   images: WarehouseImage[];
+};
+
+export type ShelfLayout = {
+  warehouseId: string;
+  layout: {
+    rows: number;
+    cols: number;
+    version: number;
+    elements: Array<{
+      type: string;
+      text?: string;
+      row: number;
+      col: number;
+      rowSpan: number;
+      colSpan: number;
+    }>;
+  } | null;
+  placed: Array<{
+    shelf: Warehouse;
+    row: number;
+    col: number;
+    rowSpan: number;
+    colSpan: number;
+  }>;
+  unplaced: Warehouse[];
 };
 
 export type NearbyWarehouse = Warehouse & { distanceKm: number };

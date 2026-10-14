@@ -15,6 +15,7 @@ type ApiErrorEnvelope = {
   message?: string | string[];
   statusCode?: number;
   code?: string;
+  details?: Record<string, unknown>;
 };
 
 export class ApiError extends Error {
@@ -23,6 +24,7 @@ export class ApiError extends Error {
     readonly statusCode?: number,
     /** Machine code from the API error body (e.g. CONFLICT) — stable, unlike message text. */
     readonly code?: string,
+    readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -84,7 +86,8 @@ export async function request<T>(
       unauthorizedHandler?.();
     }
     const code = payload && 'code' in payload ? payload.code : undefined;
-    throw new ApiError(message, response.status, code);
+    const details = payload && 'details' in payload ? payload.details : undefined;
+    throw new ApiError(message, response.status, code, details);
   }
 
   if (payload && 'success' in payload && 'data' in payload) {

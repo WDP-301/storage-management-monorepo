@@ -6,6 +6,7 @@ import { contractStatusLabel, contractStatusTone, StatusPill } from '../customer
 import { ContractDocumentsList } from '../customer/contract-documents-section';
 import { ContractSection, HandoverSection, ReturnSection } from '../customer/contract-sections';
 import { ContractDocumentsEditor } from './ContractDocumentsEditor';
+import { FirstRentSection } from './FirstRentSection';
 import { StaffInspectionSection } from './StaffInspectionSection';
 import type { useInspectionDetail } from './use-inspection-detail';
 
@@ -78,6 +79,17 @@ export function StaffContractScreen({
           )}
         </ContractSection>
 
+        {contract.status === 'DRAFT' || contract.firstRent ? (
+          <FirstRentSection
+            key={contract.id}
+            contractId={contract.id}
+            monthlyPrice={contract.monthlyPrice}
+            firstRent={contract.firstRent}
+            canCollect={contract.permissions.firstRent}
+            onChanged={onReload}
+          />
+        ) : null}
+
         {permissions.handover ? (
           <StaffInspectionSection
             kind="handover"
@@ -85,6 +97,7 @@ export function StaffContractScreen({
             finalizeBlockedReason={handoverBlockedReason(
               contract.documents.length,
               savingDocuments,
+              contract.firstRent?.status ?? null,
             )}
             onFinalized={onReload}
           />

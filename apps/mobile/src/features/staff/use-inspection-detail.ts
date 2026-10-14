@@ -17,6 +17,8 @@ export function staffErrorMessage(error: unknown, fallback: string): string {
     return 'Bạn không có quyền với biên bản này.';
   // The API message for this code is already Vietnamese and says exactly what is missing.
   if (error.code === 'CONTRACT_DOCUMENTS_REQUIRED') return error.message;
+  if (error.code === 'FIRST_RENT_UNPAID')
+    return 'Khách chưa thanh toán tiền thuê tháng đầu — thu tiền trước khi chốt biên nhận.';
   const reason = [
     ['already finalized', 'Biên bản đã được chốt trước đó.'],
     [

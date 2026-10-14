@@ -96,6 +96,28 @@ function inRange(value: number | null, preset: RangePreset | undefined): boolean
  * center already decides the area, and a stale province pick would silently empty the results.
  */
 export function matchesNearbyCriteria(warehouse: Warehouse, criteria: BrowseCriteria): boolean {
+  if (warehouse.kind === 'SHELF_WAREHOUSE') {
+    const summary = warehouse.shelfSummary;
+    if (!summary || summary.available === 0) return false;
+    const area = findPreset(AREA_PRESETS, criteria.areaPreset);
+    const volume = findPreset(VOLUME_PRESETS, criteria.volumePreset);
+    const price = findPreset(PRICE_PRESETS, criteria.pricePreset);
+    const overlaps = (min: number | null, max: number | null, preset?: RangePreset) =>
+      !preset ||
+      (preset.min === undefined && preset.max === undefined) ||
+      (min !== null &&
+        max !== null &&
+        (preset.min === undefined || max >= preset.min) &&
+        (preset.max === undefined || min <= preset.max));
+    return (
+      overlaps(summary.minAreaM2, summary.maxAreaM2, area) &&
+      overlaps(summary.minVolumeM3, summary.maxVolumeM3, volume) &&
+      (!price ||
+        (price.min === undefined && price.max === undefined) ||
+        (summary.minMonthlyPrice !== null &&
+          (price.max === undefined || summary.minMonthlyPrice <= price.max)))
+    );
+  }
   return (
     inRange(warehouse.areaM2, findPreset(AREA_PRESETS, criteria.areaPreset)) &&
     inRange(warehouse.volumeM3, findPreset(VOLUME_PRESETS, criteria.volumePreset)) &&

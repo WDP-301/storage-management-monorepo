@@ -1,6 +1,7 @@
 import { Button } from 'heroui-native';
 import { ActivityIndicator, Text, View } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
+import { isShelfWarehouse } from '../../../lib/shelf-rental';
 import { MAX_WAREHOUSES_PER_BOOKING } from '../../../lib/warehouse-query';
 import type { NearbyWarehouse, Warehouse } from '../../types/storage-api';
 import { EmptyState } from './BrowseStates';
@@ -67,7 +68,9 @@ export function BrowseResultsList({
                   isDisabled={hasHolding || (selectionFull && !isSelected)}
                   isSelected={isSelected}
                   warehouse={warehouse}
-                  onToggle={() => onToggle(warehouse)}
+                  onToggle={() =>
+                    isShelfWarehouse(warehouse) ? onOpen(warehouse) : onToggle(warehouse)
+                  }
                   onOpen={() => onOpen(warehouse)}
                 />
               </Animated.View>

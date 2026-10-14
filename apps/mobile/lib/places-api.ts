@@ -20,7 +20,10 @@ export const PlacesApi = {
     }),
 
   nearby: (center: NearbyCenterQuery, radiusKm = NEARBY_RADIUS_KM, signal?: AbortSignal) => {
-    const params = new URLSearchParams({ radius: String(radiusKm) });
+    const params = new URLSearchParams({
+      radius: String(radiusKm),
+      includeShelfWarehouses: 'true',
+    });
     if ('placeId' in center) {
       params.set('place_id', center.placeId);
     } else {

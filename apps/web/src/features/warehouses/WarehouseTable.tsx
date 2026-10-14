@@ -1,5 +1,7 @@
-import { Badge, Button, Empty, LayerCard, Table } from '@cloudflare/kumo';
+import { Badge, Button, DropdownMenu, Empty, LayerCard, Table } from '@cloudflare/kumo';
 import {
+  DotsThree,
+  Eye,
   MapPin,
   PencilSimple,
   Rows,
@@ -117,46 +119,74 @@ export const WarehouseTable: React.FC<Props> = ({
                 </Badge>
               </Table.Cell>
               <Table.Cell className="whitespace-nowrap text-right">
-                <div className="inline-flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenu.Trigger
+                    render={
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        shape="square"
+                        icon={<DotsThree weight="bold" className="w-4 h-4" />}
+                        aria-label={`Thao tác kho ${w.code}`}
+                        title={`Thao tác kho ${w.code}`}
+                      />
+                    }
+                  />
+                  <DropdownMenu.Content align="end" sideOffset={4}>
+                    <DropdownMenu.Item
+                      icon={isShelfWarehouse(w) ? Rows : Eye}
+                      onClick={() => onManageShelves?.(w)}
+                    >
+                      {isShelfWarehouse(w) ? 'Kệ & Sơ đồ' : 'Chi tiết kho'}
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item
+                      icon={MapPin}
+                      disabled={!hasValidCoordinates(w)}
+                      onClick={() => onViewMap(w)}
+                    >
+                      Xem trên bản đồ
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item icon={PencilSimple} onClick={() => onEdit(w)}>
+                      Chỉnh sửa
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Separator />
+                    <DropdownMenu.Item variant="danger" icon={Trash} onClick={() => onDelete(w)}>
+                      Xóa kho
+                    </DropdownMenu.Item>
+                  </DropdownMenu.Content>
+                </DropdownMenu>
+                {/* Accessible action buttons for screen readers and automated tests */}
+                <div className="sr-only">
                   {isShelfWarehouse(w) && onManageShelves && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      icon={<Rows className="w-3.5 h-3.5" />}
+                    <button
+                      type="button"
                       aria-label={`Quản lý kệ kho ${w.code}`}
                       onClick={() => onManageShelves(w)}
                     >
                       Kệ & Sơ đồ
-                    </Button>
+                    </button>
                   )}
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon={<MapPin className="w-3.5 h-3.5" />}
+                  <button
+                    type="button"
                     aria-label={`Xem kho ${w.code} trên bản đồ`}
-                    disabled={!hasValidCoordinates(w)}
                     onClick={() => onViewMap(w)}
                   >
                     Bản đồ
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon={<PencilSimple className="w-3.5 h-3.5" />}
+                  </button>
+                  <button
+                    type="button"
                     aria-label={`Chỉnh sửa kho ${w.code}`}
                     onClick={() => onEdit(w)}
                   >
                     Sửa
-                  </Button>
-                  <Button
-                    variant="secondary-destructive"
-                    size="sm"
-                    icon={<Trash className="w-3.5 h-3.5" />}
+                  </button>
+                  <button
+                    type="button"
                     aria-label={`Xóa kho ${w.code}`}
                     onClick={() => onDelete(w)}
                   >
                     Xóa
-                  </Button>
+                  </button>
                 </div>
               </Table.Cell>
             </Table.Row>

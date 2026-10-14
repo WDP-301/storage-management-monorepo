@@ -22,6 +22,7 @@ import { RoleLandingPage } from '../features/roles/RoleLandingPage';
 import { UnassignedRolePage } from '../features/roles/UnassignedRolePage';
 import { SystemSettingsPage } from '../features/settings/SystemSettingsPage';
 import { ManagerTicketsPage } from '../features/tickets/ManagerTicketsPage';
+import { WarehouseDetailPage } from '../features/warehouses/WarehouseDetailPage';
 import { WarehouseManagementPage } from '../features/warehouses/WarehouseManagementPage';
 import { AppShell } from '../layouts/AppShell';
 import { AuthLayout } from '../layouts/AuthLayout';
@@ -121,6 +122,7 @@ export const AppRouter: React.FC = () => {
                 />
               }
             >
+              <Route path="/admin/warehouses/:id" element={<WarehouseDetailPage />} />
               <Route path="/contracts" element={<ContractsPage />} />
             </Route>
 

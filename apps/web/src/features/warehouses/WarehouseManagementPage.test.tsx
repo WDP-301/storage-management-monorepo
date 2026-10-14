@@ -18,6 +18,14 @@ const toast = vi.hoisted(() => ({
 
 vi.mock('../../lib/toast', () => ({ useAppToast: () => toast }));
 
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => vi.fn(),
+  };
+});
+
 // MapLibre needs WebGL; the stub exposes what the page passes to the map.
 vi.mock('./WarehouseOverviewMap', () => ({
   WarehouseOverviewMap: ({

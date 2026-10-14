@@ -200,7 +200,7 @@ export const AppShell: React.FC = () => {
           </div>
         </header>
 
-        <main className="min-h-0 flex-1 overflow-y-auto">
+        <main className="min-h-0 flex-1 overflow-y-auto" style={{ scrollbarGutter: 'stable' }}>
           <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
             <Outlet />
           </div>

@@ -12,6 +12,7 @@ import {
   Wrench,
 } from '@phosphor-icons/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useFacility } from '../../context/FacilityContext';
 import { LocationsApi, WarehousesApi } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
@@ -60,6 +61,7 @@ const KpiCard: React.FC<{ label: string; value: number; icon: React.ReactNode; h
 );
 
 export const WarehouseManagementPage: React.FC = () => {
+  const navigate = useNavigate();
   const toast = useAppToast();
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [total, setTotal] = useState(0);
@@ -369,7 +371,7 @@ export const WarehouseManagementPage: React.FC = () => {
           onEdit={editWarehouse}
           onViewMap={(warehouse) => openMap(warehouse.id)}
           onDelete={setDeleting}
-          onManageShelves={setManagingShelves}
+          onManageShelves={(warehouse) => navigate(`/admin/warehouses/${warehouse.id}`)}
         />
       )}
       {mapOpened && (
@@ -386,7 +388,7 @@ export const WarehouseManagementPage: React.FC = () => {
                     size="sm"
                     variant="secondary"
                     icon={<Rows className="h-3.5 w-3.5" />}
-                    onClick={() => setManagingShelves(warehouse)}
+                    onClick={() => navigate(`/admin/warehouses/${warehouse.id}`)}
                   >
                     Kệ & Sơ đồ
                   </Button>

@@ -1,9 +1,13 @@
+import { Notification } from '@entities/notification.entity';
 import { ServiceTicket } from '@entities/service-ticket.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { NotificationsService } from '@modules/notifications/notifications.service';
 import { hashBody } from '@shared/utils/canonical-json.util';
 import {
   ContractStatus,
   IdempotencyStatus,
+  NotificationStatus,
+  NotificationType,
   TicketPriority,
   TicketStatus,
   UserRole,
@@ -116,7 +120,13 @@ describe('ServiceTicketsService', () => {
   let storageUnits: { findOne: jest.Mock };
   let contracts: { createQueryBuilder: jest.Mock };
   let idempotencyKeys: { query: jest.Mock; delete: jest.Mock };
-  let em: { save: jest.Mock; findOneOrFail: jest.Mock; update: jest.Mock };
+  let em: {
+    save: jest.Mock;
+    findOneOrFail: jest.Mock;
+    update: jest.Mock;
+    insert: jest.Mock;
+    getRepository: jest.Mock;
+  };
   let dataSource: { transaction: jest.Mock };
   let service: ServiceTicketsService;
 
@@ -150,6 +160,9 @@ describe('ServiceTicketsService', () => {
       save: jest.fn((value) => Promise.resolve(value)),
       findOneOrFail: jest.fn().mockResolvedValue(buildTicket()),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
+      insert: jest.fn().mockResolvedValue({ identifiers: [] }),
+      // update() saves through the transaction's repository — the same `tickets` mock.
+      getRepository: jest.fn(() => tickets),
     };
     dataSource = { transaction: jest.fn((cb: (manager: typeof em) => unknown) => cb(em)) };
 
@@ -163,6 +176,8 @@ describe('ServiceTicketsService', () => {
       contracts as never,
       idempotencyKeys as never,
       dataSource as never,
+      // Real service: notifications are written through the transaction's `em.insert`.
+      new NotificationsService({} as never),
     );
   });
 
@@ -1197,6 +1212,251 @@ describe('ServiceTicketsService', () => {
         service.remove('ticket-1', buildActor({ roles: [UserRole.CUSTOMER] })),
       ).rejects.toMatchObject({ status: 403, response: { code: 'FORBIDDEN' } });
       expect(tickets.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('notifications', () => {
+    const createDto = {
+      facilityId: 'facility-1',
+      typeId: 'type-1',
+      subject: 'Broken lock',
+      description: 'The lock is not working.',
+    };
+    const managerAssignment = (userId: string, endsAt?: Date) => ({
+      id: `assignment-${userId}`,
+      userId,
+      role: UserRole.FACILITY_MANAGER,
+      facilityId: 'facility-1',
+      startsAt: new Date('2024-01-01T00:00:00Z'),
+      endsAt,
+      createdAt: new Date('2024-01-01T00:00:00Z'),
+    });
+    const staff = buildActor({ id: 'staff-1', roles: [UserRole.FACILITY_STAFF] });
+    /** Rows passed to `em.insert(Notification, rows)`, flattened across calls. */
+    const insertedNotifications = () =>
+      em.insert.mock.calls
+        .filter(([entity]) => entity === Notification)
+        .flatMap(([, rows]) => rows as Array<Record<string, unknown>>);
+
+    const prepareCreate = () => {
+      facilities.findOne.mockResolvedValue({ id: 'facility-1' });
+      ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
+      em.findOneOrFail.mockResolvedValue(buildTicket({ customerId: 'customer-1' }));
+    };
+
+    describe('create ticket', () => {
+      it('stores a TICKET_CREATED notification per active manager, owned by that manager', async () => {
+        prepareCreate();
+        roleAssignments.find.mockResolvedValue([
+          managerAssignment('manager-1'),
+          managerAssignment('manager-2'),
+        ]);
+
+        await service.create(createDto, buildActor({ id: 'customer-1' }), 'key-n1');
+
+        expect(roleAssignments.find).toHaveBeenCalledWith({
+          where: { role: UserRole.FACILITY_MANAGER, facilityId: 'facility-1' },
+        });
+        const rows = insertedNotifications();
+        expect(rows.map((row) => row.userId)).toEqual(['manager-1', 'manager-2']);
+        for (const row of rows) {
+          expect(row).toMatchObject({
+            type: NotificationType.TICKET_CREATED,
+            status: NotificationStatus.SENT,
+            sentAt: expect.any(Date),
+            data: expect.objectContaining({ ticketId: 'ticket-1', facilityId: 'facility-1' }),
+          });
+          expect(row.title).toContain('ST-20260101-ABCD1234');
+        }
+      });
+
+      it('writes the notifications inside the ticket transaction, before it commits', async () => {
+        prepareCreate();
+        roleAssignments.find.mockResolvedValue([managerAssignment('manager-1')]);
+
+        await service.create(createDto, buildActor({ id: 'customer-1' }), 'key-n2');
+
+        expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+        // same EntityManager as the ticket insert, and before the idempotency DONE marker
+        expect(em.insert.mock.invocationCallOrder[0]).toBeLessThan(
+          em.update.mock.invocationCallOrder[0],
+        );
+        expect(em.save.mock.invocationCallOrder[0]).toBeLessThan(
+          em.insert.mock.invocationCallOrder[0],
+        );
+      });
+
+      it('fails the whole creation when the notification cannot be stored', async () => {
+        prepareCreate();
+        roleAssignments.find.mockResolvedValue([managerAssignment('manager-1')]);
+        em.insert.mockRejectedValue(new Error('insert failed'));
+
+        await expect(
+          service.create(createDto, buildActor({ id: 'customer-1' }), 'key-n3'),
+        ).rejects.toThrow('insert failed');
+        expect(em.update).not.toHaveBeenCalled();
+        expect(idempotencyKeys.delete).toHaveBeenCalled();
+      });
+
+      it('skips ended assignments, duplicates and the creator themself', async () => {
+        prepareCreate();
+        roleAssignments.find.mockResolvedValue([
+          managerAssignment('manager-1'),
+          managerAssignment('manager-1'),
+          managerAssignment('manager-old', new Date('2024-06-01T00:00:00Z')),
+          managerAssignment('customer-1'),
+        ]);
+
+        await service.create(createDto, buildActor({ id: 'customer-1' }), 'key-n4');
+
+        expect(insertedNotifications().map((row) => row.userId)).toEqual(['manager-1']);
+      });
+
+      it('stores nothing when the facility has no active manager', async () => {
+        prepareCreate();
+
+        await service.create(createDto, buildActor({ id: 'customer-1' }), 'key-n5');
+
+        expect(em.insert).not.toHaveBeenCalled();
+      });
+
+      it('stores nothing again on an idempotent retry', async () => {
+        idempotencyKeys.query.mockResolvedValue([
+          {
+            is_new_insert: false,
+            request_hash: hashBody(createDto),
+            status: IdempotencyStatus.DONE,
+            response_body: { ticket: { id: 'ticket-1' } },
+          },
+        ]);
+
+        const result = await service.create(createDto, buildActor({ id: 'customer-1' }), 'key-n6');
+
+        expect(result.isRetry).toBe(true);
+        expect(em.insert).not.toHaveBeenCalled();
+      });
+
+      it('stores nothing when the ticket is rejected', async () => {
+        await expect(
+          service.create(createDto, buildActor({ id: 'customer-1' }), 'key-n7'),
+        ).rejects.toMatchObject({ status: 400 });
+        expect(em.insert).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('update ticket', () => {
+      it('stores a TICKET_UPDATED notification for the ticket owner only', async () => {
+        tickets.findOne.mockResolvedValue(
+          buildTicket({ assignedTo: 'staff-1', status: TicketStatus.ASSIGNED }),
+        );
+
+        await service.update('ticket-1', { status: TicketStatus.IN_PROGRESS }, staff);
+
+        const rows = insertedNotifications();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({
+          userId: 'customer-1',
+          type: NotificationType.TICKET_UPDATED,
+          status: NotificationStatus.SENT,
+          data: {
+            ticketId: 'ticket-1',
+            ticketNo: 'ST-20260101-ABCD1234',
+            status: TicketStatus.IN_PROGRESS,
+            changes: [
+              { field: 'status', from: TicketStatus.ASSIGNED, to: TicketStatus.IN_PROGRESS },
+            ],
+          },
+        });
+      });
+
+      it('saves the ticket and its notification in one transaction', async () => {
+        tickets.findOne.mockResolvedValue(
+          buildTicket({ assignedTo: 'staff-1', status: TicketStatus.ASSIGNED }),
+        );
+
+        await service.update('ticket-1', { status: TicketStatus.IN_PROGRESS }, staff);
+
+        expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+        expect(em.getRepository).toHaveBeenCalledWith(ServiceTicket);
+        expect(tickets.save.mock.invocationCallOrder[0]).toBeLessThan(
+          em.insert.mock.invocationCallOrder[0],
+        );
+      });
+
+      it('fails the update when the notification cannot be stored', async () => {
+        tickets.findOne.mockResolvedValue(
+          buildTicket({ assignedTo: 'staff-1', status: TicketStatus.ASSIGNED }),
+        );
+        em.insert.mockRejectedValue(new Error('insert failed'));
+
+        await expect(
+          service.update('ticket-1', { status: TicketStatus.IN_PROGRESS }, staff),
+        ).rejects.toThrow('insert failed');
+      });
+
+      it('lists every changed field when there is no status change', async () => {
+        tickets.findOne.mockResolvedValue(
+          buildTicket({ assignedTo: 'staff-1', status: TicketStatus.IN_PROGRESS }),
+        );
+
+        await service.update(
+          'ticket-1',
+          {
+            priority: TicketPriority.HIGH,
+            resolution: 'Waiting for parts',
+            attachments: ['a.png'],
+          },
+          staff,
+        );
+
+        expect(insertedNotifications()[0].data).toMatchObject({
+          changes: [
+            { field: 'priority', from: TicketPriority.NORMAL, to: TicketPriority.HIGH },
+            { field: 'resolution' },
+            { field: 'attachments' },
+          ],
+        });
+      });
+
+      it('stores nothing when the update changes nothing', async () => {
+        tickets.findOne.mockResolvedValue(
+          buildTicket({ assignedTo: 'staff-1', status: TicketStatus.IN_PROGRESS }),
+        );
+
+        await service.update(
+          'ticket-1',
+          {
+            status: TicketStatus.IN_PROGRESS,
+            priority: TicketPriority.NORMAL,
+            resolution: null,
+            attachments: [],
+          },
+          staff,
+        );
+
+        expect(tickets.save).toHaveBeenCalled();
+        expect(em.insert).not.toHaveBeenCalled();
+      });
+
+      it('never notifies the staff member, manager or admin making the change', async () => {
+        const admin = buildActor({ id: 'admin-1', roles: [UserRole.ADMIN] });
+        tickets.findOne.mockResolvedValue(
+          buildTicket({ assignedTo: 'staff-1', status: TicketStatus.ASSIGNED }),
+        );
+
+        await service.update('ticket-1', { status: TicketStatus.IN_PROGRESS }, admin);
+
+        expect(insertedNotifications().map((row) => row.userId)).toEqual(['customer-1']);
+      });
+
+      it('stores nothing when the update is rejected', async () => {
+        tickets.findOne.mockResolvedValue(buildTicket({ assignedTo: 'staff-2' }));
+
+        await expect(
+          service.update('ticket-1', { status: TicketStatus.IN_PROGRESS }, staff),
+        ).rejects.toMatchObject({ status: 403 });
+        expect(em.insert).not.toHaveBeenCalled();
+      });
     });
   });
 });

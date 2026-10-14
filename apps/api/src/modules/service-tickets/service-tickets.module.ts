@@ -8,6 +8,7 @@ import { StorageUnit } from '@entities/storage-unit.entity';
 import { TicketType } from '@entities/ticket-type.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { AuthModule } from '@modules/auth/auth.module';
+import { NotificationsModule } from '@modules/notifications/notifications.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ServiceTicketsController } from './service-tickets.controller';
@@ -32,6 +33,7 @@ import { ServiceTicketsService } from './service-tickets.service';
       IdempotencyKey,
     ]),
     AuthModule,
+    NotificationsModule,
   ],
   controllers: [ServiceTicketsController],
   providers: [ServiceTicketsService],

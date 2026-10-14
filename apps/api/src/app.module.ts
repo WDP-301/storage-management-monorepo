@@ -16,9 +16,12 @@ import { CustomerModule } from './modules/customer/customer.module';
 import { FacilitiesModule } from './modules/facilities/facilities.module';
 import { HealthModule } from './modules/health/health.module';
 import { InspectionModule } from './modules/inspection/inspection.module';
+import { InvoicesModule } from './modules/invoices/invoices.module';
 import { LocationsModule } from './modules/locations/locations.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PlacesModule } from './modules/places/places.module';
+import { QueueModule } from './modules/queue/queue.module';
 import { ServiceTicketsModule } from './modules/service-tickets/service-tickets.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { TourAppointmentsModule } from './modules/tour-appointments/tour-appointments.module';
@@ -65,10 +68,13 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
     InspectionModule,
     HealthModule,
     LocationsModule,
+    NotificationsModule,
     UploadModule,
     CustomerModule,
     PlacesModule,
     PaymentsModule,
+    QueueModule,
+    InvoicesModule,
     ServiceTicketsModule,
     SettingsModule,
     TourAppointmentsModule,

@@ -54,7 +54,7 @@ describe('InvoicesService', () => {
     };
 
     notificationsService = {
-      create: jest.fn().mockResolvedValue({ id: 'notif-1' }),
+      createForUsers: jest.fn().mockResolvedValue(1),
     };
 
     service = new InvoicesService(
@@ -92,9 +92,10 @@ describe('InvoicesService', () => {
       const result = await service.generateRecurringInvoices(5);
 
       expect(result.issuedCount).toBe(1);
-      expect(notificationsService.create).toHaveBeenCalledWith(
+      expect(notificationsService.createForUsers).toHaveBeenCalledWith(
+        em,
+        ['customer-1'],
         expect.objectContaining({
-          userId: 'customer-1',
           type: 'INVOICE_ISSUED',
         }),
       );
@@ -127,7 +128,7 @@ describe('InvoicesService', () => {
       const result = await service.generateRecurringInvoices(5);
 
       expect(result.issuedCount).toBe(0);
-      expect(notificationsService.create).not.toHaveBeenCalled();
+      expect(notificationsService.createForUsers).not.toHaveBeenCalled();
       expect(queueService.send).not.toHaveBeenCalled();
 
       jest.useRealTimers();

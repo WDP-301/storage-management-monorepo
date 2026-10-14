@@ -1,5 +1,10 @@
 import { ContractStatus, StorageUnitKind } from '@storage/types';
-import { buildPayload, checkInRefusal, parsePayload } from './check-in-eligibility';
+import {
+  buildPayload,
+  checkInRefusal,
+  parsePayload,
+  startOfVietnamDay,
+} from './check-in-eligibility';
 
 const now = new Date('2026-03-01T00:00:00Z');
 const active = { status: ContractStatus.ACTIVE, effectiveAt: new Date('2026-02-01T00:00:00Z') };
@@ -25,6 +30,39 @@ describe('checkInRefusal', () => {
       reason: 'CONTRACT_NOT_STARTED',
       effectiveAt,
     });
+  });
+
+  describe('on the start date', () => {
+    // Starts 15:00 on 15/10 Vietnam time; that day opens at 2026-10-14T17:00:00Z.
+    const effectiveAt = new Date('2026-10-15T15:00:00+07:00');
+    const started = { ...active, effectiveAt };
+
+    it('allows entry from 00:00 Vietnam time, before the contract hour', () => {
+      expect(checkInRefusal(started, shelf, new Date('2026-10-15T00:00:00+07:00'))).toBeNull();
+    });
+
+    it('refuses the last second of the previous Vietnam day', () => {
+      expect(checkInRefusal(started, shelf, new Date('2026-10-14T23:59:59+07:00'))).toEqual({
+        reason: 'CONTRACT_NOT_STARTED',
+        effectiveAt,
+      });
+    });
+
+    it('uses the Vietnam day even when the UTC date differs', () => {
+      // 06:00 on 15/10 Vietnam time is still 14/10 in UTC.
+      const early = { ...active, effectiveAt: new Date('2026-10-15T06:00:00+07:00') };
+      expect(checkInRefusal(early, shelf, new Date('2026-10-15T00:00:01+07:00'))).toBeNull();
+      expect(checkInRefusal(early, shelf, new Date('2026-10-14T23:59:59+07:00'))).not.toBeNull();
+    });
+  });
+
+  it.each([
+    ['2026-10-15T00:00:00+07:00', '2026-10-14T17:00:00.000Z'],
+    ['2026-10-15T23:59:59+07:00', '2026-10-14T17:00:00.000Z'],
+    ['2026-10-14T17:00:00Z', '2026-10-14T17:00:00.000Z'],
+    ['2026-10-14T16:59:59Z', '2026-10-13T17:00:00.000Z'],
+  ])('startOfVietnamDay(%s) is %s', (at, expected) => {
+    expect(startOfVietnamDay(new Date(at)).toISOString()).toBe(expected);
   });
 
   it('allows an ACTIVE contract past its endedAt', () => {

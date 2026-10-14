@@ -13,6 +13,15 @@ const PAYLOAD_PATTERN = /^SMCI1:([A-Za-z0-9_-]{43})$/;
 
 export const buildPayload = (token: string): string => `${QR_PREFIX}${token}`;
 
+// Vietnam has no daylight saving, so its calendar day is a fixed +07:00 offset from UTC.
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** 00:00 Vietnam time on the day `at` falls on. */
+export function startOfVietnamDay(at: Date): Date {
+  return new Date(Math.floor((at.getTime() + VN_OFFSET_MS) / DAY_MS) * DAY_MS - VN_OFFSET_MS);
+}
+
 /**
  * Extracts the token from a scanned payload, or null when it is not one of ours. Surrounding
  * whitespace is dropped: keyboard-wedge scanners often append a newline.
@@ -40,8 +49,9 @@ export function checkInRefusal(
 ): CheckInRefusal | null {
   if (unit.kind !== StorageUnitKind.SHELF) return { reason: 'NOT_SHELF' };
   if (contract.status !== ContractStatus.ACTIVE) return { reason: 'CONTRACT_NOT_ACTIVE' };
-  // The handover can be signed before the agreed start date; entry opens only from that date.
-  if (contract.effectiveAt.getTime() > now.getTime()) {
+  // The handover can be signed before the agreed start date; entry opens at 00:00 Vietnam time
+  // on that date, whatever hour the contract itself starts.
+  if (startOfVietnamDay(contract.effectiveAt).getTime() > now.getTime()) {
     return { reason: 'CONTRACT_NOT_STARTED', effectiveAt: contract.effectiveAt };
   }
   return null;

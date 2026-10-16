@@ -4,6 +4,7 @@ import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView as RNSafeAreaView } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
 import { formatMoney, formatNumber } from '../../../lib/format-vi';
+import { displayMonthlyPrice, isShelfWarehouse } from '../../../lib/shelf-rental';
 import { WarehouseGallery } from '../../components/WarehousePhotos';
 import type { Warehouse } from '../../types/storage-api';
 import { WarehouseSpecs } from './WarehouseCard';
@@ -85,15 +86,20 @@ export function WarehouseDetailScreen({
                 ) : null}
                 <View className="flex-row items-baseline gap-1">
                   <Text className="font-numeric-strong text-accent text-num-lg">
-                    {formatMoney(warehouse.monthlyPrice)}
+                    {isShelfWarehouse(warehouse) ? 'Từ ' : ''}
+                    {displayMonthlyPrice(warehouse) === null
+                      ? 'Liên hệ'
+                      : formatMoney(displayMonthlyPrice(warehouse) ?? 0)}
                   </Text>
                   <Text className="font-body text-caption text-muted">/tháng</Text>
                 </View>
               </View>
 
-              <View className="rounded-xl bg-surface-secondary p-3">
-                <WarehouseSpecs warehouse={warehouse} />
-              </View>
+              {!isShelfWarehouse(warehouse) ? (
+                <View className="rounded-xl bg-surface-secondary p-3">
+                  <WarehouseSpecs warehouse={warehouse} />
+                </View>
+              ) : null}
 
               {warehouse.notes ? (
                 <View className="gap-1">
@@ -104,27 +110,29 @@ export function WarehouseDetailScreen({
             </View>
           </ScrollView>
 
-          <View className="gap-2 border-t border-border bg-surface px-4 pt-3 pb-2">
-            {hasHolding ? (
-              <Text className="font-body text-caption text-warning">
-                Bạn đang có đơn giữ kho. Hoàn tất hoặc hủy đơn trong Kho của tôi để chọn thêm.
-              </Text>
-            ) : null}
-            <Button
-              isDisabled={isDisabled}
-              variant={isSelected ? 'secondary' : 'primary'}
-              onPress={() => onToggle(warehouse)}
-            >
-              {isSelected ? (
-                <Check color={accent} size={16} weight="bold" />
-              ) : (
-                <Plus color={isDisabled ? muted : onAccent} size={16} weight="bold" />
-              )}
-              <Button.Label className="font-ui">
-                {isSelected ? 'Đã chọn — bấm để bỏ chọn' : 'Chọn kho này'}
-              </Button.Label>
-            </Button>
-          </View>
+          {!isShelfWarehouse(warehouse) ? (
+            <View className="gap-2 border-t border-border bg-surface px-4 pt-3 pb-2">
+              {hasHolding ? (
+                <Text className="font-body text-caption text-warning">
+                  Bạn đang có đơn giữ kho. Hoàn tất hoặc hủy đơn trong Kho của tôi để chọn thêm.
+                </Text>
+              ) : null}
+              <Button
+                isDisabled={isDisabled}
+                variant={isSelected ? 'secondary' : 'primary'}
+                onPress={() => onToggle(warehouse)}
+              >
+                {isSelected ? (
+                  <Check color={accent} size={16} weight="bold" />
+                ) : (
+                  <Plus color={isDisabled ? muted : onAccent} size={16} weight="bold" />
+                )}
+                <Button.Label className="font-ui">
+                  {isSelected ? 'Đã chọn — bấm để bỏ chọn' : 'Chọn kho này'}
+                </Button.Label>
+              </Button>
+            </View>
+          ) : null}
         </SafeAreaView>
       ) : null}
     </Modal>

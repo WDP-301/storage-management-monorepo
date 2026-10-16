@@ -1,9 +1,12 @@
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { useRouter } from 'expo-router';
 import { Button } from 'heroui-native';
 import { useEffect, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useBrowseSelection } from '../../../lib/browse-selection';
 import { hasPlottableCoords } from '../../../lib/goong-map-config';
 import { type PlacePrediction, WIDE_NEARBY_RADIUS_KM } from '../../../lib/places-api';
+import { isShelfWarehouse } from '../../../lib/shelf-rental';
 import {
   countActiveFilters,
   MAX_WAREHOUSES_PER_BOOKING,
@@ -31,21 +34,15 @@ type Props = {
   hasHolding: boolean;
   contentBottomPadding: number;
   onHold: (warehouses: Warehouse[]) => void;
-  /** Changes whenever the customer's set of active holds changes. */
-  holdsKey: string;
 };
 
-export function BrowseWarehousesScreen({
-  hasHolding,
-  holdsKey,
-  contentBottomPadding,
-  onHold,
-}: Props) {
+export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHold }: Props) {
+  const router = useRouter();
+  const { selected, toggle: toggleWarehouse, clear: clearSelection } = useBrowseSelection();
   const { criteria, setCriteria, provinceOptions, wardOptions } = useBrowseCriteria();
   const { warehouses, total, hasMore, isLoading, isLoadingMore, error, loadMore, refetch } =
     useWarehouses(criteria);
   const [view, setView] = useState<BrowseView>('list');
-  const [selected, setSelected] = useState<Warehouse[]>([]);
   const [mapWarehouseId, setMapWarehouseId] = useState<string | null>(null);
   const [detailWarehouse, setDetailWarehouse] = useState<Warehouse | NearbyWarehouse | null>(null);
   const nearby = useNearbySearch();
@@ -54,6 +51,7 @@ export function BrowseWarehousesScreen({
   const warehouseSheetRef = useRef<BottomSheetModal>(null);
   const locationSheetRef = useRef<BottomSheetModal>(null);
   const pendingContinueRef = useRef(false);
+  const pendingShelfIdRef = useRef<string | null>(null);
 
   // A nearby search replaces the paged results in both views; it has no server filters, so the
   // size/price criteria are applied here.
@@ -64,10 +62,6 @@ export function BrowseWarehousesScreen({
   const mapWarehouse = mapWarehouses.find((warehouse) => warehouse.id === mapWarehouseId) ?? null;
   const selectedIds = selected.map((warehouse) => warehouse.id);
 
-  // A new hold means the picks were just booked; keeping them would resubmit held warehouses.
-  useEffect(() => {
-    setSelected([]);
-  }, [holdsKey]);
   const activeFilterCount = countActiveFilters(criteria);
 
   // A refresh keeps the current list on screen; only a first load blanks it out.
@@ -75,13 +69,20 @@ export function BrowseWarehousesScreen({
   const isInitialLoading = isLoading && !hasData;
   const isRefreshing = isLoading && hasData;
 
-  const toggleWarehouse = (warehouse: Warehouse) => {
-    setSelected((current) => {
-      if (current.some((item) => item.id === warehouse.id)) {
-        return current.filter((item) => item.id !== warehouse.id);
-      }
-      return current.length >= MAX_WAREHOUSES_PER_BOOKING ? current : [...current, warehouse];
-    });
+  const openWarehouse = (warehouse: Warehouse | NearbyWarehouse) => {
+    if (isShelfWarehouse(warehouse)) {
+      router.push({ pathname: '/(customer)/shelves', params: { id: warehouse.id } });
+      return;
+    }
+    setDetailWarehouse(warehouse);
+  };
+  const openWarehouseFromMap = (warehouse: Warehouse) => {
+    if (!isShelfWarehouse(warehouse)) {
+      setDetailWarehouse(warehouse);
+      return;
+    }
+    pendingShelfIdRef.current = warehouse.id;
+    warehouseSheetRef.current?.dismiss();
   };
 
   const changeCriteria = (next: typeof criteria) => {
@@ -102,6 +103,12 @@ export function BrowseWarehousesScreen({
   };
   const dismissWarehouse = () => {
     setMapWarehouseId(null);
+    if (pendingShelfIdRef.current) {
+      const id = pendingShelfIdRef.current;
+      pendingShelfIdRef.current = null;
+      router.push({ pathname: '/(customer)/shelves', params: { id } });
+      return;
+    }
     if (!pendingContinueRef.current) return;
     pendingContinueRef.current = false;
     onHold(selected);
@@ -220,7 +227,7 @@ export function BrowseWarehousesScreen({
               onContinue={continueFromMap}
               onDismiss={dismissWarehouse}
               onToggle={toggleWarehouse}
-              onOpenDetail={setDetailWarehouse}
+              onOpenDetail={openWarehouseFromMap}
             />
           </View>
         </>
@@ -259,7 +266,7 @@ export function BrowseWarehousesScreen({
                 total={nearbyWarehouses.length}
                 warehouses={nearbyWarehouses}
                 onLoadMore={loadMore}
-                onOpen={setDetailWarehouse}
+                onOpen={openWarehouse}
                 onToggle={toggleWarehouse}
               />
             ) : null
@@ -279,7 +286,7 @@ export function BrowseWarehousesScreen({
                   total={total}
                   warehouses={warehouses}
                   onLoadMore={loadMore}
-                  onOpen={setDetailWarehouse}
+                  onOpen={openWarehouse}
                   onToggle={toggleWarehouse}
                 />
               ) : null}
@@ -293,7 +300,7 @@ export function BrowseWarehousesScreen({
           hasHolding={hasHolding}
           selected={selected}
           onContinue={() => onHold(selected)}
-          onClear={() => setSelected([])}
+          onClear={clearSelection}
         />
       ) : null}
 

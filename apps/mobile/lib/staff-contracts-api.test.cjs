@@ -41,7 +41,18 @@ const response = {
   return: null,
   documents: [{ fileKey: 'uploads/a.pdf', name: 'a.pdf', mimeType: 'application/pdf' }],
   customer: { id: 'u1', full_name: 'Nguyễn An', phone: '0901234567' },
-  permissions: { documents: true, handover: true, return: false },
+  permissions: { documents: true, handover: true, return: false, first_rent: true },
+  first_rent: {
+    invoice_id: 'invoice-1',
+    invoice_no: 'INV-001',
+    status: 'ISSUED',
+    total: '1000000',
+    paid_amount: '0',
+    amount_due: '1000000',
+    paid_at: null,
+    method: null,
+    payment_qr_url: 'https://img.vietqr.io/test.png',
+  },
 };
 
 test('normaliseStaffContract maps customer, permissions and shared contract fields', () => {
@@ -51,7 +62,14 @@ test('normaliseStaffContract maps customer, permissions and shared contract fiel
   assert.equal(contract.monthlyPrice, 1000000);
   assert.equal(contract.documents.length, 1);
   assert.deepEqual(contract.customer, { id: 'u1', fullName: 'Nguyễn An', phone: '0901234567' });
-  assert.deepEqual(contract.permissions, { documents: true, handover: true, return: false });
+  assert.deepEqual(contract.permissions, {
+    documents: true,
+    handover: true,
+    return: false,
+    firstRent: true,
+  });
+  assert.equal(contract.firstRent.amountDue, 1000000);
+  assert.equal(contract.firstRent.invoiceNo, 'INV-001');
 });
 
 test('normaliseStaffContract treats missing permissions and names as no access', () => {
@@ -61,7 +79,12 @@ test('normaliseStaffContract treats missing permissions and names as no access',
     customer: { id: 'u1', full_name: null, phone: null },
     permissions: { documents: 'yes' },
   });
-  assert.deepEqual(contract.permissions, { documents: false, handover: false, return: false });
+  assert.deepEqual(contract.permissions, {
+    documents: false,
+    handover: false,
+    return: false,
+    firstRent: false,
+  });
   assert.equal(contract.customer.fullName, 'Khách hàng');
   assert.equal(contract.customer.phone, null);
 });
@@ -75,4 +98,20 @@ test('StaffContractsApi.get requests the staff view of the contract', async () =
   const contract = await StaffContractsApi.get('c1');
   assert.equal(calls[0], '/contracts/c1/staff-view');
   assert.equal(contract.id, 'c1');
+});
+
+test('first-rent actions call the staff collection endpoints and normalise the response', async () => {
+  const calls = [];
+  const { StaffContractsApi } = load('staff-contracts-api.ts', async (path, init) => {
+    calls.push([path, init?.method]);
+    return response.first_rent;
+  });
+  const issued = await StaffContractsApi.issueFirstRent('c1');
+  const cash = await StaffContractsApi.confirmFirstRentCash('c1');
+  assert.deepEqual(calls, [
+    ['/contracts/c1/first-rent', 'POST'],
+    ['/contracts/c1/first-rent/cash', 'POST'],
+  ]);
+  assert.equal(issued.paymentQrUrl, 'https://img.vietqr.io/test.png');
+  assert.equal(cash.total, 1000000);
 });

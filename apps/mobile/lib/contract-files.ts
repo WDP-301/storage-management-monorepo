@@ -21,8 +21,14 @@ export function splitBySize(files: readonly PickedFile[]): {
 }
 
 /** Why the handover cannot be finalized yet, or `undefined` when nothing blocks it. */
-export function handoverBlockedReason(documentCount: number, savingDocuments: boolean) {
+export function handoverBlockedReason(
+  documentCount: number,
+  savingDocuments: boolean,
+  firstRentStatus?: string | null,
+) {
   if (savingDocuments) return 'Đang lưu file hợp đồng…';
   if (documentCount === 0) return 'Cần tải file hợp đồng đã ký trước khi chốt.';
+  if (firstRentStatus !== undefined && firstRentStatus !== 'PAID')
+    return 'Cần thu tiền thuê tháng đầu trước khi chốt biên nhận.';
   return undefined;
 }

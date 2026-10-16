@@ -15,6 +15,7 @@ import {
 import { ContractDocumentsList } from './contract-documents-section';
 import { ContractSection, HandoverSection, ReturnSection } from './contract-sections';
 import { ReturnRequestSheet } from './ReturnRequestSheet';
+import { ShelfAccessCard } from './ShelfAccessCard';
 
 const MUTED = 'hsl(215 16% 47%)';
 
@@ -114,6 +115,7 @@ function ContractDetail({
       <ContractSection contract={contract}>
         <ContractDocumentsList contract={contract} />
       </ContractSection>
+      <ShelfAccessCard contract={contract} />
       <HandoverSection handover={contract.handover} />
       {showReturnSection ? <ReturnSection inspection={contract.return} /> : null}
 

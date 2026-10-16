@@ -5,6 +5,7 @@ import { Buildings, UserCircle } from 'phosphor-react-native';
 import { Text, View } from 'react-native';
 import { SafeAreaView as RNSafeAreaView } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
+import { BrowseSelectionProvider } from '../../lib/browse-selection';
 import { HoldProvider, useHold } from '../../lib/hold';
 import { BottomTabButton } from '../../src/components/BottomTabButton';
 import { StorageIcon } from '../../src/components/TabIcons';
@@ -24,31 +25,36 @@ export default function CustomerTabsLayout() {
 
   return (
     <HoldProvider>
-      <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-        <StatusBar style="dark" />
-        <RouterTabs
-          backBehavior="history"
-          screenOptions={{ headerShown: false, sceneStyle: { backgroundColor } }}
-          tabBar={({ state }) => (
-            <CustomerTabBar
-              activeTab={toCustomerTab(state.routes[state.index]?.name)}
-              onSelect={(tab) => router.navigate(TAB_HREFS[tab])}
-            />
-          )}
-        >
-          <RouterTabs.Screen name="browse" options={{ title: 'Tìm kho' }} />
-          <RouterTabs.Screen name="storage" options={{ title: 'Kho của tôi' }} />
-          <RouterTabs.Screen name="contract-detail" options={{ title: 'Chi tiết hợp đồng' }} />
-          <RouterTabs.Screen name="settings" options={{ title: 'Tài khoản' }} />
-          {/* Scheduling is reached after selecting units; it has no tab button. */}
-          <RouterTabs.Screen name="schedule" options={{ title: 'Đặt lịch thuê' }} />
-          {/* Deposit payment is reached from a booking, so it has no tab button either. */}
-          <RouterTabs.Screen name="payment" options={{ title: 'Thanh toán tiền cọc' }} />
-          <RouterTabs.Screen name="tickets" options={{ title: 'Yêu cầu hỗ trợ' }} />
-          <RouterTabs.Screen name="ticket-detail" options={{ title: 'Chi tiết yêu cầu' }} />
-          <RouterTabs.Screen name="ticket-create" options={{ title: 'Tạo yêu cầu' }} />
-        </RouterTabs>
-      </SafeAreaView>
+      <BrowseSelectionProvider>
+        <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
+          <StatusBar style="dark" />
+          <RouterTabs
+            backBehavior="history"
+            screenOptions={{ headerShown: false, sceneStyle: { backgroundColor } }}
+            tabBar={({ state }) =>
+              state.routes[state.index]?.name === 'shelves' ? null : (
+                <CustomerTabBar
+                  activeTab={toCustomerTab(state.routes[state.index]?.name)}
+                  onSelect={(tab) => router.navigate(TAB_HREFS[tab])}
+                />
+              )
+            }
+          >
+            <RouterTabs.Screen name="browse" options={{ title: 'Tìm kho' }} />
+            <RouterTabs.Screen name="shelves" options={{ title: 'Chọn kệ' }} />
+            <RouterTabs.Screen name="storage" options={{ title: 'Kho của tôi' }} />
+            <RouterTabs.Screen name="contract-detail" options={{ title: 'Chi tiết hợp đồng' }} />
+            <RouterTabs.Screen name="settings" options={{ title: 'Tài khoản' }} />
+            {/* Scheduling is reached after selecting units; it has no tab button. */}
+            <RouterTabs.Screen name="schedule" options={{ title: 'Đặt lịch thuê' }} />
+            {/* Deposit payment is reached from a booking, so it has no tab button either. */}
+            <RouterTabs.Screen name="payment" options={{ title: 'Thanh toán tiền cọc' }} />
+            <RouterTabs.Screen name="tickets" options={{ title: 'Yêu cầu hỗ trợ' }} />
+            <RouterTabs.Screen name="ticket-detail" options={{ title: 'Chi tiết yêu cầu' }} />
+            <RouterTabs.Screen name="ticket-create" options={{ title: 'Tạo yêu cầu' }} />
+          </RouterTabs>
+        </SafeAreaView>
+      </BrowseSelectionProvider>
     </HoldProvider>
   );
 }

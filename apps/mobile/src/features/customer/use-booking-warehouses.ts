@@ -1,3 +1,4 @@
+import { rentalName } from '../../../lib/shelf-rental';
 import type { ApiBooking } from '../../types/booking-api';
 import { useWarehouseDetails } from './use-warehouse-details';
 
@@ -10,7 +11,7 @@ export function useBookingWarehouses(booking: ApiBooking) {
   const names = booking.items
     .map((item) => {
       const warehouse = details.get(item.storageUnitId);
-      return warehouse?.name ?? item.storageUnit?.code ?? item.storageUnitId;
+      return warehouse ? rentalName(warehouse) : (item.storageUnit?.code ?? item.storageUnitId);
     })
     .join(', ');
   const totalArea = booking.items.reduce(

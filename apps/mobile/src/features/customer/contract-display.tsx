@@ -157,6 +157,16 @@ export function contractKindLabel(kind: ApiContract['kind']) {
 
 /** Warehouse name for a contract; falls back to the unit code, then the contract number. */
 export function contractWarehouseName(contract: ApiContract): string {
+  if (contract.unit?.kind === 'SHELF' && contract.unit.parent) {
+    if (
+      contract.unit.name
+        .toLocaleLowerCase('vi')
+        .includes(contract.unit.parent.name.toLocaleLowerCase('vi'))
+    ) {
+      return contract.unit.name;
+    }
+    return `${contract.unit.name} · ${contract.unit.parent.name}`;
+  }
   return contract.unit?.name ?? contract.unit?.code ?? contract.contractNo;
 }
 

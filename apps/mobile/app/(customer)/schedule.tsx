@@ -1,12 +1,14 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
+import { Alert } from 'react-native';
+import { ApiError } from '../../lib/api';
 import { bookingErrorMessage } from '../../lib/booking-errors';
 import { useHold } from '../../lib/hold';
 import { ScheduleRentalScreen } from '../../src/features/customer/ScheduleRentalScreen';
 
 export default function ScheduleRoute() {
   const router = useRouter();
-  const { selectedWarehouses, heldBooking, createBooking, isCreating } = useHold();
+  const { selectedWarehouses, heldBooking, createBooking, clearSelection, isCreating } = useHold();
   const [error, setError] = useState<string | null>(null);
 
   if (!selectedWarehouses) {
@@ -27,7 +29,17 @@ export default function ScheduleRoute() {
           const booking = await createBooking(schedule);
           if (booking) router.navigate(`/(customer)/payment?id=${booking.id}`);
         } catch (cause) {
-          setError(bookingErrorMessage(cause));
+          const message = bookingErrorMessage(cause);
+          if (
+            cause instanceof ApiError &&
+            (cause.code === 'UNIT_NOT_AVAILABLE' || cause.code === 'RESOURCE_NOT_FOUND')
+          ) {
+            clearSelection();
+            Alert.alert('Kệ hoặc kho không còn trống', message);
+            router.navigate('/(customer)/browse');
+          } else {
+            setError(message);
+          }
         }
       }}
     />

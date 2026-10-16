@@ -1,6 +1,7 @@
 import { CheckCircle, MapPin, Plus } from 'phosphor-react-native';
 import { Pressable, Text, View } from 'react-native';
 import { formatDimensions, formatMoney, formatNumber } from '../../../lib/format-vi';
+import { displayMonthlyPrice, isShelfWarehouse } from '../../../lib/shelf-rental';
 import { warehouseDeposit } from '../../../lib/warehouse-query';
 import { WarehouseCover } from '../../components/WarehousePhotos';
 import type { Warehouse } from '../../types/storage-api';
@@ -22,6 +23,14 @@ type Props = {
 
 /** Size, volume, rent and deposit — the figures customers compare between warehouses. */
 export function WarehouseSpecs({ warehouse }: { warehouse: Warehouse }) {
+  if (isShelfWarehouse(warehouse)) {
+    return (
+      <Text className="font-body text-body-sm text-muted">
+        {warehouse.shelfSummary?.available ?? 0} kệ còn trống · Chọn kệ để xem kích thước và tiền
+        cọc
+      </Text>
+    );
+  }
   const specs = [
     [
       'Kích thước (R × D × C)',
@@ -88,12 +97,18 @@ export function WarehouseCard({
           </View>
           <View className="items-end">
             <Text className="font-numeric-strong text-accent text-num-lg">
-              {formatMoney(warehouse.monthlyPrice)}
+              {isShelfWarehouse(warehouse) ? 'Từ ' : ''}
+              {displayMonthlyPrice(warehouse) === null
+                ? 'Liên hệ'
+                : formatMoney(displayMonthlyPrice(warehouse) ?? 0)}
             </Text>
             <Text className="font-body text-caption text-muted">/tháng</Text>
           </View>
         </View>
 
+        {isShelfWarehouse(warehouse) ? (
+          <Text className="font-ui text-caption text-accent">Thuê theo kệ</Text>
+        ) : null}
         <WarehouseSpecs warehouse={warehouse} />
         {warehouse.notes ? (
           <Text className="font-body text-body-sm text-subtle">{warehouse.notes}</Text>
@@ -103,7 +118,9 @@ export function WarehouseCard({
           <Text className="font-numeric text-caption text-muted">{warehouse.code}</Text>
           <View className="flex-row items-center gap-2">
             <Text className="font-ui text-caption text-accent">Xem chi tiết</Text>
-            <SelectPill isDisabled={isDisabled} isSelected={isSelected} onPress={onToggle} />
+            {isShelfWarehouse(warehouse) ? null : (
+              <SelectPill isDisabled={isDisabled} isSelected={isSelected} onPress={onToggle} />
+            )}
           </View>
         </View>
       </View>

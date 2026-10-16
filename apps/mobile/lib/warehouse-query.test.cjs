@@ -74,6 +74,35 @@ test('matchesNearbyCriteria mirrors the size and price bounds inclusively', () =
   );
 });
 
+test('nearby shelf warehouses use available shelf summary rather than the zero-priced container', () => {
+  const parent = {
+    kind: 'SHELF_WAREHOUSE',
+    areaM2: 100,
+    volumeM3: 300,
+    monthlyPrice: 0,
+    shelfSummary: {
+      available: 2,
+      minMonthlyPrice: 500_000,
+      minAreaM2: 1,
+      maxAreaM2: 3,
+      minVolumeM3: 2,
+      maxVolumeM3: 6,
+    },
+  };
+  assert.equal(
+    q.matchesNearbyCriteria(parent, { ...base, areaPreset: 'xs', pricePreset: 'xs' }),
+    true,
+  );
+  assert.equal(q.matchesNearbyCriteria(parent, { ...base, areaPreset: 'm' }), false);
+  assert.equal(
+    q.matchesNearbyCriteria(
+      { ...parent, shelfSummary: { ...parent.shelfSummary, available: 0 } },
+      base,
+    ),
+    false,
+  );
+});
+
 test('active filter count and reset', () => {
   const active = { ...base, provinceCode: '79', areaPreset: 'l', sort: 'newest' };
   assert.equal(q.countActiveFilters(active), 2);

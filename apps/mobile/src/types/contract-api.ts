@@ -1,5 +1,7 @@
 import type { ContractKind, ContractStatus, DamageSeverity } from '@storage/types';
 
+type StorageUnitKind = 'SELF_STORAGE' | 'SHELF_WAREHOUSE' | 'SHELF';
+
 /** A file in the private bucket; display it through a presigned download URL. */
 export type EvidenceFile = {
   fileKey: string;
@@ -41,6 +43,8 @@ export type CustomerContractResponse = {
   monthly_price: string;
   deposit: string;
   unit: {
+    kind: StorageUnitKind;
+    parent: { id: string; code: string; name: string } | null;
     id: string;
     code: string;
     name: string;
@@ -87,6 +91,8 @@ export type ApiContract = {
   monthlyPrice: number;
   deposit: number;
   unit: {
+    kind: StorageUnitKind;
+    parent: { id: string; code: string; name: string } | null;
     id: string;
     code: string;
     name: string;

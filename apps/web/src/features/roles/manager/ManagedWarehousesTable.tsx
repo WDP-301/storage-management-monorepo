@@ -1,5 +1,23 @@
-import { Badge, Button, Empty, InputGroup, LayerCard, Select, Table, Text } from '@cloudflare/kumo';
-import { List, MagnifyingGlass, MapPin, MapTrifold, Rows } from '@phosphor-icons/react';
+import {
+  Badge,
+  Button,
+  DropdownMenu,
+  Empty,
+  InputGroup,
+  LayerCard,
+  Select,
+  Table,
+  Text,
+} from '@cloudflare/kumo';
+import {
+  DotsThree,
+  Eye,
+  List,
+  MagnifyingGlass,
+  MapPin,
+  MapTrifold,
+  Rows,
+} from '@phosphor-icons/react';
 import React from 'react';
 import type { Warehouse, WarehouseStatus } from '../../../types/warehouse';
 import { hasValidCoordinates } from '../../warehouses/goong-map';
@@ -153,18 +171,7 @@ export const ManagedWarehousesTable: React.FC<Props> = ({
                     </Badge>
                   </Table.Cell>
                   <Table.Cell className="whitespace-nowrap text-right">
-                    <div className="inline-flex items-center gap-2">
-                      {isShelfWarehouse(w) && onManageShelves && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          icon={<Rows className="w-3.5 h-3.5" />}
-                          aria-label={`Quản lý kệ kho ${w.code}`}
-                          onClick={() => onManageShelves(w)}
-                        >
-                          Kệ & Sơ đồ
-                        </Button>
-                      )}
+                    <div className="inline-flex items-center gap-1.5">
                       <Button
                         variant="secondary"
                         size="sm"
@@ -180,6 +187,35 @@ export const ManagedWarehousesTable: React.FC<Props> = ({
                         busy={busyId === w.id}
                         onToggle={onToggleMaintenance}
                       />
+                      <DropdownMenu>
+                        <DropdownMenu.Trigger
+                          render={
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              shape="square"
+                              icon={<DotsThree weight="bold" className="w-4 h-4" />}
+                              aria-label={`Thao tác kho ${w.code}`}
+                              title={`Thao tác kho ${w.code}`}
+                            />
+                          }
+                        />
+                        <DropdownMenu.Content align="end" sideOffset={4}>
+                          <DropdownMenu.Item
+                            icon={isShelfWarehouse(w) ? Rows : Eye}
+                            onClick={() => onManageShelves?.(w)}
+                          >
+                            {isShelfWarehouse(w) ? 'Kệ & Sơ đồ' : 'Chi tiết kho'}
+                          </DropdownMenu.Item>
+                          <DropdownMenu.Item
+                            icon={MapPin}
+                            disabled={!hasValidCoordinates(w)}
+                            onClick={() => onViewMap(w)}
+                          >
+                            Xem trên bản đồ
+                          </DropdownMenu.Item>
+                        </DropdownMenu.Content>
+                      </DropdownMenu>
                     </div>
                   </Table.Cell>
                 </Table.Row>

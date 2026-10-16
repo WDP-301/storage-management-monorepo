@@ -303,7 +303,7 @@ export const FacilityManagerDashboard: React.FC = () => {
         onStatusFilterChange={setStatusFilter}
         busyId={busyId}
         onToggleMaintenance={toggleMaintenance}
-        onManageShelves={setManagingShelves}
+        onManageShelves={(w) => navigate(`/admin/warehouses/${w.id}`)}
         view={view}
         onViewChange={changeView}
         onViewMap={viewOnMap}
@@ -321,7 +321,7 @@ export const FacilityManagerDashboard: React.FC = () => {
                         size="sm"
                         variant="secondary"
                         icon={<Rows className="h-3.5 w-3.5" />}
-                        onClick={() => setManagingShelves(w)}
+                        onClick={() => navigate(`/admin/warehouses/${w.id}`)}
                       >
                         Kệ & Sơ đồ
                       </Button>

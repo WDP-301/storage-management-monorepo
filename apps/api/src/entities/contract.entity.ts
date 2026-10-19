@@ -21,6 +21,15 @@ export interface ContractDocument {
   size?: number;
 }
 
+/** An amenity of the warehouse as it was when the contract was made. */
+export interface ContractAmenity {
+  amenityId: string;
+  code: string;
+  name: string;
+  quantity: number;
+  note: string | null;
+}
+
 @Entity('contracts')
 // Partial unique index (kind='INITIAL' AND deleted_at IS NULL) — created by migration,
 // metadata kept sync-off so schema sync never tries to manage the WHERE clause.
@@ -68,6 +77,13 @@ export class Contract {
   /** Signed contract scans/photos already uploaded to the private bucket. */
   @Column({ type: 'jsonb', default: () => "'[]'" })
   documents: ContractDocument[];
+
+  /**
+   * Warehouse amenities copied when the contract was made and never updated afterwards.
+   * NULL = the contract predates amenity snapshots (unknown); [] = the warehouse had none.
+   */
+  @Column({ type: 'jsonb', nullable: true, name: 'amenities_snapshot' })
+  amenitiesSnapshot: ContractAmenity[] | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

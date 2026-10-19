@@ -1,4 +1,4 @@
-import type { Contract, ContractDocument } from '@entities/contract.entity';
+import type { Contract, ContractAmenity, ContractDocument } from '@entities/contract.entity';
 import type { Inspection } from '@entities/inspection.entity';
 import type { ContractKind, ContractStatus, StorageUnitKind } from '@storage/types';
 
@@ -54,6 +54,8 @@ export interface CustomerContractRecord {
   facility: CustomerContractFacility | null;
   /** Signed contract files (scans/photos); empty until staff upload them. */
   documents: ContractDocument[];
+  /** Equipment of the warehouse when the contract was made; null = not recorded. */
+  amenities: ContractAmenity[] | null;
   /** Handover receipt (PRE_HANDOVER inspection); finalized once the customer received the unit. */
   handover: CustomerInspectionSummary | null;
   /** Latest RETURN inspection — open while the customer waits to move out. */
@@ -117,6 +119,7 @@ export function toCustomerContractRecord(
         }
       : null,
     documents: contract.documents ?? [],
+    amenities: contract.amenitiesSnapshot ?? null,
     handover: inspections.handover ? toCustomerInspectionSummary(inspections.handover) : null,
     return: inspections.return ? toCustomerInspectionSummary(inspections.return) : null,
   };

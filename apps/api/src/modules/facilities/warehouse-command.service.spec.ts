@@ -2,6 +2,7 @@ import { Facility } from '@entities/facility.entity';
 import { ServiceTicket } from '@entities/service-ticket.entity';
 import { ShelfLayout } from '@entities/shelf-layout.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
+import { StorageUnitAmenity } from '@entities/storage-unit-amenity.entity';
 import { TourAppointment } from '@entities/tour-appointment.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { DomainException } from '@shared/exceptions/domain.exception';
@@ -55,6 +56,7 @@ describe('WarehouseCommandService', () => {
     update: jest.Mock;
     softDelete: jest.Mock;
     delete: jest.Mock;
+    insert: jest.Mock;
   };
   let query: jest.Mock;
   const lockCalls: string[] = [];
@@ -80,6 +82,7 @@ describe('WarehouseCommandService', () => {
       update: jest.fn().mockResolvedValue(undefined),
       softDelete: jest.fn().mockResolvedValue(undefined),
       delete: jest.fn().mockResolvedValue(undefined),
+      insert: jest.fn().mockResolvedValue(undefined),
     };
     stubWarehouse(buildFacility(), buildUnit());
     const units = { manager: { transaction: jest.fn((work) => work(manager)) } };
@@ -183,6 +186,93 @@ describe('WarehouseCommandService', () => {
         service.create({ ...createDto, latitude: 0, longitude: 0 }),
       ).rejects.toMatchObject({ status: 400 });
       expect(manager.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('amenities', () => {
+    const items = [{ amenityId: 'am-1', quantity: 2 }];
+    const catalog = (isActive = true) =>
+      manager.find.mockImplementation(async (entity: unknown) =>
+        entity === StorageUnitAmenity ? [] : [{ id: 'am-1', code: 'CCTV', isActive }],
+      );
+
+    it('stores the amenities of a new warehouse in the same transaction as the unit', async () => {
+      catalog();
+
+      await service.create({ ...createDto, amenities: items });
+
+      expect(manager.insert).toHaveBeenCalledWith(StorageUnitAmenity, [
+        { storageUnitId: 'wh-new', amenityId: 'am-1', quantity: 2, note: null },
+      ]);
+      expect(manager.save.mock.invocationCallOrder[0]).toBeLessThan(
+        manager.insert.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('leaves amenities alone when a create or update does not mention them', async () => {
+      await service.create(createDto);
+      await service.update('unit-1', { notes: 'x' });
+
+      expect(manager.delete).not.toHaveBeenCalledWith(StorageUnitAmenity, expect.anything());
+      expect(manager.insert).not.toHaveBeenCalled();
+    });
+
+    it('writes an amenities-only patch even though no unit column changes', async () => {
+      catalog();
+
+      await service.update('unit-1', { amenities: items });
+
+      expect(manager.update).not.toHaveBeenCalled();
+      expect(manager.delete).toHaveBeenCalledWith(StorageUnitAmenity, { storageUnitId: 'unit-1' });
+      expect(manager.insert).toHaveBeenCalled();
+    });
+
+    it('removes every amenity with an empty list', async () => {
+      await service.update('unit-1', { amenities: [] });
+
+      expect(manager.delete).toHaveBeenCalledWith(StorageUnitAmenity, { storageUnitId: 'unit-1' });
+      expect(manager.insert).not.toHaveBeenCalled();
+    });
+
+    it('edits the amenities of a RENTED warehouse', async () => {
+      catalog();
+      stubWarehouse(buildFacility(), buildUnit({ status: StorageUnitStatus.RENTED }));
+
+      await service.update('unit-1', { amenities: items });
+
+      expect(manager.insert).toHaveBeenCalled();
+    });
+
+    it('rejects null instead of clearing the amenities', async () => {
+      await expect(service.update('unit-1', { amenities: null as never })).rejects.toMatchObject({
+        status: 400,
+      });
+      expect(manager.delete).not.toHaveBeenCalled();
+    });
+
+    it('refuses amenities on a shelf, which inherits its building’s', async () => {
+      stubWarehouse(buildFacility(), buildUnit({ kind: StorageUnitKind.SHELF }));
+
+      await expect(service.update('unit-1', { amenities: items })).rejects.toMatchObject({
+        status: 400,
+        response: {
+          details: {
+            fields: [
+              expect.objectContaining({ field: 'amenities', code: 'isInheritedFromParent' }),
+            ],
+          },
+        },
+      });
+      expect(manager.insert).not.toHaveBeenCalled();
+    });
+
+    it('rejects a retired amenity that the warehouse does not carry yet', async () => {
+      catalog(false);
+
+      await expect(service.update('unit-1', { amenities: items })).rejects.toMatchObject({
+        status: 400,
+      });
+      expect(manager.insert).not.toHaveBeenCalled();
     });
   });
 

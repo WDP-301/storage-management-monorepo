@@ -1,4 +1,5 @@
 import type { LayoutElementType, StorageUnitKind } from '@storage/types';
+import type { WarehouseAmenity, WarehouseAmenityInput } from './amenity';
 
 export type { LayoutElementType, StorageUnitKind };
 
@@ -78,6 +79,8 @@ export interface Warehouse {
   notes: string | null;
   /** Display order; the first one is the cover. */
   images: WarehouseImage[];
+  /** Optional so older fixtures without amenities still type-check. */
+  amenities?: WarehouseAmenity[];
   createdAt: string;
   updatedAt: string;
 }
@@ -124,6 +127,8 @@ export interface WarehouseInput {
   status?: WarehouseIdleStatus;
   /** The full photo list; replaces the stored one. */
   images?: Omit<WarehouseImage, 'url'>[];
+  /** The full amenity list; omitted leaves it unchanged, `[]` clears it. */
+  amenities?: WarehouseAmenityInput[];
 }
 
 export interface ShelfCreateInput {

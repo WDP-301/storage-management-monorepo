@@ -1,5 +1,6 @@
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
+import { HAS_ALL_AMENITIES_SQL, loadUnitAmenities } from '@modules/amenities/unit-amenities';
 import { activeFacilityIds } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { SettingsService } from '@modules/settings/settings.service';
@@ -190,6 +191,11 @@ export class WarehouseQueryService {
       .filter((unit) => unit.kind === StorageUnitKind.SHELF_WAREHOUSE)
       .map((unit) => unit.id);
     const summaries = await loadShelfSummaries(this.units.manager, parentIds, filter);
+    // Shelves show no amenities of their own, so they are not worth a lookup.
+    const amenities = await loadUnitAmenities(
+      this.units.manager,
+      units.filter((unit) => unit.kind !== StorageUnitKind.SHELF).map((unit) => unit.id),
+    );
     return Promise.all(
       units.map(async (unit) =>
         toWarehouseView(
@@ -197,6 +203,7 @@ export class WarehouseQueryService {
           await this.settings.getDepositMonthsFor(unit),
           await this.signImages(unit),
           summaries.get(unit.id) ?? null,
+          amenities.get(unit.id) ?? [],
         ),
       ),
     );
@@ -232,5 +239,11 @@ function applyFilters(
     qb.andWhere('unit.provinceCode = :provinceCode', { provinceCode: query.provinceCode });
   }
   if (query.wardCode) qb.andWhere('unit.wardCode = :wardCode', { wardCode: query.wardCode });
+  if (query.amenityIds?.length) {
+    qb.andWhere(HAS_ALL_AMENITIES_SQL, {
+      amenityIds: query.amenityIds,
+      amenityCount: query.amenityIds.length,
+    });
+  }
   return qb;
 }

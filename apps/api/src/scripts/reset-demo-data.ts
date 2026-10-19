@@ -8,6 +8,7 @@
  *   add --wipe-users to also delete every account, session and audit log before seeding
  * Facility-scoped demo roles (manager@, staff@) are granted per facility, see DEMO_ACCOUNTS.
  * Users, sessions, customer profiles, settings, provinces/wards and ticket types survive.
+ * The amenity catalog is business data like the warehouses: it is wiped and seeded again.
  * Demo accounts include an ADMIN, so the committed DEMO_PASSWORD is only used on a local
  * database; any other host needs DEMO_PASSWORD set in the environment, otherwise anyone who
  * has read this repository could sign in as admin. Roles are only granted to demo accounts the
@@ -17,6 +18,7 @@ import type { EntityManager } from 'typeorm';
 import { AppDataSource } from '../data-source';
 import { seed } from './demo-seed';
 import { DEMO_ACCOUNTS, DEMO_FACILITIES, DEMO_PASSWORD, DEMO_WAREHOUSES } from './demo-seed-data';
+import { DEMO_SHELF_WAREHOUSE } from './demo-shelf-warehouse-data';
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -57,7 +59,9 @@ const WIPE_STEPS: { table: string; sql: string }[] = [
     table: 'user_role_assignments',
     sql: 'DELETE FROM "user_role_assignments" WHERE "facility_id" IS NOT NULL',
   },
+  { table: 'storage_unit_amenities', sql: 'DELETE FROM "storage_unit_amenities"' },
   { table: 'storage_units', sql: 'DELETE FROM "storage_units"' },
+  { table: 'amenities', sql: 'DELETE FROM "amenities"' },
   { table: 'facilities', sql: 'DELETE FROM "facilities"' },
   // Only present before the standalone-warehouse migration ran.
   { table: 'unit_types', sql: 'DELETE FROM "unit_types"' },
@@ -136,7 +140,8 @@ async function main(): Promise<void> {
     await AppDataSource.transaction((manager) => seed(manager, demoPassword));
     console.log(
       `db:reset-demo: wiped business data${wipeUsers ? ' and all users' : ''}, applied ${applied.length} migration(s), seeded ` +
-        `${DEMO_FACILITIES.length} facilities, ${DEMO_WAREHOUSES.length} warehouses and ${DEMO_ACCOUNTS.length} demo accounts ` +
+        `${DEMO_FACILITIES.length} facilities, ${DEMO_WAREHOUSES.length} warehouses, shelf warehouse ` +
+        `${DEMO_SHELF_WAREHOUSE.code} and ${DEMO_ACCOUNTS.length} demo accounts ` +
         `(${demoPassword === DEMO_PASSWORD ? `password ${DEMO_PASSWORD}` : 'password from DEMO_PASSWORD'} for new accounts).`,
     );
   } finally {

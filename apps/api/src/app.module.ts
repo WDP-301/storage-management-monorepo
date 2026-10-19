@@ -8,6 +8,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { validateEnv } from './config/env.validation';
 import { AccessModule } from './modules/access/access.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { AmenitiesModule } from './modules/amenities/amenities.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
 import { ChangeRequestsModule } from './modules/change-requests/change-requests.module';
@@ -62,6 +63,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
     AccessModule,
     AdminModule,
     FacilitiesModule,
+    AmenitiesModule,
     BookingsModule,
     ChangeRequestsModule,
     ContractsModule,

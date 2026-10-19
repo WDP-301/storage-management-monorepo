@@ -1,13 +1,17 @@
 import { Button, Dialog, Input, InputArea, Select, Text } from '@cloudflare/kumo';
 import { X } from '@phosphor-icons/react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { AmenitiesApi } from '../../lib/amenities-api';
 import { type FacilityRecord, LocationsApi, WarehousesApi } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
+import type { Amenity } from '../../types/amenity';
 import type { Province, Ward, Warehouse, WarehouseCreatableKind } from '../../types/warehouse';
 import { WarehouseAddressPicker } from './WarehouseAddressPicker';
+import { WarehouseAmenitiesField } from './WarehouseAmenitiesField';
 import { WarehouseFacilityField } from './WarehouseFacilityField';
 import { WarehouseImagesField } from './WarehouseImagesField';
 import { WarehouseLocationMap } from './WarehouseLocationMap';
+import type { AmenityCatalogStatus } from './warehouse-amenities';
 import {
   describeWarehouseError,
   formatArea,
@@ -70,6 +74,8 @@ export const WarehouseFormDialog: React.FC<Props> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [pinMoved, setPinMoved] = useState(false);
   const [imagesUploading, setImagesUploading] = useState(false);
+  const [amenityCatalog, setAmenityCatalog] = useState<Amenity[]>([]);
+  const [catalogStatus, setCatalogStatus] = useState<AmenityCatalogStatus>('loading');
 
   const isEdit = warehouse !== null;
   const frozen = isEdit && !isIdleStatus(warehouse.status);
@@ -87,6 +93,24 @@ export const WarehouseFormDialog: React.FC<Props> = ({
       .then(setProvinces)
       .catch(() => toast.error('Lỗi tải dữ liệu', 'Không tải được danh sách tỉnh/thành.'));
   }, [open, warehouse, defaultFacilityId, toast]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    // Drop the previous session's catalog so stale entries never drive the "retired" badges.
+    setAmenityCatalog([]);
+    setCatalogStatus('loading');
+    AmenitiesApi.listActive()
+      .then((list) => {
+        if (cancelled) return;
+        setAmenityCatalog(list);
+        setCatalogStatus('ready');
+      })
+      .catch(() => !cancelled && setCatalogStatus('failed'));
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open || !form.provinceCode) {
@@ -177,8 +201,8 @@ export const WarehouseFormDialog: React.FC<Props> = ({
           {frozen && (
             <div className="p-3 bg-kumo-warning-tint text-kumo-warning rounded-lg text-xs">
               Kho đang {WAREHOUSE_STATUS_LABEL[warehouse.status].label.toLowerCase()} nên không thể
-              đổi chi nhánh, mã kho, kích thước hay trạng thái. Giá, đặt cọc, địa chỉ và ghi chú vẫn
-              chỉnh được.
+              đổi chi nhánh, mã kho, kích thước hay trạng thái. Giá, đặt cọc, địa chỉ, ghi chú và
+              tiện ích vẫn chỉnh được.
             </div>
           )}
 
@@ -378,6 +402,13 @@ export const WarehouseFormDialog: React.FC<Props> = ({
             onChange={(images) => set('images', images)}
             onUploadingChange={setImagesUploading}
             onError={(message) => toast.error('Lỗi ảnh kho', message)}
+          />
+
+          <WarehouseAmenitiesField
+            rows={form.amenities}
+            catalog={amenityCatalog}
+            catalogStatus={catalogStatus}
+            onChange={(amenities) => set('amenities', amenities)}
           />
 
           <div className="flex items-center justify-between gap-2.5 pt-3 border-t border-kumo-line">

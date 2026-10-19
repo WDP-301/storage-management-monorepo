@@ -45,6 +45,7 @@ describe('ContractsService', () => {
     create: jest.Mock;
     save: jest.Mock;
     update: jest.Mock;
+    query: jest.Mock;
   };
   let repo: { find: jest.Mock; findOne: jest.Mock; update: jest.Mock; softDelete: jest.Mock };
 
@@ -76,6 +77,7 @@ describe('ContractsService', () => {
       save: jest.fn(async (_entity, data) => ({ id: 'contract-1', ...data })),
       findOneOrFail: jest.fn(async (entity) => (entity === Contract ? { id: 'contract-1' } : null)),
       update: jest.fn(async () => ({ affected: 1 })),
+      query: jest.fn().mockResolvedValue([]),
     };
     repo = { find: jest.fn(), findOne: jest.fn(), update: jest.fn(), softDelete: jest.fn() };
     service = new ContractsService(
@@ -193,6 +195,20 @@ describe('ContractsService', () => {
       Booking,
       expect.objectContaining({ lock: { mode: 'pessimistic_write' } }),
     );
+  });
+
+  it('freezes the unit amenities into the new contract, [] when it has none', async () => {
+    const result = await service.create({ bookingItemId: item.id });
+    expect(manager.query).toHaveBeenCalledWith(expect.any(String), ['unit-1']);
+    expect(result.amenitiesSnapshot).toEqual([]);
+
+    manager.query.mockResolvedValue([
+      { amenityId: 'a-1', code: 'CCTV', name: 'CCTV', quantity: 6, note: 'gate' },
+    ]);
+    const withAmenities = await service.create({ bookingItemId: item.id });
+    expect(withAmenities.amenitiesSnapshot).toEqual([
+      { amenityId: 'a-1', code: 'CCTV', name: 'CCTV', quantity: 6, note: 'gate' },
+    ]);
   });
 
   it('locks the unit before creating the contract', async () => {

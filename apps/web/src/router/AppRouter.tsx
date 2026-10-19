@@ -13,6 +13,7 @@ import {
 } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { UserManagementPage } from '../features/admin/UserManagementPage';
+import { AmenityCatalogPage } from '../features/amenities/AmenityCatalogPage';
 import { AuthPage } from '../features/auth/AuthPage';
 import { ContractsPage } from '../features/contracts/ContractsPage';
 import { FacilityManagementPage } from '../features/facilities/FacilityManagementPage';
@@ -93,6 +94,7 @@ export const AppRouter: React.FC = () => {
             {/* Role-specific dedicated interfaces with guards */}
             <Route element={<RoleRoute allowedRoles={[UserRole.ADMIN]} />}>
               <Route path="/admin/users" element={<UserManagementPage />} />
+              <Route path="/admin/amenities" element={<AmenityCatalogPage />} />
               <Route path="/admin/settings" element={<SystemSettingsPage />} />
             </Route>
 

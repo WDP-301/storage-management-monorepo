@@ -89,6 +89,7 @@ describe('BookingsService.handlePaymentReceived', () => {
     update: jest.Mock;
     count: jest.Mock;
     save: jest.Mock;
+    query: jest.Mock;
     getRepository: jest.Mock;
   };
   let paymentRepo: { exists: jest.Mock; sum: jest.Mock; save: jest.Mock };
@@ -112,6 +113,7 @@ describe('BookingsService.handlePaymentReceived', () => {
       update: jest.fn(),
       count: jest.fn(),
       save: jest.fn(),
+      query: jest.fn().mockResolvedValue([]),
       getRepository: jest.fn(() => paymentRepo),
     };
     dataSource = {
@@ -166,11 +168,18 @@ describe('BookingsService.handlePaymentReceived', () => {
     em.save.mockImplementation(async (entity, data) =>
       entity === Contract ? { id: `c-${data.bookingItemId}`, ...data } : data,
     );
+    const amenity = { amenityId: 'a-1', code: 'CCTV', name: 'CCTV', quantity: '2', note: null };
+    em.query.mockImplementation(async (_sql: string, [unitId]: [string]) =>
+      unitId === 'unit-1' ? [amenity] : [],
+    );
 
     await service.handlePaymentReceived(buildEvent());
 
     const contracts = em.save.mock.calls.filter(([entity]) => entity === Contract);
     expect(contracts).toHaveLength(2);
+    // Each contract freezes its own unit's amenities; a unit without any gets [] (not null).
+    expect(contracts[0][1].amenitiesSnapshot).toEqual([{ ...amenity, quantity: 2 }]);
+    expect(contracts[1][1].amenitiesSnapshot).toEqual([]);
     expect(contracts[0][1]).toEqual(
       expect.objectContaining({
         bookingItemId: 'item-1',

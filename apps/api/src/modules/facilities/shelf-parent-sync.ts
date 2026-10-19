@@ -20,8 +20,8 @@ export const LOCATION_FIELDS = [
   'longitude',
 ] as const;
 
-/** A shelf cannot move or be re-photographed on its own: location and photos belong to the parent. */
-const SHELF_READONLY_FIELDS = [...LOCATION_FIELDS, 'images'] as const;
+/** A shelf cannot move, be re-photographed or re-equipped on its own: location, photos and amenities belong to the parent. */
+const SHELF_READONLY_FIELDS = [...LOCATION_FIELDS, 'images', 'amenities'] as const;
 
 /** Shelf warehouses are priced per shelf, so these have no meaning on the building. */
 const PARENT_FORBIDDEN_FIELDS = ['monthlyPrice', 'depositMonths'] as const;

@@ -1,6 +1,8 @@
+import { Amenity } from '@entities/amenity.entity';
 import { Facility } from '@entities/facility.entity';
 import { ShelfLayout } from '@entities/shelf-layout.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
+import { StorageUnitAmenity } from '@entities/storage-unit-amenity.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { AuthModule } from '@modules/auth/auth.module';
 import { SettingsModule } from '@modules/settings/settings.module';
@@ -20,7 +22,14 @@ import { WarehousesController } from './warehouses.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Facility, ShelfLayout, StorageUnit, UserRoleAssignment]),
+    TypeOrmModule.forFeature([
+      Amenity,
+      Facility,
+      ShelfLayout,
+      StorageUnit,
+      StorageUnitAmenity,
+      UserRoleAssignment,
+    ]),
     AuthModule, // provides SessionGuard and RolesGuard for controllers
     SettingsModule,
     UploadModule, // presigns warehouse photo links

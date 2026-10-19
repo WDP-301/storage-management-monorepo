@@ -39,7 +39,8 @@ type Props = {
 export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHold }: Props) {
   const router = useRouter();
   const { selected, toggle: toggleWarehouse, clear: clearSelection } = useBrowseSelection();
-  const { criteria, setCriteria, provinceOptions, wardOptions } = useBrowseCriteria();
+  const { criteria, setCriteria, provinceOptions, wardOptions, amenityOptions, reloadAmenities } =
+    useBrowseCriteria();
   const { warehouses, total, hasMore, isLoading, isLoadingMore, error, loadMore, refetch } =
     useWarehouses(criteria);
   const [view, setView] = useState<BrowseView>('list');
@@ -139,7 +140,15 @@ export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHol
     : (selectedProvince?.name ??
       (provinceOptions.length === 1 ? provinceOptions[0].name : 'Tất cả kho'));
   const provinceCount = selectedProvince?.count ?? provinceOptions.reduce((n, o) => n + o.count, 0);
-  const openFilters = () => filtersSheetRef.current?.present();
+  const openFilters = () => {
+    reloadAmenities();
+    filtersSheetRef.current?.present();
+  };
+  const refresh = () => {
+    reloadAmenities();
+    if (nearbySearch) nearby.refresh();
+    else refetch();
+  };
 
   const header = (
     <View className="bg-surface">
@@ -236,10 +245,7 @@ export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHol
           className="flex-1"
           contentContainerStyle={{ paddingBottom: contentBottomPadding }}
           refreshControl={
-            <RefreshControl
-              refreshing={nearbySearch ? false : isRefreshing}
-              onRefresh={nearbySearch ? nearby.refresh : refetch}
-            />
+            <RefreshControl refreshing={nearbySearch ? false : isRefreshing} onRefresh={refresh} />
           }
           showsVerticalScrollIndicator={false}
         >
@@ -305,6 +311,7 @@ export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHol
       ) : null}
 
       <BrowseFiltersSheet
+        amenityOptions={amenityOptions}
         criteria={criteria}
         provinceOptions={provinceOptions}
         resultCount={nearbyWarehouses?.length ?? total}

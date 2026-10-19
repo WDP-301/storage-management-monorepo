@@ -170,7 +170,22 @@ describe('ContractQueryService', () => {
       return: null,
       terms: { note: 'x' },
       documents: [],
+      amenities: null,
     });
+  });
+
+  it('returns the frozen amenities as stored, and null for contracts without a snapshot', async () => {
+    const amenities = [{ amenityId: 'a-1', code: 'CCTV', name: 'CCTV', quantity: 2, note: null }];
+    qb.getManyAndCount.mockResolvedValueOnce([
+      [
+        contract({ amenitiesSnapshot: amenities }),
+        contract({ id: 'contract-2', amenitiesSnapshot: [] }),
+      ],
+      2,
+    ]);
+    const { contracts } = await service.list(ADMIN, {});
+    expect(contracts[0].amenities).toEqual(amenities);
+    expect(contracts[1].amenities).toEqual([]);
   });
 
   it('shows a contract to its facility manager but not to managers of other facilities', async () => {

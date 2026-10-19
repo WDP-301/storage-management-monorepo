@@ -46,6 +46,7 @@ const FIELD_LABEL: Record<string, string> = {
   from: 'số thứ tự bắt đầu',
   to: 'số thứ tự kết thúc',
   pad: 'độ dài số thứ tự',
+  amenities: 'tiện ích',
 };
 
 const CONSTRAINT_REASON: Record<string, string> = {
@@ -66,6 +67,8 @@ const CONSTRAINT_REASON: Record<string, string> = {
   isInheritedFromParent: 'kế thừa từ kho kệ cha, chỉ chỉnh sửa ở kho kệ',
   isGreaterOrEqualToFrom: 'phải lớn hơn hoặc bằng số thứ tự bắt đầu',
   maxShelves: 'vượt quá giới hạn tối đa 200 kệ mỗi lần tạo hàng loạt',
+  notFound: 'có mục không tồn tại',
+  inactive: 'có mục đã ngừng dùng, hãy bỏ mục đó khỏi danh sách',
   matches: 'chỉ được chứa chữ cái và chữ số (tối đa 10 ký tự)',
 };
 

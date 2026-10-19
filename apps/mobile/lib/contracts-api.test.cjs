@@ -56,6 +56,36 @@ test('normaliseContract defaults documents to empty when the API omits them', ()
   assert.deepEqual(normaliseContract({ ...baseContract, documents: null }).documents, []);
 });
 
+test('normaliseContract reports amenities as null when the API omits or nulls them', () => {
+  const { normaliseContract } = load('contracts-api.ts', async () => null);
+  assert.equal(normaliseContract(baseContract).amenities, null);
+  assert.equal(normaliseContract({ ...baseContract, amenities: null }).amenities, null);
+});
+
+test('normaliseContract keeps an empty amenity snapshot distinct from null', () => {
+  const { normaliseContract } = load('contracts-api.ts', async () => null);
+  assert.deepEqual(normaliseContract({ ...baseContract, amenities: [] }).amenities, []);
+});
+
+test('normaliseContract keeps valid amenities in order and drops malformed entries', () => {
+  const { normaliseContract } = load('contracts-api.ts', async () => null);
+  const wifi = { amenityId: 'a1', code: 'WIFI', name: 'Wifi', quantity: 1, note: null };
+  const camera = { amenityId: 'a2', code: 'CCTV', name: 'Camera', quantity: 4, note: 'Cổng chính' };
+  const contract = normaliseContract({
+    ...baseContract,
+    amenities: [
+      wifi,
+      null,
+      'Wifi',
+      { amenityId: 'a3', name: 'No quantity' },
+      { amenityId: 'a4', name: 'Bad quantity', quantity: Number.NaN },
+      { name: 'No id', quantity: 1 },
+      camera,
+    ],
+  });
+  assert.deepEqual(contract.amenities, [wifi, camera]);
+});
+
 test('ContractDocumentsApi.replace PUTs the full list and returns the saved files', async () => {
   const calls = [];
   const file = { fileKey: 'uploads/a.pdf', name: 'a.pdf', mimeType: 'application/pdf' };

@@ -34,6 +34,24 @@ export type ShelfSummary = {
   maxVolumeM3: number | null;
 };
 
+/** Public amenity catalog entry (`GET /amenities`); only active entries are returned. */
+export type Amenity = {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+};
+
+/** Equipment included in the rent. Retired catalog entries still appear on warehouses that carry them. */
+export type WarehouseAmenity = {
+  amenityId: string;
+  code: string;
+  name: string;
+  quantity: number;
+  note: string | null;
+};
+
 /** A warehouse or shelf. Only SELF_STORAGE and SHELF are directly rentable. */
 export type Warehouse = {
   id: string;
@@ -63,6 +81,8 @@ export type Warehouse = {
   notes: string | null;
   /** Display order; the first one is the cover. */
   images: WarehouseImage[];
+  /** Absent when the API predates amenities; always empty for shelves. */
+  amenities?: WarehouseAmenity[];
 };
 
 export type ShelfLayout = {

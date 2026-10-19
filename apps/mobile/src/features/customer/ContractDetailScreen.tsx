@@ -5,6 +5,7 @@ import { useRef } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import type { ApiContract } from '../../types/contract-api';
+import { ContractAmenitiesSection } from './contract-amenities-section';
 import {
   contractUnitSummary,
   contractWarehouseName,
@@ -115,6 +116,7 @@ function ContractDetail({
       <ContractSection contract={contract}>
         <ContractDocumentsList contract={contract} />
       </ContractSection>
+      <ContractAmenitiesSection contract={contract} />
       <ShelfAccessCard contract={contract} />
       <HandoverSection handover={contract.handover} />
       {showReturnSection ? <ReturnSection inspection={contract.return} /> : null}

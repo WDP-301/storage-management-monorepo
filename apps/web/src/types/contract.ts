@@ -1,4 +1,4 @@
-import type { ContractKind, ContractStatus, PaginationMeta } from '@storage/types';
+import type { ContractKind, ContractStatus, PaginationMeta, StorageUnitKind } from '@storage/types';
 
 export type { ContractKind, ContractStatus };
 
@@ -19,6 +19,15 @@ export interface ContractDocument {
   size?: number;
 }
 
+/** An amenity copied into the contract when it was created; later warehouse edits never change it. */
+export interface ContractAmenity {
+  amenityId: string;
+  code: string;
+  name: string;
+  quantity: number;
+  note: string | null;
+}
+
 /** Back-office contract row from GET /contracts and GET /contracts/:id. */
 export interface ContractRecord {
   id: string;
@@ -32,12 +41,20 @@ export interface ContractRecord {
   /** Decimal columns arrive as strings. */
   monthly_price: number | string;
   deposit: number | string;
-  unit: { id: string; code: string; name: string; address_line: string } | null;
+  unit: {
+    id: string;
+    code: string;
+    name: string;
+    address_line: string;
+    kind?: StorageUnitKind;
+  } | null;
   facility: { id: string; code: string; name: string } | null;
   customer: { id: string; full_name: string | null; email: string | null; phone: string | null };
   handover: ContractInspectionSummary | null;
   return: ContractInspectionSummary | null;
   documents: ContractDocument[];
+  /** null/absent: contract predates amenity recording; []: the warehouse had none. */
+  amenities?: ContractAmenity[] | null;
   created_at: string;
 }
 

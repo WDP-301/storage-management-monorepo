@@ -1,3 +1,4 @@
+import { MAX_UNIT_AMENITIES } from '@modules/amenities/unit-amenities';
 import { EvidenceFileDto } from '@modules/inspection/dto/inspection-evidence.dto';
 import { ApiProperty, ApiPropertyOptional, OmitType, PartialType } from '@nestjs/swagger';
 import { StorageUnitKind, StorageUnitStatus } from '@storage/types';
@@ -24,6 +25,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { IDLE_UNIT_STATUSES } from '../unit-status';
+import { MAX_AMENITY_FILTER, toIdList, WarehouseAmenityDto } from './warehouse-amenity.dto';
 
 /** Longest side accepted, in metres — keeps width × length × height inside numeric(14,2). */
 export const MAX_SIDE_M = 1000;
@@ -173,6 +175,21 @@ export class CreateWarehouseDto {
   @ValidateNested({ each: true })
   @Type(() => WarehouseImageDto)
   images?: WarehouseImageDto[];
+
+  @ApiPropertyOptional({
+    type: [WarehouseAmenityDto],
+    maxItems: MAX_UNIT_AMENITIES,
+    description:
+      'The full amenity list; replaces the old one, [] removes all, omitted leaves it as is. ' +
+      'Not accepted on a shelf: shelves carry none, read the shelf warehouse’s list instead.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_UNIT_AMENITIES)
+  @ArrayUnique((amenity: WarehouseAmenityDto) => amenity.amenityId)
+  @ValidateNested({ each: true })
+  @Type(() => WarehouseAmenityDto)
+  amenities?: WarehouseAmenityDto[];
 }
 
 /** The kind is fixed at creation: shelves and contracts depend on it. */
@@ -277,6 +294,18 @@ export class WarehouseListQueryDto {
   @IsBoolean()
   @IsOptional()
   includeShelfWarehouses?: boolean;
+
+  @ApiPropertyOptional({
+    type: [String],
+    maxItems: MAX_AMENITY_FILTER,
+    description: 'Comma-separated or repeated amenity ids; a warehouse must have all of them',
+  })
+  @Transform(toIdList)
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_AMENITY_FILTER)
+  @IsUUID(undefined, { each: true })
+  amenityIds?: string[];
 
   @ApiPropertyOptional({ default: 1, minimum: 1 })
   @Type(() => Number)

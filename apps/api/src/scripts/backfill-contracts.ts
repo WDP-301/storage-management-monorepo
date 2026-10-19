@@ -85,6 +85,9 @@ async function main(): Promise<void> {
           customer,
           status: ContractStatus.DRAFT,
           effectiveAt: item.requestedStartAt,
+          // The rental began in the past; today's amenities would not prove what the warehouse
+          // offered then, so leave the snapshot as "not recorded".
+          snapshotAmenities: false,
         });
         await em.update(
           StorageUnit,

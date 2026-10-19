@@ -1,4 +1,5 @@
 import { StorageUnit } from '@entities/storage-unit.entity';
+import { replaceUnitAmenities } from '@modules/amenities/unit-amenities';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -64,6 +65,7 @@ export class WarehouseCommandService {
     const id = await this.units.manager.transaction(async (manager) => {
       const address = await resolveAddressCodes(manager, dto.wardCode, dto.provinceCode);
       assertFacilityActive(await lockFacility(manager, dto.facilityId));
+      let unitId: string;
       try {
         const unit = await manager.save(
           manager.create(StorageUnit, {
@@ -75,16 +77,18 @@ export class WarehouseCommandService {
             status: dto.status ?? StorageUnitStatus.AVAILABLE,
           }),
         );
-        return unit.id;
+        unitId = unit.id;
       } catch (err) {
         handleDbError(err);
       }
+      if (dto.amenities) await replaceUnitAmenities(manager, unitId, dto.amenities);
+      return unitId;
     });
     return this.query.findOne(id);
   }
 
   /**
-   * Price, deposit, address, notes and photos stay editable — bookings and contracts keep their own
+   * Price, deposit, address, notes, photos and amenities stay editable — bookings and contracts keep their own
    * snapshots. Code, dimensions, status and facility are frozen while a customer is attached;
    * moving to another facility also requires an active target facility and no open tour or service ticket.
    * A shelf warehouse moves with all its shelves (refused while any is occupied); a shelf's own
@@ -129,6 +133,9 @@ export class WarehouseCommandService {
       } catch (err) {
         handleDbError(err);
       }
+      // Outside the try: amenity problems are field errors, not database conflicts. The unit lock
+      // taken above serialises concurrent edits of this warehouse.
+      if (dto.amenities !== undefined) await replaceUnitAmenities(manager, unit.id, dto.amenities);
     });
     return this.query.findOne(id);
   }

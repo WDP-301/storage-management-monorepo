@@ -10,6 +10,7 @@ import type { InspectionRecord } from '../../types/inspection';
 import { InspectionDetailDialog } from '../inspections/InspectionDetailDialog';
 import { formatDateTime, formatDay } from '../inspections/inspection-display';
 import { formatVnd } from '../warehouses/warehouse-display';
+import { ContractAmenitiesSection } from './ContractAmenitiesSection';
 import { ContractDocumentsPanel } from './ContractDocumentsPanel';
 import { ContractEditDialog } from './ContractEditDialog';
 import { ContractStaffSection } from './ContractStaffSection';
@@ -170,6 +171,11 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
             <Fact label="Mã đầy đủ" value={contract.contract_no} mono />
             <Fact label="Tạo lúc" value={formatDateTime(contract.created_at)} />
           </dl>
+
+          <ContractAmenitiesSection
+            amenities={contract.amenities ?? null}
+            unitKind={contract.unit?.kind}
+          />
 
           <ContractStaffSection
             contract={contract}

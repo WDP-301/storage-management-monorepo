@@ -52,6 +52,7 @@ import {
   validateShelfForm,
   withNextBulkRange,
 } from './shelf-form';
+import { WarehouseAmenitiesCard } from './WarehouseAmenitiesCard';
 import { WarehouseFormDialog } from './WarehouseFormDialog';
 import { WarehouseOverviewMap } from './WarehouseOverviewMap';
 import {
@@ -578,6 +579,8 @@ export const WarehouseDetailPage: React.FC = () => {
           </div>
         </div>
       </LayerCard>
+
+      <WarehouseAmenitiesCard amenities={warehouse.amenities} />
 
       {/* Shelf Warehouse Tabs Content */}
       {isShelfWarehouse(warehouse) ? (

@@ -45,11 +45,18 @@ export const AmenityFormDialog: React.FC<Props> = ({ open, amenity, onClose, onS
       toast.warning('Thông tin chưa hợp lệ', problem);
       return;
     }
+    // Nothing edited: skip the request instead of sending an empty PATCH.
+    const patch = amenity ? buildAmenityPatch(form, amenity) : null;
+    if (amenity && patch && Object.keys(patch).length === 0) {
+      onClose();
+      return;
+    }
     setIsSaving(true);
     try {
-      const saved = amenity
-        ? await AmenitiesApi.update(amenity.id, buildAmenityPatch(form, amenity))
-        : await AmenitiesApi.create(buildAmenityPayload(form));
+      const saved =
+        amenity && patch
+          ? await AmenitiesApi.update(amenity.id, patch)
+          : await AmenitiesApi.create(buildAmenityPayload(form));
       onSaved(saved, !isEdit);
     } catch (err) {
       toast.error(

@@ -2,19 +2,20 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  Index,
   PrimaryGeneratedColumn,
+  Unique,
   UpdateDateColumn,
 } from 'typeorm';
 
 /**
  * An item a warehouse can be equipped with (air conditioning, shelving, CCTV…), managed by admins.
  * `code` never changes once created: it is the stable handle for seeds and integrations, while
- * `name` is free to be reworded. Retiring an amenity (`isActive = false`) hides it from pickers and
- * filters but keeps it on the warehouses already equipped with it.
+ * `name` is free to be reworded. Retiring an amenity (`isActive = false`) drops it from the public
+ * catalog (pickers, filter choices) but keeps it on the warehouses already equipped with it.
  */
 @Entity('amenities')
-@Index('UQ_amenities_code', ['code'], { unique: true })
+// A unique constraint, not an index, to match the migration so schema diffs stay empty.
+@Unique('UQ_amenities_code', ['code'])
 export class Amenity {
   @PrimaryGeneratedColumn('uuid', { primaryKeyConstraintName: 'PK_amenities' })
   id: string;

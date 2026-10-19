@@ -9,12 +9,10 @@ const catalog = [
 
 function fakeManager(attachedIds: string[] = []) {
   return {
-    find: jest.fn(async (entity: unknown, options: { where: { id?: unknown } }) =>
-      entity === Amenity
-        ? catalog.filter((amenity) =>
-            (options.where.id as { _value: string[] })._value.includes(amenity.id),
-          )
-        : attachedIds.map((amenityId) => ({ amenityId })),
+    // Returns the whole catalog for any id lookup: ids the caller asked for but that are absent
+    // still surface as unknown, without depending on how TypeORM represents `In()`.
+    find: jest.fn(async (entity: unknown) =>
+      entity === Amenity ? catalog : attachedIds.map((amenityId) => ({ amenityId })),
     ),
     delete: jest.fn().mockResolvedValue(undefined),
     insert: jest.fn().mockResolvedValue(undefined),

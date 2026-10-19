@@ -1,6 +1,12 @@
 import { Badge, Button, Empty, LayerCard, Table, Text } from '@cloudflare/kumo';
-import { ArrowsClockwise, ListChecks, PencilSimple, Plus } from '@phosphor-icons/react';
-import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ArrowsClockwise,
+  ListChecks,
+  PencilSimple,
+  Plus,
+  WarningCircle,
+} from '@phosphor-icons/react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AmenitiesApi } from '../../lib/amenities-api';
 import { useAppToast } from '../../lib/toast';
 import type { Amenity } from '../../types/amenity';
@@ -8,29 +14,44 @@ import { AmenityDeactivateDialog } from './AmenityDeactivateDialog';
 import { AmenityFormDialog } from './AmenityFormDialog';
 import { describeAmenityError } from './amenity-form';
 
+type LoadStatus = 'loading' | 'ready' | 'failed';
+
 export const AmenityCatalogPage: React.FC = () => {
   const toast = useAppToast();
   const [amenities, setAmenities] = useState<Amenity[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [status, setStatus] = useState<LoadStatus>('loading');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Amenity | null>(null);
   const [deactivating, setDeactivating] = useState<Amenity | null>(null);
 
+  const latestRequest = useRef(0);
+
   const load = useCallback(async () => {
-    setIsLoading(true);
+    // Only the newest request may write state, so a slow older response cannot overwrite fresher data.
+    const requestId = ++latestRequest.current;
+    setStatus('loading');
     try {
-      setAmenities(await AmenitiesApi.listAdmin());
+      const result = await AmenitiesApi.listAdmin();
+      if (requestId !== latestRequest.current) return;
+      setAmenities(result);
+      setStatus('ready');
     } catch (err) {
+      if (requestId !== latestRequest.current) return;
+      setStatus('failed');
       toast.error('Lỗi tải dữ liệu', describeAmenityError(err, 'Không tải được tiện ích.'));
-    } finally {
-      setIsLoading(false);
     }
   }, [toast]);
 
   useEffect(() => {
     load();
+    // Invalidate any in-flight request on unmount.
+    return () => {
+      latestRequest.current += 1;
+    };
   }, [load]);
+
+  const isLoading = status === 'loading';
 
   const openForm = (amenity: Amenity | null) => {
     setEditing(amenity);
@@ -78,6 +99,16 @@ export const AmenityCatalogPage: React.FC = () => {
         </div>
       </div>
 
+      {status === 'failed' && (
+        <div
+          role="alert"
+          className="p-3.5 bg-kumo-danger-tint text-kumo-danger rounded-lg text-sm flex items-center gap-2.5"
+        >
+          <WarningCircle className="w-4 h-4 shrink-0" />
+          Không tải được danh sách tiện ích. Hãy bấm "Làm mới" để thử lại.
+        </div>
+      )}
+
       <LayerCard className="overflow-x-auto p-0 ring ring-kumo-line">
         <Table>
           <Table.Header>
@@ -91,7 +122,14 @@ export const AmenityCatalogPage: React.FC = () => {
             </Table.Row>
           </Table.Header>
           <Table.Body>
-            {amenities.length === 0 && (
+            {amenities.length === 0 && isLoading && (
+              <Table.Row>
+                <Table.Cell className="p-6 text-center text-kumo-subtle" colSpan={6}>
+                  Đang tải…
+                </Table.Cell>
+              </Table.Row>
+            )}
+            {amenities.length === 0 && status === 'ready' && (
               <Table.Row>
                 <Table.Cell className="p-0" colSpan={6}>
                   <Empty

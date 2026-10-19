@@ -18,4 +18,15 @@ describe('amenity DTOs', () => {
       'Camera',
     );
   });
+
+  it.each(['name', 'sortOrder', 'isActive'])('rejects null %s on update', async (property) => {
+    const errors = await validate(plainToInstance(UpdateAmenityDto, { [property]: null }));
+    expect(errors.map((error) => error.property)).toEqual([property]);
+  });
+
+  it('still allows clearing the description with null', async () => {
+    await expect(
+      validate(plainToInstance(UpdateAmenityDto, { description: null })),
+    ).resolves.toHaveLength(0);
+  });
 });

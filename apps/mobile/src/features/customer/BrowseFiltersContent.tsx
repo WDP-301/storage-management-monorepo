@@ -1,6 +1,7 @@
 import { Text, View } from 'react-native';
 import {
   AREA_PRESETS,
+  MAX_AMENITY_FILTER,
   PRICE_PRESETS,
   type RangePreset,
   SORT_OPTIONS,
@@ -116,6 +117,12 @@ export function BrowseFiltersContent({
               }
             />
           ))}
+          {criteria.amenityIds.length >= MAX_AMENITY_FILTER ? (
+            // Chips cannot be disabled, so say why an extra tap does nothing.
+            <Text className="w-full font-body text-body-sm text-muted">
+              Tối đa {MAX_AMENITY_FILTER} tiện ích
+            </Text>
+          ) : null}
         </FilterRow>
       ) : null}
 

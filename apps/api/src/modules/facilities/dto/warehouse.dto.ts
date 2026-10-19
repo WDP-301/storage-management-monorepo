@@ -181,7 +181,7 @@ export class CreateWarehouseDto {
     maxItems: MAX_UNIT_AMENITIES,
     description:
       'The full amenity list; replaces the old one, [] removes all, omitted leaves it as is. ' +
-      'Not accepted on a shelf, which shows its shelf warehouse’s amenities.',
+      'Not accepted on a shelf: shelves carry none, read the shelf warehouse’s list instead.',
   })
   @IsOptional()
   @IsArray()

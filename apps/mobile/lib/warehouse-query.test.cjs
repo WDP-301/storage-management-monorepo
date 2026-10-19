@@ -177,3 +177,11 @@ test('booking items use the hidden unit id', () => {
     { storageUnitId: 'u2', requestedStartAt: '2026-11-01T12:00:00.000Z', rentalMonths: 6 },
   ]);
 });
+
+test('pruneAmenityIds drops retired ids and keeps the same array when all are known', () => {
+  const catalog = [{ id: 'a' }, { id: 'b' }];
+  const ids = ['a', 'b'];
+  assert.equal(q.pruneAmenityIds(ids, catalog), ids);
+  assert.deepEqual(q.pruneAmenityIds(['a', 'gone'], catalog), ['a']);
+  assert.deepEqual(q.pruneAmenityIds(['gone'], catalog), []);
+});

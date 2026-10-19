@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { DEFAULT_BROWSE_CRITERIA } from '../../../lib/warehouse-query';
+import { DEFAULT_BROWSE_CRITERIA, pruneAmenityIds } from '../../../lib/warehouse-query';
 import { WarehousesApi } from '../../../lib/warehouses-api';
 import type { BrowseCriteria } from '../../types/customer';
 import type { ApiProvince, Warehouse } from '../../types/storage-api';
@@ -38,7 +38,11 @@ function useFacetWarehouses(provinceCode: string | null) {
  */
 export function useBrowseCriteria() {
   const [criteria, setCriteria] = useState<BrowseCriteria>(DEFAULT_BROWSE_CRITERIA);
-  const amenityOptions = useAmenityCatalog();
+  const {
+    amenities: amenityOptions,
+    isLoaded: isCatalogLoaded,
+    reload: reloadAmenities,
+  } = useAmenityCatalog();
   const [provinces, setProvinces] = useState<ApiProvince[]>([]);
 
   useEffect(() => {
@@ -67,6 +71,16 @@ export function useBrowseCriteria() {
     () => buildWardOptions(provinceFacets.warehouses, effectiveProvinceCode, wardNames),
     [provinceFacets.warehouses, effectiveProvinceCode, wardNames],
   );
+
+  // A retired amenity would stay selected with no chip to undo it, so prune once the catalog has
+  // really loaded; a failed load leaves the selection alone.
+  useEffect(() => {
+    if (!isCatalogLoaded) return;
+    setCriteria((current) => {
+      const amenityIds = pruneAmenityIds(current.amenityIds, amenityOptions);
+      return amenityIds === current.amenityIds ? current : { ...current, amenityIds };
+    });
+  }, [isCatalogLoaded, amenityOptions]);
 
   // A code with no stock left would keep filtering with no chip to undo it, so drop it once the
   // facets that could have offered it have loaded.
@@ -97,5 +111,5 @@ export function useBrowseCriteria() {
     effectiveProvinceCode,
   ]);
 
-  return { criteria, setCriteria, provinceOptions, wardOptions, amenityOptions };
+  return { criteria, setCriteria, provinceOptions, wardOptions, amenityOptions, reloadAmenities };
 }

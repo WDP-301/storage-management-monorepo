@@ -102,4 +102,81 @@ describe('AmenityCatalogPage', () => {
       expect(toast.error).toHaveBeenCalledWith('Lỗi tạo tiện ích', 'Mã tiện ích đã tồn tại.'),
     );
   });
+
+  it('shows a loading state, not the empty state, while the list is loading', async () => {
+    let resolve!: (value: Amenity[]) => void;
+    vi.spyOn(AmenitiesApi, 'listAdmin').mockReturnValue(new Promise((r) => (resolve = r)));
+    render(<AmenityCatalogPage />);
+
+    expect(screen.getByText('Đang tải…')).toBeTruthy();
+    expect(screen.queryByText('Chưa có tiện ích nào')).toBeNull();
+    resolve([]);
+    expect(await screen.findByText('Chưa có tiện ích nào')).toBeTruthy();
+  });
+
+  it('shows an error instead of the empty state when loading fails, and recovers on refresh', async () => {
+    const list = vi
+      .spyOn(AmenitiesApi, 'listAdmin')
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce([CCTV]);
+    render(<AmenityCatalogPage />);
+
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(screen.queryByText('Chưa có tiện ích nào')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Làm mới' }));
+    expect(await screen.findByText('Camera an ninh')).toBeTruthy();
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('ignores a stale response that resolves after a newer one', async () => {
+    const RACK2: Amenity = { ...RACK, id: 'a3', code: 'SAFE', name: 'Két sắt' };
+    const resolvers: ((value: Amenity[]) => void)[] = [];
+    vi.spyOn(AmenitiesApi, 'listAdmin')
+      .mockResolvedValueOnce([RACK, RACK2])
+      .mockImplementation(() => new Promise((r) => resolvers.push(r)));
+    vi.spyOn(AmenitiesApi, 'update').mockResolvedValue({ ...RACK, isActive: true });
+    render(<AmenityCatalogPage />);
+    await screen.findByText('Giá kệ');
+
+    // Two reactivations each trigger a reload; their responses arrive out of order.
+    fireEvent.click(screen.getByRole('button', { name: 'Dùng lại tiện ích RACK' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dùng lại tiện ích SAFE' }));
+    await waitFor(() => expect(resolvers).toHaveLength(2));
+
+    resolvers[1]([CCTV]);
+    expect(await screen.findByText('Camera an ninh')).toBeTruthy();
+    resolvers[0]([RACK]);
+    await Promise.resolve();
+    expect(screen.queryByText('Giá kệ')).toBeNull();
+    expect(screen.getByText('Camera an ninh')).toBeTruthy();
+  });
+
+  it('ignores close requests while a deactivation is in flight', async () => {
+    let finish!: (value: Amenity) => void;
+    vi.spyOn(AmenitiesApi, 'update').mockReturnValue(new Promise((r) => (finish = r)));
+    render(<AmenityCatalogPage />);
+    await screen.findByText('Camera an ninh');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ngừng dùng tiện ích CCTV' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận ngừng dùng' }));
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.getByText(/các kho đang gắn vẫn giữ/)).toBeTruthy();
+
+    finish({ ...CCTV, isActive: false });
+    await waitFor(() => expect(screen.queryByText(/các kho đang gắn vẫn giữ/)).toBeNull());
+  });
+
+  it('closes without a request when an edit changes nothing', async () => {
+    const update = vi.spyOn(AmenitiesApi, 'update');
+    render(<AmenityCatalogPage />);
+    await screen.findByText('Camera an ninh');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sửa tiện ích CCTV' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Lưu thay đổi' }));
+
+    await waitFor(() => expect(screen.queryByLabelText('Tên tiện ích')).toBeNull());
+    expect(update).not.toHaveBeenCalled();
+  });
 });

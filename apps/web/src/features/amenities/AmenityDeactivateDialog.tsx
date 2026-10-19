@@ -1,6 +1,6 @@
 import { Button, Dialog, Text } from '@cloudflare/kumo';
 import { WarningCircle } from '@phosphor-icons/react';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AmenitiesApi } from '../../lib/amenities-api';
 import { useAppToast } from '../../lib/toast';
 import type { Amenity } from '../../types/amenity';
@@ -16,8 +16,20 @@ export const AmenityDeactivateDialog: React.FC<Props> = ({ amenity, onClose, onD
   const toast = useAppToast();
   const [isSaving, setIsSaving] = useState(false);
 
+  const amenityId = amenity?.id ?? null;
+
+  // Saving belongs to one amenity's request; reset when the target changes so it cannot leak across.
+  useEffect(() => {
+    setIsSaving(false);
+  }, [amenityId]);
+
+  const requestClose = () => {
+    // Closing mid-request would let its completion dismiss a dialog opened for another amenity.
+    if (!isSaving) onClose();
+  };
+
   const confirm = async () => {
-    if (!amenity) return;
+    if (!amenity || isSaving) return;
     setIsSaving(true);
     try {
       await AmenitiesApi.update(amenity.id, { isActive: false });
@@ -31,7 +43,7 @@ export const AmenityDeactivateDialog: React.FC<Props> = ({ amenity, onClose, onD
   };
 
   return (
-    <Dialog.Root open={Boolean(amenity)} onOpenChange={(open) => !open && onClose()}>
+    <Dialog.Root open={Boolean(amenity)} onOpenChange={(open) => !open && requestClose()}>
       <Dialog size="base" className="p-6 max-w-md w-full">
         {amenity && (
           <div className="space-y-5">
@@ -47,7 +59,7 @@ export const AmenityDeactivateDialog: React.FC<Props> = ({ amenity, onClose, onD
               Tiện ích sẽ ẩn khỏi bộ lọc và danh sách chọn; các kho đang gắn vẫn giữ.
             </Text>
             <div className="flex justify-end gap-2.5">
-              <Button variant="secondary" onClick={onClose} disabled={isSaving}>
+              <Button variant="secondary" onClick={requestClose} disabled={isSaving}>
                 Hủy bỏ
               </Button>
               <Button variant="destructive" onClick={confirm} loading={isSaving}>

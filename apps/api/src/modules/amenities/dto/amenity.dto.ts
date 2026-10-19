@@ -19,6 +19,10 @@ export const AMENITY_CODE_PATTERN = /^[A-Z][A-Z0-9_]{1,49}$/;
 const trimString = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 
+// `IsOptional` also skips validation for null, which would let null reach NOT NULL columns and fail
+// as a 500; only an omitted key means "leave unchanged".
+const UnlessOmitted = () => ValidateIf((_, value) => value !== undefined);
+
 export class CreateAmenityDto {
   @ApiProperty({
     example: 'AIR_CONDITIONER',
@@ -59,7 +63,7 @@ export class UpdateAmenityDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
-  @IsOptional()
+  @UnlessOmitted()
   name?: string;
 
   @ApiPropertyOptional({ nullable: true, maxLength: 500 })
@@ -73,13 +77,14 @@ export class UpdateAmenityDto {
   @IsInt()
   @Min(0)
   @Max(9999)
-  @IsOptional()
+  @UnlessOmitted()
   sortOrder?: number;
 
   @ApiPropertyOptional({
-    description: 'false retires the amenity: hidden from pickers and filters',
+    description:
+      'false retires the amenity: left out of GET /amenities, so pickers and filter choices drop it',
   })
   @IsBoolean()
-  @IsOptional()
+  @UnlessOmitted()
   isActive?: boolean;
 }

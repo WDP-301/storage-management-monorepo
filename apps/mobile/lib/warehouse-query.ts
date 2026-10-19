@@ -101,6 +101,13 @@ export function toggleAmenityId(ids: readonly string[], id: string): string[] {
   return ids.length >= MAX_AMENITY_FILTER ? [...ids] : [...ids, id];
 }
 
+/** Drops ids missing from the catalog; returns the same array when nothing is dropped. */
+export function pruneAmenityIds(ids: string[], catalog: readonly { id: string }[]): string[] {
+  const known = new Set(catalog.map((amenity) => amenity.id));
+  const kept = ids.filter((id) => known.has(id));
+  return kept.length === ids.length ? ids : kept;
+}
+
 function inRange(value: number | null, preset: RangePreset | undefined): boolean {
   if (!preset || (preset.min === undefined && preset.max === undefined)) return true;
   if (value === null) return false;

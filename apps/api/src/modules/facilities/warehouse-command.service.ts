@@ -88,7 +88,7 @@ export class WarehouseCommandService {
   }
 
   /**
-   * Price, deposit, address, notes and photos stay editable — bookings and contracts keep their own
+   * Price, deposit, address, notes, photos and amenities stay editable — bookings and contracts keep their own
    * snapshots. Code, dimensions, status and facility are frozen while a customer is attached;
    * moving to another facility also requires an active target facility and no open tour or service ticket.
    * A shelf warehouse moves with all its shelves (refused while any is occupied); a shelf's own

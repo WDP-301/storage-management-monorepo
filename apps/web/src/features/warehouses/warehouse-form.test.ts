@@ -98,8 +98,22 @@ describe('warehouse form helpers', () => {
     const stored = {
       ...warehouse,
       amenities: [
-        { amenityId: 'am-1', code: 'CCTV', name: 'Camera', quantity: 2, note: null },
-        { amenityId: 'am-2', code: 'POWER', name: 'Ổ điện', quantity: 4, note: 'Gần cửa' },
+        {
+          amenityId: 'am-1',
+          code: 'CCTV',
+          name: 'Camera',
+          quantity: 2,
+          note: null,
+          isActive: true,
+        },
+        {
+          amenityId: 'am-2',
+          code: 'POWER',
+          name: 'Ổ điện',
+          quantity: 4,
+          note: 'Gần cửa',
+          isActive: true,
+        },
       ],
     };
     const base = toFormState(stored);

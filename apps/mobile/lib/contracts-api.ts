@@ -1,6 +1,7 @@
 import type {
   ApiContract,
   ApiInspection,
+  ContractAmenity,
   CustomerContractResponse,
   InspectionSummaryResponse,
 } from '../src/types/contract-api';
@@ -61,7 +62,31 @@ export function normaliseContract(contract: CustomerContractResponse): ApiContra
     handover: contract.handover ? normaliseInspection(contract.handover) : null,
     return: contract.return ? normaliseInspection(contract.return) : null,
     documents: (contract.documents ?? []).filter(isEvidenceFile),
+    amenities: normaliseAmenities(contract.amenities),
   };
+}
+
+/**
+ * Keeps null ("not recorded") distinct from [] ("warehouse had none"); a missing or
+ * non-array value means the API predates the snapshot. Malformed entries are dropped.
+ */
+function normaliseAmenities(value: unknown): ContractAmenity[] | null {
+  if (!Array.isArray(value)) return null;
+  const amenities: ContractAmenity[] = [];
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null) continue;
+    const { amenityId, code, name, quantity, note } = item as Record<string, unknown>;
+    if (typeof amenityId !== 'string' || typeof name !== 'string') continue;
+    if (typeof quantity !== 'number' || !Number.isFinite(quantity)) continue;
+    amenities.push({
+      amenityId,
+      code: typeof code === 'string' ? code : '',
+      name,
+      quantity,
+      note: typeof note === 'string' ? note : null,
+    });
+  }
+  return amenities;
 }
 
 function toOptionalNumber(value: string | number | null | undefined): number | null {

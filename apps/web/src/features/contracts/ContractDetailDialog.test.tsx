@@ -55,6 +55,23 @@ describe('ContractDetailDialog', () => {
     expect(screen.getAllByText('3.200.000 đ')).toHaveLength(2);
   });
 
+  it('shows the amenities recorded on the contract', () => {
+    mockRole(UserRole.ADMIN);
+    renderDialog(
+      contractRecord({
+        amenities: [{ amenityId: 'am-1', code: 'CCTV', name: 'Camera', quantity: 2, note: null }],
+      }),
+    );
+    expect(screen.getByText('Tiện ích kèm theo')).toBeTruthy();
+    expect(screen.getByText('Camera ×2')).toBeTruthy();
+  });
+
+  it('says amenities were not recorded for an older contract', () => {
+    mockRole(UserRole.ADMIN);
+    renderDialog(contractRecord());
+    expect(screen.getByText(/Chưa ghi nhận/)).toBeTruthy();
+  });
+
   it.each([
     [UserRole.ADMIN, 'DRAFT', ['Hủy hợp đồng', 'Sửa hợp đồng', 'Tải file lên']],
     [UserRole.OPERATIONS_MANAGER, 'ACTIVE', ['Sửa hợp đồng', 'Tải file lên']],

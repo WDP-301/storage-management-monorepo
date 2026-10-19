@@ -78,7 +78,7 @@ export const WarehouseAmenitiesField: React.FC<Props> = ({
               onChange={(e) => update(row.amenityId, { quantity: e.target.value })}
             />
             <Input
-              label="Ghi chú (khách xem được)"
+              label="Ghi chú (khách xem được, chép vào hợp đồng)"
               aria-label={`Ghi chú ${row.name}`}
               className="w-full"
               value={row.note}

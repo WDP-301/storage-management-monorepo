@@ -56,7 +56,9 @@ export const AmenityDeactivateDialog: React.FC<Props> = ({ amenity, onClose, onD
               </Dialog.Title>
             </div>
             <Text variant="secondary" size="sm">
-              Tiện ích sẽ ẩn khỏi bộ lọc và danh sách chọn; các kho đang gắn vẫn giữ.
+              Tiện ích sẽ ẩn khỏi bộ lọc và danh sách chọn. Ngừng dùng không gỡ tiện ích khỏi các
+              kho đang có — nếu thiết bị đã được tháo khỏi một kho cụ thể, hãy gỡ tiện ích trong
+              phần sửa kho đó.
             </Text>
             <div className="flex justify-end gap-2.5">
               <Button variant="secondary" onClick={requestClose} disabled={isSaving}>

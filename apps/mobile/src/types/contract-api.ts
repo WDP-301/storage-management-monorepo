@@ -61,6 +61,17 @@ export type CustomerContractResponse = {
   return: InspectionSummaryResponse | null;
   /** Signed contract files; absent on API versions that predate them. */
   documents?: unknown[] | null;
+  /** Amenity snapshot; null/absent when the contract predates amenity recording. */
+  amenities?: unknown[] | null;
+};
+
+/** Equipment recorded on the contract when it was created; later catalog edits do not change it. */
+export type ContractAmenity = {
+  amenityId: string;
+  code: string;
+  name: string;
+  quantity: number;
+  note: string | null;
 };
 
 /** Handover receipt (biên nhận) or return record (biên trả). Finalized = signed off by staff. */
@@ -110,4 +121,6 @@ export type ApiContract = {
   return: ApiInspection | null;
   /** Signed contract scans/PDFs uploaded by staff. */
   documents: EvidenceFile[];
+  /** Amenities included at signing. null = not recorded; [] = the warehouse had none. */
+  amenities: ContractAmenity[] | null;
 };

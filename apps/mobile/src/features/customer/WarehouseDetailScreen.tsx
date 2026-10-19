@@ -102,7 +102,13 @@ export function WarehouseDetailScreen({
                 </View>
               ) : null}
 
-              <WarehouseAmenityList amenities={warehouse.amenities ?? []} />
+              <WarehouseAmenityList
+                amenities={warehouse.amenities ?? []}
+                // A shelf building's amenities are shared by every shelf in it, not owned by one tenant.
+                title={
+                  isShelfWarehouse(warehouse) ? 'Tiện ích chung của toà nhà' : 'Tiện ích có sẵn'
+                }
+              />
 
               {warehouse.notes ? (
                 <View className="gap-1">

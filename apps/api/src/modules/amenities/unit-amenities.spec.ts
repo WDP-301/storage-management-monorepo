@@ -106,21 +106,21 @@ describe('loadUnitAmenities', () => {
         amenityId: 'a',
         quantity: 2,
         note: 'x',
-        amenity: { code: 'CCTV', name: 'Camera' },
+        amenity: { code: 'CCTV', name: 'Camera', isActive: true },
       },
       {
         storageUnitId: 'u1',
         amenityId: 'b',
         quantity: 1,
         note: null,
-        amenity: { code: 'LIGHT', name: 'Đèn' },
+        amenity: { code: 'LIGHT', name: 'Đèn', isActive: false },
       },
       {
         storageUnitId: 'u2',
         amenityId: 'a',
         quantity: 5,
         note: null,
-        amenity: { code: 'CCTV', name: 'Camera' },
+        amenity: { code: 'CCTV', name: 'Camera', isActive: true },
       },
     ];
     const qb: Record<string, jest.Mock> = {};
@@ -134,8 +134,9 @@ describe('loadUnitAmenities', () => {
 
     expect(manager.createQueryBuilder).toHaveBeenCalledTimes(1);
     expect(result.get('u1')).toEqual([
-      { amenityId: 'a', code: 'CCTV', name: 'Camera', quantity: 2, note: 'x' },
-      { amenityId: 'b', code: 'LIGHT', name: 'Đèn', quantity: 1, note: null },
+      { amenityId: 'a', code: 'CCTV', name: 'Camera', quantity: 2, note: 'x', isActive: true },
+      // A retired amenity stays visible on the warehouse that still carries it.
+      { amenityId: 'b', code: 'LIGHT', name: 'Đèn', quantity: 1, note: null, isActive: false },
     ]);
     expect(result.get('u2')).toHaveLength(1);
     expect(result.get('u3')).toEqual([]);

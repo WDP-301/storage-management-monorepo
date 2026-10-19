@@ -142,7 +142,7 @@ describe('WarehouseQueryService', () => {
       amenityId: `id-${code}`,
       quantity,
       note: null,
-      amenity: { code, name: code.toLowerCase() },
+      amenity: { code, name: code.toLowerCase(), isActive: true },
     });
 
     it('puts the amenities of every listed warehouse on its view from a single lookup', async () => {
@@ -158,8 +158,22 @@ describe('WarehouseQueryService', () => {
       expect(amenities.called('where')).toHaveLength(1);
       expect(amenities.called('where')[0][1][1]).toEqual({ unitIds: ['unit-1', 'unit-2'] });
       expect(warehouses[0].amenities).toEqual([
-        { amenityId: 'id-CCTV', code: 'CCTV', name: 'cctv', quantity: 2, note: null },
-        { amenityId: 'id-LIGHTING', code: 'LIGHTING', name: 'lighting', quantity: 1, note: null },
+        {
+          amenityId: 'id-CCTV',
+          code: 'CCTV',
+          name: 'cctv',
+          quantity: 2,
+          note: null,
+          isActive: true,
+        },
+        {
+          amenityId: 'id-LIGHTING',
+          code: 'LIGHTING',
+          name: 'lighting',
+          quantity: 1,
+          note: null,
+          isActive: true,
+        },
       ]);
       expect(warehouses[1].amenities).toEqual([]);
     });

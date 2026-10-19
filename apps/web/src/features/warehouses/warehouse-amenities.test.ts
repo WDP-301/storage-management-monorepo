@@ -52,7 +52,7 @@ describe('warehouse amenities helpers', () => {
 
   it('maps stored amenities to string rows', () => {
     const stored: WarehouseAmenity[] = [
-      { amenityId: 'a', code: 'A', name: 'A', quantity: 3, note: null },
+      { amenityId: 'a', code: 'A', name: 'A', quantity: 3, note: null, isActive: true },
     ];
     expect(toAmenityRows(stored)).toEqual([{ amenityId: 'a', name: 'A', quantity: '3', note: '' }]);
     expect(toAmenityRows(undefined)).toEqual([]);

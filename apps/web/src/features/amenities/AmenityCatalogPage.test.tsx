@@ -55,7 +55,7 @@ describe('AmenityCatalogPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Ngừng dùng tiện ích CCTV' }));
     expect(update).not.toHaveBeenCalled();
-    expect(await screen.findByText(/các kho đang gắn vẫn giữ/)).toBeTruthy();
+    expect(await screen.findByText(/không gỡ tiện ích/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận ngừng dùng' }));
 
     await waitFor(() => expect(update).toHaveBeenCalledWith('a1', { isActive: false }));
@@ -162,10 +162,10 @@ describe('AmenityCatalogPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ngừng dùng tiện ích CCTV' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận ngừng dùng' }));
     fireEvent.keyDown(document.body, { key: 'Escape' });
-    expect(screen.getByText(/các kho đang gắn vẫn giữ/)).toBeTruthy();
+    expect(screen.getByText(/không gỡ tiện ích/)).toBeTruthy();
 
     finish({ ...CCTV, isActive: false });
-    await waitFor(() => expect(screen.queryByText(/các kho đang gắn vẫn giữ/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/không gỡ tiện ích/)).toBeNull());
   });
 
   it('closes without a request when an edit changes nothing', async () => {

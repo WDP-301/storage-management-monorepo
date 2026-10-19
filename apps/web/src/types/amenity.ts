@@ -29,6 +29,8 @@ export interface WarehouseAmenity {
   name: string;
   quantity: number;
   note: string | null;
+  /** False when the catalog entry was retired but is still attached to the warehouse. */
+  isActive: boolean;
 }
 
 export interface WarehouseAmenityInput {

@@ -3,6 +3,7 @@ import { AppUser } from '@entities/app-user.entity';
 import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
+import { snapshotUnitAmenities } from '@modules/amenities/contract-amenities';
 import { HttpStatus } from '@nestjs/common';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
@@ -20,6 +21,11 @@ export interface PersistContractInput {
   endedAt?: Date;
   signedAt?: Date;
   termsSnapshot?: Record<string, unknown>;
+  /**
+   * Freeze the warehouse's current amenities into the contract (default true). Pass false when
+   * the contract describes a past rental, where today's amenities would be a guess.
+   */
+  snapshotAmenities?: boolean;
 }
 
 /**
@@ -36,7 +42,12 @@ export async function persistContract(
   // Each item already stores MONTHLY rent — snapshot it directly rather than deriving
   // from the booking subtotal (which may include other units and rental terms).
   const monthlyPriceSnapshot = new Decimal(item.monthlyPriceSnapshot).toFixed(2);
+  const amenitiesSnapshot =
+    input.snapshotAmenities === false
+      ? null
+      : await snapshotUnitAmenities(manager, item.storageUnitId);
   const contract = manager.create(Contract, {
+    amenitiesSnapshot,
     contractNo: `CT-${randomUUID()}`,
     bookingItemId: item.id,
     customerId: customer.id,

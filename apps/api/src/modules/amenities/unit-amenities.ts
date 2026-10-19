@@ -14,6 +14,8 @@ export interface WarehouseAmenityView {
   name: string;
   quantity: number;
   note: string | null;
+  /** False once the amenity is retired from the catalog; it can still stay on warehouses that carry it. */
+  isActive: boolean;
 }
 
 /** One entry of a "replace the amenities of this warehouse" request. */
@@ -53,6 +55,7 @@ export async function loadUnitAmenities(
       name: row.amenity?.name ?? '',
       quantity: row.quantity,
       note: row.note ?? null,
+      isActive: row.amenity?.isActive !== false,
     });
   }
   return byUnit;

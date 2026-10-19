@@ -1,4 +1,5 @@
 import type { StorageUnit } from '@entities/storage-unit.entity';
+import { StorageUnitAmenity } from '@entities/storage-unit-amenity.entity';
 import { FacilityStatus, StorageUnitKind, StorageUnitStatus, UserRole } from '@storage/types';
 import { In } from 'typeorm';
 import { WarehouseQueryService } from './warehouse-query.service';
@@ -68,16 +69,22 @@ const parentUnit = {
 function build(options: {
   main: ReturnType<typeof fakeQb>;
   summaryRows?: unknown[];
+  amenityRows?: unknown[];
   assignments?: unknown[];
   parent?:
     | (Partial<Omit<StorageUnit, 'facility'>> & { facility?: Partial<StorageUnit['facility']> })
     | null;
 }) {
   const summary = fakeQb({ raw: options.summaryRows });
+  const amenities = fakeQb({ many: options.amenityRows });
   const units = {
     createQueryBuilder: jest.fn(() => options.main.qb),
     findOne: jest.fn().mockResolvedValue(options.parent ?? null),
-    manager: { createQueryBuilder: jest.fn(() => summary.qb) },
+    manager: {
+      createQueryBuilder: jest.fn((entity: unknown) =>
+        entity === StorageUnitAmenity ? amenities.qb : summary.qb,
+      ),
+    },
   };
   const roleAssignments = { find: jest.fn().mockResolvedValue(options.assignments ?? []) };
   const settings = { getDepositMonthsFor: jest.fn().mockResolvedValue(2) };
@@ -88,7 +95,7 @@ function build(options: {
     settings as never,
     uploads as never,
   );
-  return { service, units, summary, roleAssignments };
+  return { service, units, summary, amenities, roleAssignments };
 }
 
 describe('WarehouseQueryService', () => {
@@ -127,6 +134,67 @@ describe('WarehouseQueryService', () => {
     expect(main.called('leftJoin')[0][1]).toEqual(['unit.parent', 'parent']);
     expect(main.called('addSelect')[0][1]).toEqual([['parent.id', 'parent.code', 'parent.name']]);
     expect(main.called('setLock')).toHaveLength(0);
+  });
+
+  describe('amenities', () => {
+    const amenityRow = (storageUnitId: string, code: string, quantity: number) => ({
+      storageUnitId,
+      amenityId: `id-${code}`,
+      quantity,
+      note: null,
+      amenity: { code, name: code.toLowerCase() },
+    });
+
+    it('puts the amenities of every listed warehouse on its view from a single lookup', async () => {
+      const other = { ...(unit as object), id: 'unit-2' } as unknown as StorageUnit;
+      const main = fakeQb({ many: [unit, other], count: 2 });
+      const { service, amenities } = build({
+        main,
+        amenityRows: [amenityRow('unit-1', 'CCTV', 2), amenityRow('unit-1', 'LIGHTING', 1)],
+      });
+
+      const { warehouses } = await service.listPublic({});
+
+      expect(amenities.called('where')).toHaveLength(1);
+      expect(amenities.called('where')[0][1][1]).toEqual({ unitIds: ['unit-1', 'unit-2'] });
+      expect(warehouses[0].amenities).toEqual([
+        { amenityId: 'id-CCTV', code: 'CCTV', name: 'cctv', quantity: 2, note: null },
+        { amenityId: 'id-LIGHTING', code: 'LIGHTING', name: 'lighting', quantity: 1, note: null },
+      ]);
+      expect(warehouses[1].amenities).toEqual([]);
+    });
+
+    it('does not look up amenities for a shelf', async () => {
+      const shelf = { ...(unit as object), id: 'shelf-1', kind: StorageUnitKind.SHELF };
+      const main = fakeQb({ many: [shelf, unit], count: 2 });
+      const { service, amenities } = build({ main });
+
+      const { warehouses } = await service.listPublic({});
+
+      expect(amenities.called('where')[0][1][1]).toEqual({ unitIds: ['unit-1'] });
+      expect(warehouses[0].amenities).toEqual([]);
+    });
+
+    it('requires every requested amenity, counting distinct ids', async () => {
+      const main = fakeQb({ many: [], count: 0 });
+      const { service } = build({ main });
+
+      await service.listPublic({ amenityIds: ['a1', 'a2'] });
+
+      const call = main
+        .called('andWhere')
+        .find(([, args]) => String(args[0]).includes('storage_unit_amenities'));
+      expect(call?.[1][0]).toContain('= :amenityCount');
+      expect(call?.[1][1]).toEqual({ amenityIds: ['a1', 'a2'], amenityCount: 2 });
+      expect(main.called('innerJoin')).toHaveLength(0);
+    });
+
+    it('adds no amenity condition when none is requested', async () => {
+      const main = fakeQb({ many: [], count: 0 });
+      await build({ main }).service.listPublic({ amenityIds: [] });
+
+      expect(main.where()).not.toContain('storage_unit_amenities');
+    });
   });
 
   describe('listPublic', () => {

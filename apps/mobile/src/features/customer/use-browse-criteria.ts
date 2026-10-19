@@ -4,6 +4,7 @@ import { WarehousesApi } from '../../../lib/warehouses-api';
 import type { BrowseCriteria } from '../../types/customer';
 import type { ApiProvince, Warehouse } from '../../types/storage-api';
 import { buildProvinceOptions, buildWardOptions } from './location-options';
+import { useAmenityCatalog } from './use-amenity-catalog';
 import { useWards } from './use-wards';
 
 /** Warehouses in scope of a province (or all), used only to learn which areas have stock. */
@@ -37,6 +38,7 @@ function useFacetWarehouses(provinceCode: string | null) {
  */
 export function useBrowseCriteria() {
   const [criteria, setCriteria] = useState<BrowseCriteria>(DEFAULT_BROWSE_CRITERIA);
+  const amenityOptions = useAmenityCatalog();
   const [provinces, setProvinces] = useState<ApiProvince[]>([]);
 
   useEffect(() => {
@@ -95,5 +97,5 @@ export function useBrowseCriteria() {
     effectiveProvinceCode,
   ]);
 
-  return { criteria, setCriteria, provinceOptions, wardOptions };
+  return { criteria, setCriteria, provinceOptions, wardOptions, amenityOptions };
 }

@@ -5,6 +5,7 @@ import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { hashPassword, verifyPassword } from '@modules/auth/session.util';
 import { FacilityStatus, StorageUnitStatus, UserStatus } from '@storage/types';
 import type { EntityManager } from 'typeorm';
+import { seedDemoAmenities } from './demo-amenities';
 import { DEMO_ACCOUNTS, DEMO_FACILITIES, DEMO_WAREHOUSES } from './demo-seed-data';
 import { seedDemoShelfWarehouse } from './demo-shelf-warehouse';
 import { DEMO_SHELF_WAREHOUSE } from './demo-shelf-warehouse-data';
@@ -57,6 +58,7 @@ export async function seed(manager: EntityManager, demoPassword: string): Promis
     );
   }
   await seedDemoShelfWarehouse(manager, facilityIdOf(DEMO_SHELF_WAREHOUSE.facilityCode));
+  await seedDemoAmenities(manager);
 
   const passwordHash = await hashPassword(demoPassword);
   for (const account of DEMO_ACCOUNTS) {

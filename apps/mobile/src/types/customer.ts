@@ -13,5 +13,7 @@ export type BrowseCriteria = {
   areaPreset: RangePresetKey;
   volumePreset: RangePresetKey;
   pricePreset: RangePresetKey;
+  /** Amenity ids a warehouse must all carry. */
+  amenityIds: string[];
   sort: WarehouseSort;
 };

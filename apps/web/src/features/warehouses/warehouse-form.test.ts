@@ -94,6 +94,62 @@ describe('warehouse form helpers', () => {
     expect(buildPatch({ ...toFormState(stored), images: [] }, stored)).toEqual({ images: [] });
   });
 
+  describe('amenities', () => {
+    const stored = {
+      ...warehouse,
+      amenities: [
+        { amenityId: 'am-1', code: 'CCTV', name: 'Camera', quantity: 2, note: null },
+        { amenityId: 'am-2', code: 'POWER', name: 'Ổ điện', quantity: 4, note: 'Gần cửa' },
+      ],
+    };
+    const base = toFormState(stored);
+
+    it('includes the selected amenities in a create payload and omits them when none', () => {
+      expect(buildPayload(base).amenities).toEqual([
+        { amenityId: 'am-1', quantity: 2, note: null },
+        { amenityId: 'am-2', quantity: 4, note: 'Gần cửa' },
+      ]);
+      expect(buildPayload(toFormState(warehouse))).not.toHaveProperty('amenities');
+    });
+
+    it('does not send amenities when saved unchanged or merely reordered', () => {
+      expect(buildPatch(base, stored)).toEqual({});
+      expect(buildPatch({ ...base, amenities: [...base.amenities].reverse() }, stored)).toEqual({});
+    });
+
+    it('sends the whole list when a quantity changes, even while occupied', () => {
+      const edited = base.amenities.map((r) =>
+        r.amenityId === 'am-2' ? { ...r, quantity: '5' } : r,
+      );
+      expect(buildPatch({ ...base, amenities: edited }, stored)).toEqual({
+        amenities: [
+          { amenityId: 'am-1', quantity: 2, note: null },
+          { amenityId: 'am-2', quantity: 5, note: 'Gần cửa' },
+        ],
+      });
+    });
+
+    it('sends an empty list when the last amenities are removed', () => {
+      expect(buildPatch({ ...base, amenities: [] }, stored)).toEqual({ amenities: [] });
+    });
+
+    it('treats a warehouse without stored amenities as empty', () => {
+      expect(buildPatch(toFormState(warehouse), warehouse)).toEqual({});
+    });
+
+    it('blocks quantities of 0, 100 and 1.5 but accepts 1', () => {
+      const ok = toFormState({ ...stored, status: 'AVAILABLE' });
+      const withQty = (quantity: string) => ({
+        ...ok,
+        amenities: [{ ...ok.amenities[0], quantity }],
+      });
+      expect(validateForm(withQty('1'))).toBeNull();
+      for (const bad of ['0', '100', '1.5']) {
+        expect(validateForm(withQty(bad))).toContain('Số lượng');
+      }
+    });
+  });
+
   it('clears the stored ward when the province changes and no ward is picked', () => {
     const placed = {
       ...warehouse,

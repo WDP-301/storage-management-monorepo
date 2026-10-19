@@ -103,6 +103,60 @@ test('nearby shelf warehouses use available shelf summary rather than the zero-p
   );
 });
 
+test('amenity ids are sorted and encoded, and omitted when none are chosen', () => {
+  assert.equal('amenityIds' in params(q.buildWarehouseQuery(base)), false);
+  const query = q.buildWarehouseQuery({ ...base, amenityIds: ['b-2', 'a-1'] });
+  assert.match(query, /amenityIds=a-1%2Cb-2&sort=/);
+  assert.equal(params(query).amenityIds, 'a-1,b-2');
+});
+
+test('nearby requires every selected amenity, for warehouses and shelf warehouses', () => {
+  const owned = (...ids) => ids.map((amenityId) => ({ amenityId }));
+  const w = {
+    kind: 'SELF_STORAGE',
+    areaM2: 10,
+    volumeM3: 30,
+    monthlyPrice: 1,
+    amenities: owned('a', 'b', 'c'),
+  };
+  const crit = { ...base, amenityIds: ['a', 'b'] };
+  assert.equal(q.matchesNearbyCriteria(w, crit), true);
+  assert.equal(q.matchesNearbyCriteria({ ...w, amenities: owned('a') }, crit), false);
+  assert.equal(q.matchesNearbyCriteria({ ...w, amenities: undefined }, crit), false);
+  assert.equal(q.matchesNearbyCriteria({ ...w, amenities: undefined }, base), true);
+  const shelfWarehouse = {
+    kind: 'SHELF_WAREHOUSE',
+    shelfSummary: {
+      available: 1,
+      minMonthlyPrice: 1,
+      minAreaM2: 1,
+      maxAreaM2: 1,
+      minVolumeM3: 1,
+      maxVolumeM3: 1,
+    },
+    amenities: owned('a'),
+  };
+  assert.equal(q.matchesNearbyCriteria(shelfWarehouse, crit), false);
+  assert.equal(
+    q.matchesNearbyCriteria({ ...shelfWarehouse, amenities: owned('a', 'b') }, crit),
+    true,
+  );
+});
+
+test('toggleAmenityId adds, removes and caps the selection', () => {
+  assert.deepEqual(q.toggleAmenityId(['a'], 'b'), ['a', 'b']);
+  assert.deepEqual(q.toggleAmenityId(['a', 'b'], 'a'), ['b']);
+  const full = Array.from({ length: q.MAX_AMENITY_FILTER }, (_, i) => `id${i}`);
+  assert.deepEqual(q.toggleAmenityId(full, 'extra'), full);
+  assert.equal(q.toggleAmenityId(full, 'id0').length, q.MAX_AMENITY_FILTER - 1);
+});
+
+test('amenity selection counts as one active filter and is cleared by reset', () => {
+  const active = { ...base, amenityIds: ['a', 'b'], sort: 'newest' };
+  assert.equal(q.countActiveFilters(active), 1);
+  assert.deepEqual(q.clearFilters(active), { ...base, sort: 'newest' });
+});
+
 test('active filter count and reset', () => {
   const active = { ...base, provinceCode: '79', areaPreset: 'l', sort: 'newest' };
   assert.equal(q.countActiveFilters(active), 2);

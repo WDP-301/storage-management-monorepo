@@ -12,6 +12,7 @@ import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { clearFilters, countActiveFilters } from '../../../lib/warehouse-query';
 import type { BrowseCriteria } from '../../types/customer';
+import type { Amenity } from '../../types/storage-api';
 import { BrowseFiltersContent } from './BrowseFiltersContent';
 import type { LocationOption } from './location-options';
 
@@ -24,6 +25,7 @@ type Props = {
   onChange: (criteria: BrowseCriteria) => void;
   provinceOptions: readonly LocationOption[];
   wardOptions: readonly LocationOption[];
+  amenityOptions: readonly Amenity[];
   /** Warehouses matching the current criteria, shown on the confirm button. */
   resultCount: number;
 };
@@ -41,6 +43,7 @@ export function BrowseFiltersSheet({
   onChange,
   provinceOptions,
   wardOptions,
+  amenityOptions,
   resultCount,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -108,6 +111,7 @@ export function BrowseFiltersSheet({
           criteria={criteria}
           provinceOptions={provinceOptions}
           wardOptions={wardOptions}
+          amenityOptions={amenityOptions}
           onChange={onChange}
         />
       </BottomSheetScrollView>

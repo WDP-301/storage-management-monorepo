@@ -1,4 +1,5 @@
 import type { StorageUnit, WarehouseImage } from '@entities/storage-unit.entity';
+import type { WarehouseAmenityView } from '@modules/amenities/unit-amenities';
 import type { StorageUnitKind, StorageUnitStatus } from '@storage/types';
 
 /** A stored photo plus a presigned GET link; links expire, so clients refetch rather than keep them. */
@@ -52,6 +53,8 @@ export interface WarehouseView {
   notes: string | null;
   /** Display order; the first one is the cover. */
   images: WarehouseImageView[];
+  /** Equipment included in the rent; always empty for a shelf, which shares its building's. */
+  amenities: WarehouseAmenityView[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -65,6 +68,7 @@ export function toWarehouseView(
   effectiveDepositMonths: number,
   images: WarehouseImageView[] = [],
   shelfSummary: ShelfSummary | null = null,
+  amenities: WarehouseAmenityView[] = [],
 ): WarehouseView {
   const { facility, parent } = unit;
   return {
@@ -92,6 +96,7 @@ export function toWarehouseView(
     status: unit.status,
     notes: unit.notes ?? null,
     images,
+    amenities,
     createdAt: unit.createdAt,
     updatedAt: unit.updatedAt,
   };

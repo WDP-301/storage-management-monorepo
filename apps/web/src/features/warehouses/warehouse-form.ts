@@ -5,6 +5,13 @@ import type {
   WarehouseImage,
   WarehouseInput,
 } from '../../types/warehouse';
+import {
+  type AmenityRow,
+  amenityKey,
+  toAmenityInputs,
+  toAmenityRows,
+  validateAmenityRows,
+} from './warehouse-amenities';
 
 export const DEPOSIT_DEFAULT = 'default';
 
@@ -26,6 +33,7 @@ export interface WarehouseFormState {
   notes: string;
   status: WarehouseIdleStatus;
   images: WarehouseImage[];
+  amenities: AmenityRow[];
 }
 
 export const EMPTY_FORM: WarehouseFormState = {
@@ -46,6 +54,7 @@ export const EMPTY_FORM: WarehouseFormState = {
   notes: '',
   status: 'AVAILABLE',
   images: [],
+  amenities: [],
 };
 
 export const IDLE_STATUSES: WarehouseIdleStatus[] = ['AVAILABLE', 'MAINTENANCE', 'INACTIVE'];
@@ -71,6 +80,7 @@ export const toFormState = (w: Warehouse): WarehouseFormState => ({
   notes: w.notes ?? '',
   status: isIdleStatus(w.status) ? w.status : 'AVAILABLE',
   images: w.images ?? [],
+  amenities: toAmenityRows(w.amenities),
 });
 
 const num = (value: string) => (value.trim() === '' ? Number.NaN : Number(value));
@@ -129,7 +139,7 @@ export function validateForm(form: WarehouseFormState, frozen = false): string |
     }
     if (!hasAtMostTwoDecimals(price)) return 'Giá thuê chỉ được tối đa 2 chữ số thập phân.';
   }
-  return null;
+  return validateAmenityRows(form.amenities);
 }
 
 export function buildPayload(form: WarehouseFormState): WarehouseInput {
@@ -161,6 +171,7 @@ export function buildPayload(form: WarehouseFormState): WarehouseInput {
       mimeType,
       ...(size === undefined ? {} : { size }),
     })),
+    ...(form.amenities.length > 0 ? { amenities: toAmenityInputs(form.amenities) } : {}),
   };
 }
 
@@ -172,12 +183,17 @@ export function buildPatch(form: WarehouseFormState, original: Warehouse): Parti
   const before = buildPayload(toFormState(original));
   const patch: Record<string, unknown> = {};
   for (const key of Object.keys(next) as (keyof WarehouseInput)[]) {
-    if (key !== 'images' && key !== 'kind' && next[key] !== before[key]) {
+    if (key !== 'images' && key !== 'amenities' && key !== 'kind' && next[key] !== before[key]) {
       patch[key] = next[key];
     }
   }
   // Sent only when the set or order changed — the order decides the cover.
   if (imageOrder(form.images) !== imageOrder(original.images ?? [])) patch.images = next.images;
+  // Arrays never compare equal by `!==`, so compare an order-independent key; the whole list is
+  // sent because the API replaces it, and `[]` is how the last amenity is removed.
+  if (amenityKey(form.amenities) !== amenityKey(toAmenityRows(original.amenities))) {
+    patch.amenities = toAmenityInputs(form.amenities);
+  }
   if (!form.notes.trim() && original.notes) patch.notes = '';
   // A ward left over from the old province must be cleared explicitly, or the API pairs it
   // with the new province and rejects the mismatch.

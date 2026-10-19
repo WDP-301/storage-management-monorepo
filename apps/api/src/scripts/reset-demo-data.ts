@@ -8,6 +8,7 @@
  *   add --wipe-users to also delete every account, session and audit log before seeding
  * Facility-scoped demo roles (manager@, staff@) are granted per facility, see DEMO_ACCOUNTS.
  * Users, sessions, customer profiles, settings, provinces/wards and ticket types survive.
+ * The amenity catalog is business data like the warehouses: it is wiped and seeded again.
  * Demo accounts include an ADMIN, so the committed DEMO_PASSWORD is only used on a local
  * database; any other host needs DEMO_PASSWORD set in the environment, otherwise anyone who
  * has read this repository could sign in as admin. Roles are only granted to demo accounts the
@@ -58,7 +59,9 @@ const WIPE_STEPS: { table: string; sql: string }[] = [
     table: 'user_role_assignments',
     sql: 'DELETE FROM "user_role_assignments" WHERE "facility_id" IS NOT NULL',
   },
+  { table: 'storage_unit_amenities', sql: 'DELETE FROM "storage_unit_amenities"' },
   { table: 'storage_units', sql: 'DELETE FROM "storage_units"' },
+  { table: 'amenities', sql: 'DELETE FROM "amenities"' },
   { table: 'facilities', sql: 'DELETE FROM "facilities"' },
   // Only present before the standalone-warehouse migration ran.
   { table: 'unit_types', sql: 'DELETE FROM "unit_types"' },

@@ -39,7 +39,8 @@ type Props = {
 export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHold }: Props) {
   const router = useRouter();
   const { selected, toggle: toggleWarehouse, clear: clearSelection } = useBrowseSelection();
-  const { criteria, setCriteria, provinceOptions, wardOptions } = useBrowseCriteria();
+  const { criteria, setCriteria, provinceOptions, wardOptions, amenityOptions } =
+    useBrowseCriteria();
   const { warehouses, total, hasMore, isLoading, isLoadingMore, error, loadMore, refetch } =
     useWarehouses(criteria);
   const [view, setView] = useState<BrowseView>('list');
@@ -305,6 +306,7 @@ export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHol
       ) : null}
 
       <BrowseFiltersSheet
+        amenityOptions={amenityOptions}
         criteria={criteria}
         provinceOptions={provinceOptions}
         resultCount={nearbyWarehouses?.length ?? total}

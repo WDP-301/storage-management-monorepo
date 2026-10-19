@@ -4,9 +4,11 @@ import {
   PRICE_PRESETS,
   type RangePreset,
   SORT_OPTIONS,
+  toggleAmenityId,
   VOLUME_PRESETS,
 } from '../../../lib/warehouse-query';
 import type { BrowseCriteria } from '../../types/customer';
+import type { Amenity } from '../../types/storage-api';
 import { ChipButton, FilterRow } from './FilterChips';
 import type { LocationOption } from './location-options';
 
@@ -17,13 +19,21 @@ type Props = {
   provinceOptions: readonly LocationOption[];
   /** Wards within the selected province that have available warehouses. */
   wardOptions: readonly LocationOption[];
+  /** Active catalog amenities; the row is hidden when empty. */
+  amenityOptions: readonly Amenity[];
 };
 
 /**
  * Body of the filter sheet. Selections apply immediately — each one re-queries the server — and
  * the sheet's footer button reports the resulting count and closes.
  */
-export function BrowseFiltersContent({ criteria, onChange, provinceOptions, wardOptions }: Props) {
+export function BrowseFiltersContent({
+  criteria,
+  onChange,
+  provinceOptions,
+  wardOptions,
+  amenityOptions,
+}: Props) {
   const update = (patch: Partial<BrowseCriteria>) => onChange({ ...criteria, ...patch });
 
   const presetRow = (
@@ -93,6 +103,21 @@ export function BrowseFiltersContent({ criteria, onChange, provinceOptions, ward
       {presetRow('Diện tích', AREA_PRESETS, criteria.areaPreset, 'areaPreset')}
       {presetRow('Thể tích', VOLUME_PRESETS, criteria.volumePreset, 'volumePreset')}
       {presetRow('Giá thuê / tháng', PRICE_PRESETS, criteria.pricePreset, 'pricePreset')}
+
+      {amenityOptions.length > 0 ? (
+        <FilterRow label="Tiện ích">
+          {amenityOptions.map((amenity) => (
+            <ChipButton
+              key={amenity.id}
+              isSelected={criteria.amenityIds.includes(amenity.id)}
+              label={amenity.name}
+              onPress={() =>
+                update({ amenityIds: toggleAmenityId(criteria.amenityIds, amenity.id) })
+              }
+            />
+          ))}
+        </FilterRow>
+      ) : null}
 
       <FilterRow label="Sắp xếp">
         {SORT_OPTIONS.map((option) => (

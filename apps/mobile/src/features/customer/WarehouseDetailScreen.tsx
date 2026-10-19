@@ -7,6 +7,7 @@ import { formatMoney, formatNumber } from '../../../lib/format-vi';
 import { displayMonthlyPrice, isShelfWarehouse } from '../../../lib/shelf-rental';
 import { WarehouseGallery } from '../../components/WarehousePhotos';
 import type { Warehouse } from '../../types/storage-api';
+import { WarehouseAmenityList } from './WarehouseAmenityList';
 import { WarehouseSpecs } from './WarehouseCard';
 
 const SafeAreaView = withUniwind(RNSafeAreaView);
@@ -100,6 +101,8 @@ export function WarehouseDetailScreen({
                   <WarehouseSpecs warehouse={warehouse} />
                 </View>
               ) : null}
+
+              <WarehouseAmenityList amenities={warehouse.amenities ?? []} />
 
               {warehouse.notes ? (
                 <View className="gap-1">

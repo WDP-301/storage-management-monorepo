@@ -12,6 +12,8 @@ export const MAX_WAREHOUSES_PER_BOOKING = 4;
 export const PAGE_SIZE = 20;
 /** Highest `limit` the API accepts. */
 export const FACET_LIMIT = 100;
+/** Most amenity ids the API accepts in one filter. */
+export const MAX_AMENITY_FILTER = 10;
 
 export type RangePreset = { key: string; label: string; min?: number; max?: number };
 
@@ -53,6 +55,7 @@ export const DEFAULT_BROWSE_CRITERIA: BrowseCriteria = {
   areaPreset: 'any',
   volumePreset: 'any',
   pricePreset: 'any',
+  amenityIds: [],
   sort: 'price_asc',
 };
 
@@ -77,8 +80,25 @@ export function buildWarehouseQuery(criteria: BrowseCriteria, page = 1, limit = 
     if (preset?.max !== undefined) params.push([`max${name}`, preset.max]);
   }
 
+  // Sorted so the same selection always yields the same query key and no needless refetch.
+  if (criteria.amenityIds.length > 0)
+    params.push(['amenityIds', [...criteria.amenityIds].sort().join(',')]);
+
   params.push(['sort', criteria.sort], ['page', page], ['limit', limit]);
   return params.map(([name, value]) => `${name}=${encodeURIComponent(String(value))}`).join('&');
+}
+
+/** AND semantics, matching the server filter: the warehouse must carry every selected amenity. */
+function hasAllAmenities(warehouse: Warehouse, amenityIds: readonly string[]): boolean {
+  if (amenityIds.length === 0) return true;
+  const owned = new Set((warehouse.amenities ?? []).map((amenity) => amenity.amenityId));
+  return amenityIds.every((id) => owned.has(id));
+}
+
+/** Toggles one amenity; a new selection beyond the API limit is ignored. */
+export function toggleAmenityId(ids: readonly string[], id: string): string[] {
+  if (ids.includes(id)) return ids.filter((current) => current !== id);
+  return ids.length >= MAX_AMENITY_FILTER ? [...ids] : [...ids, id];
 }
 
 function inRange(value: number | null, preset: RangePreset | undefined): boolean {
@@ -91,11 +111,12 @@ function inRange(value: number | null, preset: RangePreset | undefined): boolean
 }
 
 /**
- * Client-side mirror of the size and price filters for `/places/nearby`, which returns every
+ * Client-side mirror of the size, price and amenity filters for `/places/nearby`, which returns every
  * warehouse in range and takes no filter params. Province/ward are skipped on purpose: the search
  * center already decides the area, and a stale province pick would silently empty the results.
  */
 export function matchesNearbyCriteria(warehouse: Warehouse, criteria: BrowseCriteria): boolean {
+  if (!hasAllAmenities(warehouse, criteria.amenityIds)) return false;
   if (warehouse.kind === 'SHELF_WAREHOUSE') {
     const summary = warehouse.shelfSummary;
     if (!summary || summary.available === 0) return false;
@@ -132,6 +153,7 @@ export function countActiveFilters(criteria: BrowseCriteria): number {
     criteria.areaPreset !== 'any',
     criteria.volumePreset !== 'any',
     criteria.pricePreset !== 'any',
+    criteria.amenityIds.length > 0,
   ].filter(Boolean).length;
 }
 

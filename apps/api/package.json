@@ -21,6 +21,7 @@
     "demo:pay": "pnpm run build && node dist/scripts/demo-pay.js",
     "backfill:contracts": "pnpm run build && node dist/scripts/backfill-contracts.js",
     "seed:admin": "pnpm run build && node dist/scripts/seed-admin.js",
+    "seed:shelf-demo": "pnpm run build && node dist/scripts/seed-shelf-warehouse.js",
     "db:reset-demo": "pnpm run build && node dist/scripts/reset-demo-data.js"
   },
   "jest": {

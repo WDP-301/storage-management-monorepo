@@ -6,8 +6,10 @@ import { hashPassword, verifyPassword } from '@modules/auth/session.util';
 import { FacilityStatus, StorageUnitStatus, UserStatus } from '@storage/types';
 import type { EntityManager } from 'typeorm';
 import { DEMO_ACCOUNTS, DEMO_FACILITIES, DEMO_WAREHOUSES } from './demo-seed-data';
+import { seedDemoShelfWarehouse } from './demo-shelf-warehouse';
+import { DEMO_SHELF_WAREHOUSE } from './demo-shelf-warehouse-data';
 
-/** Creates facilities, their warehouses, demo accounts and facility-scoped roles. */
+/** Creates facilities, their warehouses (one with shelves), demo accounts and facility-scoped roles. */
 export async function seed(manager: EntityManager, demoPassword: string): Promise<void> {
   const facilityIds = new Map<string, string>();
   for (const demo of DEMO_FACILITIES) {
@@ -54,6 +56,7 @@ export async function seed(manager: EntityManager, demoPassword: string): Promis
       }),
     );
   }
+  await seedDemoShelfWarehouse(manager, facilityIdOf(DEMO_SHELF_WAREHOUSE.facilityCode));
 
   const passwordHash = await hashPassword(demoPassword);
   for (const account of DEMO_ACCOUNTS) {

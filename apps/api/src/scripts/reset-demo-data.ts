@@ -17,6 +17,7 @@ import type { EntityManager } from 'typeorm';
 import { AppDataSource } from '../data-source';
 import { seed } from './demo-seed';
 import { DEMO_ACCOUNTS, DEMO_FACILITIES, DEMO_PASSWORD, DEMO_WAREHOUSES } from './demo-seed-data';
+import { DEMO_SHELF_WAREHOUSE } from './demo-shelf-warehouse-data';
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -136,7 +137,8 @@ async function main(): Promise<void> {
     await AppDataSource.transaction((manager) => seed(manager, demoPassword));
     console.log(
       `db:reset-demo: wiped business data${wipeUsers ? ' and all users' : ''}, applied ${applied.length} migration(s), seeded ` +
-        `${DEMO_FACILITIES.length} facilities, ${DEMO_WAREHOUSES.length} warehouses and ${DEMO_ACCOUNTS.length} demo accounts ` +
+        `${DEMO_FACILITIES.length} facilities, ${DEMO_WAREHOUSES.length} warehouses, shelf warehouse ` +
+        `${DEMO_SHELF_WAREHOUSE.code} and ${DEMO_ACCOUNTS.length} demo accounts ` +
         `(${demoPassword === DEMO_PASSWORD ? `password ${DEMO_PASSWORD}` : 'password from DEMO_PASSWORD'} for new accounts).`,
     );
   } finally {

@@ -197,6 +197,55 @@ describe('SettingsService', () => {
     });
   });
 
+  describe('getClientSettings', () => {
+    const stored: Record<string, unknown> = {
+      'booking.rental_months_options': [18, 6, 12],
+      'booking.default_rental_months': 6,
+      'booking.min_rental_months': 6,
+      'booking.max_rental_months': 60,
+      'booking.lead_days': 30,
+      'booking.max_units_per_booking': 4,
+    };
+
+    const serve = (overrides: Record<string, unknown> = {}) =>
+      repo.findOne.mockImplementation(({ where: { key } }: { where: { key: string } }) =>
+        Promise.resolve(buildSetting(key, { ...stored, ...overrides }[key])),
+      );
+
+    it('returns the booking rules with options sorted', async () => {
+      serve();
+
+      await expect(service.getClientSettings()).resolves.toEqual({
+        booking: {
+          rentalMonthsOptions: [6, 12, 18],
+          defaultRentalMonths: 6,
+          minRentalMonths: 6,
+          maxRentalMonths: 60,
+          leadDays: 30,
+          maxUnitsPerBooking: 4,
+        },
+      });
+    });
+
+    it('drops options the booking endpoint would reject and re-picks the default', async () => {
+      serve({ 'booking.min_rental_months': 12, 'booking.max_rental_months': 12 });
+
+      const { booking } = await service.getClientSettings();
+
+      expect(booking.rentalMonthsOptions).toEqual([12]);
+      expect(booking.defaultRentalMonths).toBe(12);
+    });
+
+    it('falls back to the minimum term when no option is in range', async () => {
+      serve({ 'booking.min_rental_months': 24, 'booking.default_rental_months': 6 });
+
+      const { booking } = await service.getClientSettings();
+
+      expect(booking.rentalMonthsOptions).toEqual([24]);
+      expect(booking.defaultRentalMonths).toBe(24);
+    });
+  });
+
   describe('getDepositMonthsFor', () => {
     it('uses the unit own level when set', async () => {
       await expect(service.getDepositMonthsFor({ depositMonths: 3 })).resolves.toBe(3);

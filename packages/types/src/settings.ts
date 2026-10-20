@@ -32,3 +32,20 @@ export interface UpdateSettingsDto {
 export interface UpdateSettingsResponse {
   settings: SystemSettingRecord[];
 }
+
+/** Booking rules a client needs to build its booking UI; mirrors the `booking.*` settings. */
+export interface ClientBookingSettings {
+  /** Terms offered as choices — never empty, sorted, each within min/max. */
+  rentalMonthsOptions: number[];
+  /** Pre-selected term — always one of `rentalMonthsOptions`. */
+  defaultRentalMonths: number;
+  minRentalMonths: number;
+  maxRentalMonths: number;
+  /** How many days ahead of today the rental start date may be. */
+  leadDays: number;
+  maxUnitsPerBooking: number;
+}
+
+export interface ClientSettingsResponse {
+  booking: ClientBookingSettings;
+}

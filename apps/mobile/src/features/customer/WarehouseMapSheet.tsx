@@ -8,9 +8,9 @@ import { Button, useThemeColor } from 'heroui-native';
 import { ArrowRight, Check, MapPin, Plus } from 'phosphor-react-native';
 import { type RefObject, useCallback } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { useBookingSettings } from '../../../lib/client-settings';
 import { formatMoney, formatNumber } from '../../../lib/format-vi';
 import { displayMonthlyPrice, isShelfWarehouse } from '../../../lib/shelf-rental';
-import { MAX_WAREHOUSES_PER_BOOKING } from '../../../lib/warehouse-query';
 import { WarehousePhotoStrip } from '../../components/WarehousePhotos';
 import type { Warehouse } from '../../types/storage-api';
 import { WarehouseSpecs } from './WarehouseCard';
@@ -37,6 +37,7 @@ export function WarehouseMapSheet({
   onDismiss,
   onOpenDetail,
 }: Props) {
+  const { maxUnitsPerBooking } = useBookingSettings();
   const [surface, muted, accent, onAccent] = useThemeColor([
     'surface',
     'muted',
@@ -44,7 +45,7 @@ export function WarehouseMapSheet({
     'accent-foreground',
   ]);
   const isSelected = warehouse ? selected.some((item) => item.id === warehouse.id) : false;
-  const isDisabled = hasHolding || (!isSelected && selected.length >= MAX_WAREHOUSES_PER_BOOKING);
+  const isDisabled = hasHolding || (!isSelected && selected.length >= maxUnitsPerBooking);
   const totalArea = selected.reduce((sum, item) => sum + item.areaM2, 0);
   const totalRent = selected.reduce((sum, item) => sum + item.monthlyPrice, 0);
   const renderBackdrop = useCallback(
@@ -148,7 +149,7 @@ export function WarehouseMapSheet({
               <View className="flex-row flex-wrap items-center justify-between gap-2 rounded-xl bg-surface-secondary p-3">
                 <View className="gap-1">
                   <Text className="font-body text-caption text-muted">
-                    Đã chọn {selected.length}/{MAX_WAREHOUSES_PER_BOOKING} kho
+                    Đã chọn {selected.length}/{maxUnitsPerBooking} kho
                   </Text>
                   <Text className="font-strong text-body-sm text-foreground">
                     Tổng {formatNumber(totalArea)} m²

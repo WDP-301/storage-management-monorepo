@@ -32,3 +32,29 @@ test('other errors keep their message, unknown values use the fallback', () => {
   assert.equal(bookingErrorMessage(new Error('Hết phiên')), 'Hết phiên');
   assert.match(bookingErrorMessage('boom'), /Không giữ được kho/);
 });
+
+test('booking-rule rejections show the server field message instead of "Validation failed"', () => {
+  const error = Object.assign(new Error('Validation failed'), {
+    code: 'VALIDATION_FAILED',
+    details: {
+      fields: [
+        {
+          field: 'items.0.requestedStartAt',
+          code: 'maxLeadDays',
+          message: 'Ngày bắt đầu tối đa trước 14 ngày',
+        },
+      ],
+    },
+  });
+  assert.equal(bookingErrorMessage(error), 'Ngày bắt đầu tối đa trước 14 ngày');
+});
+
+test('other validation failures keep the error message', () => {
+  const error = Object.assign(new Error('Validation failed'), {
+    code: 'VALIDATION_FAILED',
+    details: {
+      fields: [{ field: 'items', code: 'arrayMinSize', message: 'items must not be empty' }],
+    },
+  });
+  assert.equal(bookingErrorMessage(error), 'Validation failed');
+});

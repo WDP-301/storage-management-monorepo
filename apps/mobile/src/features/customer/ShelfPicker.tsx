@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { ApiError } from '../../../lib/api';
+import { useBookingSettings } from '../../../lib/client-settings';
 import { formatMoney, formatNumber } from '../../../lib/format-vi';
 import { WarehousesApi } from '../../../lib/warehouses-api';
 import type { ShelfLayout, Warehouse } from '../../types/storage-api';
@@ -370,6 +371,7 @@ export function ShelfPicker({
   onToggle,
   expanded = false,
 }: Props) {
+  const { maxUnitsPerBooking } = useBookingSettings();
   const [shelves, setShelves] = useState<Warehouse[]>([]);
   const [layout, setLayout] = useState<ShelfLayout | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -537,7 +539,7 @@ export function ShelfPicker({
           !hasHolding &&
           focused.status === 'AVAILABLE' ? (
             <Text className="font-body text-caption text-muted">
-              Bạn đã chọn tối đa 4 kho hoặc kệ.
+              Bạn đã chọn tối đa {maxUnitsPerBooking} kho hoặc kệ.
             </Text>
           ) : null}
         </View>

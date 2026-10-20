@@ -3,12 +3,14 @@ import { useState } from 'react';
 import { Alert } from 'react-native';
 import { ApiError } from '../../lib/api';
 import { bookingErrorMessage } from '../../lib/booking-errors';
+import { useRefreshBookingSettings } from '../../lib/client-settings';
 import { useHold } from '../../lib/hold';
 import { ScheduleRentalScreen } from '../../src/features/customer/ScheduleRentalScreen';
 
 export default function ScheduleRoute() {
   const router = useRouter();
   const { selectedWarehouses, heldBooking, createBooking, clearSelection, isCreating } = useHold();
+  const refreshBookingSettings = useRefreshBookingSettings();
   const [error, setError] = useState<string | null>(null);
 
   if (!selectedWarehouses) {
@@ -38,6 +40,11 @@ export default function ScheduleRoute() {
             Alert.alert('Kệ hoặc kho không còn trống', message);
             router.navigate('/(customer)/browse');
           } else {
+            // A rule rejection means the rules shown here are stale; reload them so the screen
+            // re-clamps its choices before the customer tries again.
+            if (cause instanceof ApiError && cause.code === 'VALIDATION_FAILED') {
+              refreshBookingSettings();
+            }
             setError(message);
           }
         }

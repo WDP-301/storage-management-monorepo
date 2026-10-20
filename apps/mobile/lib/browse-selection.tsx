@@ -8,9 +8,9 @@ import {
   useState,
 } from 'react';
 import type { Warehouse } from '../src/types/storage-api';
+import { useBookingSettings } from './client-settings';
 import { useHold } from './hold';
 import { isRentable } from './shelf-rental';
-import { MAX_WAREHOUSES_PER_BOOKING } from './warehouse-query';
 
 type BrowseSelection = {
   selected: Warehouse[];
@@ -22,6 +22,7 @@ const Context = createContext<BrowseSelection | null>(null);
 
 export function BrowseSelectionProvider({ children }: { children: ReactNode }) {
   const { activeHolds, heldBooking } = useHold();
+  const { maxUnitsPerBooking } = useBookingSettings();
   const [selected, setSelected] = useState<Warehouse[]>([]);
   const holdsKey = activeHolds.map((booking) => booking.id).join(',');
 
@@ -34,10 +35,10 @@ export function BrowseSelectionProvider({ children }: { children: ReactNode }) {
         if (current.some((item) => item.id === warehouse.id)) {
           return current.filter((item) => item.id !== warehouse.id);
         }
-        return current.length >= MAX_WAREHOUSES_PER_BOOKING ? current : [...current, warehouse];
+        return current.length >= maxUnitsPerBooking ? current : [...current, warehouse];
       });
     },
-    [heldBooking],
+    [heldBooking, maxUnitsPerBooking],
   );
   const clear = useCallback(() => setSelected([]), []);
   const value = useMemo(() => ({ selected, toggle, clear }), [selected, toggle, clear]);

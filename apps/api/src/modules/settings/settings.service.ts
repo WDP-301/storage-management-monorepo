@@ -5,7 +5,9 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
+import type { ClientSettingsResponse } from '@storage/types';
 import { In, Repository } from 'typeorm';
+import { toClientBookingSettings } from './client-settings';
 import {
   type SystemSettingsResponse,
   toSystemSettingRecord,
@@ -99,6 +101,35 @@ export class SettingsService {
   /** A unit's own deposit level wins; units without one follow the system-wide setting. */
   async getDepositMonthsFor(unit: Pick<StorageUnit, 'depositMonths'>): Promise<number> {
     return unit.depositMonths ?? this.getDepositDefaultMonths();
+  }
+
+  /** The subset of settings clients need to drive their own UI — safe to expose to any user. */
+  async getClientSettings(): Promise<ClientSettingsResponse> {
+    const [
+      rentalMonthsOptions,
+      defaultRentalMonths,
+      minRentalMonths,
+      maxRentalMonths,
+      leadDays,
+      maxUnitsPerBooking,
+    ] = await Promise.all([
+      this.getBookingRentalMonthsOptions(),
+      this.getBookingDefaultRentalMonths(),
+      this.getBookingMinRentalMonths(),
+      this.getBookingMaxRentalMonths(),
+      this.getBookingLeadDays(),
+      this.getBookingMaxUnitsPerBooking(),
+    ]);
+    return {
+      booking: toClientBookingSettings({
+        rentalMonthsOptions,
+        defaultRentalMonths,
+        minRentalMonths,
+        maxRentalMonths,
+        leadDays,
+        maxUnitsPerBooking,
+      }),
+    };
   }
 
   /** Lists every setting with its stored metadata (label, bounds, default). */

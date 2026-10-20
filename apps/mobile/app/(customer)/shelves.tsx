@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { ApiError } from '../../lib/api';
 import { useBrowseSelection } from '../../lib/browse-selection';
+import { useBookingSettings } from '../../lib/client-settings';
 import { formatMoney } from '../../lib/format-vi';
 import { useHold } from '../../lib/hold';
-import { MAX_WAREHOUSES_PER_BOOKING } from '../../lib/warehouse-query';
 import { WarehousesApi } from '../../lib/warehouses-api';
 import { ScreenHeader } from '../../src/components/ScreenHeader';
 import { ShelfPicker } from '../../src/features/customer/ShelfPicker';
@@ -16,6 +16,7 @@ export default function ShelvesRoute() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { selected, toggle } = useBrowseSelection();
+  const { maxUnitsPerBooking } = useBookingSettings();
   const { heldBooking, selectWarehouses } = useHold();
   const [warehouse, setWarehouse] = useState<Warehouse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +78,7 @@ export default function ShelvesRoute() {
             <ShelfPicker
               warehouse={warehouse}
               selectedIds={selectedIds}
-              selectionFull={selected.length >= MAX_WAREHOUSES_PER_BOOKING}
+              selectionFull={selected.length >= maxUnitsPerBooking}
               hasHolding={Boolean(heldBooking)}
               onToggle={toggle}
               expanded
@@ -89,7 +90,7 @@ export default function ShelvesRoute() {
         <View className="gap-2 border-t border-border bg-surface px-4 pt-3 pb-2">
           <View className="flex-row items-center justify-between gap-3">
             <Text className="font-ui text-body-sm text-foreground">
-              Đã chọn {selected.length}/{MAX_WAREHOUSES_PER_BOOKING} vị trí
+              Đã chọn {selected.length}/{maxUnitsPerBooking} vị trí
             </Text>
             <Text className="font-numeric text-body-sm text-accent">
               {formatMoney(totalRent)}/tháng

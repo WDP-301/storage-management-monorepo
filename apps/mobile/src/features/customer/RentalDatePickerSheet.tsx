@@ -8,8 +8,15 @@ import { useThemeColor } from 'heroui-native';
 import { CaretDown, CaretLeft, CaretRight } from 'phosphor-react-native';
 import { type RefObject, useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { useBookingSettings } from '../../../lib/client-settings';
 import { formatIsoDate } from '../../../lib/format-vi';
-import { fromIsoDate, latestStartIso, todayIso, toIsoDate } from '../../../lib/rental-schedule';
+import {
+  fromIsoDate,
+  latestStartIso,
+  monthStartsBetween,
+  todayIso,
+  toIsoDate,
+} from '../../../lib/rental-schedule';
 
 type Props = {
   sheetRef: RefObject<BottomSheetModal | null>;
@@ -27,9 +34,10 @@ export function RentalDatePickerSheet({ sheetRef, selectedDate, onSelect }: Prop
     return new Date(date.getFullYear(), date.getMonth(), 1);
   });
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
+  const { leadDays } = useBookingSettings();
   const today = todayIso();
   const todayDate = fromIsoDate(today);
-  const maxIso = latestStartIso(today);
+  const maxIso = latestStartIso(leadDays, today);
   const maxDate = fromIsoDate(maxIso);
 
   const monthStart = toIsoDate(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1));
@@ -40,9 +48,7 @@ export function RentalDatePickerSheet({ sheetRef, selectedDate, onSelect }: Prop
   const todayMonthStart = toIsoDate(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
   const canGoPrevious = monthStart > todayMonthStart;
   const canGoNext = monthStart < maxMonthStart;
-  const availableMonths = [todayMonthStart, maxMonthStart].filter(
-    (month, index, months) => months.indexOf(month) === index,
-  );
+  const availableMonths = monthStartsBetween(today, maxIso);
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
@@ -132,7 +138,7 @@ export function RentalDatePickerSheet({ sheetRef, selectedDate, onSelect }: Prop
         </View>
 
         {monthPickerOpen ? (
-          <View className="mt-3 flex-row gap-2 rounded-xl bg-surface-secondary p-2">
+          <View className="mt-3 flex-row flex-wrap gap-2 rounded-xl bg-surface-secondary p-2">
             {availableMonths.map((monthIso) => {
               const month = fromIsoDate(monthIso);
               const selected = monthIso === monthStart;
@@ -143,6 +149,8 @@ export function RentalDatePickerSheet({ sheetRef, selectedDate, onSelect }: Prop
                   accessibilityLabel={`Tháng ${month.getMonth() + 1}/${month.getFullYear()}`}
                   accessibilityState={{ selected }}
                   className={`flex-1 items-center rounded-lg px-2 py-3 ${selected ? 'bg-accent' : 'bg-surface'}`}
+                  // A long lead window lists many months; wrap three to a row instead of squeezing.
+                  style={{ minWidth: '30%' }}
                   onPress={() => {
                     setVisibleMonth(month);
                     setMonthPickerOpen(false);

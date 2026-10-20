@@ -1,8 +1,8 @@
 import { Button } from 'heroui-native';
 import { ActivityIndicator, Text, View } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
+import { useBookingSettings } from '../../../lib/client-settings';
 import { isShelfWarehouse } from '../../../lib/shelf-rental';
-import { MAX_WAREHOUSES_PER_BOOKING } from '../../../lib/warehouse-query';
 import type { NearbyWarehouse, Warehouse } from '../../types/storage-api';
 import { EmptyState } from './BrowseStates';
 import { WarehouseCard } from './WarehouseCard';
@@ -38,13 +38,14 @@ export function BrowseResultsList({
   onLoadMore,
 }: Props) {
   const prefersReducedMotion = useReducedMotion();
-  const selectionFull = selectedIds.length >= MAX_WAREHOUSES_PER_BOOKING;
+  const { maxUnitsPerBooking } = useBookingSettings();
+  const selectionFull = selectedIds.length >= maxUnitsPerBooking;
 
   return (
     <>
       <Text className="mx-4 mt-3 mb-3 font-body text-body-sm text-muted">
-        {summary ?? `${total} kho đang trống`}. Chọn tối đa {MAX_WAREHOUSES_PER_BOOKING} kho cho một
-        lần đặt.
+        {summary ?? `${total} kho đang trống`}. Chọn tối đa {maxUnitsPerBooking} kho cho một lần
+        đặt.
       </Text>
 
       {warehouses.length === 0 ? (

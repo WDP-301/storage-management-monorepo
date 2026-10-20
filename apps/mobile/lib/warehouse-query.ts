@@ -8,7 +8,6 @@
 import type { BrowseCriteria, WarehouseSort } from '../src/types/customer';
 import type { Warehouse } from '../src/types/storage-api';
 
-export const MAX_WAREHOUSES_PER_BOOKING = 4;
 export const PAGE_SIZE = 20;
 /** Highest `limit` the API accepts. */
 export const FACET_LIMIT = 100;

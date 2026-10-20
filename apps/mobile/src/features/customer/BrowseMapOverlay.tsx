@@ -1,6 +1,6 @@
 import { Crosshair, Faders, MagnifyingGlass, X } from 'phosphor-react-native';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
-import { MAX_WAREHOUSES_PER_BOOKING } from '../../../lib/warehouse-query';
+import { useBookingSettings } from '../../../lib/client-settings';
 
 type Props = {
   searchLabel: string | null;
@@ -30,6 +30,7 @@ export function BrowseMapOverlay({
   onNearMe,
   onOpenFilters,
 }: Props) {
+  const { maxUnitsPerBooking } = useBookingSettings();
   return (
     <View className="absolute top-3 right-4 left-4 gap-2" pointerEvents="box-none">
       <View className="flex-row items-center gap-2">
@@ -89,7 +90,7 @@ export function BrowseMapOverlay({
         </Pressable>
         {selectedCount > 0 ? (
           <Text className="rounded-full bg-foreground px-2.5 py-2 font-ui text-caption text-surface">
-            Đã chọn {selectedCount}/{MAX_WAREHOUSES_PER_BOOKING}
+            Đã chọn {selectedCount}/{maxUnitsPerBooking}
           </Text>
         ) : null}
         {nearbyCount !== null ? (

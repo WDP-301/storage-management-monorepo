@@ -9,14 +9,10 @@ import {
 } from 'phosphor-react-native';
 import { useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useBookingSettings } from '../../../lib/client-settings';
 import { formatIsoDate, formatMoney, formatNumber } from '../../../lib/format-vi';
 import type { RentalSchedule } from '../../../lib/hold';
-import {
-  DEFAULT_DURATION_MONTHS,
-  DURATION_OPTIONS,
-  rentalEndIso,
-  todayIso,
-} from '../../../lib/rental-schedule';
+import { latestStartIso, rentalEndIso, todayIso } from '../../../lib/rental-schedule';
 import { rentalName } from '../../../lib/shelf-rental';
 import { warehouseDeposit } from '../../../lib/warehouse-query';
 import type { Warehouse } from '../../types/storage-api';
@@ -42,8 +38,21 @@ const SUCCESS = 'hsl(160 84% 31%)';
  * it stays visible while the customer changes dates and durations.
  */
 export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, onConfirm }: Props) {
-  const [startDate, setStartDate] = useState(todayIso);
-  const [durationMonths, setDurationMonths] = useState(DEFAULT_DURATION_MONTHS);
+  const { rentalMonthsOptions, defaultRentalMonths, minRentalMonths, maxRentalMonths, leadDays } =
+    useBookingSettings();
+  const [pickedStart, setStartDate] = useState(todayIso);
+  const [pickedMonths, setPickedMonths] = useState(defaultRentalMonths);
+  // Rules can refresh while the screen is open. A pick the API still accepts is kept even when it is
+  // no longer suggested; anything else is pulled back in, so the summary always shows what is sent.
+  const latestStart = latestStartIso(leadDays);
+  const startDate = pickedStart > latestStart ? latestStart : pickedStart;
+  const durationMonths =
+    pickedMonths >= minRentalMonths && pickedMonths <= maxRentalMonths
+      ? pickedMonths
+      : defaultRentalMonths;
+  const durationChoices = rentalMonthsOptions.includes(durationMonths)
+    ? rentalMonthsOptions
+    : [...rentalMonthsOptions, durationMonths].sort((a, b) => a - b);
   const dateSheetRef = useRef<BottomSheetModal>(null);
   const endDate = rentalEndIso(startDate, durationMonths);
 
@@ -134,12 +143,12 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
 
         <SectionLabel text="Thời hạn thuê dự kiến" />
         <View className="flex-row flex-wrap gap-2 px-4">
-          {DURATION_OPTIONS.map((months) => (
+          {durationChoices.map((months) => (
             <ChoiceChip
               key={months}
               isSelected={durationMonths === months}
               label={`${months} tháng`}
-              onPress={() => setDurationMonths(months)}
+              onPress={() => setPickedMonths(months)}
             />
           ))}
         </View>

@@ -1,7 +1,7 @@
 import { Button } from 'heroui-native';
 import { Text, View } from 'react-native';
+import { useBookingSettings } from '../../../lib/client-settings';
 import { formatMoney, formatNumber } from '../../../lib/format-vi';
-import { MAX_WAREHOUSES_PER_BOOKING } from '../../../lib/warehouse-query';
 import type { Warehouse } from '../../types/storage-api';
 
 type Props = {
@@ -18,6 +18,7 @@ type Props = {
  * rent and progress — while the customer keeps scrolling through the list.
  */
 export function BrowseSelectionBar({ selected, hasHolding, onContinue, onClear }: Props) {
+  const { maxUnitsPerBooking } = useBookingSettings();
   const totalArea = selected.reduce((sum, warehouse) => sum + warehouse.areaM2, 0);
   const totalRent = selected.reduce((sum, warehouse) => sum + warehouse.monthlyPrice, 0);
   const unitLabel = selected.every((warehouse) => warehouse.kind === 'SHELF')
@@ -31,7 +32,7 @@ export function BrowseSelectionBar({ selected, hasHolding, onContinue, onClear }
       <View className="flex-row items-center justify-between gap-3">
         <View className="flex-1 gap-1">
           <Text className="font-strong text-body-sm text-foreground" numberOfLines={1}>
-            Đã chọn {selected.length}/{MAX_WAREHOUSES_PER_BOOKING} {unitLabel}
+            Đã chọn {selected.length}/{maxUnitsPerBooking} {unitLabel}
           </Text>
           <View className="flex-row items-baseline gap-1">
             <Text className="font-body text-caption text-muted">

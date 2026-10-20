@@ -6,16 +6,6 @@
  * display happens at the edge, in `format-vi`.
  */
 
-/**
- * Rental terms run in multiples of six months.
- *
- * The API does not enforce this yet — `bookings.rental_months` is only constrained to be positive
- * — so these values are the whole of the rule for now.
- */
-export const DURATION_OPTIONS: readonly number[] = [6, 12, 18];
-
-export const DEFAULT_DURATION_MONTHS = 6;
-
 export function toIsoDate(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
@@ -32,15 +22,28 @@ export function todayIso(): string {
   return toIsoDate(new Date());
 }
 
-/** One calendar month ahead, within the API's current 30-day booking lead limit. */
-export function latestStartIso(today: string = todayIso()): string {
+/**
+ * Latest start date the booking rules allow: `leadDays` days after today, inclusive. The API counts
+ * "today" in its own timezone, so in the hours after local midnight it may still be on yesterday.
+ */
+export function latestStartIso(leadDays: number, today: string = todayIso()): string {
   const date = fromIsoDate(today);
-  const lastDayOfNextMonth = new Date(date.getFullYear(), date.getMonth() + 2, 0).getDate();
-  const calendarMonthLimit = toIsoDate(
-    new Date(date.getFullYear(), date.getMonth() + 1, Math.min(date.getDate(), lastDayOfNextMonth)),
-  );
-  const apiLimit = toIsoDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() + 30));
-  return calendarMonthLimit < apiLimit ? calendarMonthLimit : apiLimit;
+  return toIsoDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() + leadDays));
+}
+
+/** First day of every month from `fromIso`'s month through `toIso`'s, as ISO day strings. */
+export function monthStartsBetween(fromIso: string, toIso: string): string[] {
+  const from = fromIsoDate(fromIso);
+  const to = fromIsoDate(toIso);
+  const months: string[] = [];
+  for (
+    let cursor = new Date(from.getFullYear(), from.getMonth(), 1);
+    cursor <= to;
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)
+  ) {
+    months.push(toIsoDate(cursor));
+  }
+  return months;
 }
 
 /**

@@ -4,14 +4,11 @@ import { Button } from 'heroui-native';
 import { useEffect, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useBrowseSelection } from '../../../lib/browse-selection';
+import { useBookingSettings } from '../../../lib/client-settings';
 import { hasPlottableCoords } from '../../../lib/goong-map-config';
 import { type PlacePrediction, WIDE_NEARBY_RADIUS_KM } from '../../../lib/places-api';
 import { isShelfWarehouse } from '../../../lib/shelf-rental';
-import {
-  countActiveFilters,
-  MAX_WAREHOUSES_PER_BOOKING,
-  matchesNearbyCriteria,
-} from '../../../lib/warehouse-query';
+import { countActiveFilters, matchesNearbyCriteria } from '../../../lib/warehouse-query';
 import type { BrowseView } from '../../types/customer';
 import type { NearbyWarehouse, Warehouse } from '../../types/storage-api';
 import { BrowseFiltersSheet } from './BrowseFiltersSheet';
@@ -39,6 +36,7 @@ type Props = {
 export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHold }: Props) {
   const router = useRouter();
   const { selected, toggle: toggleWarehouse, clear: clearSelection } = useBrowseSelection();
+  const { maxUnitsPerBooking } = useBookingSettings();
   const { criteria, setCriteria, provinceOptions, wardOptions, amenityOptions, reloadAmenities } =
     useBrowseCriteria();
   const { warehouses, total, hasMore, isLoading, isLoadingMore, error, loadMore, refetch } =
@@ -340,7 +338,7 @@ export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHol
         isDisabled={
           hasHolding ||
           (!selectedIds.includes(detailWarehouse?.id ?? '') &&
-            selected.length >= MAX_WAREHOUSES_PER_BOOKING)
+            selected.length >= maxUnitsPerBooking)
         }
         isSelected={selectedIds.includes(detailWarehouse?.id ?? '')}
         warehouse={detailWarehouse}

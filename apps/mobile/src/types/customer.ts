@@ -1,4 +1,4 @@
-export type CustomerTab = 'browse' | 'storage' | 'settings';
+export type CustomerTab = 'browse' | 'storage' | 'notifications' | 'settings';
 /** Browse renders either the warehouse list or the map; both read the same data. */
 export type BrowseView = 'list' | 'map';
 

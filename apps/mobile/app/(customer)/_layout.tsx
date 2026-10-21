@@ -1,13 +1,17 @@
 import { Tabs as RouterTabs, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Button, useThemeColor } from 'heroui-native';
-import { Buildings, UserCircle } from 'phosphor-react-native';
+import { Bell, Buildings, UserCircle } from 'phosphor-react-native';
 import { Text, View } from 'react-native';
 import { SafeAreaView as RNSafeAreaView } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
 import { BrowseSelectionProvider } from '../../lib/browse-selection';
 import { ClientSettingsProvider } from '../../lib/client-settings';
 import { HoldProvider, useHold } from '../../lib/hold';
+import {
+  NotificationsUnreadProvider,
+  useUnreadNotifications,
+} from '../../lib/notifications-unread';
 import { BottomTabButton } from '../../src/components/BottomTabButton';
 import { StorageIcon } from '../../src/components/TabIcons';
 import type { CustomerTab } from '../../src/types/customer';
@@ -17,6 +21,7 @@ const SafeAreaView = withUniwind(RNSafeAreaView);
 const TAB_HREFS = {
   browse: '/(customer)/browse',
   storage: '/(customer)/storage',
+  notifications: '/(customer)/notifications',
   settings: '/(customer)/settings',
 } as const;
 
@@ -27,36 +32,42 @@ export default function CustomerTabsLayout() {
   return (
     <ClientSettingsProvider>
       <HoldProvider>
-        <BrowseSelectionProvider>
-          <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-            <StatusBar style="dark" />
-            <RouterTabs
-              backBehavior="history"
-              screenOptions={{ headerShown: false, sceneStyle: { backgroundColor } }}
-              tabBar={({ state }) =>
-                state.routes[state.index]?.name === 'shelves' ? null : (
-                  <CustomerTabBar
-                    activeTab={toCustomerTab(state.routes[state.index]?.name)}
-                    onSelect={(tab) => router.navigate(TAB_HREFS[tab])}
-                  />
-                )
-              }
-            >
-              <RouterTabs.Screen name="browse" options={{ title: 'Tìm kho' }} />
-              <RouterTabs.Screen name="shelves" options={{ title: 'Chọn kệ' }} />
-              <RouterTabs.Screen name="storage" options={{ title: 'Kho của tôi' }} />
-              <RouterTabs.Screen name="contract-detail" options={{ title: 'Chi tiết hợp đồng' }} />
-              <RouterTabs.Screen name="settings" options={{ title: 'Tài khoản' }} />
-              {/* Scheduling is reached after selecting units; it has no tab button. */}
-              <RouterTabs.Screen name="schedule" options={{ title: 'Đặt lịch thuê' }} />
-              {/* Deposit payment is reached from a booking, so it has no tab button either. */}
-              <RouterTabs.Screen name="payment" options={{ title: 'Thanh toán tiền cọc' }} />
-              <RouterTabs.Screen name="tickets" options={{ title: 'Yêu cầu hỗ trợ' }} />
-              <RouterTabs.Screen name="ticket-detail" options={{ title: 'Chi tiết yêu cầu' }} />
-              <RouterTabs.Screen name="ticket-create" options={{ title: 'Tạo yêu cầu' }} />
-            </RouterTabs>
-          </SafeAreaView>
-        </BrowseSelectionProvider>
+        <NotificationsUnreadProvider>
+          <BrowseSelectionProvider>
+            <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
+              <StatusBar style="dark" />
+              <RouterTabs
+                backBehavior="history"
+                screenOptions={{ headerShown: false, sceneStyle: { backgroundColor } }}
+                tabBar={({ state }) =>
+                  state.routes[state.index]?.name === 'shelves' ? null : (
+                    <CustomerTabBar
+                      activeTab={toCustomerTab(state.routes[state.index]?.name)}
+                      onSelect={(tab) => router.navigate(TAB_HREFS[tab])}
+                    />
+                  )
+                }
+              >
+                <RouterTabs.Screen name="browse" options={{ title: 'Tìm kho' }} />
+                <RouterTabs.Screen name="shelves" options={{ title: 'Chọn kệ' }} />
+                <RouterTabs.Screen name="storage" options={{ title: 'Kho của tôi' }} />
+                <RouterTabs.Screen
+                  name="contract-detail"
+                  options={{ title: 'Chi tiết hợp đồng' }}
+                />
+                <RouterTabs.Screen name="notifications" options={{ title: 'Thông báo' }} />
+                <RouterTabs.Screen name="settings" options={{ title: 'Tài khoản' }} />
+                {/* Scheduling is reached after selecting units; it has no tab button. */}
+                <RouterTabs.Screen name="schedule" options={{ title: 'Đặt lịch thuê' }} />
+                {/* Deposit payment is reached from a booking, so it has no tab button either. */}
+                <RouterTabs.Screen name="payment" options={{ title: 'Thanh toán tiền cọc' }} />
+                <RouterTabs.Screen name="tickets" options={{ title: 'Yêu cầu hỗ trợ' }} />
+                <RouterTabs.Screen name="ticket-detail" options={{ title: 'Chi tiết yêu cầu' }} />
+                <RouterTabs.Screen name="ticket-create" options={{ title: 'Tạo yêu cầu' }} />
+              </RouterTabs>
+            </SafeAreaView>
+          </BrowseSelectionProvider>
+        </NotificationsUnreadProvider>
       </HoldProvider>
     </ClientSettingsProvider>
   );
@@ -70,6 +81,7 @@ function CustomerTabBar({
   onSelect: (tab: CustomerTab) => void;
 }) {
   const { activeHolds, heldBooking, heldUnitCount, remaining, isExpiringSoon } = useHold();
+  const { unread } = useUnreadNotifications();
   const [accentColor, mutedColor] = useThemeColor(['accent', 'muted']);
   const iconColor = (tab: CustomerTab) => (activeTab === tab ? accentColor : mutedColor);
   // Several bookings can hold units at once, so the bar summarises all of them and counts down the
@@ -127,6 +139,13 @@ function CustomerTabBar({
           onPress={() => onSelect('storage')}
         />
         <BottomTabButton
+          badge={unread > 0 ? unread : undefined}
+          icon={<Bell color={iconColor('notifications')} size={24} />}
+          isSelected={activeTab === 'notifications'}
+          label="Thông báo"
+          onPress={() => onSelect('notifications')}
+        />
+        <BottomTabButton
           icon={<UserCircle color={iconColor('settings')} size={24} />}
           isSelected={activeTab === 'settings'}
           label="Tài khoản"
@@ -138,7 +157,7 @@ function CustomerTabBar({
 }
 
 function toCustomerTab(routeName: string | undefined): CustomerTab {
-  if (routeName === 'storage' || routeName === 'settings') {
+  if (routeName === 'storage' || routeName === 'notifications' || routeName === 'settings') {
     return routeName;
   }
   if (routeName === 'contract-detail') return 'storage';

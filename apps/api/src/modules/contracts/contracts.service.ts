@@ -9,7 +9,13 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { BookingStatus, ContractStatus, InspectionType, StorageUnitStatus } from '@storage/types';
+import {
+  BookingStatus,
+  ContractKind,
+  ContractStatus,
+  InspectionType,
+  StorageUnitStatus,
+} from '@storage/types';
 import { DataSource, In, IsNull, Repository } from 'typeorm';
 import { loadContractInspections } from './contract-inspections.util';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
@@ -100,10 +106,23 @@ export class ContractsService {
         await manager.update(StorageUnit, { id: unit.id }, { status: StorageUnitStatus.BOOKED });
       }
 
+      // Only one live INITIAL contract per item is allowed (UQ_contract_initial_item), so a
+      // cancelled one is retired before the item is contracted again; its HELD deposit then
+      // moves to the new contract when persistContract records the deposit.
+      const kind = dto.kind ?? ContractKind.INITIAL;
+      if (kind === ContractKind.INITIAL) {
+        await manager.softDelete(Contract, {
+          bookingItemId: item.id,
+          kind: ContractKind.INITIAL,
+          status: ContractStatus.CANCELLED,
+          deletedAt: IsNull(),
+        });
+      }
+
       return persistContract(manager, {
         item,
         customer,
-        kind: dto.kind,
+        kind,
         effectiveAt,
         endedAt,
         signedAt: dto.signedAt ? new Date(dto.signedAt) : undefined,

@@ -2,6 +2,7 @@ import type { SystemSetting } from '@entities/system-setting.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import type { SettingValueType } from '@storage/types';
 import { UserRole, UserStatus } from '@storage/types';
+import { In, Not } from 'typeorm';
 import { SettingsService } from './settings.service';
 
 const buildAdmin = (): AuthUser =>
@@ -47,6 +48,13 @@ const ROW_META: Record<
     label: 'Suggested rental terms (months)',
     min: 1,
     max: 60,
+  },
+  'contract.return_rules_effective_at': {
+    valueType: 'string',
+    group: 'contract',
+    label: 'Return rules effective at',
+    min: undefined,
+    max: undefined,
   },
 };
 
@@ -120,7 +128,85 @@ describe('SettingsService', () => {
     });
   });
 
+  describe('return rules', () => {
+    it('reads the notice days and overstay percentage as numbers', async () => {
+      repo.findOne.mockImplementation(({ where: { key } }: { where: { key: string } }) =>
+        Promise.resolve(buildSetting(key, { 'contract.return_notice_days': 30 }[key] ?? '150')),
+      );
+
+      await expect(service.getReturnNoticeDays()).resolves.toBe(30);
+      await expect(service.getOverduePenaltyPercent()).resolves.toBe(150);
+      expect(repo.findOne).toHaveBeenCalledWith({
+        where: { key: 'billing.overdue_penalty_percent' },
+      });
+    });
+
+    it('parses the go-live timestamp stored by the database', async () => {
+      repo.findOne.mockResolvedValue(
+        buildSetting('contract.return_rules_effective_at', '2026-10-21T09:20:35.123456+00:00'),
+      );
+
+      await expect(service.getReturnRulesEffectiveAt()).resolves.toEqual(
+        new Date('2026-10-21T09:20:35.123Z'),
+      );
+    });
+
+    it.each([null, 42, 'not a date'])(
+      'refuses to guess when the go-live value is %p',
+      async (value) => {
+        repo.findOne.mockResolvedValue(buildSetting('contract.return_rules_effective_at', value));
+
+        await expect(service.getReturnRulesEffectiveAt()).rejects.toMatchObject({
+          status: 500,
+          response: { code: 'INTERNAL_ERROR' },
+        });
+      },
+    );
+  });
+
+  describe('getAll', () => {
+    it('leaves the go-live timestamp out of the editable settings', async () => {
+      repo.find.mockResolvedValue([buildSetting('booking.hold_minutes', 15)]);
+
+      const result = await service.getAll();
+
+      expect(repo.find).toHaveBeenCalledWith({
+        where: { key: Not(In(['contract.return_rules_effective_at'])) },
+        order: { group: 'ASC', key: 'ASC' },
+      });
+      expect(result.settings.map((setting) => setting.key)).toEqual(['booking.hold_minutes']);
+    });
+  });
+
   describe('update', () => {
+    it('refuses to change the go-live timestamp even though its row exists', async () => {
+      repo.find.mockResolvedValue([
+        buildSetting('contract.return_rules_effective_at', '2026-10-21T00:00:00Z'),
+      ]);
+
+      await expect(
+        service.update(
+          { 'contract.return_rules_effective_at': '2020-01-01T00:00:00Z' },
+          buildAdmin(),
+        ),
+      ).rejects.toMatchObject({
+        status: 400,
+        response: {
+          code: 'VALIDATION_FAILED',
+          details: {
+            fields: [
+              {
+                field: 'contract.return_rules_effective_at',
+                code: 'invalidValue',
+                message: 'Unknown setting key',
+              },
+            ],
+          },
+        },
+      });
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
     it('updates only value and updated_by, then returns the updated records', async () => {
       repo.find.mockResolvedValue([buildSetting('booking.hold_minutes', 10)]);
 
@@ -205,6 +291,8 @@ describe('SettingsService', () => {
       'booking.max_rental_months': 60,
       'booking.lead_days': 30,
       'booking.max_units_per_booking': 4,
+      'contract.return_notice_days': 30,
+      'billing.overdue_penalty_percent': 100,
     };
 
     const serve = (overrides: Record<string, unknown> = {}) =>
@@ -212,7 +300,7 @@ describe('SettingsService', () => {
         Promise.resolve(buildSetting(key, { ...stored, ...overrides }[key])),
       );
 
-    it('returns the booking rules with options sorted', async () => {
+    it('returns the booking rules with options sorted, and the return rules', async () => {
       serve();
 
       await expect(service.getClientSettings()).resolves.toEqual({
@@ -224,6 +312,17 @@ describe('SettingsService', () => {
           leadDays: 30,
           maxUnitsPerBooking: 4,
         },
+        return: { noticeDays: 30, overduePenaltyPercent: 100 },
+      });
+    });
+
+    it('never exposes the go-live timestamp to clients', async () => {
+      serve();
+
+      await service.getClientSettings();
+
+      expect(repo.findOne).not.toHaveBeenCalledWith({
+        where: { key: 'contract.return_rules_effective_at' },
       });
     });
 

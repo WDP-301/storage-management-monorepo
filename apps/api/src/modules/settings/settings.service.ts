@@ -3,11 +3,12 @@ import { SystemSetting } from '@entities/system-setting.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DomainException } from '@shared/exceptions/domain.exception';
+import { DomainException, fieldValidationError } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import type { ClientSettingsResponse } from '@storage/types';
-import { In, Repository } from 'typeorm';
-import { toClientBookingSettings } from './client-settings';
+import { In, Not, Repository } from 'typeorm';
+import { loadClientSettings } from './client-settings';
+import { validateSettingValue } from './setting-value.validator';
 import {
   type SystemSettingsResponse,
   toSystemSettingRecord,
@@ -16,6 +17,13 @@ import {
 
 /** Settings change rarely — a short TTL lets other instances pick up updates without invalidation plumbing. */
 const CACHE_TTL_MS = 60_000;
+
+/**
+ * When the return rules went live. Contracts already overdue then are only charged from this
+ * moment, so it is set once by the migration and never listed or edited through the API.
+ */
+const RETURN_RULES_EFFECTIVE_AT = 'contract.return_rules_effective_at';
+const HIDDEN_KEYS = [RETURN_RULES_EFFECTIVE_AT];
 
 @Injectable()
 export class SettingsService {
@@ -98,6 +106,30 @@ export class SettingsService {
     return this.getNumber('access.check_in_qr_ttl_minutes');
   }
 
+  /** Notice (days) a customer must give to return early without losing a month of rent. */
+  async getReturnNoticeDays(): Promise<number> {
+    return this.getNumber('contract.return_notice_days');
+  }
+
+  /** Per-day overstay charge as a percentage of one day's rent (monthly rent / 30). */
+  async getOverduePenaltyPercent(): Promise<number> {
+    return this.getNumber('billing.overdue_penalty_percent');
+  }
+
+  /** Go-live of the return rules; a missing or unreadable value is an error, never a guess. */
+  async getReturnRulesEffectiveAt(): Promise<Date> {
+    const value = await this.get(RETURN_RULES_EFFECTIVE_AT);
+    const at = typeof value === 'string' ? new Date(value) : null;
+    if (!at || Number.isNaN(at.getTime())) {
+      throw new DomainException(
+        ErrorCode.INTERNAL_ERROR,
+        `System setting '${RETURN_RULES_EFFECTIVE_AT}' is not a timestamp`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+    return at;
+  }
+
   /** A unit's own deposit level wins; units without one follow the system-wide setting. */
   async getDepositMonthsFor(unit: Pick<StorageUnit, 'depositMonths'>): Promise<number> {
     return unit.depositMonths ?? this.getDepositDefaultMonths();
@@ -105,36 +137,15 @@ export class SettingsService {
 
   /** The subset of settings clients need to drive their own UI — safe to expose to any user. */
   async getClientSettings(): Promise<ClientSettingsResponse> {
-    const [
-      rentalMonthsOptions,
-      defaultRentalMonths,
-      minRentalMonths,
-      maxRentalMonths,
-      leadDays,
-      maxUnitsPerBooking,
-    ] = await Promise.all([
-      this.getBookingRentalMonthsOptions(),
-      this.getBookingDefaultRentalMonths(),
-      this.getBookingMinRentalMonths(),
-      this.getBookingMaxRentalMonths(),
-      this.getBookingLeadDays(),
-      this.getBookingMaxUnitsPerBooking(),
-    ]);
-    return {
-      booking: toClientBookingSettings({
-        rentalMonthsOptions,
-        defaultRentalMonths,
-        minRentalMonths,
-        maxRentalMonths,
-        leadDays,
-        maxUnitsPerBooking,
-      }),
-    };
+    return loadClientSettings(this);
   }
 
-  /** Lists every setting with its stored metadata (label, bounds, default). */
+  /** Lists every editable setting with its stored metadata (label, bounds, default). */
   async getAll(): Promise<SystemSettingsResponse> {
-    const rows = await this.settingsRepo.find({ order: { group: 'ASC', key: 'ASC' } });
+    const rows = await this.settingsRepo.find({
+      where: { key: Not(In(HIDDEN_KEYS)) },
+      order: { group: 'ASC', key: 'ASC' },
+    });
     return { settings: rows.map(toSystemSettingRecord) };
   }
 
@@ -142,25 +153,15 @@ export class SettingsService {
   async update(values: Record<string, unknown>, admin: AuthUser): Promise<UpdateSettingsResponse> {
     const entries = Object.entries(values);
     if (entries.length === 0) {
-      throw new DomainException(
-        ErrorCode.VALIDATION_FAILED,
-        'Validation failed',
-        HttpStatus.BAD_REQUEST,
-        {
-          fields: [
-            {
-              field: 'values',
-              code: 'isEmpty',
-              message: 'At least one setting is required to update',
-            },
-          ],
-        },
-      );
+      throw fieldValidationError('values', 'isEmpty', 'At least one setting is required to update');
     }
 
     const keys = entries.map(([key]) => key);
     const rows = await this.settingsRepo.find({ where: { key: In(keys) } });
-    const byKey = new Map(rows.map((row) => [row.key, row]));
+    // Hidden keys answer like unknown ones: they are not part of the editable settings.
+    const byKey = new Map(
+      rows.filter((row) => !HIDDEN_KEYS.includes(row.key)).map((row) => [row.key, row]),
+    );
 
     const fieldErrors = entries.flatMap(([key, value]) => {
       const row = byKey.get(key);
@@ -192,66 +193,4 @@ export class SettingsService {
     });
     return { settings: updated.map(toSystemSettingRecord) };
   }
-}
-
-/**
- * Validates a candidate value against the row's declared type and bounds.
- * Returns an error message, or `null` when the value is valid.
- */
-function validateSettingValue(row: SystemSetting, value: unknown): string | null {
-  const { min, max } = row;
-
-  switch (row.valueType) {
-    case 'int':
-      if (typeof value !== 'number' || !Number.isInteger(value)) {
-        return 'Value must be an integer';
-      }
-      break;
-    case 'float':
-      if (typeof value !== 'number' || !Number.isFinite(value)) {
-        return 'Value must be a number';
-      }
-      break;
-    case 'string':
-      if (typeof value !== 'string') {
-        return 'Value must be a string';
-      }
-      break;
-    case 'boolean':
-      if (typeof value !== 'boolean') {
-        return 'Value must be a boolean';
-      }
-      break;
-    case 'duration_minutes':
-      if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
-        return 'Value must be a positive integer number of minutes';
-      }
-      break;
-    case 'int_list':
-      if (
-        !Array.isArray(value) ||
-        !value.every((v) => typeof v === 'number' && Number.isInteger(v))
-      ) {
-        return 'Value must be an array of integers';
-      }
-      if (min != null && value.some((v) => v < min)) {
-        return `Each item must be >= ${min}`;
-      }
-      if (max != null && value.some((v) => v > max)) {
-        return `Each item must be <= ${max}`;
-      }
-      break;
-  }
-
-  if (row.valueType !== 'string' && row.valueType !== 'boolean' && row.valueType !== 'int_list') {
-    const numeric = value as number;
-    if (min != null && numeric < min) {
-      return `Value must be >= ${min}`;
-    }
-    if (max != null && numeric > max) {
-      return `Value must be <= ${max}`;
-    }
-  }
-
-  return null;
 }

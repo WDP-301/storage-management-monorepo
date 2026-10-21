@@ -1,4 +1,41 @@
-import type { ClientBookingSettings } from '@storage/types';
+import type { ClientBookingSettings, ClientSettingsResponse } from '@storage/types';
+import type { SettingsService } from './settings.service';
+
+/** Reads every setting a client needs in one go; see `toClientBookingSettings` for the booking rules. */
+export async function loadClientSettings(
+  settings: SettingsService,
+): Promise<ClientSettingsResponse> {
+  const [
+    rentalMonthsOptions,
+    defaultRentalMonths,
+    minRentalMonths,
+    maxRentalMonths,
+    leadDays,
+    maxUnitsPerBooking,
+    noticeDays,
+    overduePenaltyPercent,
+  ] = await Promise.all([
+    settings.getBookingRentalMonthsOptions(),
+    settings.getBookingDefaultRentalMonths(),
+    settings.getBookingMinRentalMonths(),
+    settings.getBookingMaxRentalMonths(),
+    settings.getBookingLeadDays(),
+    settings.getBookingMaxUnitsPerBooking(),
+    settings.getReturnNoticeDays(),
+    settings.getOverduePenaltyPercent(),
+  ]);
+  return {
+    booking: toClientBookingSettings({
+      rentalMonthsOptions,
+      defaultRentalMonths,
+      minRentalMonths,
+      maxRentalMonths,
+      leadDays,
+      maxUnitsPerBooking,
+    }),
+    return: { noticeDays, overduePenaltyPercent },
+  };
+}
 
 /**
  * Settings are validated one key at a time, so an admin can leave them mutually inconsistent

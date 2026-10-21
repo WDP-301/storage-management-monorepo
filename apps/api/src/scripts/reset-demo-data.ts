@@ -27,6 +27,8 @@ const LOCAL_HOSTS = ['localhost', '127.0.0.1', '::1'];
 /** Child tables first, so every statement runs after the rows that reference it are gone. */
 const WIPE_STEPS: { table: string; sql: string }[] = [
   { table: 'refunds', sql: 'DELETE FROM "refunds"' },
+  // References deposits without a cascade, so it must go first.
+  { table: 'contract_settlements', sql: 'DELETE FROM "contract_settlements"' },
   { table: 'deposits', sql: 'DELETE FROM "deposits"' },
   { table: 'payments', sql: 'DELETE FROM "payments"' },
   { table: 'damage_fees', sql: 'DELETE FROM "damage_fees"' },

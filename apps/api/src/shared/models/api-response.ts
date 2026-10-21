@@ -28,6 +28,22 @@ export enum ErrorCode {
   ACCESS_PASS_INVALID = 'ACCESS_PASS_INVALID',
   CHECK_IN_NOT_ALLOWED = 'CHECK_IN_NOT_ALLOWED',
   INVOICE_OVERDUE = 'INVOICE_OVERDUE',
+  /** Staff already started the return inspection, so the customer can no longer cancel it. */
+  RETURN_REQUEST_LOCKED = 'RETURN_REQUEST_LOCKED',
+  /** The deposit paid for the contract cannot be determined. */
+  DEPOSIT_MISSING = 'DEPOSIT_MISSING',
+  /** The contract has no finalized return yet. */
+  SETTLEMENT_NOT_READY = 'SETTLEMENT_NOT_READY',
+  SETTLEMENT_ALREADY_APPROVED = 'SETTLEMENT_ALREADY_APPROVED',
+  /** The figures changed since the reviewer loaded them; reload before approving. */
+  SETTLEMENT_CHANGED = 'SETTLEMENT_CHANGED',
+  /** A damage or a payment under review has no decision yet. */
+  DECISION_REQUIRED = 'DECISION_REQUIRED',
+  /** There is money to refund but no bank account to send it to. */
+  REFUND_ACCOUNT_REQUIRED = 'REFUND_ACCOUNT_REQUIRED',
+  REFUND_NOT_PENDING = 'REFUND_NOT_PENDING',
+  /** The upload is evidence of a finalized inspection or a settlement and cannot be deleted. */
+  FILE_IN_USE = 'FILE_IN_USE',
 }
 
 export interface ValidationFieldDetail {

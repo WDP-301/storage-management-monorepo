@@ -1,5 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { ClientBookingSettings, ClientSettingsResponse } from '@storage/types';
+import type {
+  ClientBookingSettings,
+  ClientReturnSettings,
+  ClientSettingsResponse,
+} from '@storage/types';
 
 export class ClientBookingSettingsDto implements ClientBookingSettings {
   @ApiProperty({
@@ -25,7 +29,24 @@ export class ClientBookingSettingsDto implements ClientBookingSettings {
   maxUnitsPerBooking: number;
 }
 
+export class ClientReturnSettingsDto implements ClientReturnSettings {
+  @ApiProperty({
+    description: 'Days of notice needed to return early without losing one month of rent',
+    example: 30,
+  })
+  noticeDays: number;
+
+  @ApiProperty({
+    description: "Per-day overstay charge as a percentage of one day's rent (monthly rent / 30)",
+    example: 100,
+  })
+  overduePenaltyPercent: number;
+}
+
 export class ClientSettingsResponseDto implements ClientSettingsResponse {
   @ApiProperty({ type: ClientBookingSettingsDto })
   booking: ClientBookingSettingsDto;
+
+  @ApiProperty({ type: ClientReturnSettingsDto })
+  return: ClientReturnSettingsDto;
 }

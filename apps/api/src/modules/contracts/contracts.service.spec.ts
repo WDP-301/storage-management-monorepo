@@ -5,6 +5,7 @@ import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
+import { Logger } from '@nestjs/common';
 import {
   BookingStatus,
   ContractKind,
@@ -45,12 +46,16 @@ describe('ContractsService', () => {
     create: jest.Mock;
     save: jest.Mock;
     update: jest.Mock;
+    softDelete: jest.Mock;
     query: jest.Mock;
+    transaction: jest.Mock;
   };
   let repo: { find: jest.Mock; findOne: jest.Mock; update: jest.Mock; softDelete: jest.Mock };
 
   beforeEach(() => {
     jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-12-02T00:00:00+07:00').getTime());
+    // Without ledger rows the deposit cannot be derived; that warning is expected here.
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation();
     // Includes another item's rent: the whole subtotal must not become this contract's rent.
     booking = {
       id: 'booking-1',
@@ -77,7 +82,11 @@ describe('ContractsService', () => {
       save: jest.fn(async (_entity, data) => ({ id: 'contract-1', ...data })),
       findOneOrFail: jest.fn(async (entity) => (entity === Contract ? { id: 'contract-1' } : null)),
       update: jest.fn(async () => ({ affected: 1 })),
-      query: jest.fn().mockResolvedValue([]),
+      softDelete: jest.fn(async () => ({ affected: 0 })),
+      // Amenity snapshot and deposit ledger reads return no rows; UPDATE answers [rows, count].
+      query: jest.fn(async (sql: string) => (sql.trimStart().startsWith('UPDATE') ? [[], 0] : [])),
+      // A nested transaction is a savepoint on the same manager.
+      transaction: jest.fn((callback) => callback(manager)),
     };
     repo = { find: jest.fn(), findOne: jest.fn(), update: jest.fn(), softDelete: jest.fn() };
     service = new ContractsService(
@@ -202,13 +211,74 @@ describe('ContractsService', () => {
     expect(manager.query).toHaveBeenCalledWith(expect.any(String), ['unit-1']);
     expect(result.amenitiesSnapshot).toEqual([]);
 
-    manager.query.mockResolvedValue([
-      { amenityId: 'a-1', code: 'CCTV', name: 'CCTV', quantity: 6, note: 'gate' },
-    ]);
+    const amenity = { amenityId: 'a-1', code: 'CCTV', name: 'CCTV', quantity: 6, note: 'gate' };
+    manager.query.mockImplementation(async (sql: string) =>
+      sql.includes('storage_unit_amenities') ? [amenity] : sql.startsWith('UPDATE') ? [[], 0] : [],
+    );
     const withAmenities = await service.create({ bookingItemId: item.id });
     expect(withAmenities.amenitiesSnapshot).toEqual([
       { amenityId: 'a-1', code: 'CCTV', name: 'CCTV', quantity: 6, note: 'gate' },
     ]);
+  });
+
+  it('retires a cancelled initial contract of the item before contracting it again', async () => {
+    await service.create({ bookingItemId: item.id });
+
+    expect(manager.softDelete).toHaveBeenCalledWith(Contract, {
+      bookingItemId: item.id,
+      kind: ContractKind.INITIAL,
+      status: ContractStatus.CANCELLED,
+      deletedAt: IsNull(),
+    });
+    const contractSave = manager.save.mock.calls.findIndex(([entity]) => entity === Contract);
+    expect(manager.softDelete.mock.invocationCallOrder[0]).toBeLessThan(
+      manager.save.mock.invocationCallOrder[contractSave],
+    );
+  });
+
+  it('keeps cancelled contracts when the new contract is a renewal', async () => {
+    await service.create({ bookingItemId: item.id, kind: ContractKind.RENEWAL });
+    expect(manager.softDelete).not.toHaveBeenCalled();
+  });
+
+  it("moves the cancelled contract's held deposit to the re-created contract", async () => {
+    const moved = {
+      id: 'deposit-1',
+      contractId: 'contract-1',
+      paymentId: 'payment-1',
+      amount: '2000000.00',
+      heldAmount: '2000000.00',
+      status: 'HELD',
+    };
+    manager.query.mockImplementation(async (sql: string) =>
+      sql.trimStart().startsWith('UPDATE deposits') ? [[moved], 1] : [],
+    );
+
+    await service.create({ bookingItemId: item.id });
+
+    expect(manager.transaction).toHaveBeenCalledTimes(1);
+    expect(manager.query).toHaveBeenCalledWith(expect.stringMatching(/^\s*UPDATE deposits/), [
+      'contract-1',
+      item.id,
+    ]);
+    expect(manager.query).not.toHaveBeenCalledWith(
+      expect.stringMatching(/INSERT INTO deposits/),
+      expect.anything(),
+    );
+  });
+
+  it('still creates the contract when recording its deposit fails', async () => {
+    const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    manager.transaction.mockRejectedValue(new Error('deposits locked'));
+
+    await expect(service.create({ bookingItemId: item.id })).resolves.toHaveProperty(
+      'id',
+      'contract-1',
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('contract-1'),
+      expect.stringContaining('deposits locked'),
+    );
   });
 
   it('locks the unit before creating the contract', async () => {

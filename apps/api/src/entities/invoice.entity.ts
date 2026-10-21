@@ -1,6 +1,6 @@
 import { AppUser } from '@entities/app-user.entity';
 import { Contract } from '@entities/contract.entity';
-import { InvoiceStatus, RentalPeriodKind } from '@storage/types';
+import { InvoiceKind, InvoiceStatus } from '@storage/types';
 import {
   Column,
   CreateDateColumn,
@@ -16,8 +16,8 @@ import {
 @Index('IDX_invoices_customer_open', ['customerId', 'dueAt'], {
   where: `"status" IN ('ISSUED', 'PARTIALLY_PAID')`,
 })
-// Partial unique index (contract_id, period_no) WHERE status <> 'VOID' — created by migration,
-// metadata kept sync-off so schema sync never manages the WHERE clause.
+// Partial unique index (contract_id, period_no) WHERE status <> 'VOID' AND kind <> 'SETTLEMENT' —
+// created by migration, metadata kept sync-off so schema sync never manages the WHERE clause.
 @Index('UQ_invoices_contract_period', { synchronize: false })
 export class Invoice {
   @PrimaryGeneratedColumn('uuid')
@@ -35,8 +35,8 @@ export class Invoice {
   @Column({ type: 'int', default: 1, name: 'period_no' })
   periodNo: number;
 
-  @Column({ type: 'varchar', length: 20, default: RentalPeriodKind.INITIAL })
-  kind: RentalPeriodKind;
+  @Column({ type: 'varchar', length: 20, default: InvoiceKind.INITIAL })
+  kind: InvoiceKind;
 
   @Column({ type: 'timestamptz', nullable: true, name: 'start_at' })
   startAt?: Date;

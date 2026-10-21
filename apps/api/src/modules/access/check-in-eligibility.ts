@@ -3,6 +3,7 @@ import type { StorageUnit } from '@entities/storage-unit.entity';
 import { HttpStatus } from '@nestjs/common';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
+import { startOfVietnamDay } from '@shared/utils/calendar.util';
 import { ContractStatus, StorageUnitKind } from '@storage/types';
 import type { EntityManager } from 'typeorm';
 import { findOverdueInvoiceNos } from './overdue-invoices.query';
@@ -13,14 +14,8 @@ const PAYLOAD_PATTERN = /^SMCI1:([A-Za-z0-9_-]{43})$/;
 
 export const buildPayload = (token: string): string => `${QR_PREFIX}${token}`;
 
-// Vietnam has no daylight saving, so its calendar day is a fixed +07:00 offset from UTC.
-const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** 00:00 Vietnam time on the day `at` falls on. */
-export function startOfVietnamDay(at: Date): Date {
-  return new Date(Math.floor((at.getTime() + VN_OFFSET_MS) / DAY_MS) * DAY_MS - VN_OFFSET_MS);
-}
+// Kept importable from here for existing callers; the Vietnam calendar lives in calendar.util.
+export { startOfVietnamDay };
 
 /**
  * Extracts the token from a scanned payload, or null when it is not one of ours. Surrounding

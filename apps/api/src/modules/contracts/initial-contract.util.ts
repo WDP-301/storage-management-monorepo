@@ -11,6 +11,7 @@ import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import { ContractKind, ContractStatus, InspectionType } from '@storage/types';
 import Decimal from 'decimal.js';
 import { EntityManager } from 'typeorm';
+import { captureDepositSafely } from './deposit-ledger.util';
 
 export interface PersistContractInput {
   item: BookingItem;
@@ -29,10 +30,11 @@ export interface PersistContractInput {
 }
 
 /**
- * Saves a contract for a booking item plus its empty PRE_HANDOVER inspection.
- * Plain function over an EntityManager so the caller's transaction covers both rows
- * (inspection failure rolls back the contract) and BookingsModule can use it
- * without depending on ContractsModule.
+ * Saves a contract for a booking item plus its empty PRE_HANDOVER inspection, then records its
+ * deposit in the ledger. Plain function over an EntityManager so the caller's transaction covers
+ * the rows (inspection failure rolls back the contract) and BookingsModule can use it without
+ * depending on ContractsModule. The deposit is recorded inside a savepoint that never fails the
+ * caller, so a ledger problem cannot undo a confirmed deposit transfer.
  */
 export async function persistContract(
   manager: EntityManager,
@@ -93,5 +95,6 @@ export async function persistContract(
       scheduledAt: saved.effectiveAt,
     }),
   );
+  await captureDepositSafely(manager, saved);
   return saved;
 }

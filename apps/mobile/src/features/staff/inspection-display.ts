@@ -1,6 +1,10 @@
-import { formatIsoDate } from '../../../lib/format-vi';
+import type { ReturnRequestSource } from '@storage/types';
+import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import { toIsoDate } from '../../../lib/rental-schedule';
-import type { InspectionKind, StaffInspection } from '../../types/inspection-api';
+import type { InspectionKind, StaffDamage, StaffInspection } from '../../types/inspection-api';
+
+/** Largest fee one damage can carry, VND — the API rejects anything above. */
+export const MAX_PROPOSED_FEE = 1_000_000_000;
 
 export const INSPECTION_KIND_LABEL: Record<InspectionKind, string> = {
   PRE_HANDOVER: 'Nhận kho',
@@ -46,11 +50,46 @@ export function scheduledLabel(inspection: StaffInspection): string {
   return day ? `Hẹn ${formatIsoDate(day)}` : 'Chưa hẹn ngày';
 }
 
+/**
+ * Reads a fee typed into the input: digits only, empty clears it, and a value above the limit
+ * is ignored so the field keeps the last acceptable amount.
+ */
+export function parseProposedFee(text: string, previous: number | null): number | null {
+  const digits = text.replace(/\D/g, '');
+  if (digits === '') return null;
+  const value = Number(digits);
+  return value > MAX_PROPOSED_FEE ? previous : value;
+}
+
+export function proposedFeeTotal(damages: readonly Pick<StaffDamage, 'proposedFee'>[]): number {
+  return damages.reduce((sum, damage) => sum + (damage.proposedFee ?? 0), 0);
+}
+
 /** What finalizing will do, spelled out in the confirmation dialog. */
-export function finalizeConsequence(inspection: StaffInspection, damageCount: number): string {
+export function finalizeConsequence(
+  inspection: StaffInspection,
+  damages: readonly Pick<StaffDamage, 'severity' | 'proposedFee'>[],
+): string {
   if (inspection.type === 'PRE_HANDOVER') {
     return 'Hợp đồng sẽ có hiệu lực và kho chuyển sang Đang thuê. Biên bản không sửa được sau khi chốt.';
   }
-  const unit = damageCount > 0 ? 'Bảo trì (có hư hỏng)' : 'Trống';
-  return `Hợp đồng kết thúc và kho chuyển sang ${unit}. Biên bản không sửa được sau khi chốt.`;
+  // Only a major damage takes the unit out of rotation; minor wear leaves it rentable.
+  const unit = damages.some((damage) => damage.severity === 'MAJOR')
+    ? 'Bảo trì (có hư hỏng nặng)'
+    : 'Trống';
+  const consequence = `Hợp đồng kết thúc và kho chuyển sang ${unit}. Biên bản không sửa được sau khi chốt.`;
+  const fees = proposedFeeTotal(damages);
+  return fees > 0
+    ? `${consequence}\n\nTổng phí đề xuất: ${formatMoney(fees)} — quản lý vận hành duyệt khi quyết toán cọc.`
+    : consequence;
+}
+
+const REQUEST_SOURCE_LABEL: Partial<Record<ReturnRequestSource, string>> = {
+  HOTLINE: 'Chi nhánh tạo yêu cầu thay khách (khách gọi hotline)',
+  ABANDONED: 'Chi nhánh tạo yêu cầu thay khách (khách bỏ kho)',
+};
+
+/** Only requests a branch made for the customer are called out; the customer's own need no label. */
+export function requestSourceLabel(inspection: StaffInspection): string | null {
+  return inspection.requestSource ? (REQUEST_SOURCE_LABEL[inspection.requestSource] ?? null) : null;
 }

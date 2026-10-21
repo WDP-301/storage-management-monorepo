@@ -1,40 +1,14 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ApiError } from '../../../lib/api';
 import { InspectionsApi } from '../../../lib/inspections-api';
 import type { InspectionUpdate, StaffInspection } from '../../types/inspection-api';
+import { staffErrorMessage } from './staff-errors';
 
 const toForm = (inspection: StaffInspection): InspectionUpdate => ({
   conditionNotes: inspection.conditionNotes,
   evidence: inspection.evidence,
   damages: inspection.damages,
 });
-
-/** API conflicts arrive in English; staff get the reason in Vietnamese. */
-export function staffErrorMessage(error: unknown, fallback: string): string {
-  if (!(error instanceof ApiError)) return fallback;
-  if (error.code === 'FORBIDDEN' || error.statusCode === 403)
-    return 'Bạn không có quyền với biên bản này.';
-  // The API message for this code is already Vietnamese and says exactly what is missing.
-  if (error.code === 'CONTRACT_DOCUMENTS_REQUIRED') return error.message;
-  if (error.code === 'FIRST_RENT_UNPAID')
-    return 'Khách chưa thanh toán tiền thuê tháng đầu — thu tiền trước khi chốt biên nhận.';
-  const reason = [
-    ['already finalized', 'Biên bản đã được chốt trước đó.'],
-    [
-      'Assign an inspector',
-      'Biên bản chưa được phân công nhân viên — nhờ quản lý giao việc trước.',
-    ],
-    ['requires a', 'Hợp đồng không ở trạng thái phù hợp để chốt biên bản này.'],
-    ['expected state', 'Trạng thái kho không khớp — liên hệ quản lý chi nhánh.'],
-  ].find(([needle]) => error.message.includes(needle));
-  if (reason) return reason[1];
-  // Message substrings above are best-effort; the error code is the stable signal.
-  if (error.code === 'CONFLICT' || error.statusCode === 409)
-    return 'Thao tác bị xung đột — tải lại biên bản rồi thử lại.';
-  if (error.statusCode === 400) return 'Thông tin chưa hợp lệ, kiểm tra lại ghi chú và hư hỏng.';
-  return error.message || fallback;
-}
 
 /** Fields whose edited value differs from the stored record; the rest stay untouched server-side. */
 function changedFields(
@@ -58,7 +32,7 @@ export function useInspectionDetail(id: string | undefined) {
   const [inspection, setInspection] = useState<StaffInspection | null>(null);
   const [form, setForm] = useState<InspectionUpdate | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'saving' | 'finalizing' | null>(null);
+  const [busy, setBusy] = useState<'saving' | 'finalizing' | 'rescheduling' | null>(null);
   const [uploads, setUploads] = useState(0);
   // The route stays mounted across inspections: async results for a previous id are dropped.
   const idRef = useRef(id);
@@ -148,18 +122,52 @@ export function useInspectionDetail(id: string | undefined) {
     }
   };
 
-  /** Saves pending edits first so the signed record is exactly what is on screen. */
-  const finalize = async (): Promise<boolean> => {
+  /**
+   * Moves a return appointment and returns the reason it failed, or null when it moved. Only the
+   * appointment is taken from the response, so edits typed into the form but not yet saved stay
+   * as they are; the caller shows the reason next to its own control.
+   */
+  const reschedule = async (dayIso: string): Promise<string | null> => {
+    if (!id) return 'Không đổi được ngày hẹn.';
+    setBusy('rescheduling');
+    try {
+      const moved = await InspectionsApi.reschedule(id, dayIso);
+      if (idRef.current === id) {
+        setInspection((current) =>
+          current ? { ...current, scheduledAt: moved.scheduledAt } : current,
+        );
+      }
+      return null;
+    } catch (err) {
+      return staffErrorMessage(
+        err,
+        'Không đổi được ngày hẹn.',
+        'Bạn không có quyền đổi lịch biên bản này.',
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /**
+   * Saves pending edits first so the signed record is exactly what is on screen.
+   * `returnedOn` is the Vietnam day a return actually happened; omit it for a handover.
+   */
+  const finalize = async (returnedOn?: string): Promise<boolean> => {
     if (!id) return false;
     if (isDirty && !(await save())) return false;
     setBusy('finalizing');
     try {
-      const done = await InspectionsApi.finalize(id);
+      const done = await InspectionsApi.finalize(id, returnedOn);
       // Locks the screen at once instead of waiting for the next reload.
       if (idRef.current === id) {
         setInspection((current) =>
           current
-            ? { ...current, finalizedAt: done.finalizedAt ?? new Date().toISOString() }
+            ? {
+                ...current,
+                finalizedAt: done.finalizedAt ?? new Date().toISOString(),
+                returnedOn: done.returnedOn ?? returnedOn ?? current.returnedOn,
+              }
             : current,
         );
       }
@@ -182,6 +190,7 @@ export function useInspectionDetail(id: string | undefined) {
     isUploading: uploads > 0,
     trackUpload,
     save,
+    reschedule,
     finalize,
     reload: load,
   };

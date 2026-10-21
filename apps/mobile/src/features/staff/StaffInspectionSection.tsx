@@ -1,7 +1,9 @@
 import { ActivityIndicator, Text } from 'react-native';
+import { formatIsoDate } from '../../../lib/format-vi';
 import { SectionCard } from '../customer/contract-sections';
 import { InspectionEditor } from './InspectionEditor';
-import { scheduledLabel } from './inspection-display';
+import { requestSourceLabel, scheduledLabel } from './inspection-display';
+import { ReturnRescheduleCard } from './ReturnRescheduleCard';
 import type { useInspectionDetail } from './use-inspection-detail';
 
 type Props = {
@@ -22,6 +24,7 @@ export function StaffInspectionSection({
 }: Props) {
   const { inspection } = detail;
   const finalized = inspection?.finalizedAt != null;
+  const sourceLabel = inspection ? requestSourceLabel(inspection) : null;
   return (
     <SectionCard
       title={TITLE[kind]}
@@ -31,11 +34,20 @@ export function StaffInspectionSection({
       {inspection ? (
         <>
           <Text className="font-body text-body-sm text-muted">{scheduledLabel(inspection)}</Text>
-          {inspection.requestNote ? (
-            <Text className="font-body text-body-sm leading-5 text-muted">
-              Ghi chú của khách: {inspection.requestNote}
+          {sourceLabel ? (
+            <Text className="font-body text-body-sm text-muted">{sourceLabel}</Text>
+          ) : null}
+          {inspection.returnedOn ? (
+            <Text className="font-body text-body-sm text-muted">
+              Ngày trả thực tế: {formatIsoDate(inspection.returnedOn)}
             </Text>
           ) : null}
+          {inspection.requestNote ? (
+            <Text className="font-body text-body-sm leading-5 text-muted">
+              {sourceLabel ? 'Ghi chú yêu cầu' : 'Ghi chú của khách'}: {inspection.requestNote}
+            </Text>
+          ) : null}
+          {kind === 'return' && !finalized ? <ReturnRescheduleCard detail={detail} /> : null}
           <InspectionEditor
             detail={detail}
             finalizeBlockedReason={finalizeBlockedReason}

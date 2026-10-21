@@ -1,26 +1,28 @@
 import type { DamageSeverity } from '@storage/types';
 import { Button, useThemeColor } from 'heroui-native';
 import { Pressable, Text, TextInput, View } from 'react-native';
-import type { InspectionDamage } from '../../types/contract-api';
+import { formatMoney, formatNumber } from '../../../lib/format-vi';
+import type { StaffDamage } from '../../types/inspection-api';
 import { StatusPill } from '../customer/contract-display';
 import { ChipButton } from '../customer/FilterChips';
 import { EvidenceEditor } from './EvidenceEditor';
+import { parseProposedFee } from './inspection-display';
 
 const MAX_DAMAGES = 20;
 const MAX_DAMAGE_PHOTOS = 10;
 const SEVERITY_LABEL: Record<DamageSeverity, string> = { MINOR: 'Nhẹ', MAJOR: 'Nghiêm trọng' };
 
 type Props = {
-  damages: InspectionDamage[];
+  damages: StaffDamage[];
   /** Takes an updater so edits apply to the latest list, not the one rendered earlier. */
-  onChange: (change: (damages: InspectionDamage[]) => InspectionDamage[]) => void;
+  onChange: (change: (damages: StaffDamage[]) => StaffDamage[]) => void;
   onUploadingChange: (uploading: boolean) => void;
   readOnly?: boolean;
 };
 
 export function DamageEditor({ damages, onChange, onUploadingChange, readOnly }: Props) {
   const [mutedColor] = useThemeColor(['muted']);
-  const replace = (index: number, patch: Partial<InspectionDamage>) =>
+  const replace = (index: number, patch: Partial<StaffDamage>) =>
     onChange((list) => list.map((damage, i) => (i === index ? { ...damage, ...patch } : damage)));
 
   if (readOnly && damages.length === 0) {
@@ -36,15 +38,22 @@ export function DamageEditor({ damages, onChange, onUploadingChange, readOnly }:
           className="gap-3 rounded-xl border border-border bg-background p-3"
         >
           {readOnly ? (
-            <View className="flex-row items-start justify-between gap-3">
-              <Text className="font-body flex-1 text-body-sm text-foreground">
-                {damage.description}
+            <>
+              <View className="flex-row items-start justify-between gap-3">
+                <Text className="font-body flex-1 text-body-sm text-foreground">
+                  {damage.description}
+                </Text>
+                <StatusPill
+                  label={SEVERITY_LABEL[damage.severity]}
+                  tone={damage.severity === 'MAJOR' ? 'accent' : 'neutral'}
+                />
+              </View>
+              <Text className="font-body text-body-sm text-muted">
+                {damage.proposedFee === null
+                  ? 'Chưa đề xuất phí'
+                  : `Phí đề xuất: ${formatMoney(damage.proposedFee)}`}
               </Text>
-              <StatusPill
-                label={SEVERITY_LABEL[damage.severity]}
-                tone={damage.severity === 'MAJOR' ? 'accent' : 'neutral'}
-              />
-            </View>
+            </>
           ) : (
             <>
               <View className="flex-row items-center justify-between">
@@ -77,6 +86,22 @@ export function DamageEditor({ damages, onChange, onUploadingChange, readOnly }:
                     onPress={() => replace(index, { severity })}
                   />
                 ))}
+              </View>
+              <View className="gap-1">
+                <Text className="font-ui text-caption text-muted">Phí đề xuất (đ)</Text>
+                <TextInput
+                  className="font-body rounded-lg border border-border bg-surface px-3 py-2 text-body-sm text-foreground"
+                  placeholder="Để trống nếu chưa đề xuất"
+                  placeholderTextColor={mutedColor}
+                  value={damage.proposedFee === null ? '' : formatNumber(damage.proposedFee)}
+                  onChangeText={(text) =>
+                    replace(index, {
+                      proposedFee: parseProposedFee(text, damage.proposedFee),
+                    })
+                  }
+                  keyboardType="number-pad"
+                  maxLength={14}
+                />
               </View>
             </>
           )}
@@ -119,7 +144,10 @@ export function DamageEditor({ damages, onChange, onUploadingChange, readOnly }:
           className="self-start"
           isDisabled={damages.length >= MAX_DAMAGES}
           onPress={() =>
-            onChange((list) => [...list, { description: '', severity: 'MINOR', evidence: [] }])
+            onChange((list) => [
+              ...list,
+              { description: '', severity: 'MINOR', evidence: [], proposedFee: null },
+            ])
           }
         >
           <Button.Label>+ Thêm hư hỏng</Button.Label>

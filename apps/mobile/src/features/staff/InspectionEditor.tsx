@@ -1,9 +1,11 @@
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { Button, Card, useThemeColor } from 'heroui-native';
-import type { ReactNode } from 'react';
+import { type ReactNode, useRef } from 'react';
 import { Alert, Text, TextInput, View } from 'react-native';
 import { DamageEditor } from './DamageEditor';
 import { EvidenceEditor } from './EvidenceEditor';
 import { finalizeConsequence } from './inspection-display';
+import { ReturnedOnPicker } from './ReturnedOnPicker';
 import type { useInspectionDetail } from './use-inspection-detail';
 
 const MAX_PHOTOS = 20;
@@ -18,12 +20,19 @@ type Props = {
 /** Condition notes, photos, damages and Save/Finalize for one inspection (handover or return). */
 export function InspectionEditor({ detail, finalizeBlockedReason, onFinalized }: Props) {
   const [mutedColor] = useThemeColor(['muted']);
+  const returnedOnSheet = useRef<BottomSheetModal>(null);
   const { inspection, form, updateForm, error, busy, isDirty, isUploading, trackUpload } = detail;
   if (!inspection || !form) return null;
 
   const readOnly = inspection.finalizedAt !== null;
-  const confirmFinalize = () =>
-    Alert.alert('Chốt biên bản?', finalizeConsequence(inspection, form.damages.length), [
+  const isReturn = inspection.type === 'RETURN';
+  // A return asks for the actual return day in a sheet; a handover only needs a yes/no.
+  const confirmFinalize = () => {
+    if (isReturn) {
+      returnedOnSheet.current?.present();
+      return;
+    }
+    Alert.alert('Chốt biên bản?', finalizeConsequence(inspection, form.damages), [
       { text: 'Huỷ', style: 'cancel' },
       {
         text: 'Chốt',
@@ -33,6 +42,13 @@ export function InspectionEditor({ detail, finalizeBlockedReason, onFinalized }:
         },
       },
     ]);
+  };
+  const finalizeReturn = async (returnedOn: string) => {
+    const done = await detail.finalize(returnedOn);
+    // Dismissed either way so a failure message in the editor is not hidden behind the sheet.
+    returnedOnSheet.current?.dismiss();
+    if (done) onFinalized();
+  };
 
   return (
     <View className="gap-4">
@@ -117,6 +133,16 @@ export function InspectionEditor({ detail, finalizeBlockedReason, onFinalized }:
           ) : null}
         </View>
       )}
+
+      {isReturn && !readOnly ? (
+        <ReturnedOnPicker
+          sheetRef={returnedOnSheet}
+          inspection={inspection}
+          damages={form.damages}
+          isBusy={busy === 'finalizing'}
+          onConfirm={(returnedOn) => void finalizeReturn(returnedOn)}
+        />
+      ) : null}
     </View>
   );
 }

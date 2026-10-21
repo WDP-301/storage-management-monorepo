@@ -1,49 +1,27 @@
-import { BookingItem } from '@entities/booking-item.entity';
-import { Contract } from '@entities/contract.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { ContractStatus, StorageUnitKind } from '@storage/types';
 import { AccessPassService } from './access-pass.service';
 import { parsePayload } from './check-in-eligibility';
 
 const user = { id: 'cust-1' } as AuthUser;
 
 describe('AccessPassService.createPass', () => {
-  let contract: Record<string, unknown> | null;
-  let unit: Record<string, unknown>;
+  let contracts: { id: string; effectiveAt: Date }[];
   let overdue: { invoiceNo: string }[];
-  let em: { findOne: jest.Mock; query: jest.Mock };
+  let em: { query: jest.Mock };
   let order: string[];
   let service: AccessPassService;
 
   beforeEach(() => {
     order = [];
-    contract = {
-      id: 'c-1',
-      contractNo: 'CT-1',
-      customerId: 'cust-1',
-      bookingItemId: 'bi-1',
-      status: ContractStatus.ACTIVE,
-      effectiveAt: new Date('2020-01-01T00:00:00Z'),
-      endedAt: new Date('2021-01-01T00:00:00Z'),
-    };
-    unit = {
-      id: 'u-1',
-      code: 'S-1',
-      name: 'Shelf 1',
-      kind: StorageUnitKind.SHELF,
-      facilityId: 'f-1',
-    };
+    contracts = [{ id: 'c-1', effectiveAt: new Date('2020-01-01T00:00:00Z') }];
     overdue = [];
     em = {
-      findOne: jest.fn(async (entity, options) => {
-        if (entity === Contract) {
-          order.push('lock');
-          return options.where.customerId === 'cust-1' ? contract : null;
-        }
-        if (entity === BookingItem) return { storageUnit: unit };
-        return null;
-      }),
       query: jest.fn(async (sql: string) => {
+        if (sql.includes('FOR NO KEY UPDATE')) {
+          order.push('lock');
+          return [{}];
+        }
+        if (sql.includes('FROM "contracts"')) return contracts;
         if (sql.includes('FROM "invoices"')) return overdue;
         if (sql.startsWith('DELETE')) {
           order.push('prune');
@@ -62,84 +40,86 @@ describe('AccessPassService.createPass', () => {
     service = new AccessPassService(dataSource as never, settings as never);
   });
 
-  it('issues a pass: raw token only in the payload, sha256 stored, ttl from setting', async () => {
-    const result = await service.createPass(user, 'c-1');
+  const call = (prefix: string) =>
+    em.query.mock.calls.find(([sql]) => sql.startsWith(prefix)) as [string, unknown[]];
 
-    const insert = em.query.mock.calls.find(([sql]) => sql.startsWith('INSERT'));
-    const [, params] = insert as [string, unknown[]];
+  it('issues a customer pass: raw token only in the payload, sha256 stored, ttl from setting', async () => {
+    const result = await service.createPass(user);
+
+    const [, params] = call('INSERT');
     const token = parsePayload(result.qrPayload) as string;
     expect(token).toHaveLength(43);
+    expect(params[0]).toBe('cust-1');
     expect(params[2]).toMatch(/^[0-9a-f]{64}$/);
     expect(params).not.toContain(token);
-    expect(params.slice(3)).toEqual(['u-1', 'f-1', 10]);
+    expect(params[3]).toBe(10);
     expect(result.ttlSeconds).toBeGreaterThan(595);
-    expect(result).toMatchObject({
-      id: 'pass-1',
-      contract: { id: 'c-1', contractNo: 'CT-1' },
-      unit: { code: 'S-1', name: 'Shelf 1' },
-    });
+    expect(result.id).toBe('pass-1');
   });
 
-  it('locks the contract, prunes stale passes, expires older ones, then inserts', async () => {
-    await service.createPass(user, 'c-1');
+  it('locks the customer, prunes stale passes, expires older ones, then inserts', async () => {
+    await service.createPass(user);
 
-    expect(em.findOne.mock.calls[0][1].lock).toEqual({ mode: 'pessimistic_write' });
     expect(order).toEqual(['lock', 'prune', 'expire', 'insert']);
   });
 
-  it('prunes only unused passes of this contract that expired over a day ago', async () => {
-    await service.createPass(user, 'c-1');
+  it('prunes and expires only unused passes of this customer', async () => {
+    await service.createPass(user);
 
-    const [sql, params] = em.query.mock.calls.find(([q]) => q.startsWith('DELETE')) as [
-      string,
-      unknown[],
-    ];
-    expect(sql).toContain('"used_at" IS NULL');
-    expect(sql).toContain(`"expires_at" < now() - interval '1 day'`);
-    expect(params).toEqual(['c-1']);
+    const [prune, pruneParams] = call('DELETE');
+    expect(prune).toContain('"customer_id" = $1 AND "used_at" IS NULL');
+    expect(prune).toContain(`"expires_at" < now() - interval '1 day'`);
+    expect(pruneParams).toEqual(['cust-1']);
+    expect(call('UPDATE')[1]).toEqual(['cust-1']);
   });
 
-  it("answers 404 for another customer's contract", async () => {
-    await expect(service.createPass({ id: 'other' } as AuthUser, 'c-1')).rejects.toMatchObject({
-      status: 404,
-    });
+  it('looks for shelf contracts in any warehouse', async () => {
+    await service.createPass(user);
+
+    const lookup = em.query.mock.calls.find(([sql]) => sql.includes('FROM "contracts"'));
+    expect(lookup?.[0]).not.toContain('"parent_id"');
+    expect(lookup?.[1]).toEqual(['cust-1']);
   });
 
   it('refuses with the overdue invoice numbers and issues nothing', async () => {
     overdue = [{ invoiceNo: 'INV-9' }];
 
-    await expect(service.createPass(user, 'c-1')).rejects.toMatchObject({
+    await expect(service.createPass(user)).rejects.toMatchObject({
       status: 409,
       response: { code: 'INVOICE_OVERDUE', details: { invoiceNos: ['INV-9'] } },
     });
     expect(order).toEqual(['lock']);
   });
 
-  it('refuses a self-storage contract', async () => {
-    unit.kind = StorageUnitKind.SELF_STORAGE;
+  it('refuses a customer without an ACTIVE shelf contract', async () => {
+    contracts = [];
 
-    await expect(service.createPass(user, 'c-1')).rejects.toMatchObject({
-      response: { code: 'CHECK_IN_NOT_ALLOWED', details: { reason: 'NOT_SHELF' } },
+    await expect(service.createPass(user)).rejects.toMatchObject({
+      response: { code: 'CHECK_IN_NOT_ALLOWED', details: { reason: 'NO_SHELF_CONTRACT' } },
     });
   });
 
-  it('refuses before effectiveAt', async () => {
-    contract = { ...contract, effectiveAt: new Date(Date.now() + 86_400_000) };
+  it('refuses until the earliest contract starts, and reports that date', async () => {
+    const soon = new Date(Date.now() + 2 * 86_400_000);
+    contracts = [
+      { id: 'c-1', effectiveAt: new Date(Date.now() + 9 * 86_400_000) },
+      { id: 'c-2', effectiveAt: soon },
+    ];
 
-    await expect(service.createPass(user, 'c-1')).rejects.toMatchObject({
-      response: { code: 'CHECK_IN_NOT_ALLOWED', details: { reason: 'CONTRACT_NOT_STARTED' } },
+    await expect(service.createPass(user)).rejects.toMatchObject({
+      response: {
+        code: 'CHECK_IN_NOT_ALLOWED',
+        details: { reason: 'CONTRACT_NOT_STARTED', effectiveAt: soon },
+      },
     });
   });
 
-  it('refuses a contract that is not ACTIVE (status re-checked under the lock)', async () => {
-    contract = { ...contract, status: ContractStatus.ENDED };
+  it('issues when one of several contracts has started', async () => {
+    contracts = [
+      { id: 'c-1', effectiveAt: new Date(Date.now() + 9 * 86_400_000) },
+      { id: 'c-2', effectiveAt: new Date('2020-01-01T00:00:00Z') },
+    ];
 
-    await expect(service.createPass(user, 'c-1')).rejects.toMatchObject({
-      response: { code: 'CHECK_IN_NOT_ALLOWED', details: { reason: 'CONTRACT_NOT_ACTIVE' } },
-    });
-  });
-
-  it('still issues a pass for an ACTIVE contract past endedAt', async () => {
-    await expect(service.createPass(user, 'c-1')).resolves.toMatchObject({ id: 'pass-1' });
+    await expect(service.createPass(user)).resolves.toMatchObject({ id: 'pass-1' });
   });
 });

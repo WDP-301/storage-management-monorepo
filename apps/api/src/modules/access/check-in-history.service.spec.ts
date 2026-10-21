@@ -74,19 +74,18 @@ describe('CheckInHistoryService.list', () => {
 });
 
 describe('toCheckInView', () => {
-  it('renders the snapshot unit/facility and verifier', () => {
+  it('renders the customer, warehouse, facility and verifier', () => {
     const view = toCheckInView({
       id: 'p-1',
-      contractId: 'c-1',
       usedAt: new Date('2026-03-01T00:00:00Z'),
-      contract: { contractNo: 'CT-1', endedAt: null, customer: { fullName: 'An', phone: '09' } },
-      storageUnit: { code: 'S-1', name: 'Shelf', parent: { code: 'W-1', name: 'Wh' } },
+      customer: { fullName: 'An', phone: '09' },
+      warehouse: { code: 'W-1', name: 'Wh' },
       facility: { code: 'F-1', name: 'HCM' },
       verifier: { id: 'u-1', fullName: 'Staff' },
     } as unknown as AccessEvent);
 
     expect(view).toMatchObject({
-      unit: { code: 'S-1' },
+      customer: { fullName: 'An', phone: '09' },
       warehouse: { code: 'W-1' },
       facility: { code: 'F-1' },
       verifiedBy: { id: 'u-1', fullName: 'Staff' },
@@ -94,7 +93,7 @@ describe('toCheckInView', () => {
   });
 
   it('survives missing joined records', () => {
-    const view = toCheckInView({ id: 'p-1', contractId: 'c-1' } as AccessEvent);
+    const view = toCheckInView({ id: 'p-1' } as AccessEvent);
 
     expect(view).toMatchObject({ warehouse: null, verifiedBy: null, customer: { fullName: null } });
   });

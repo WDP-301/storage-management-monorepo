@@ -2,8 +2,9 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Button } from 'heroui-native';
 import { useRef, useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
-import { AccessApi, type CheckInResult } from '../../../lib/access-api';
+import { AccessApi, type CheckInResult, type ScanWarehouse } from '../../../lib/access-api';
 import { ApiError } from '../../../lib/api';
+import { ScanWarehousePicker } from './ScanWarehousePicker';
 
 export function StaffScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -12,16 +13,17 @@ export function StaffScanScreen() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CheckInResult | null>(null);
   const [paused, setPaused] = useState(false);
+  const [warehouse, setWarehouse] = useState<ScanWarehouse | null>(null);
   const lock = useRef(false);
   const submit = async (value: string) => {
-    if (lock.current || !value.trim()) return;
+    if (lock.current || !value.trim() || !warehouse) return;
     lock.current = true;
     setPaused(true);
     setBusy(true);
     setResult(null);
     setError(null);
     try {
-      const checkIn = await AccessApi.checkIn(value.trim());
+      const checkIn = await AccessApi.checkIn(value.trim(), warehouse.id);
       setResult(checkIn);
       setPayload('');
     } catch (cause) {
@@ -35,9 +37,10 @@ export function StaffScanScreen() {
     <View className="flex-1 gap-4 bg-background px-4 pt-6">
       <Text className="font-strong text-title-md text-foreground">Quét mã vào kho</Text>
       <Text className="font-body text-body-sm text-muted">
-        Quét mã QR trên điện thoại khách thuê kệ. Mỗi mã chỉ dùng một lần.
+        Chọn kho rồi quét mã QR trên điện thoại khách thuê kệ. Mỗi mã chỉ dùng một lần.
       </Text>
-      {permission?.granted ? (
+      <ScanWarehousePicker value={warehouse} onChange={setWarehouse} />
+      {!warehouse ? null : permission?.granted ? (
         <CameraView
           style={{ height: 280, borderRadius: 16, overflow: 'hidden' }}
           facing="back"
@@ -62,7 +65,10 @@ export function StaffScanScreen() {
         value={payload}
         onChangeText={setPayload}
       />
-      <Button isDisabled={busy || !payload.trim()} onPress={() => void submit(payload)}>
+      <Button
+        isDisabled={busy || !payload.trim() || !warehouse}
+        onPress={() => void submit(payload)}
+      >
         <Button.Label>{busy ? 'Đang kiểm tra…' : 'Xác thực mã'}</Button.Label>
       </Button>
       {error ? (
@@ -88,12 +94,6 @@ export function StaffScanScreen() {
             Khách: {result.customer.fullName ?? result.customer.phone ?? '—'}
           </Text>
           <Text className="font-body text-body-sm text-foreground">
-            Hợp đồng: {result.contract.contractNo}
-          </Text>
-          <Text className="font-body text-body-sm text-foreground">
-            Kệ: {result.unit.code} · {result.unit.name}
-          </Text>
-          <Text className="font-body text-body-sm text-foreground">
             Kho: {result.warehouse?.name ?? result.facility.name}
           </Text>
           <Text className="font-body text-caption text-muted">
@@ -116,15 +116,21 @@ export function StaffScanScreen() {
 
 function scanError(cause: unknown): string {
   if (!(cause instanceof ApiError)) return 'Không xác thực được mã vào kho.';
-  if (cause.code === 'FORBIDDEN')
-    return 'Mã này thuộc cơ sở khác hoặc bạn chưa được phân quyền tại cơ sở đó.';
+  if (cause.code === 'FORBIDDEN') return 'Bạn chưa được phân quyền tại cơ sở của kho này.';
+  if (cause.code === 'RESOURCE_NOT_FOUND') return 'Không tìm thấy kho đã chọn.';
   if (cause.code === 'INVOICE_OVERDUE') return 'Khách có hóa đơn quá hạn và chưa thể vào kho.';
   if (cause.code === 'ACCESS_PASS_INVALID') {
     const reason = cause.details?.reason;
     if (reason === 'USED') return 'Mã này đã được sử dụng.';
-    if (reason === 'EXPIRED') return 'Mã đã hết hạn. Hãy yêu cầu khách tạo mã mới.';
+    if (reason === 'EXPIRED') return 'Mã đã hết hạn. Hãy nhờ khách mở lại mã mới trên ứng dụng.';
     return 'Mã QR không hợp lệ hoặc đã bị thay thế.';
   }
-  if (cause.code === 'CHECK_IN_NOT_ALLOWED') return 'Hợp đồng chưa đủ điều kiện để vào kho.';
+  if (cause.code === 'CHECK_IN_NOT_ALLOWED') {
+    const reason = cause.details?.reason;
+    if (reason === 'NO_SHELF_CONTRACT') return 'Khách không thuê kệ nào đang hiệu lực tại kho này.';
+    if (reason === 'CONTRACT_NOT_STARTED')
+      return 'Hợp đồng thuê kệ tại kho này chưa tới ngày bắt đầu.';
+    return 'Khách chưa đủ điều kiện để vào kho này.';
+  }
   return cause.message;
 }

@@ -29,15 +29,12 @@ export class CheckInHistoryService {
     const scope = await this.facilityScope(actor, query.facilityId);
     if (scope?.length === 0) return { checkIns: [], meta: buildPaginationMeta(page, limit, 0) };
 
-    // withDeleted: an entry stays in the audit trail after its contract or shelf is soft-deleted.
-    // The snapshot unit/facility are joined, not the contract's current unit.
+    // withDeleted: an entry stays in the audit trail after its warehouse is soft-deleted.
     const qb = this.events
       .createQueryBuilder('pass')
       .withDeleted()
-      .innerJoinAndSelect('pass.contract', 'contract')
-      .innerJoinAndSelect('contract.customer', 'customer')
-      .innerJoinAndSelect('pass.storageUnit', 'unit')
-      .leftJoinAndSelect('unit.parent', 'warehouse')
+      .innerJoinAndSelect('pass.customer', 'customer')
+      .leftJoinAndSelect('pass.warehouse', 'warehouse')
       .innerJoinAndSelect('pass.facility', 'facility')
       .leftJoinAndSelect('pass.verifier', 'verifier')
       .where('pass.usedAt IS NOT NULL');
@@ -48,8 +45,8 @@ export class CheckInHistoryService {
     const term = query.search?.trim();
     if (term) {
       qb.andWhere(
-        `(contract.contractNo ILIKE :search OR unit.code ILIKE :search
-          OR customer.fullName ILIKE :search OR customer.phone ILIKE :search)`,
+        `(customer.fullName ILIKE :search OR customer.phone ILIKE :search
+          OR warehouse.code ILIKE :search OR warehouse.name ILIKE :search)`,
         { search: `%${escapeLikePattern(term)}%` },
       );
     }

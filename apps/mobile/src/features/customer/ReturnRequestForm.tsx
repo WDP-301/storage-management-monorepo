@@ -1,13 +1,13 @@
-import { type BottomSheetModal, BottomSheetTextInput } from '@gorhom/bottom-sheet';
+import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import { Button, useThemeColor } from 'heroui-native';
 import { CalendarBlank } from 'phosphor-react-native';
-import { useRef } from 'react';
+import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { formatIsoDate } from '../../../lib/format-vi';
 import type { ApiContract } from '../../types/contract-api';
 import { contractEndIso, contractWarehouseName, openReturn } from './contract-display';
 import { RefundAccountFields } from './RefundAccountFields';
-import { ReturnDatePickerSheet } from './ReturnDatePickerSheet';
+import { ReturnDatePicker } from './ReturnDatePicker';
 import { ReturnPreviewNotice } from './ReturnPreviewNotice';
 import { useReturnRequestForm } from './use-return-request-form';
 
@@ -22,7 +22,7 @@ export function ReturnRequestForm({
   onDone: () => void;
 }) {
   const [mutedColor] = useThemeColor(['muted']);
-  const dateSheet = useRef<BottomSheetModal>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const pending = openReturn(contract);
   const form = useReturnRequestForm(contract.id, pending, onDone);
   const isEdit = pending !== null;
@@ -44,7 +44,7 @@ export function ReturnRequestForm({
           accessibilityRole="button"
           accessibilityLabel="Chọn ngày trả kho"
           className="flex-row items-center gap-2 rounded-lg border border-border bg-surface-secondary px-3 py-3"
-          onPress={() => dateSheet.current?.present()}
+          onPress={() => setCalendarOpen((open) => !open)}
         >
           <CalendarBlank color={ACCENT} size={18} weight="bold" />
           <Text
@@ -53,6 +53,17 @@ export function ReturnRequestForm({
             {form.dayIso ? formatIsoDate(form.dayIso) : 'Chọn ngày'}
           </Text>
         </Pressable>
+        {calendarOpen ? (
+          <ReturnDatePicker
+            todayIso={form.today}
+            selectedIso={form.dayIso}
+            lastDayIso={contract.termEndAt ? contractEndIso(contract) : null}
+            onSelect={(iso) => {
+              form.setDayIso(iso);
+              setCalendarOpen(false);
+            }}
+          />
+        ) : null}
         <ReturnPreviewNotice
           preview={form.preview.preview}
           isLoading={form.preview.isLoading}
@@ -89,14 +100,6 @@ export function ReturnRequestForm({
           {form.isSubmitting ? 'Đang gửi…' : isEdit ? 'Lưu thay đổi' : 'Gửi yêu cầu'}
         </Button.Label>
       </Button>
-
-      <ReturnDatePickerSheet
-        sheetRef={dateSheet}
-        todayIso={form.today}
-        selectedIso={form.dayIso}
-        lastDayIso={contract.termEndAt ? contractEndIso(contract) : null}
-        onSelect={form.setDayIso}
-      />
     </View>
   );
 }

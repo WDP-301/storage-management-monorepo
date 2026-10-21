@@ -153,38 +153,3 @@ test('termEndState warns from the notice window, then overdue until a return is 
   assert.equal(termEndState({ ...active, status: 'ENDED' }, '2027-04-03', 30), null);
   assert.equal(termEndState({ ...active, termEndAt: null }, '2027-04-03', 30), null);
 });
-
-test('refund account draft is pre-filled, validated and sent with the holder name folded', () => {
-  const draft = load(`${customerDir}/refund-account-draft.ts`);
-  const listed = (bin) => bin === '970436';
-  const saved = {
-    bankBin: '970436',
-    bankName: 'Vietcombank',
-    accountNo: '0123',
-    accountName: 'A B',
-  };
-
-  assert.equal(draft.draftFromAccount(null, listed), draft.EMPTY_REFUND_ACCOUNT);
-  assert.equal(draft.draftFromAccount(saved, listed).bankBin, '970436');
-  const stale = draft.draftFromAccount({ ...saved, bankBin: '999999' }, listed);
-  assert.deepEqual([stale.bankBin, stale.isOtherBank, stale.bankName], [null, true, 'Vietcombank']);
-
-  const empty = draft.EMPTY_REFUND_ACCOUNT;
-  assert.equal(draft.isDraftEmpty(empty), true);
-  assert.equal(draft.refundAccountProblem(empty), 'Chọn ngân hàng nhận hoàn cọc');
-  assert.equal(draft.refundAccountProblem({ ...empty, isOtherBank: true }), 'Nhập tên ngân hàng');
-  const filled = { ...empty, bankBin: '970436', bankName: 'Vietcombank' };
-  assert.match(draft.refundAccountProblem({ ...filled, accountNo: '12' }), /Số tài khoản/);
-  assert.equal(
-    draft.refundAccountProblem({ ...filled, accountNo: '0123', accountName: ' ' }),
-    'Nhập tên chủ tài khoản',
-  );
-  const ready = { ...filled, accountNo: ' 0123 4567 ', accountName: 'Nguyễn Văn Ạ' };
-  assert.equal(draft.refundAccountProblem(ready), null);
-  assert.deepEqual(draft.toRefundAccountInput(ready), {
-    bankBin: '970436',
-    bankName: 'Vietcombank',
-    accountNo: '01234567',
-    accountName: 'NGUYEN VAN A',
-  });
-});

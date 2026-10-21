@@ -18,9 +18,17 @@ type Props = {
   onChange: (change: (damages: StaffDamage[]) => StaffDamage[]) => void;
   onUploadingChange: (uploading: boolean) => void;
   readOnly?: boolean;
+  /** Shows the proposed-fee field; only return inspections feed a deposit settlement. */
+  withProposedFee?: boolean;
 };
 
-export function DamageEditor({ damages, onChange, onUploadingChange, readOnly }: Props) {
+export function DamageEditor({
+  damages,
+  onChange,
+  onUploadingChange,
+  readOnly,
+  withProposedFee = false,
+}: Props) {
   const [mutedColor] = useThemeColor(['muted']);
   const replace = (index: number, patch: Partial<StaffDamage>) =>
     onChange((list) => list.map((damage, i) => (i === index ? { ...damage, ...patch } : damage)));
@@ -48,11 +56,13 @@ export function DamageEditor({ damages, onChange, onUploadingChange, readOnly }:
                   tone={damage.severity === 'MAJOR' ? 'accent' : 'neutral'}
                 />
               </View>
-              <Text className="font-body text-body-sm text-muted">
-                {damage.proposedFee === null
-                  ? 'Chưa đề xuất phí'
-                  : `Phí đề xuất: ${formatMoney(damage.proposedFee)}`}
-              </Text>
+              {withProposedFee ? (
+                <Text className="font-body text-body-sm text-muted">
+                  {damage.proposedFee === null
+                    ? 'Chưa đề xuất phí'
+                    : `Phí đề xuất: ${formatMoney(damage.proposedFee)}`}
+                </Text>
+              ) : null}
             </>
           ) : (
             <>
@@ -87,22 +97,24 @@ export function DamageEditor({ damages, onChange, onUploadingChange, readOnly }:
                   />
                 ))}
               </View>
-              <View className="gap-1">
-                <Text className="font-ui text-caption text-muted">Phí đề xuất (đ)</Text>
-                <TextInput
-                  className="font-body rounded-lg border border-border bg-surface px-3 py-2 text-body-sm text-foreground"
-                  placeholder="Để trống nếu chưa đề xuất"
-                  placeholderTextColor={mutedColor}
-                  value={damage.proposedFee === null ? '' : formatNumber(damage.proposedFee)}
-                  onChangeText={(text) =>
-                    replace(index, {
-                      proposedFee: parseProposedFee(text, damage.proposedFee),
-                    })
-                  }
-                  keyboardType="number-pad"
-                  maxLength={14}
-                />
-              </View>
+              {withProposedFee ? (
+                <View className="gap-1">
+                  <Text className="font-ui text-caption text-muted">Phí đề xuất (đ)</Text>
+                  <TextInput
+                    className="font-body rounded-lg border border-border bg-surface px-3 py-2 text-body-sm text-foreground"
+                    placeholder="Để trống nếu chưa đề xuất"
+                    placeholderTextColor={mutedColor}
+                    value={damage.proposedFee === null ? '' : formatNumber(damage.proposedFee)}
+                    onChangeText={(text) =>
+                      replace(index, {
+                        proposedFee: parseProposedFee(text, damage.proposedFee),
+                      })
+                    }
+                    keyboardType="number-pad"
+                    maxLength={14}
+                  />
+                </View>
+              ) : null}
             </>
           )}
           <EvidenceEditor

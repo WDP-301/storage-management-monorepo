@@ -12,6 +12,8 @@ type Props = {
   draft: RefundAccountDraft;
   onChange: (draft: RefundAccountDraft) => void;
   required: boolean;
+  /** Shown under the title, e.g. what leaving the form empty does. */
+  hint?: string | null;
   mutedColor: string;
 };
 
@@ -19,7 +21,7 @@ type Props = {
  * Where the deposit is refunded. The full number only ever lives in this form; everywhere else the
  * app shows the server's masked copy.
  */
-export function RefundAccountFields({ draft, onChange, required, mutedColor }: Props) {
+export function RefundAccountFields({ draft, onChange, required, hint, mutedColor }: Props) {
   const update = (patch: Partial<RefundAccountDraft>) => onChange({ ...draft, ...patch });
   const hasBank = draft.bankBin !== null || draft.isOtherBank;
 
@@ -28,6 +30,7 @@ export function RefundAccountFields({ draft, onChange, required, mutedColor }: P
       <Text className="text-body-sm font-strong text-foreground">
         Tài khoản nhận hoàn cọc{required ? '' : ' (không bắt buộc)'}
       </Text>
+      {hint ? <Text className="font-body text-caption text-muted">{hint}</Text> : null}
       {hasBank ? (
         <View className="flex-row items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
           <Text className="flex-1 font-strong text-body-sm text-foreground" numberOfLines={1}>

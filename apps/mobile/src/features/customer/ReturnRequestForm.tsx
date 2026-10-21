@@ -65,6 +65,7 @@ export function ReturnRequestForm({
         draft={form.account}
         onChange={form.changeAccount}
         required={form.accountRequired}
+        hint={form.accountHint}
         mutedColor={mutedColor}
       />
 

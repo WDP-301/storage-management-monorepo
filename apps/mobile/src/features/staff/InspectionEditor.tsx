@@ -102,6 +102,8 @@ export function InspectionEditor({ detail, finalizeBlockedReason, onFinalized }:
           }
           onUploadingChange={trackUpload}
           readOnly={readOnly}
+          // Fees are only proposed when the unit comes back, for the deposit settlement.
+          withProposedFee={isReturn}
         />
       </Section>
 
@@ -139,7 +141,8 @@ export function InspectionEditor({ detail, finalizeBlockedReason, onFinalized }:
           sheetRef={returnedOnSheet}
           inspection={inspection}
           damages={form.damages}
-          isBusy={busy === 'finalizing'}
+          // Finalize saves pending edits first; a tap during that save would finalize twice.
+          isBusy={busy !== null}
           onConfirm={(returnedOn) => void finalizeReturn(returnedOn)}
         />
       ) : null}

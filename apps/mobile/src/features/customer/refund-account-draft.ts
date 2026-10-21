@@ -71,3 +71,27 @@ export function toRefundAccountInput(draft: RefundAccountDraft): RefundBankAccou
     accountName: toAccountHolderName(draft.accountName),
   };
 }
+
+export type RefundAccountPayload = {
+  /** Set when the form has to be fixed before sending. */
+  problem: string | null;
+  /** undefined = send no account (none needed, or keep the one already on the request). */
+  refundAccount?: RefundBankAccountInput;
+};
+
+/**
+ * What to send as the refund account. A new request needs one unless there is no deposit to
+ * refund. A change to an open request keeps the account already stored on it — which the app
+ * never sees — unless the customer filled the form in, so a reschedule cannot overwrite it.
+ */
+export function refundAccountPayload(
+  draft: RefundAccountDraft,
+  rule: { isEdit: boolean; required: boolean; touched: boolean },
+): RefundAccountPayload {
+  const sendNothing = rule.isEdit
+    ? !rule.touched || isDraftEmpty(draft)
+    : !rule.required && isDraftEmpty(draft);
+  if (sendNothing) return { problem: null };
+  const problem = refundAccountProblem(draft);
+  return problem ? { problem } : { problem: null, refundAccount: toRefundAccountInput(draft) };
+}

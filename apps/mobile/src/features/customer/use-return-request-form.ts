@@ -7,10 +7,8 @@ import type { ApiInspection } from '../../types/contract-api';
 import {
   draftFromAccount,
   EMPTY_REFUND_ACCOUNT,
-  isDraftEmpty,
   type RefundAccountDraft,
-  refundAccountProblem,
-  toRefundAccountInput,
+  refundAccountPayload,
 } from './refund-account-draft';
 import { returnErrorMessage } from './return-errors';
 import { useReturnPreview } from './use-return-preview';
@@ -19,8 +17,10 @@ const isListedBin = (bin: string) => findVnBank(bin) !== undefined;
 
 /**
  * State of the return request form: a new request, or a change to the open one (`openReturn`),
- * which starts from its day and note. The refund account is pre-filled from the one used last
- * time, unless the customer already started typing.
+ * which starts from its day and note. A new request pre-fills the refund account used last time
+ * (unless the customer already started typing). A change starts with an empty account form and
+ * sends one only if the customer fills it in: the request's own account is not visible to the
+ * app, and the last-used one may belong to another contract or predate a branch-made request.
  */
 export function useReturnRequestForm(
   contractId: string,
@@ -40,14 +40,17 @@ export function useReturnRequestForm(
   const [isSubmitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const preview = useReturnPreview(contractId, dayIso);
+  const isEdit = openReturn !== null;
 
   const saved = preview.preview?.saved_refund_account;
   useEffect(() => {
-    if (saved && !accountTouched.current) setAccount(draftFromAccount(saved, isListedBin));
-  }, [saved]);
+    if (!isEdit && saved && !accountTouched.current) {
+      setAccount(draftFromAccount(saved, isListedBin));
+    }
+  }, [isEdit, saved]);
 
   // No preview yet counts as required: only a known zero deposit leaves nothing to refund.
-  const accountRequired = preview.preview?.deposit_held !== 0;
+  const accountRequired = !isEdit && preview.preview?.deposit_held !== 0;
   const movedEarlier = Boolean(openReturn && currentDay && dayIso && dayIso < currentDay);
 
   const changeAccount = (draft: RefundAccountDraft) => {
@@ -58,17 +61,19 @@ export function useReturnRequestForm(
 
   const submit = async () => {
     if (!dayIso || isSubmitting) return;
-    const skipAccount = !accountRequired && isDraftEmpty(account);
-    const problem = skipAccount ? null : refundAccountProblem(account);
+    const { problem, refundAccount } = refundAccountPayload(account, {
+      isEdit,
+      required: accountRequired,
+      touched: accountTouched.current,
+    });
     if (problem) {
       setError(problem);
       return;
     }
-    const refundAccount = skipAccount ? undefined : toRefundAccountInput(account);
     setSubmitting(true);
     setError(null);
     try {
-      if (openReturn) {
+      if (isEdit) {
         await ContractsApi.updateReturn(contractId, {
           dayIso: dayIso === currentDay ? undefined : dayIso,
           note: note.trim(),
@@ -94,6 +99,7 @@ export function useReturnRequestForm(
     account,
     changeAccount,
     accountRequired,
+    accountHint: isEdit ? 'Để trống để giữ tài khoản đã gửi' : null,
     movedEarlier,
     preview,
     isSubmitting,

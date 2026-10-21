@@ -1,4 +1,4 @@
-import type { ContractStatus, DamageSeverity } from '@storage/types';
+import type { ContractStatus, DamageSeverity, ReturnRequestSource } from '@storage/types';
 
 export type InspectionKind = 'PRE_HANDOVER' | 'RETURN' | 'MAINTENANCE';
 export type InspectionListStatus = 'open' | 'done';
@@ -15,6 +15,8 @@ export interface InspectionDamage {
   description: string;
   severity: DamageSeverity;
   evidence?: EvidenceFile[];
+  /** Repair fee staff proposed at a return; decided at the deposit settlement. */
+  proposedFee?: number | null;
 }
 
 /** `GET /inspections` row — the entity with its contract → unit → facility chain. */
@@ -29,6 +31,9 @@ export interface InspectionRecord {
   scheduledAt: string | null;
   inspectedAt: string | null;
   finalizedAt: string | null;
+  /** Return only: Vietnam day the unit actually came back (`YYYY-MM-DD`). */
+  returnedOn?: string | null;
+  requestSource?: ReturnRequestSource | null;
   createdAt: string;
   inspector?: { id: string; fullName: string } | null;
   contract?: {

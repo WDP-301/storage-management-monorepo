@@ -13,13 +13,16 @@ import { formatVnd } from '../warehouses/warehouse-display';
 import { ContractAmenitiesSection } from './ContractAmenitiesSection';
 import { ContractDocumentsPanel } from './ContractDocumentsPanel';
 import { ContractEditDialog } from './ContractEditDialog';
+import { ContractSettlementSection } from './ContractSettlementSection';
 import { ContractStaffSection } from './ContractStaffSection';
 import {
   CONTRACT_KIND_LABEL,
   CONTRACT_STATUS_LABEL,
-  plannedEnd,
   shortContractNo,
+  termLastDay,
 } from './contract-display';
+import { ManagedReturnForm } from './ManagedReturnForm';
+import { formatDepositAmount } from './settlement-display';
 
 interface Props {
   contract: ContractRecord | null;
@@ -162,10 +165,10 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
             <Fact label="Hiệu lực từ" value={formatDay(contract.effective_at)} />
             <Fact
               label="Thời hạn"
-              value={`${contract.months} tháng · đến ${formatDay(plannedEnd(contract))}`}
+              value={`${contract.months} tháng · đến ${termLastDay(contract)}`}
             />
             <Fact label="Giá thuê / tháng" value={formatVnd(contract.monthly_price)} />
-            <Fact label="Tiền cọc" value={formatVnd(contract.deposit)} />
+            <Fact label="Tiền cọc" value={formatDepositAmount(contract.deposit)} />
             <Fact label="Ngày ký" value={formatDay(contract.signed_at)} />
             <Fact label="Ngày kết thúc" value={formatDay(contract.ended_at)} />
             <Fact label="Mã đầy đủ" value={contract.contract_no} mono />
@@ -183,6 +186,12 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
             onOpenInspection={openInspection}
             onChanged={onChanged}
           />
+          <ManagedReturnForm
+            key={contract.id}
+            contract={contract}
+            canRequest={canCancel}
+            onChanged={onChanged}
+          />
 
           <ContractDocumentsPanel
             documents={contract.documents}
@@ -192,6 +201,14 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
             onSave={saveDocuments}
             onInvalid={setError}
           />
+
+          {canManage && contract.status === 'ENDED' && (
+            <ContractSettlementSection
+              key={contract.id}
+              contractId={contract.id}
+              onChanged={onChanged}
+            />
+          )}
 
           {error && (
             <div

@@ -36,6 +36,7 @@ import type {
   ServiceTicketResponse,
   UpdateTicketDto,
 } from '../types/service-tickets';
+import type { ManagedReturnRequestInput } from '../types/settlement';
 import type {
   BulkCreateShelvesInput,
   BulkCreateShelvesResult,
@@ -286,8 +287,12 @@ export const InspectionsApi = {
     return res.data.data;
   },
 
-  finalize: async (id: string): Promise<InspectionRecord> => {
-    const res = await apiClient.post<ApiResponse<InspectionRecord>>(`/inspections/${id}/finalize`);
+  /** `returnedOn` (Vietnam day, return only) defaults to today on the server. */
+  finalize: async (id: string, returnedOn?: string): Promise<InspectionRecord> => {
+    const res = await apiClient.post<ApiResponse<InspectionRecord>>(
+      `/inspections/${id}/finalize`,
+      returnedOn ? { returnedOn } : undefined,
+    );
     return res.data.data;
   },
 };
@@ -318,6 +323,11 @@ export const ContractsApi = {
   /** Only ENDED or CANCELLED contracts can be deleted. */
   remove: async (id: string): Promise<void> => {
     await apiClient.delete(`/contracts/${id}`);
+  },
+
+  /** Opens a return for a customer who phoned in or abandoned the unit (managers, ops, admin). */
+  createReturnOnBehalf: async (id: string, input: ManagedReturnRequestInput): Promise<void> => {
+    await apiClient.post(`/contracts/${id}/return-request/on-behalf`, input);
   },
 };
 

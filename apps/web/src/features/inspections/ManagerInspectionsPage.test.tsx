@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as AuthContextModule from '../../context/AuthContext';
 import * as FacilityContextModule from '../../context/FacilityContext';
 import { ContractsApi, FacilitiesApi, InspectionsApi, UploadsApi } from '../../lib/api';
+import { vnToday } from '../../lib/vn-day';
 import type { InspectionRecord } from '../../types/inspection';
 import { finalizeConsequence, inspectionMetrics, matchesSearch } from './inspection-display';
 import { ManagerInspectionsPage } from './ManagerInspectionsPage';
@@ -84,6 +85,8 @@ describe('inspection-display', () => {
     expect(finalizeConsequence(UNASSIGNED)).toContain('Đang thuê');
     expect(finalizeConsequence(ASSIGNED_RETURN)).toContain('Bảo trì');
     expect(finalizeConsequence({ ...ASSIGNED_RETURN, damages: [] })).toContain('Trống');
+    const minor = [{ description: 'Trầy sơn', severity: 'MINOR' }];
+    expect(finalizeConsequence({ ...ASSIGNED_RETURN, damages: minor })).toContain('Trống');
   });
 });
 
@@ -207,7 +210,7 @@ describe('ManagerInspectionsPage', () => {
     expect(finalize).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận chốt' }));
-    await waitFor(() => expect(finalize).toHaveBeenCalledWith('insp-B-202'));
+    await waitFor(() => expect(finalize).toHaveBeenCalledWith('insp-B-202', vnToday()));
   });
 
   it('blocks finalizing a pre-handover while the contract has no signed files', async () => {

@@ -2,6 +2,7 @@ import { UserRole } from '@storage/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContractsApi, FacilitiesApi, InspectionsApi } from '../../lib/api';
+import { SettlementsApi } from '../../lib/settlements-api';
 import { contractRecord, mockRole } from '../../test-utils/contract-fixtures';
 import type { ContractRecord } from '../../types/contract';
 import { ContractDetailDialog } from './ContractDetailDialog';
@@ -22,6 +23,8 @@ describe('ContractDetailDialog', () => {
     vi.spyOn(FacilitiesApi, 'listStaff').mockResolvedValue([
       { id: 's-1', fullName: 'Nhân viên kho Demo', phone: '0900000004' },
     ]);
+    // Ended contracts load their settlement; these tests are about the contract itself.
+    vi.spyOn(SettlementsApi, 'detail').mockReturnValue(new Promise(() => {}));
   });
   afterEach(() => vi.restoreAllMocks());
 

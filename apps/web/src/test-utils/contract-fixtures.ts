@@ -15,6 +15,8 @@ export const contractRecord = (over: Partial<ContractRecord> = {}): ContractReco
   months: 6,
   monthly_price: '3200000.00',
   deposit: '3200000.00',
+  term_end_at: null,
+  settlement_status: null,
   unit: { id: 'u-1', code: 'HCM-SG-01', name: 'Kho mini Sài Gòn', address_line: '45 Lê Thánh Tôn' },
   facility: { id: 'fac-1', code: 'CN-HCM', name: 'Chi nhánh Hồ Chí Minh' },
   customer: {

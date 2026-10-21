@@ -24,13 +24,11 @@ import { UserRole } from '@storage/types';
 import { ContractCancelService } from './contract-cancel.service';
 import { ContractDocumentsService } from './contract-documents.service';
 import { ContractQueryService } from './contract-query.service';
-import { ContractReturnService } from './contract-return.service';
 import { ContractsService } from './contracts.service';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
 import { ReplaceContractDocumentsDto } from './dto/contract-documents.dto';
 import { FirstRentResponseDto } from './dto/first-rent-response.dto';
 import { ListContractsQueryDto } from './dto/list-contracts-query.dto';
-import { ReturnRequestDto } from './dto/return-request.dto';
 import { FirstRentService } from './first-rent.service';
 
 @ApiTags('Contracts')
@@ -47,7 +45,6 @@ import { FirstRentService } from './first-rent.service';
 export class ContractsController {
   constructor(
     private readonly contractsService: ContractsService,
-    private readonly contractReturn: ContractReturnService,
     private readonly contractCancel: ContractCancelService,
     private readonly contractQuery: ContractQueryService,
     private readonly contractDocuments: ContractDocumentsService,
@@ -83,18 +80,6 @@ export class ContractsController {
   @ApiOperation({ summary: "List the caller's contracts with unit and facility info" })
   findMine(@CurrentUser() user: AuthUser) {
     return this.contractsService.findMine(user.id);
-  }
-
-  @Post(':id/return-request')
-  @Roles(UserRole.CUSTOMER)
-  @ApiOperation({ summary: 'Ask to move out — opens a RETURN inspection on the chosen date' })
-  @ApiResponse({ status: 409, description: 'Contract not ACTIVE or a return is already open' })
-  requestReturn(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: ReturnRequestDto,
-    @CurrentUser() user: AuthUser,
-  ) {
-    return this.contractReturn.requestReturn(id, user.id, dto);
   }
 
   @Post(':id/cancel')

@@ -1,6 +1,12 @@
 import type { Contract, ContractAmenity, ContractDocument } from '@entities/contract.entity';
 import type { Inspection } from '@entities/inspection.entity';
-import type { ContractKind, ContractStatus, StorageUnitKind } from '@storage/types';
+import { withoutProposedFees } from '@modules/inspection/inspection-access.util';
+import type {
+  ContractKind,
+  ContractStatus,
+  ReturnRequestSource,
+  StorageUnitKind,
+} from '@storage/types';
 
 export interface CustomerContractUnit {
   id: string;
@@ -34,8 +40,11 @@ export interface CustomerInspectionSummary {
   inspector_name: string | null;
   /** The customer's own note on a return request. */
   request_note: string | null;
+  /** Return: who asked for it — the customer, or the branch on their behalf (hotline, abandoned). */
+  request_source: ReturnRequestSource | null;
   condition_notes: string | null;
   evidence: unknown[];
+  /** Without the fees staff proposed; those are only decided at the deposit settlement. */
   damages: unknown[];
 }
 
@@ -71,9 +80,10 @@ export function toCustomerInspectionSummary(inspection: Inspection): CustomerIns
     finalized_at: inspection.finalizedAt ?? null,
     inspector_name: inspection.inspector?.fullName ?? null,
     request_note: inspection.requestNote ?? null,
+    request_source: inspection.requestSource ?? null,
     condition_notes: inspection.conditionNotes ?? null,
     evidence: inspection.evidence ?? [],
-    damages: inspection.damages ?? [],
+    damages: withoutProposedFees(inspection.damages),
   };
 }
 

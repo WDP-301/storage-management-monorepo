@@ -3,7 +3,6 @@ import { SessionGuard } from '@modules/auth/guards/session.guard';
 import { ContractCancelService } from '@modules/contracts/contract-cancel.service';
 import { ContractDocumentsService } from '@modules/contracts/contract-documents.service';
 import { ContractQueryService } from '@modules/contracts/contract-query.service';
-import { ContractReturnService } from '@modules/contracts/contract-return.service';
 import { ContractsController } from '@modules/contracts/contracts.controller';
 import { ContractsService } from '@modules/contracts/contracts.service';
 import { FirstRentService } from '@modules/contracts/first-rent.service';
@@ -85,7 +84,6 @@ describe('First-rent endpoints (e2e response contract)', () => {
     };
     const unused = [
       ContractsService,
-      ContractReturnService,
       ContractCancelService,
       ContractQueryService,
       ContractDocumentsService,

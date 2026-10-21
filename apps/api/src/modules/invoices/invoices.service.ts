@@ -3,8 +3,6 @@ import { Invoice } from '@entities/invoice.entity';
 import { InvoiceItem } from '@entities/invoice-item.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { NotificationsService } from '@modules/notifications/notifications.service';
-import type { NotificationPayload } from '@modules/notifications/types/notification';
-import { generateInvoiceNo } from '@modules/payments/invoice-no.util';
 import { buildPaymentQrUrl } from '@modules/payments/vietqr.util';
 import { QueueService } from '@modules/queue/queue.service';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
@@ -12,31 +10,14 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
+import { ContractStatus, InvoiceStatus, UserRole } from '@storage/types';
+import { DataSource, Repository } from 'typeorm';
 import {
-  ContractStatus,
-  InvoiceItemType,
-  InvoiceStatus,
-  NotificationType,
-  RentalPeriodKind,
-  UserRole,
-} from '@storage/types';
-import Decimal from 'decimal.js';
-import { DataSource, Not, Repository } from 'typeorm';
-import { formatDateStr, formatVndCurrency } from './invoice-pdf.service';
-
-function invoiceIssuedNotification(invoice: Invoice): NotificationPayload {
-  return {
-    type: NotificationType.INVOICE_ISSUED,
-    title: `Hóa đơn tiền thuê kho kỳ ${invoice.periodNo}`,
-    body: `Hóa đơn ${invoice.invoiceNo} với số tiền ${formatVndCurrency(invoice.total)} đã được phát hành. Hạn thanh toán đến ${formatDateStr(invoice.dueAt)}. Vui lòng thanh toán đúng hạn.`,
-    data: {
-      invoiceId: invoice.id,
-      invoiceNo: invoice.invoiceNo,
-      total: invoice.total,
-      dueAt: invoice.dueAt ? invoice.dueAt.toISOString() : null,
-    },
-  };
-}
+  issueRentPeriodInvoice,
+  queueInvoicePdf,
+  type RentPeriod,
+  recurringRentPeriods,
+} from './rent-period-invoice.util';
 
 export interface InvoiceWithQrResponse extends Invoice {
   paymentQrUrl?: string | null;
@@ -76,49 +57,23 @@ export class InvoicesService {
     const issuedInvoiceNos: string[] = [];
 
     for (const contract of activeContracts) {
-      if (!contract.effectiveAt || contract.months <= 1) continue;
-
-      const effectiveStart = new Date(contract.effectiveAt);
-      const monthlyPrice = new Decimal(contract.monthlyPriceSnapshot);
-      if (monthlyPrice.lte(0)) continue;
-
-      // Periods 2 to contract.months
-      for (let period = 2; period <= contract.months; period++) {
-        const periodStart = new Date(effectiveStart);
-        periodStart.setMonth(periodStart.getMonth() + (period - 1));
-
-        const periodEnd = new Date(effectiveStart);
-        periodEnd.setMonth(periodEnd.getMonth() + period);
-
-        // Calculate when to issue: leadDays before period starts
-        const issueThreshold = new Date(periodStart);
+      for (const period of recurringRentPeriods(contract)) {
+        // Issued from leadDays before the period starts until it ends.
+        const issueThreshold = new Date(period.startAt);
         issueThreshold.setDate(issueThreshold.getDate() - leadDays);
-
-        // If today is past the issue threshold and before period end
-        if (now >= issueThreshold && now < periodEnd) {
-          try {
-            const invoice = await this.issuePeriodInvoiceIfAbsent(
-              contract,
-              period,
-              periodStart,
-              periodEnd,
-              monthlyPrice,
-              now,
-            );
-
-            if (invoice) {
-              issuedInvoiceNos.push(invoice.invoiceNo);
-              // Send background PDF generation job to pg-boss
-              await this.queueService.send('invoice.render-pdf', {
-                invoiceId: invoice.id,
-              });
-            }
-          } catch (err: any) {
-            this.logger.error(
-              `Error issuing recurring invoice for contract ${contract.contractNo}, period ${period}: ${err?.message || err}`,
-              err?.stack,
-            );
+        if (now < issueThreshold || now >= period.endAt) continue;
+        try {
+          const invoice = await this.issuePeriodInvoiceIfAbsent(contract, period, now);
+          if (invoice) {
+            issuedInvoiceNos.push(invoice.invoiceNo);
+            // Send background PDF generation job to pg-boss
+            await queueInvoicePdf(this.queueService, invoice.id);
           }
+        } catch (err: any) {
+          this.logger.error(
+            `Error issuing recurring invoice for contract ${contract.contractNo}, period ${period.periodNo}: ${err?.message || err}`,
+            err?.stack,
+          );
         }
       }
     }
@@ -129,79 +84,45 @@ export class InvoicesService {
     return { issuedCount: issuedInvoiceNos.length, invoiceNos: issuedInvoiceNos };
   }
 
+  /**
+   * Issues one rent period unless it exists. The contract row is share-locked and re-checked:
+   * the scan read it outside this transaction, and a return finalized meanwhile (which holds
+   * the row for update, and issues the periods it still owes itself) must not get a fresh one.
+   */
   private async issuePeriodInvoiceIfAbsent(
     contract: Contract,
-    periodNo: number,
-    startAt: Date,
-    endAt: Date,
-    monthlyPrice: Decimal,
+    period: RentPeriod,
     now: Date,
   ): Promise<Invoice | null> {
-    const savedInvoice = await this.dataSource.transaction(async (em) => {
-      const existing = await em.findOne(Invoice, {
-        where: {
-          contractId: contract.id,
-          periodNo,
-          status: Not(InvoiceStatus.VOID),
-        },
-      });
-
-      if (existing) {
+    return this.dataSource.transaction(async (em) => {
+      const [current]: { status: ContractStatus }[] = await em.query(
+        'SELECT status FROM contracts WHERE id = $1 AND deleted_at IS NULL FOR SHARE',
+        [contract.id],
+      );
+      if (current?.status !== ContractStatus.ACTIVE) {
+        this.logger.log(
+          `Contract ${contract.contractNo} is ${current?.status ?? 'gone'}; period ${period.periodNo} not issued`,
+        );
         return null;
       }
-
-      const invoice = em.create(Invoice, {
-        invoiceNo: generateInvoiceNo(),
-        customerId: contract.customerId,
-        contractId: contract.id,
-        periodNo,
-        kind: contract.kind ?? RentalPeriodKind.INITIAL,
-        startAt,
-        endAt,
-        months: 1,
-        monthlyPriceSnapshot: monthlyPrice.toNumber(),
-        status: InvoiceStatus.ISSUED,
-        currency: 'VND',
-        subtotal: monthlyPrice.toNumber(),
-        taxAmount: 0,
-        total: monthlyPrice.toNumber(),
-        issuedAt: now,
-        dueAt: startAt,
-        billingInfo: {},
-      });
-
-      const saved = await em.save(Invoice, invoice);
-
-      const unitCode = contract.bookingItem?.storageUnit?.code ?? '';
-      const description =
-        `Tiền thuê kỳ ${periodNo} — Kho ${unitCode} (HĐ: ${contract.contractNo})`.trim();
-
-      const item = em.create(InvoiceItem, {
-        invoiceId: saved.id,
-        storageUnitId: contract.bookingItem?.storageUnitId,
-        itemType: InvoiceItemType.RENT,
-        description,
-        quantity: 1,
-        unitAmount: monthlyPrice.toNumber(),
-        amount: monthlyPrice.toNumber(),
-      });
-
-      await em.save(InvoiceItem, item);
-
-      await this.notificationsService.createForUsers(
+      const unit = contract.bookingItem
+        ? { id: contract.bookingItem.storageUnitId, code: contract.bookingItem.storageUnit?.code }
+        : null;
+      const saved = await issueRentPeriodInvoice(
         em,
-        [saved.customerId],
-        invoiceIssuedNotification(saved),
+        contract,
+        unit,
+        period,
+        now,
+        this.notificationsService,
       );
-
-      this.logger.log(
-        `Issued recurring invoice ${saved.invoiceNo} for contract ${contract.contractNo}, period ${periodNo}`,
-      );
-
+      if (saved) {
+        this.logger.log(
+          `Issued recurring invoice ${saved.invoiceNo} for contract ${contract.contractNo}, period ${period.periodNo}`,
+        );
+      }
       return saved;
     });
-
-    return savedInvoice;
   }
 
   /**

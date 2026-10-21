@@ -1,5 +1,7 @@
+import { Invoice } from '@entities/invoice.entity';
 import { ConfigService } from '@nestjs/config';
-import { ContractStatus, InvoiceStatus } from '@storage/types';
+import { ContractStatus, InvoiceKind, InvoiceStatus } from '@storage/types';
+import { Not } from 'typeorm';
 import { InvoicesService } from './invoices.service';
 
 describe('InvoicesService', () => {
@@ -31,6 +33,8 @@ describe('InvoicesService', () => {
     };
 
     em = {
+      // The contract re-read under FOR SHARE: still ACTIVE unless a test says otherwise.
+      query: jest.fn().mockResolvedValue([{ status: ContractStatus.ACTIVE }]),
       findOne: jest.fn(),
       save: jest.fn(async (_entityClass, data) => ({ id: 'new-inv-id', ...data })),
       create: jest.fn((_entityClass, data) => data),
@@ -102,6 +106,47 @@ describe('InvoicesService', () => {
       expect(queueService.send).toHaveBeenCalledWith('invoice.render-pdf', {
         invoiceId: 'new-inv-id',
       });
+      expect(em.query).toHaveBeenCalledWith(expect.stringContaining('FOR SHARE'), ['contract-1']);
+      // A settlement invoice never stands in for the rent period.
+      expect(em.findOne).toHaveBeenCalledWith(Invoice, {
+        where: {
+          contractId: 'contract-1',
+          periodNo: 2,
+          status: Not(InvoiceStatus.VOID),
+          kind: Not(InvoiceKind.SETTLEMENT),
+        },
+      });
+
+      jest.useRealTimers();
+    });
+
+    it.each([
+      ['ended by a return finalized after the scan', [{ status: ContractStatus.ENDED }]],
+      ['deleted after the scan', []],
+    ])('issues nothing for a contract %s', async (_label, rows) => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-11-28'));
+      contractsRepo.find.mockResolvedValue([
+        {
+          id: 'contract-1',
+          contractNo: 'CT-0001',
+          customerId: 'customer-1',
+          status: ContractStatus.ACTIVE,
+          effectiveAt: new Date('2026-11-01'),
+          months: 3,
+          monthlyPriceSnapshot: '1500000.00',
+        },
+      ]);
+      em.query.mockResolvedValue(rows);
+      em.findOne.mockResolvedValue(null);
+
+      const result = await service.generateRecurringInvoices(5);
+
+      expect(result.issuedCount).toBe(0);
+      expect(em.findOne).not.toHaveBeenCalled();
+      expect(em.save).not.toHaveBeenCalled();
+      expect(notificationsService.createForUsers).not.toHaveBeenCalled();
+      expect(queueService.send).not.toHaveBeenCalled();
 
       jest.useRealTimers();
     });

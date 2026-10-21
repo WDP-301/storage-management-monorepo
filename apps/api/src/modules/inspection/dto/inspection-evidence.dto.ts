@@ -10,10 +10,14 @@ import {
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
+
+/** Largest fee staff can propose for one damage, VND. */
+export const MAX_PROPOSED_FEE = 1_000_000_000;
 
 /** A file already uploaded to the private bucket (POST /uploads/presigned-url + PUT). */
 export class EvidenceFileDto {
@@ -60,4 +64,19 @@ export class DamageDto {
   @ValidateNested({ each: true })
   @Type(() => EvidenceFileDto)
   evidence?: EvidenceFileDto[];
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    minimum: 0,
+    maximum: MAX_PROPOSED_FEE,
+    example: 500000,
+    description:
+      'Repair fee staff propose, whole VND; operations decide it at the deposit settlement. Hidden from the customer.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(MAX_PROPOSED_FEE)
+  proposedFee?: number | null;
 }

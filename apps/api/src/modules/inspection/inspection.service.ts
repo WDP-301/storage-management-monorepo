@@ -4,13 +4,9 @@ import { Inspection } from '@entities/inspection.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { activeFacilityIds } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { HttpStatus, Injectable } from '@nestjs/common';
-import {
-  DomainException,
-  fieldValidationError,
-  notFound,
-} from '@shared/exceptions/domain.exception';
-import { ErrorCode } from '@shared/models/api-response';
+import { SettingsService } from '@modules/settings/settings.service';
+import { Injectable } from '@nestjs/common';
+import { fieldValidationError, notFound } from '@shared/exceptions/domain.exception';
 import { ContractStatus, UserRole, UserStatus } from '@storage/types';
 import { DataSource, type FindOptionsWhere, In, IsNull, Not } from 'typeorm';
 import { AssignInspectionDto } from './dto/assign-inspection.dto';
@@ -20,17 +16,23 @@ import {
   assertInspectorOrManager,
   assertManagesInspection,
   assertNotFinalized,
+  forContractOwner,
   INSPECTION_RELATIONS,
   isGlobalManager,
   loadInspectionFacilityId,
   loadManagedFacilityIds,
-  managesInspectionFacility,
+  readableInspection,
+  withoutRefundAccount,
   withPublicInspector,
 } from './inspection-access.util';
+import { rescheduleInspection } from './inspection-schedule.util';
 
 @Injectable()
 export class InspectionService {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly settings: SettingsService,
+  ) {}
 
   private get em() {
     return this.dataSource.manager;
@@ -44,17 +46,20 @@ export class InspectionService {
       facilityIds = facilityIds ? facilityIds.filter((id) => managed.includes(id)) : managed;
       if (facilityIds.length === 0) return [];
     }
-    return this.list({
-      ...this.filters(query),
-      ...(facilityIds
-        ? { contract: { bookingItem: { storageUnit: { facilityId: In(facilityIds) } } } }
-        : {}),
-    });
+    return this.list(
+      {
+        ...this.filters(query),
+        ...(facilityIds
+          ? { contract: { bookingItem: { storageUnit: { facilityId: In(facilityIds) } } } }
+          : {}),
+      },
+      withoutRefundAccount,
+    );
   }
 
   /** Customer view: every inspection whose contract belongs to the caller. */
   findMyInspections(actor: AuthUser): Promise<Inspection[]> {
-    return this.list({ contract: { customerId: actor.id } });
+    return this.list({ contract: { customerId: actor.id } }, forContractOwner);
   }
 
   /** Staff view: every inspection assigned to the caller (`inspected_by = me`). */
@@ -62,7 +67,7 @@ export class InspectionService {
     actor: AuthUser,
     query: ListInspectionsQueryDto = {},
   ): Promise<Inspection[]> {
-    return this.list({ ...this.filters(query), inspectedBy: actor.id });
+    return this.list({ ...this.filters(query), inspectedBy: actor.id }, withoutRefundAccount);
   }
 
   /** Readable by the contract owner, the assigned inspector and managers of the facility. */
@@ -72,16 +77,7 @@ export class InspectionService {
       relations: INSPECTION_RELATIONS,
     });
     if (!inspection) notFound('Inspection', id);
-    const ownsOrInspects =
-      inspection.contract?.customerId === actor.id || inspection.inspectedBy === actor.id;
-    if (!ownsOrInspects && !(await managesInspectionFacility(this.em, inspection, actor))) {
-      throw new DomainException(
-        ErrorCode.FORBIDDEN,
-        'You do not have access to this inspection',
-        HttpStatus.FORBIDDEN,
-      );
-    }
-    return withPublicInspector(inspection);
+    return readableInspection(this.em, inspection, actor);
   }
 
   /** Assigns an ACTIVE user holding an active FACILITY_STAFF role at the unit's facility. */
@@ -115,13 +111,14 @@ export class InspectionService {
       }
 
       inspection.inspectedBy = dto.inspectedBy;
-      return em.save(Inspection, inspection);
+      return withoutRefundAccount(await em.save(Inspection, inspection));
     });
   }
 
   /**
    * Updates inspection fields (assigned inspector or a manager of the facility).
    * `inspected_by` only changes through assign, `finalized_at` only through finalize.
+   * A return can be rescheduled; bringing it forward restarts the customer's notice.
    */
   async update(id: string, dto: UpdateInspectionDto, actor: AuthUser): Promise<Inspection> {
     // Row lock: a save racing a finalize must see the committed finalizedAt (409),
@@ -140,6 +137,9 @@ export class InspectionService {
       );
       assertNotFinalized(inspection);
 
+      if (dto.scheduledAt !== undefined) {
+        await rescheduleInspection(inspection, new Date(dto.scheduledAt), this.settings);
+      }
       if (dto.conditionNotes !== undefined) {
         inspection.conditionNotes = dto.conditionNotes;
       }
@@ -151,7 +151,7 @@ export class InspectionService {
         where: { id },
         relations: INSPECTION_RELATIONS,
       });
-      return withPublicInspector(reloaded ?? inspection);
+      return withoutRefundAccount(withPublicInspector(reloaded ?? inspection));
     });
   }
 
@@ -163,7 +163,11 @@ export class InspectionService {
     };
   }
 
-  private async list(where: FindOptionsWhere<Inspection>): Promise<Inspection[]> {
+  /** `view` hides what the caller may not read (refund account, proposed fees). */
+  private async list(
+    where: FindOptionsWhere<Inspection>,
+    view: (inspection: Inspection) => Inspection,
+  ): Promise<Inspection[]> {
     // A cancelled contract never reaches handover, so its inspection is not work to do.
     const contract = {
       ...(where.contract as FindOptionsWhere<Contract> | undefined),
@@ -174,6 +178,6 @@ export class InspectionService {
       relations: INSPECTION_RELATIONS,
       order: { scheduledAt: { direction: 'ASC', nulls: 'LAST' }, createdAt: 'DESC' },
     });
-    return rows.map(withPublicInspector);
+    return rows.map((row) => view(withPublicInspector(row)));
   }
 }

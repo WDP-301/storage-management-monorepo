@@ -20,6 +20,7 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ApiErrorResponseDto } from '@shared/models/api-response';
 import { UserRole } from '@storage/types';
 import { AssignInspectionDto } from './dto/assign-inspection.dto';
+import { FinalizeInspectionDto } from './dto/finalize-inspection.dto';
 import { ListInspectionsQueryDto } from './dto/list-inspections-query.dto';
 import { UpdateInspectionDto } from './dto/update-inspection.dto';
 import { InspectionService } from './inspection.service';
@@ -77,7 +78,11 @@ export class InspectionController {
     UserRole.FACILITY_MANAGER,
     UserRole.OPERATIONS_MANAGER,
   )
-  @ApiOperation({ summary: 'Update an inspection (assigned inspector or manager)' })
+  @ApiOperation({
+    summary: 'Update an inspection (assigned inspector or manager)',
+    description:
+      'A return can be rescheduled (scheduledAt); bringing it forward restarts the customer notice. Damages may carry a proposedFee, never shown to the customer.',
+  })
   @ApiResponse({ status: 400, type: ApiErrorResponseDto })
   update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -111,7 +116,12 @@ export class InspectionController {
     summary:
       'Finalize an inspection — handover activates the contract, return ends it and frees the unit',
     description:
-      "A handover needs the signed contract files and the first month's rent paid (POST /contracts/:id/first-rent).",
+      "A handover needs the signed contract files and the first month's rent paid (POST /contracts/:id/first-rent). A return records the actual return day (returnedOn, default today), voids rent periods starting on or after the later of it and the appointment, and frees the unit unless a MAJOR damage sends it to maintenance.",
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'returnedOn outside request day..today, or sent for a handover',
+    type: ApiErrorResponseDto,
   })
   @ApiResponse({
     status: 409,
@@ -119,7 +129,11 @@ export class InspectionController {
       'Already finalized, wrong contract status, CONTRACT_DOCUMENTS_REQUIRED or FIRST_RENT_UNPAID',
     type: ApiErrorResponseDto,
   })
-  finalize(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
-    return this.lifecycle.finalize(id, user);
+  finalize(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: FinalizeInspectionDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.lifecycle.finalize(id, user, dto);
   }
 }

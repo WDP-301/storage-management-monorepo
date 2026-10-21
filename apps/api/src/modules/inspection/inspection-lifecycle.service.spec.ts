@@ -7,9 +7,16 @@ import { UnitHold } from '@entities/unit-hold.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { HttpStatus, Logger } from '@nestjs/common';
 import {
+  addVietnamDays,
+  fromVietnamDate,
+  vietnamDate,
+  vietnamToday,
+} from '@shared/utils/calendar.util';
+import {
   ContractStatus,
   InspectionType,
   InvoiceStatus,
+  NotificationType,
   StorageUnitStatus,
   UserRole,
 } from '@storage/types';
@@ -19,6 +26,9 @@ import { InspectionLifecycleService } from './inspection-lifecycle.service';
 const actor = (id: string, roles: UserRole[] = [UserRole.FACILITY_STAFF]): AuthUser =>
   ({ id, roles }) as AuthUser;
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const daysAgo = (days: number) => new Date(Date.now() - days * DAY_MS);
+
 const buildInspection = (overrides: Partial<Inspection> = {}): Inspection =>
   ({
     id: 'insp-1',
@@ -27,8 +37,13 @@ const buildInspection = (overrides: Partial<Inspection> = {}): Inspection =>
     inspectedBy: 'staff-1',
     evidence: [],
     damages: [],
+    createdAt: daysAgo(10),
+    scheduledAt: daysAgo(3),
     ...overrides,
   }) as Inspection;
+
+const buildReturn = (overrides: Partial<Inspection> = {}) =>
+  buildInspection({ type: InspectionType.RETURN, ...overrides });
 
 const buildContract = (overrides: Partial<Contract> = {}): Contract =>
   ({
@@ -48,7 +63,14 @@ describe('InspectionLifecycleService.finalize', () => {
     findOneOrFail: jest.Mock;
     update: jest.Mock;
     save: jest.Mock;
+    create: jest.Mock;
+    query: jest.Mock;
+    transaction: jest.Mock;
   };
+  let notifications: { createForUsers: jest.Mock };
+  let queue: { send: jest.Mock };
+  /** Whether the finalize transaction has committed. */
+  let committed: boolean;
   let service: InspectionLifecycleService;
   /** Claims on the unit by other bookings — none unless a test sets them. */
   let otherHold: { bookingId: string } | null;
@@ -82,10 +104,31 @@ describe('InspectionLifecycleService.finalize', () => {
       findOne: jest.fn(),
       findOneOrFail: jest.fn().mockResolvedValue({ id: 'item-1', storageUnitId: 'unit-1' }),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
-      save: jest.fn(async (_entity, data) => data),
+      save: jest.fn(async (entity, data) =>
+        entity === Invoice ? { ...data, id: `new-${data.periodNo}` } : data,
+      ),
+      create: jest.fn((_entity, data) => ({ ...data })),
+      // Invoice voids return no rows; the contract's ledger deposit already exists.
+      query: jest.fn(async (sql: string) =>
+        sql.startsWith('UPDATE invoices') ? [[], 0] : [{ id: 'deposit-1' }],
+      ),
+      transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)),
     };
-    const dataSource = { transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)) };
-    service = new InspectionLifecycleService(dataSource as never);
+    notifications = { createForUsers: jest.fn().mockResolvedValue(1) };
+    committed = false;
+    queue = { send: jest.fn(async () => (committed ? 'job-1' : 'sent before commit')) };
+    const dataSource = {
+      transaction: jest.fn(async (cb: (e: unknown) => unknown) => {
+        const result = await cb(em);
+        committed = true;
+        return result;
+      }),
+    };
+    service = new InspectionLifecycleService(
+      dataSource as never,
+      notifications as never,
+      queue as never,
+    );
     jest.spyOn(Logger.prototype, 'log').mockImplementation();
   });
 
@@ -109,6 +152,19 @@ describe('InspectionLifecycleService.finalize', () => {
     );
     expect(result.finalizedAt).toBeInstanceOf(Date);
     expect(result.inspectedAt).toBe(result.finalizedAt);
+    // Nothing of a return happens on a handover.
+    expect(result.returnedOn).toBeUndefined();
+    expect(em.query).not.toHaveBeenCalled();
+    expect(notifications.createForUsers).not.toHaveBeenCalled();
+  });
+
+  it('refuses a return day on a handover', async () => {
+    stubRows(buildInspection());
+
+    await expect(
+      service.finalize('insp-1', actor('staff-1'), { returnedOn: vietnamToday() }),
+    ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+    expect(em.update).not.toHaveBeenCalled();
   });
 
   it('refuses to finalize a handover while the contract has no signed files', async () => {
@@ -245,20 +301,110 @@ describe('InspectionLifecycleService.finalize', () => {
     );
   });
 
-  it('sends a damaged unit to maintenance on return', async () => {
-    stubRows(
-      buildInspection({
-        type: InspectionType.RETURN,
-        damages: [{ description: 'Móp cửa', severity: 'MAJOR' }],
-      }),
-      buildContract({ status: ContractStatus.ACTIVE }),
-    );
+  it.each([
+    ['major damage', [{ description: 'Móp cửa', severity: 'MAJOR' }]],
+    [
+      'major and minor damage',
+      [
+        { description: 'Trầy sơn', severity: 'MINOR' },
+        { description: 'Móp cửa', severity: 'MAJOR' },
+      ],
+    ],
+  ])('sends a unit with %s to maintenance on return', async (_label, damages) => {
+    stubRows(buildReturn({ damages }), buildContract({ status: ContractStatus.ACTIVE }));
 
     await service.finalize('insp-1', actor('staff-1'));
 
     expect(em.update).toHaveBeenCalledWith(StorageUnit, expect.anything(), {
       status: StorageUnitStatus.MAINTENANCE,
     });
+  });
+
+  it('rents a unit with only minor damage out again', async () => {
+    stubRows(
+      buildReturn({ damages: [{ description: 'Trầy sơn', severity: 'MINOR' }] }),
+      buildContract({ status: ContractStatus.ACTIVE }),
+    );
+
+    await service.finalize('insp-1', actor('staff-1'));
+
+    expect(em.update).toHaveBeenCalledWith(StorageUnit, expect.anything(), {
+      status: StorageUnitStatus.AVAILABLE,
+    });
+  });
+
+  it('records today as the return day when none is given, as older clients do', async () => {
+    stubRows(buildReturn(), buildContract({ status: ContractStatus.ACTIVE, customerId: 'cust-1' }));
+
+    const result = await service.finalize('insp-1', actor('staff-1'));
+
+    expect(result.returnedOn).toBe(vietnamToday());
+    // Came back after the appointment: rent counts to the return day.
+    const voidCall = em.query.mock.calls.find(([sql]) => sql.startsWith('UPDATE invoices'));
+    expect(voidCall?.[1]).toEqual(
+      expect.arrayContaining(['contract-1', fromVietnamDate(vietnamToday())]),
+    );
+    expect(notifications.createForUsers).toHaveBeenCalledWith(
+      em,
+      ['cust-1'],
+      expect.objectContaining({ type: NotificationType.RETURN_FINALIZED }),
+    );
+  });
+
+  it('records the return day staff picked and voids rent from the later appointment', async () => {
+    const scheduledAt = new Date(Date.now() + 5 * DAY_MS);
+    const picked = addVietnamDays(vietnamToday(), -2);
+    stubRows(buildReturn({ scheduledAt }), buildContract({ status: ContractStatus.ACTIVE }));
+
+    const result = await service.finalize('insp-1', actor('staff-1'), { returnedOn: picked });
+
+    expect(result.returnedOn).toBe(picked);
+    const voidCall = em.query.mock.calls.find(([sql]) => sql.startsWith('UPDATE invoices'));
+    expect(voidCall?.[1][1]).toEqual(fromVietnamDate(vietnamDate(scheduledAt)));
+  });
+
+  it.each([
+    ['before the return was requested', () => addVietnamDays(vietnamToday(), -11)],
+    ['in the future', () => addVietnamDays(vietnamToday(), 1)],
+  ])('rejects a return day %s, changing nothing', async (_label, day) => {
+    stubRows(buildReturn(), buildContract({ status: ContractStatus.ACTIVE }));
+
+    await expect(
+      service.finalize('insp-1', actor('staff-1'), { returnedOn: day() }),
+    ).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+      response: { details: { fields: [{ field: 'returnedOn', code: 'outOfRange' }] } },
+    });
+    expect(em.update).not.toHaveBeenCalled();
+    expect(em.query).not.toHaveBeenCalled();
+    expect(em.save).not.toHaveBeenCalled();
+  });
+
+  it('finalizes the return even when the deposit cannot be recorded', async () => {
+    jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    em.transaction.mockRejectedValue(new Error('could not serialize access'));
+    stubRows(buildReturn(), buildContract({ status: ContractStatus.ACTIVE }));
+
+    await expect(service.finalize('insp-1', actor('staff-1'))).resolves.toEqual(
+      expect.objectContaining({ finalizedAt: expect.any(Date) }),
+    );
+  });
+
+  it('does not return the customer’s refund account to staff', async () => {
+    stubRows(
+      buildReturn({
+        refundAccount: { bankBin: null, bankName: 'X', accountNo: '1234', accountName: 'LE B' },
+      }),
+      buildContract({ status: ContractStatus.ACTIVE }),
+    );
+
+    const result = await service.finalize('insp-1', actor('staff-1'));
+
+    expect(result.refundAccount).toBeUndefined();
+    expect(em.save).toHaveBeenCalledWith(
+      Inspection,
+      expect.objectContaining({ refundAccount: expect.objectContaining({ accountNo: '1234' }) }),
+    );
   });
 
   it('rejects a return on a contract that is not ACTIVE', async () => {
@@ -350,5 +496,110 @@ describe('InspectionLifecycleService.finalize', () => {
     await expect(service.finalize('missing', actor('staff-1'))).rejects.toMatchObject({
       status: HttpStatus.NOT_FOUND,
     });
+  });
+
+  describe('rent still owed by a return', () => {
+    // Monthly from 15/01/2027 for a year; billed through June, July unbilled.
+    const billedContract = () =>
+      buildContract({
+        status: ContractStatus.ACTIVE,
+        customerId: 'cust-1',
+        effectiveAt: new Date('2027-01-15T05:00:00.000Z'),
+        months: 12,
+        monthlyPriceSnapshot: '1500000.00' as never,
+      });
+    const billed = new Set([1, 2, 3, 4, 5, 6]);
+
+    beforeEach(() => {
+      // Returned 01/07 with the appointment on 01/08, finalized on 01/07.
+      jest.useFakeTimers({ now: new Date('2027-07-01T05:00:00.000Z'), doNotFake: ['nextTick'] });
+      stubRows(
+        buildReturn({
+          createdAt: new Date('2027-06-20T03:00:00.000Z'),
+          scheduledAt: new Date('2027-08-01T05:00:00.000Z'),
+        }),
+        billedContract(),
+      );
+      const stubbed = em.findOne.getMockImplementation();
+      em.findOne.mockImplementation(async (entity, options) =>
+        entity === Invoice
+          ? billed.has(options.where.periodNo)
+            ? { id: `inv-${options.where.periodNo}` }
+            : null
+          : stubbed?.(entity, options),
+      );
+    });
+
+    afterEach(() => jest.useRealTimers());
+
+    it('bills it while the contract is still active, then ends the contract', async () => {
+      await service.finalize('insp-1', actor('staff-1'));
+
+      const invoiceSaves = em.save.mock.calls.filter(([entity]) => entity === Invoice);
+      expect(invoiceSaves.map(([, data]) => [data.periodNo, data.total])).toEqual([[7, 1500000]]);
+      const issuedAt =
+        em.save.mock.invocationCallOrder[
+          em.save.mock.calls.findIndex(([entity]) => entity === Invoice)
+        ];
+      const endedAt =
+        em.update.mock.invocationCallOrder[
+          em.update.mock.calls.findIndex(([entity]) => entity === Contract)
+        ];
+      expect(issuedAt).toBeLessThan(endedAt);
+      expect(em.update).toHaveBeenCalledWith(
+        Contract,
+        { id: 'contract-1' },
+        { status: ContractStatus.ENDED, endedAt: expect.any(Date) },
+      );
+      expect(notifications.createForUsers).toHaveBeenCalledWith(
+        em,
+        ['cust-1'],
+        expect.objectContaining({ type: NotificationType.INVOICE_ISSUED }),
+      );
+    });
+
+    it('queues the PDF of the new invoice only once the finalize committed', async () => {
+      await service.finalize('insp-1', actor('staff-1'));
+
+      expect(queue.send).toHaveBeenCalledTimes(1);
+      expect(queue.send).toHaveBeenCalledWith('invoice.render-pdf', { invoiceId: 'new-7' });
+      await expect(queue.send.mock.results[0].value).resolves.toBe('job-1');
+    });
+
+    it('keeps the finalize when the PDF cannot be queued', async () => {
+      jest.spyOn(Logger.prototype, 'error').mockImplementation();
+      queue.send.mockRejectedValue(new Error('queue down'));
+
+      await expect(service.finalize('insp-1', actor('staff-1'))).resolves.toMatchObject({
+        returnedOn: '2027-07-01',
+      });
+    });
+
+    it('bills nothing more when the finalize is sent again', async () => {
+      await service.finalize('insp-1', actor('staff-1'));
+      em.save.mockClear();
+      queue.send.mockClear();
+
+      // The first finalize committed: the inspection now reads as finalized.
+      const finalized = buildReturn({ finalizedAt: new Date('2027-07-01T05:00:00.000Z') });
+      const stubbed = em.findOne.getMockImplementation();
+      em.findOne.mockImplementation(async (entity, options) =>
+        entity === Inspection ? finalized : stubbed?.(entity, options),
+      );
+
+      await expect(service.finalize('insp-1', actor('staff-1'))).rejects.toMatchObject({
+        status: HttpStatus.CONFLICT,
+      });
+      expect(em.save).not.toHaveBeenCalled();
+      expect(queue.send).not.toHaveBeenCalled();
+    });
+  });
+
+  it('queues nothing for a handover', async () => {
+    stubRows(buildInspection());
+
+    await service.finalize('insp-1', actor('staff-1'));
+
+    expect(queue.send).not.toHaveBeenCalled();
   });
 });

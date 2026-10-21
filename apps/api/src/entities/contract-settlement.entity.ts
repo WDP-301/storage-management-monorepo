@@ -57,7 +57,7 @@ export class ContractSettlement {
   @Column({ type: 'decimal', precision: 14, scale: 2, default: 0, name: 'shortfall_amount' })
   shortfallAmount: number;
 
-  /** Invoice for what the deposit did not cover; null when there was no shortfall. */
+  /** Settlement invoice for approved fees (paid from the deposit where it covers them); null when there were no fees. */
   @Column({ type: 'uuid', nullable: true, name: 'fee_invoice_id' })
   feeInvoiceId?: string | null;
 

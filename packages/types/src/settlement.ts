@@ -77,7 +77,7 @@ export interface SettlementSummaryRecord {
   lines: SettlementLine[];
   totals: SettlementTotals | null;
   refund_account: MaskedRefundBankAccount | null;
-  /** Invoice for what the deposit did not cover, when there was a shortfall. */
+  /** Settlement invoice for approved fees, open only for the part the deposit did not cover. */
   fee_invoice_id: string | null;
   approved_at: string | Date | null;
   completed_at: string | Date | null;

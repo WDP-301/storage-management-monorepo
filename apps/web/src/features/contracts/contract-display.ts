@@ -1,4 +1,6 @@
+import { formatVnDay, lastDayBefore } from '../../lib/vn-day';
 import type { ContractPatch, ContractRecord, ContractStatus } from '../../types/contract';
+import { formatDay } from '../inspections/inspection-display';
 
 export const CONTRACT_STATUS_LABEL: Record<
   ContractStatus,
@@ -63,6 +65,15 @@ export function plannedEnd(contract: Pick<ContractRecord, 'effective_at' | 'mont
   );
   end.setDate(end.getDate() - 1);
   return end.toISOString();
+}
+
+/** dd/mm/yyyy of the term's last day: from the server's term end when known, else computed. */
+export function termLastDay(
+  contract: Pick<ContractRecord, 'effective_at' | 'months' | 'term_end_at'>,
+): string {
+  return contract.term_end_at
+    ? formatVnDay(lastDayBefore(contract.term_end_at))
+    : formatDay(plannedEnd(contract));
 }
 
 export type HandoverState = 'none' | 'unassigned' | 'assigned' | 'done';

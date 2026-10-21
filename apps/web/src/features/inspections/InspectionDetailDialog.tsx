@@ -6,11 +6,13 @@ import { Link } from 'react-router-dom';
 import { SignedImageThumb } from '../../components/SignedFile';
 import { ContractsApi, FacilitiesApi, InspectionsApi } from '../../lib/api';
 import type { FacilityStaffMember, InspectionRecord } from '../../types/inspection';
+import { describeApiError } from '../contracts/settlement-display';
+import { formatVnd } from '../warehouses/warehouse-display';
+import { InspectionFinalizeConfirm } from './InspectionFinalizeConfirm';
 import {
   customerName,
   customerPhone,
   facilityId,
-  finalizeConsequence,
   formatDateTime,
   formatDay,
   INSPECTION_KIND_LABEL,
@@ -63,7 +65,7 @@ export const InspectionDetailDialog: React.FC<Props> = ({ inspection, onClose, o
       await action();
       onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Thao tác thất bại.');
+      setError(describeApiError(err, 'Thao tác thất bại.'));
     } finally {
       setBusy(null);
       setConfirming(false);
@@ -163,6 +165,13 @@ export const InspectionDetailDialog: React.FC<Props> = ({ inspection, onClose, o
                       {damage.severity === 'MAJOR' ? 'Nghiêm trọng' : 'Nhẹ'}
                     </Badge>
                   </div>
+                  {inspection.type === 'RETURN' && (
+                    <p className="text-xs text-kumo-subtle">
+                      {damage.proposedFee == null
+                        ? 'Chưa có phí đề xuất'
+                        : `Phí đề xuất: ${formatVnd(damage.proposedFee)}`}
+                    </p>
+                  )}
                   {damage.evidence && damage.evidence.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {damage.evidence.map((file) => (
@@ -225,23 +234,14 @@ export const InspectionDetailDialog: React.FC<Props> = ({ inspection, onClose, o
               )}
 
               {confirming ? (
-                <div className="p-3 bg-kumo-warning-tint rounded-lg space-y-3 text-sm">
-                  <p className="text-kumo-default">
-                    {finalizeConsequence(inspection)} Biên bản không sửa được sau khi chốt.
-                  </p>
-                  <div className="flex justify-end gap-2">
-                    <Button variant="secondary" onClick={() => setConfirming(false)}>
-                      Huỷ
-                    </Button>
-                    <Button
-                      variant="primary"
-                      loading={busy === 'finalize'}
-                      onClick={() => run('finalize', () => InspectionsApi.finalize(inspection.id))}
-                    >
-                      Xác nhận chốt
-                    </Button>
-                  </div>
-                </div>
+                <InspectionFinalizeConfirm
+                  inspection={inspection}
+                  busy={busy === 'finalize'}
+                  onCancel={() => setConfirming(false)}
+                  onConfirm={(returnedOn) =>
+                    run('finalize', () => InspectionsApi.finalize(inspection.id, returnedOn))
+                  }
+                />
               ) : confirmingCancel ? (
                 <div className="p-3 bg-kumo-warning-tint rounded-lg space-y-3 text-sm">
                   <p className="text-kumo-default">

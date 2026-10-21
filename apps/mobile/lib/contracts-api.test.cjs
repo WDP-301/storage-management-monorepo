@@ -99,3 +99,81 @@ test('ContractDocumentsApi.replace PUTs the full list and returns the saved file
   assert.deepEqual(JSON.parse(calls[0].init.body), { documents: [file] });
   assert.deepEqual(saved, [file]);
 });
+
+test('normaliseContract reads term, deposit, penalty and settlement as unknown on older APIs', () => {
+  const { normaliseContract } = load('contracts-api.ts', async () => null);
+  const contract = normaliseContract(baseContract);
+  assert.equal(contract.deposit, 2000000);
+  assert.equal(contract.termEndAt, null);
+  assert.equal(contract.overduePenaltyPerDay, null);
+  assert.equal(contract.settlement, null);
+});
+
+test('normaliseContract keeps an undetermined deposit as null, never 0', () => {
+  const { normaliseContract } = load('contracts-api.ts', async () => null);
+  assert.equal(normaliseContract({ ...baseContract, deposit: null }).deposit, null);
+});
+
+test('normaliseContract maps the term end, per-day penalty, settlement and request source', () => {
+  const { normaliseContract } = load('contracts-api.ts', async () => null);
+  const settlement = { status: 'PENDING', deposit_amount: 2000000, lines: null, totals: null };
+  const contract = normaliseContract({
+    ...baseContract,
+    deposit: 2000000,
+    term_end_at: '2027-03-31T17:00:00.000Z',
+    overdue_penalty_per_day: '33333',
+    settlement,
+    return: {
+      id: 'r1',
+      type: 'RETURN',
+      scheduled_at: '2027-04-01T12:00:00.000Z',
+      inspected_at: null,
+      finalized_at: null,
+      inspector_name: null,
+      request_note: null,
+      request_source: 'HOTLINE',
+      condition_notes: null,
+      evidence: [],
+      damages: [],
+    },
+  });
+  assert.equal(contract.termEndAt, '2027-03-31T17:00:00.000Z');
+  assert.equal(contract.overduePenaltyPerDay, 33333);
+  assert.deepEqual(contract.settlement, { ...settlement, lines: [] });
+  assert.equal(contract.return.requestSource, 'HOTLINE');
+  assert.equal(normaliseContract({ ...baseContract, settlement: {} }).settlement, null);
+});
+
+test('return request calls send the Vietnam day at noon UTC and the refund account', async () => {
+  const calls = [];
+  const { ContractsApi } = load('contracts-api.ts', async (path, init) => {
+    calls.push({ path, init });
+    return { id: 'r1' };
+  });
+  const refundAccount = {
+    bankBin: '970436',
+    bankName: 'Vietcombank',
+    accountNo: '0123',
+    accountName: 'A B',
+  };
+  await ContractsApi.returnPreview('c1', '2027-04-12');
+  await ContractsApi.requestReturn('c1', { dayIso: '2027-04-12', note: '', refundAccount });
+  await ContractsApi.updateReturn('c1', { note: '' });
+  const cancelled = await ContractsApi.cancelReturn('c1');
+
+  assert.equal(
+    calls[0].path,
+    '/contracts/c1/return-preview?scheduledAt=2027-04-12T12%3A00%3A00.000Z',
+  );
+  assert.equal(calls[1].init.method, 'POST');
+  assert.deepEqual(JSON.parse(calls[1].init.body), {
+    scheduledAt: '2027-04-12T12:00:00.000Z',
+    refundAccount,
+  });
+  // Omitted fields stay as they are; an empty note is sent so it clears.
+  assert.equal(calls[2].init.method, 'PATCH');
+  assert.deepEqual(JSON.parse(calls[2].init.body), { note: '' });
+  assert.equal(calls[3].path, '/contracts/c1/return-request');
+  assert.equal(calls[3].init.method, 'DELETE');
+  assert.deepEqual(cancelled, { id: 'r1' });
+});

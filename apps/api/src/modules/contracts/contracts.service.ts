@@ -5,12 +5,21 @@ import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { findUnrentable, lockShelfParents } from '@modules/bookings/rentable-units.util';
+import { SettingsService } from '@modules/settings/settings.service';
+import { loadCustomerContractExtras } from '@modules/settlements/settlement-summary.util';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { BookingStatus, ContractStatus, InspectionType, StorageUnitStatus } from '@storage/types';
-import { DataSource, In, IsNull, Repository } from 'typeorm';
+import {
+  BookingStatus,
+  ContractKind,
+  ContractStatus,
+  InspectionType,
+  StorageUnitStatus,
+} from '@storage/types';
+import { DataSource, IsNull, Repository } from 'typeorm';
+import { assertContractDeletable } from './contract-delete-guard.util';
 import { loadContractInspections } from './contract-inspections.util';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
 import { persistContract } from './initial-contract.util';
@@ -24,6 +33,7 @@ export class ContractsService {
   constructor(
     @InjectRepository(Contract) private readonly contracts: Repository<Contract>,
     private readonly dataSource: DataSource,
+    private readonly settings: SettingsService,
   ) {}
 
   async create(dto: CreateContractDto): Promise<Contract> {
@@ -100,10 +110,23 @@ export class ContractsService {
         await manager.update(StorageUnit, { id: unit.id }, { status: StorageUnitStatus.BOOKED });
       }
 
+      // Only one live INITIAL contract per item is allowed (UQ_contract_initial_item), so a
+      // cancelled one is retired before the item is contracted again; its HELD deposit then
+      // moves to the new contract when persistContract records the deposit.
+      const kind = dto.kind ?? ContractKind.INITIAL;
+      if (kind === ContractKind.INITIAL) {
+        await manager.softDelete(Contract, {
+          bookingItemId: item.id,
+          kind: ContractKind.INITIAL,
+          status: ContractStatus.CANCELLED,
+          deletedAt: IsNull(),
+        });
+      }
+
       return persistContract(manager, {
         item,
         customer,
-        kind: dto.kind,
+        kind,
         effectiveAt,
         endedAt,
         signedAt: dto.signedAt ? new Date(dto.signedAt) : undefined,
@@ -119,11 +142,22 @@ export class ContractsService {
       order: { effectiveAt: 'DESC' },
     });
     if (contracts.length === 0) return [];
-    const byContract = await loadContractInspections(
-      this.dataSource,
-      contracts.map((c) => c.id),
+    const [byContract, penaltyPercent] = await Promise.all([
+      loadContractInspections(
+        this.dataSource,
+        contracts.map((c) => c.id),
+      ),
+      this.settings.getOverduePenaltyPercent(),
+    ]);
+    const extras = await loadCustomerContractExtras(
+      this.dataSource.manager,
+      contracts,
+      byContract,
+      penaltyPercent,
     );
-    return contracts.map((c) => toCustomerContractRecord(c, byContract.get(c.id)));
+    return contracts.map((c) =>
+      toCustomerContractRecord(c, byContract.get(c.id), extras.get(c.id)),
+    );
   }
 
   async findById(id: string): Promise<Contract> {
@@ -194,23 +228,30 @@ export class ContractsService {
   /**
    * Only contracts that no longer hold a unit may go: deleting a DRAFT/ACTIVE one
    * strands the unit (BOOKED/RENTED) and its open inspections can never finalize —
-   * TypeORM excludes soft-deleted rows, so finalize would 404 on the contract.
+   * TypeORM excludes soft-deleted rows, so finalize would 404 on the contract. Money still
+   * open on it (settlement, invoices, a held deposit) keeps it too; checked under the row lock.
    */
   async softDelete(id: string): Promise<void> {
-    const result = await this.contracts.softDelete({
-      id,
-      status: In([ContractStatus.ENDED, ContractStatus.CANCELLED]),
-      deletedAt: IsNull(),
+    await this.dataSource.transaction(async (em) => {
+      const contract = await em.findOne(Contract, {
+        where: { id, deletedAt: IsNull() },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!contract) notFound('Contract', id);
+      if (
+        contract.status !== ContractStatus.ENDED &&
+        contract.status !== ContractStatus.CANCELLED
+      ) {
+        throw new DomainException(
+          ErrorCode.CONFLICT,
+          `Cannot delete a ${contract.status} contract — finalize its inspections first`,
+          HttpStatus.CONFLICT,
+          { contractId: id, status: contract.status },
+        );
+      }
+      await assertContractDeletable(em, contract);
+      await em.softDelete(Contract, { id });
     });
-    if (result.affected) return;
-    const contract = await this.contracts.findOne({ where: { id, deletedAt: IsNull() } });
-    if (!contract) notFound('Contract', id);
-    throw new DomainException(
-      ErrorCode.CONFLICT,
-      `Cannot delete a ${contract.status} contract — finalize its inspections first`,
-      HttpStatus.CONFLICT,
-      { contractId: id, status: contract.status },
-    );
   }
 
   private validateDates(effectiveAt: Date, endedAt?: Date): void {

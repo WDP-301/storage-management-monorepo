@@ -1,4 +1,19 @@
-import type { ContractKind, ContractStatus, DamageSeverity } from '@storage/types';
+import type {
+  ContractKind,
+  ContractStatus,
+  DamageSeverity,
+  ReturnRequestSource,
+  SettlementSummaryRecord,
+} from '@storage/types';
+
+export type {
+  MaskedRefundBankAccount,
+  RefundBankAccount,
+  RefundBankAccountInput,
+  ReturnPreviewRecord,
+  SettlementLine,
+  SettlementSummaryRecord,
+} from '@storage/types';
 
 type StorageUnitKind = 'SELF_STORAGE' | 'SHELF_WAREHOUSE' | 'SHELF';
 
@@ -25,6 +40,8 @@ export type InspectionSummaryResponse = {
   finalized_at: string | null;
   inspector_name: string | null;
   request_note: string | null;
+  /** Return: who asked for it; absent on API versions that predate branch-made requests. */
+  request_source?: ReturnRequestSource | null;
   condition_notes: string | null;
   evidence: unknown[];
   damages: unknown[];
@@ -41,7 +58,14 @@ export type CustomerContractResponse = {
   signed_at: string | null;
   months: number;
   monthly_price: string;
-  deposit: string;
+  /** Deposit paid; null when the server cannot determine it (never a guessed 0). */
+  deposit: string | number | null;
+  /** 00:00 Vietnam time of the first day after the term (exclusive end). */
+  term_end_at?: string | null;
+  /** Charged per day kept past the term. */
+  overdue_penalty_per_day?: string | number | null;
+  /** Deposit settlement of an ENDED contract; null otherwise. */
+  settlement?: SettlementSummaryRecord | null;
   unit: {
     kind: StorageUnitKind;
     parent: { id: string; code: string; name: string } | null;
@@ -83,6 +107,8 @@ export type ApiInspection = {
   inspectorName: string | null;
   /** What the customer wrote when asking for the return. */
   requestNote: string | null;
+  /** Return: CUSTOMER, or the branch on the customer's behalf (HOTLINE, ABANDONED). */
+  requestSource?: ReturnRequestSource | null;
   conditionNotes: string | null;
   evidence: EvidenceFile[];
   damages: InspectionDamage[];
@@ -100,7 +126,14 @@ export type ApiContract = {
   signedAt: string | null;
   months: number;
   monthlyPrice: number;
-  deposit: number;
+  /** null = the server could not determine the deposit; show it as unknown, never as 0. */
+  deposit: number | null;
+  /** Exclusive end of the term (00:00 Vietnam time); null on API versions without it. */
+  termEndAt: string | null;
+  /** Overstay charge per day, computed by the server; null when unknown. */
+  overduePenaltyPerDay: number | null;
+  /** Deposit settlement of an ENDED contract; null otherwise or on older APIs. */
+  settlement: SettlementSummaryRecord | null;
   unit: {
     kind: StorageUnitKind;
     parent: { id: string; code: string; name: string } | null;

@@ -91,6 +91,7 @@ describe('BookingsService.handlePaymentReceived', () => {
     save: jest.Mock;
     query: jest.Mock;
     getRepository: jest.Mock;
+    transaction: jest.Mock;
   };
   let paymentRepo: { exists: jest.Mock; sum: jest.Mock; save: jest.Mock };
   let dataSource: { transaction: jest.Mock; getRepository: jest.Mock };
@@ -113,8 +114,11 @@ describe('BookingsService.handlePaymentReceived', () => {
       update: jest.fn(),
       count: jest.fn(),
       save: jest.fn(),
-      query: jest.fn().mockResolvedValue([]),
+      // Amenity and deposit-ledger reads find nothing; UPDATE answers [rows, count] like pg.
+      query: jest.fn(async (sql: string) => (sql.trimStart().startsWith('UPDATE') ? [[], 0] : [])),
       getRepository: jest.fn(() => paymentRepo),
+      // The deposit is recorded in a nested transaction, i.e. a savepoint of this one.
+      transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)),
     };
     dataSource = {
       transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)),
@@ -169,9 +173,10 @@ describe('BookingsService.handlePaymentReceived', () => {
       entity === Contract ? { id: `c-${data.bookingItemId}`, ...data } : data,
     );
     const amenity = { amenityId: 'a-1', code: 'CCTV', name: 'CCTV', quantity: '2', note: null };
-    em.query.mockImplementation(async (_sql: string, [unitId]: [string]) =>
-      unitId === 'unit-1' ? [amenity] : [],
-    );
+    em.query.mockImplementation(async (sql: string, [unitId]: [string]) => {
+      if (sql.includes('storage_unit_amenities')) return unitId === 'unit-1' ? [amenity] : [];
+      return sql.trimStart().startsWith('UPDATE') ? [[], 0] : [];
+    });
 
     await service.handlePaymentReceived(buildEvent());
 
@@ -211,6 +216,54 @@ describe('BookingsService.handlePaymentReceived', () => {
       { status: StorageUnitStatus.BOOKED },
     );
     expect(logSpy).toHaveBeenCalledWith(expect.stringMatching(/contracts=\[CT-.+, CT-.+\]/));
+  });
+
+  it('records the deposit of each new contract inside a savepoint of the confirmation', async () => {
+    bookingRepo.find.mockResolvedValue([buildBooking()]);
+    em.update.mockResolvedValue({ affected: 2 });
+    em.count.mockResolvedValue(0);
+    em.find.mockResolvedValue([buildItem('item-1', 'unit-1'), buildItem('item-2', 'unit-2')]);
+    em.save.mockImplementation(async (entity, data) =>
+      entity === Contract ? { id: `c-${data.bookingItemId}`, ...data } : data,
+    );
+
+    await service.handlePaymentReceived(buildEvent());
+
+    expect(em.transaction).toHaveBeenCalledTimes(2);
+    const inserts = em.query.mock.calls.filter(([sql]) =>
+      (sql as string).trimStart().startsWith('INSERT INTO deposits'),
+    );
+    expect(inserts.map(([, params]) => params)).toEqual([
+      ['c-item-1', ['item-1']],
+      ['c-item-2', ['item-2']],
+    ]);
+  });
+
+  it('keeps the booking CONFIRMED when recording the deposit fails', async () => {
+    const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    bookingRepo.find.mockResolvedValue([buildBooking()]);
+    em.update.mockResolvedValue({ affected: 1 });
+    em.count.mockResolvedValue(0);
+    em.find.mockResolvedValue([buildItem('item-1', 'unit-1')]);
+    em.save.mockImplementation(async (entity, data) =>
+      entity === Contract ? { id: 'c-1', ...data } : data,
+    );
+    // The savepoint rolls back and rethrows; the confirming transaction must carry on.
+    em.transaction.mockRejectedValue(new Error('deposits: lock timeout'));
+
+    await service.handlePaymentReceived(buildEvent());
+
+    expect(em.update).toHaveBeenCalledWith(
+      StorageUnit,
+      { id: In(['unit-1']), status: StorageUnitStatus.HELD },
+      { status: StorageUnitStatus.BOOKED },
+    );
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('confirmed via payment'));
+    expect(paymentRepo.save).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('c-1'),
+      expect.stringContaining('lock timeout'),
+    );
   });
 
   it('propagates a contract failure so the whole confirmation rolls back for retry', async () => {

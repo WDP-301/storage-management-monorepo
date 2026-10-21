@@ -28,17 +28,20 @@ export class InvoicesController {
   @Get('my')
   @ApiOperation({ summary: 'Get invoices belonging to the current customer' })
   @ApiQuery({ name: 'status', required: false, enum: InvoiceStatus })
+  @ApiQuery({ name: 'contractId', required: false, format: 'uuid' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'List of customer invoices' })
   getMyInvoices(
     @CurrentUser() user: AuthUser,
     @Query('status') status?: InvoiceStatus,
+    @Query('contractId', new ParseUUIDPipe({ optional: true })) contractId?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
     return this.invoicesService.getMyInvoices(user.id, {
       status,
+      contractId,
       page: page ? Number.parseInt(page, 10) : 1,
       limit: limit ? Number.parseInt(limit, 10) : 20,
     });

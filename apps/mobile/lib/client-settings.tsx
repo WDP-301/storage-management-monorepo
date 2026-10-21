@@ -1,4 +1,4 @@
-import type { ClientBookingSettings } from '@storage/types';
+import type { ClientBookingSettings, ClientReturnSettings } from '@storage/types';
 import {
   createContext,
   type ReactNode,
@@ -26,8 +26,15 @@ const INITIAL_BOOKING_SETTINGS: ClientBookingSettings = {
   maxUnitsPerBooking: 4,
 };
 
+/** Seeded return rules; shown in copy only — the server applies the rules a request captured. */
+const INITIAL_RETURN_SETTINGS: ClientReturnSettings = {
+  noticeDays: 30,
+  overduePenaltyPercent: 100,
+};
+
 type ClientSettings = {
   booking: ClientBookingSettings;
+  return: ClientReturnSettings;
   /** Refetches the rules, e.g. after the API rejected a booking under rules that have changed. */
   refresh: () => void;
 };
@@ -51,12 +58,27 @@ function isBookingSettings(value: unknown): value is ClientBookingSettings {
   );
 }
 
+function isReturnSettings(value: unknown): value is ClientReturnSettings {
+  const settings = value as Partial<ClientReturnSettings> | null | undefined;
+  return (
+    Number.isInteger(settings?.noticeDays) &&
+    (settings?.noticeDays ?? -1) >= 0 &&
+    Number.isFinite(settings?.overduePenaltyPercent) &&
+    (settings?.overduePenaltyPercent ?? -1) >= 0
+  );
+}
+
+/** Identical rules keep the same object, so consumers (the browse map among them) skip a render. */
+const keepIfSame = <T,>(current: T, next: T): T =>
+  JSON.stringify(current) === JSON.stringify(next) ? current : next;
+
 /**
- * Loads the admin-configured booking rules on mount and again when the app returns from the
+ * Loads the admin-configured booking and return rules on mount and again when the app returns from the
  * background, so a long-lived session picks up changes without a restart.
  */
 export function ClientSettingsProvider({ children }: { children: ReactNode }) {
   const [booking, setBooking] = useState(INITIAL_BOOKING_SETTINGS);
+  const [returnRules, setReturnRules] = useState(INITIAL_RETURN_SETTINGS);
   const inFlight = useRef<AbortController | null>(null);
 
   const refresh = useCallback(() => {
@@ -65,12 +87,16 @@ export function ClientSettingsProvider({ children }: { children: ReactNode }) {
     inFlight.current = controller;
     SettingsApi.client(controller.signal)
       .then((result) => {
-        const next = result?.booking;
-        if (controller.signal.aborted || !isBookingSettings(next)) return;
-        // Identical rules keep the same object, so consumers (the browse map among them) skip a render.
-        setBooking((current) =>
-          JSON.stringify(current) === JSON.stringify(next) ? current : next,
-        );
+        if (controller.signal.aborted) return;
+        // Each group is checked on its own: an API without return rules keeps the defaults.
+        const nextBooking = result?.booking;
+        if (isBookingSettings(nextBooking)) {
+          setBooking((current) => keepIfSame(current, nextBooking));
+        }
+        const nextReturn = result?.return;
+        if (isReturnSettings(nextReturn)) {
+          setReturnRules((current) => keepIfSame(current, nextReturn));
+        }
       })
       // Keep the last known rules; the next return from background or booking rejection retries.
       .catch(() => undefined);
@@ -94,7 +120,10 @@ export function ClientSettingsProvider({ children }: { children: ReactNode }) {
     };
   }, [refresh]);
 
-  const value = useMemo(() => ({ booking, refresh }), [booking, refresh]);
+  const value = useMemo(
+    () => ({ booking, return: returnRules, refresh }),
+    [booking, returnRules, refresh],
+  );
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 
@@ -106,6 +135,11 @@ function useClientSettings(): ClientSettings {
 
 export function useBookingSettings(): ClientBookingSettings {
   return useClientSettings().booking;
+}
+
+/** Notice and overstay rules, for copy shown before the customer asks to move out. */
+export function useReturnSettings(): ClientReturnSettings {
+  return useClientSettings().return;
 }
 
 export function useRefreshBookingSettings(): () => void {

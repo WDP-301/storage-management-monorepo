@@ -5,6 +5,7 @@ import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
+import { Logger } from '@nestjs/common';
 import {
   BookingStatus,
   ContractKind,
@@ -45,12 +46,23 @@ describe('ContractsService', () => {
     create: jest.Mock;
     save: jest.Mock;
     update: jest.Mock;
+    softDelete: jest.Mock;
     query: jest.Mock;
+    transaction: jest.Mock;
   };
   let repo: { find: jest.Mock; findOne: jest.Mock; update: jest.Mock; softDelete: jest.Mock };
+  const settings = { getOverduePenaltyPercent: jest.fn(async () => 100) };
+  /** Read side of /contracts/mine: inspections from the repository, the rest by SQL. */
+  const readSide = (inspectionRepo: unknown, query = jest.fn(async () => []), find = jest.fn()) =>
+    ({
+      getRepository: jest.fn(() => inspectionRepo),
+      manager: { query, find: find.mockResolvedValue([]) },
+    }) as unknown as DataSource;
 
   beforeEach(() => {
     jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-12-02T00:00:00+07:00').getTime());
+    // Without ledger rows the deposit cannot be derived; that warning is expected here.
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation();
     // Includes another item's rent: the whole subtotal must not become this contract's rent.
     booking = {
       id: 'booking-1',
@@ -77,7 +89,11 @@ describe('ContractsService', () => {
       save: jest.fn(async (_entity, data) => ({ id: 'contract-1', ...data })),
       findOneOrFail: jest.fn(async (entity) => (entity === Contract ? { id: 'contract-1' } : null)),
       update: jest.fn(async () => ({ affected: 1 })),
-      query: jest.fn().mockResolvedValue([]),
+      softDelete: jest.fn(async () => ({ affected: 0 })),
+      // Amenity snapshot and deposit ledger reads return no rows; UPDATE answers [rows, count].
+      query: jest.fn(async (sql: string) => (sql.trimStart().startsWith('UPDATE') ? [[], 0] : [])),
+      // A nested transaction is a savepoint on the same manager.
+      transaction: jest.fn((callback) => callback(manager)),
     };
     repo = { find: jest.fn(), findOne: jest.fn(), update: jest.fn(), softDelete: jest.fn() };
     service = new ContractsService(
@@ -85,6 +101,7 @@ describe('ContractsService', () => {
       {
         transaction: jest.fn((callback) => callback(manager)),
       } as unknown as DataSource,
+      settings as never,
     );
   });
 
@@ -114,7 +131,8 @@ describe('ContractsService', () => {
     };
     service = new ContractsService(
       repo as unknown as Repository<Contract>,
-      { getRepository: jest.fn(() => inspectionRepo) } as unknown as DataSource,
+      readSide(inspectionRepo),
+      settings as never,
     );
     repo.find.mockResolvedValue([{ id: 'contract-1' }, { id: 'contract-2' }]);
 
@@ -136,6 +154,68 @@ describe('ContractsService', () => {
     expect(withInspections.return).toMatchObject({ id: 'return-new' });
     expect(bare.handover).toBeNull();
     expect(bare.return).toBeNull();
+  });
+
+  it('adds the deposit, overstay charge and settlement summary in /contracts/mine', async () => {
+    const inspectionRepo = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 'return-1',
+          contractId: 'contract-1',
+          type: InspectionType.RETURN,
+          returnRules: { noticeDays: 30, penaltyPercent: 200 },
+          refundAccount: {
+            bankBin: null,
+            bankName: 'X',
+            accountNo: '0123456789',
+            accountName: 'A',
+          },
+          evidence: [],
+          damages: [],
+          createdAt: new Date('2027-01-01'),
+        },
+      ]),
+    };
+    const query = jest.fn(async () => [
+      {
+        id: 'dep-1',
+        contractId: 'contract-1',
+        paymentId: null,
+        amount: '2000000.00',
+        heldAmount: '2000000.00',
+        status: 'HELD',
+      },
+    ]);
+    service = new ContractsService(
+      repo as unknown as Repository<Contract>,
+      readSide(inspectionRepo, query),
+      settings as never,
+    );
+    repo.find.mockResolvedValue([
+      {
+        id: 'contract-1',
+        status: ContractStatus.ENDED,
+        bookingItemId: 'item-1',
+        effectiveAt: new Date('2026-10-01T00:00:00+07:00'),
+        months: 3,
+        monthlyPriceSnapshot: '1500000.00',
+      },
+    ]);
+
+    const [record] = await service.findMine('customer-1');
+
+    expect(record).toMatchObject({
+      deposit: 2000000,
+      term_end_at: new Date('2027-01-01T00:00:00+07:00'),
+      // 1.500.000 / 30 × 200% — the percent captured on the return request wins.
+      overdue_penalty_per_day: 100000,
+      settlement: {
+        status: 'PENDING',
+        deposit_amount: 2000000,
+        refund_account: { account_no_masked: '••••6789' },
+        totals: null,
+      },
+    });
   });
 
   it('allows creation one millisecond before the 7-day deadline', async () => {
@@ -202,13 +282,74 @@ describe('ContractsService', () => {
     expect(manager.query).toHaveBeenCalledWith(expect.any(String), ['unit-1']);
     expect(result.amenitiesSnapshot).toEqual([]);
 
-    manager.query.mockResolvedValue([
-      { amenityId: 'a-1', code: 'CCTV', name: 'CCTV', quantity: 6, note: 'gate' },
-    ]);
+    const amenity = { amenityId: 'a-1', code: 'CCTV', name: 'CCTV', quantity: 6, note: 'gate' };
+    manager.query.mockImplementation(async (sql: string) =>
+      sql.includes('storage_unit_amenities') ? [amenity] : sql.startsWith('UPDATE') ? [[], 0] : [],
+    );
     const withAmenities = await service.create({ bookingItemId: item.id });
     expect(withAmenities.amenitiesSnapshot).toEqual([
       { amenityId: 'a-1', code: 'CCTV', name: 'CCTV', quantity: 6, note: 'gate' },
     ]);
+  });
+
+  it('retires a cancelled initial contract of the item before contracting it again', async () => {
+    await service.create({ bookingItemId: item.id });
+
+    expect(manager.softDelete).toHaveBeenCalledWith(Contract, {
+      bookingItemId: item.id,
+      kind: ContractKind.INITIAL,
+      status: ContractStatus.CANCELLED,
+      deletedAt: IsNull(),
+    });
+    const contractSave = manager.save.mock.calls.findIndex(([entity]) => entity === Contract);
+    expect(manager.softDelete.mock.invocationCallOrder[0]).toBeLessThan(
+      manager.save.mock.invocationCallOrder[contractSave],
+    );
+  });
+
+  it('keeps cancelled contracts when the new contract is a renewal', async () => {
+    await service.create({ bookingItemId: item.id, kind: ContractKind.RENEWAL });
+    expect(manager.softDelete).not.toHaveBeenCalled();
+  });
+
+  it("moves the cancelled contract's held deposit to the re-created contract", async () => {
+    const moved = {
+      id: 'deposit-1',
+      contractId: 'contract-1',
+      paymentId: 'payment-1',
+      amount: '2000000.00',
+      heldAmount: '2000000.00',
+      status: 'HELD',
+    };
+    manager.query.mockImplementation(async (sql: string) =>
+      sql.trimStart().startsWith('UPDATE deposits') ? [[moved], 1] : [],
+    );
+
+    await service.create({ bookingItemId: item.id });
+
+    expect(manager.transaction).toHaveBeenCalledTimes(1);
+    expect(manager.query).toHaveBeenCalledWith(expect.stringMatching(/^\s*UPDATE deposits/), [
+      'contract-1',
+      item.id,
+    ]);
+    expect(manager.query).not.toHaveBeenCalledWith(
+      expect.stringMatching(/INSERT INTO deposits/),
+      expect.anything(),
+    );
+  });
+
+  it('still creates the contract when recording its deposit fails', async () => {
+    const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    manager.transaction.mockRejectedValue(new Error('deposits locked'));
+
+    await expect(service.create({ bookingItemId: item.id })).resolves.toHaveProperty(
+      'id',
+      'contract-1',
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('contract-1'),
+      expect.stringContaining('deposits locked'),
+    );
   });
 
   it('locks the unit before creating the contract', async () => {
@@ -336,7 +477,8 @@ describe('ContractsService', () => {
     const inspectionRepo = { find: jest.fn().mockResolvedValue([]) };
     service = new ContractsService(
       repo as unknown as Repository<Contract>,
-      { getRepository: jest.fn(() => inspectionRepo) } as unknown as DataSource,
+      readSide(inspectionRepo),
+      settings as never,
     );
     const stored = (kind: StorageUnitKind, parent: unknown) => ({
       id: `c-${kind}`,
@@ -443,27 +585,78 @@ describe('ContractsService', () => {
     expect(manager.update).not.toHaveBeenCalled();
   });
 
-  it('soft-deletes only finished contracts and returns 404 when already deleted', async () => {
-    repo.softDelete.mockResolvedValueOnce({ affected: 1 }).mockResolvedValueOnce({ affected: 0 });
-    await service.softDelete('contract-1');
-    expect(repo.softDelete).toHaveBeenCalledWith({
-      id: 'contract-1',
-      status: In([ContractStatus.ENDED, ContractStatus.CANCELLED]),
-      deletedAt: IsNull(),
+  describe('softDelete', () => {
+    let open: { settlement_status: string | null; open_invoices: boolean; held_deposit: boolean };
+    const stored = (status: ContractStatus) => {
+      manager.findOne.mockImplementation(async (entity) =>
+        entity === Contract ? { id: 'contract-1', status } : null,
+      );
+    };
+    beforeEach(() => {
+      open = { settlement_status: 'COMPLETED', open_invoices: false, held_deposit: false };
+      manager.query.mockImplementation(async () => [open]);
     });
-    repo.findOne.mockResolvedValue(null);
-    await expect(service.softDelete('contract-1')).rejects.toMatchObject({ status: 404 });
-  });
 
-  it.each([ContractStatus.DRAFT, ContractStatus.ACTIVE])(
-    'refuses to soft-delete a %s contract — its unit would stay booked',
-    async (status) => {
-      repo.softDelete.mockResolvedValue({ affected: 0 });
-      repo.findOne.mockResolvedValue({ id: 'contract-1', status });
+    it('soft-deletes a finished contract with nothing open, under the row lock', async () => {
+      stored(ContractStatus.ENDED);
+      await service.softDelete('contract-1');
+      expect(manager.findOne).toHaveBeenCalledWith(Contract, {
+        where: { id: 'contract-1', deletedAt: IsNull() },
+        lock: { mode: 'pessimistic_write' },
+      });
+      expect(manager.softDelete).toHaveBeenCalledWith(Contract, { id: 'contract-1' });
+    });
+
+    it('returns 404 when the contract is already deleted', async () => {
+      manager.findOne.mockResolvedValue(null);
+      await expect(service.softDelete('contract-1')).rejects.toMatchObject({ status: 404 });
+    });
+
+    it.each([ContractStatus.DRAFT, ContractStatus.ACTIVE])(
+      'refuses to soft-delete a %s contract — its unit would stay booked',
+      async (status) => {
+        stored(status);
+        await expect(service.softDelete('contract-1')).rejects.toMatchObject({
+          status: 409,
+          response: { code: 'CONFLICT', details: { status } },
+        });
+        expect(manager.softDelete).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
+      [
+        'an ENDED contract whose settlement is not completed',
+        ContractStatus.ENDED,
+        { settlement_status: 'AWAITING_REFUND' },
+        'SETTLEMENT_OPEN',
+      ],
+      [
+        'an ENDED contract never settled',
+        ContractStatus.ENDED,
+        { settlement_status: null },
+        'SETTLEMENT_OPEN',
+      ],
+      [
+        'a contract with an unpaid invoice',
+        ContractStatus.ENDED,
+        { open_invoices: true },
+        'INVOICES_OPEN',
+      ],
+      [
+        'a CANCELLED contract still holding a deposit',
+        ContractStatus.CANCELLED,
+        { held_deposit: true },
+        'DEPOSIT_HELD',
+      ],
+    ])('refuses to soft-delete %s', async (_label, status, over, reason) => {
+      stored(status);
+      Object.assign(open, over);
       await expect(service.softDelete('contract-1')).rejects.toMatchObject({
         status: 409,
-        response: { code: 'CONFLICT', details: { status } },
+        response: { code: 'CONFLICT', details: { reason } },
       });
-    },
-  );
+      expect(manager.softDelete).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -1,4 +1,5 @@
 import { AuditWithTimezone } from '@shared/models/audit.model';
+import type { RefundBankAccount } from '@storage/types';
 import { Column, Entity, JoinColumn, OneToOne, PrimaryColumn } from 'typeorm';
 import { AppUser } from './app-user.entity';
 
@@ -23,6 +24,10 @@ export class CustomerProfile extends AuditWithTimezone {
 
   @Column({ type: 'varchar', length: 20, nullable: true, name: 'tax_code' })
   taxCode?: string;
+
+  /** Last refund account used, only to pre-fill the next return request. */
+  @Column({ type: 'jsonb', nullable: true, name: 'refund_bank_account' })
+  refundBankAccount?: RefundBankAccount | null;
 
   @OneToOne(() => AppUser, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })

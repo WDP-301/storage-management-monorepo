@@ -106,24 +106,11 @@ const SETTINGS_METADATA: Record<string, SettingMetadata> = {
     unit: 'giờ',
     group: 'booking',
   },
-  'contract.transition_grace_period_hours': {
-    label: 'Thời gian ân hạn chuyển tiếp khi đổi kho',
+  'contract.return_notice_days': {
+    label: 'Số ngày báo trước khi trả kho sớm',
     description:
-      'Khoảng thời gian khách hàng được phép mở khóa và sử dụng đồng thời cả kho cũ và kho mới để dọn đồ chuyển kho (Mục 7 tài liệu nghiệp vụ).',
-    unit: 'giờ',
-    group: 'contract',
-  },
-  'contract.renewal_notice_days': {
-    label: 'Thời hạn gửi thông báo nhắc gia hạn',
-    description:
-      'Số ngày trước khi hợp đồng kết thúc để hệ thống tự động gửi thông báo đề xuất gia hạn kỳ thuê mới đến khách hàng.',
-    unit: 'ngày trước hạn',
-    group: 'contract',
-  },
-  'contract.inspection_required_on_checkout': {
-    label: 'Bắt buộc kiểm tra biên bản hiện trạng khi trả kho',
-    description:
-      'Yêu cầu nhân viên chi nhánh chụp ảnh nghiệm thu và xác nhận biên bản tình trạng kho trước khi giải phóng cọc.',
+      'Khách trả kho trước khi hết hạn hợp đồng phải báo trước ít nhất số ngày này; báo trễ hơn sẽ bị trừ 1 tháng tiền thuê vào tiền cọc. Áp dụng cho yêu cầu trả kho tạo sau khi đổi.',
+    unit: 'ngày',
     group: 'contract',
   },
   'deposit.default_months': {
@@ -140,17 +127,11 @@ const SETTINGS_METADATA: Record<string, SettingMetadata> = {
     unit: '%',
     group: 'billing',
   },
-  'billing.overdue_penalty_fee_per_day': {
-    label: 'Phí phạt quá hạn trả kho mỗi ngày',
+  'billing.overdue_penalty_percent': {
+    label: 'Phí quá hạn (% tiền thuê một ngày)',
     description:
-      'Khoản phí phát sinh tính trên mỗi ngày trễ hạn bàn giao trả kho nếu chưa thực hiện gia hạn hợp đồng.',
-    unit: 'VNĐ / ngày',
-    group: 'billing',
-  },
-  'billing.auto_refund_deposit_enabled': {
-    label: 'Tự động duyệt hoàn cọc sau nghiệm thu đạt chuẩn',
-    description:
-      'Tự động tạo lệnh hoàn cọc sau khi nhân viên xác nhận biên bản trả kho không phát sinh hư hỏng hoặc công nợ.',
+      'Mỗi ngày giữ kho quá hạn hợp đồng bị tính phí bằng tỷ lệ này của tiền thuê một ngày (giá thuê tháng / 30), trừ vào tiền cọc khi quyết toán.',
+    unit: '%',
     group: 'billing',
   },
   'idempotency.ttl_hours': {

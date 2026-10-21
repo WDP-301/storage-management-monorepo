@@ -25,7 +25,8 @@ import { BookingsService } from './bookings.service';
       StorageUnit,
       Payment,
       Invoice,
-      // Deposit confirmation creates contracts and handover inspections (persistContract).
+      // Deposit confirmation creates contracts and handover inspections (persistContract); the
+      // deposit ledger row it also records is written with plain SQL and needs no repository.
       Contract,
       Inspection,
       AppUser,

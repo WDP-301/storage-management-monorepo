@@ -92,8 +92,9 @@ export function finalizeConsequence(row: InspectionRecord): string {
   if (row.type === 'PRE_HANDOVER') {
     return 'Hợp đồng sẽ có hiệu lực và kho chuyển sang Đang thuê.';
   }
-  const damaged = toDamages(row.damages).length > 0;
-  return `Hợp đồng kết thúc và kho chuyển sang ${damaged ? 'Bảo trì (có hư hỏng)' : 'Trống'}.`;
+  // Only a major damage takes the unit out of service; minor ones are settled from the deposit.
+  const major = toDamages(row.damages).some((damage) => damage.severity === 'MAJOR');
+  return `Hợp đồng kết thúc và kho chuyển sang ${major ? 'Bảo trì (có hư hỏng nặng)' : 'Trống'}.`;
 }
 
 export function isEvidenceFile(value: unknown): value is EvidenceFile {

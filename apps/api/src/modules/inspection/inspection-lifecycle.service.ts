@@ -4,18 +4,23 @@ import { Inspection } from '@entities/inspection.entity';
 import { Invoice } from '@entities/invoice.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { CONTRACT_DOCUMENTS_REQUIRED_MESSAGE } from '@modules/contracts/contract-documents.service';
-import {
-  FIRST_RENT_UNPAID_MESSAGE,
-  findFirstRentInvoice,
-} from '@modules/contracts/first-rent.util';
 import { lockUnitClaimedOnlyBy } from '@modules/contracts/unit-claim.util';
+import { queueInvoicePdf } from '@modules/invoices/rent-period-invoice.util';
+import { NotificationsService } from '@modules/notifications/notifications.service';
+import { QueueService } from '@modules/queue/queue.service';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { ContractStatus, InspectionType, InvoiceStatus, StorageUnitStatus } from '@storage/types';
+import { ContractStatus, DamageSeverity, InspectionType, StorageUnitStatus } from '@storage/types';
 import { DataSource, type EntityManager, In } from 'typeorm';
-import { assertInspectorOrManager, assertNotFinalized } from './inspection-access.util';
+import type { FinalizeInspectionDto } from './dto/finalize-inspection.dto';
+import { assertReadyForHandover } from './handover-ready.util';
+import {
+  assertInspectorOrManager,
+  assertNotFinalized,
+  withoutRefundAccount,
+} from './inspection-access.util';
+import { applyReturnFinalize, resolveReturnedOn } from './return-finalize.util';
 
 interface Transition {
   contractFrom: ContractStatus;
@@ -35,14 +40,17 @@ const TRANSITIONS: Partial<Record<InspectionType, Transition>> = {
     unitFrom: [StorageUnitStatus.BOOKED, StorageUnitStatus.HELD],
     unitTo: () => StorageUnitStatus.RENTED,
   },
-  // Return: recorded damage keeps the unit out of rotation until it is repaired.
+  // Return: only major damage takes the unit out of rotation for repair. Minor damage stays on
+  // the return record for staff to handle while the unit is rented out again.
   [InspectionType.RETURN]: {
     contractFrom: ContractStatus.ACTIVE,
     contractTo: ContractStatus.ENDED,
     stamp: 'endedAt',
     unitFrom: [StorageUnitStatus.RENTED],
     unitTo: (inspection) =>
-      inspection.damages?.length ? StorageUnitStatus.MAINTENANCE : StorageUnitStatus.AVAILABLE,
+      inspection.damages?.some((damage) => damage?.severity === DamageSeverity.MAJOR)
+        ? StorageUnitStatus.MAINTENANCE
+        : StorageUnitStatus.AVAILABLE,
   },
 };
 
@@ -50,17 +58,26 @@ const TRANSITIONS: Partial<Record<InspectionType, Transition>> = {
 export class InspectionLifecycleService {
   private readonly logger = new Logger(InspectionLifecycleService.name);
 
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly notifications: NotificationsService,
+    private readonly queue: QueueService,
+  ) {}
 
   /**
    * Signs off an inspection and moves the contract and unit along with it (a handover first
    * needs the signed files and the first month paid):
    * handover DRAFT → ACTIVE / unit RENTED, return ACTIVE → ENDED / unit AVAILABLE or
-   * MAINTENANCE. Everything changes in one transaction under row locks, so a concurrent
-   * finalize sees the committed finalizedAt and gets 409.
+   * MAINTENANCE, with the actual return day (default today) and the rent it still owes billed.
+   * Everything changes in one transaction under row locks, so a concurrent finalize sees the
+   * committed finalizedAt (409). PDFs of invoices it issued are queued once committed.
    */
-  async finalize(id: string, actor: AuthUser): Promise<Inspection> {
-    return this.dataSource.transaction(async (em) => {
+  async finalize(
+    id: string,
+    actor: AuthUser,
+    dto: FinalizeInspectionDto = {},
+  ): Promise<Inspection> {
+    const { finalized, issuedInvoiceIds } = await this.dataSource.transaction(async (em) => {
       const inspection = await em.findOne(Inspection, {
         where: { id },
         lock: { mode: 'pessimistic_write' },
@@ -83,6 +100,8 @@ export class InspectionLifecycleService {
           type: inspection.type,
         });
       }
+      const now = new Date();
+      const returnedOn = resolveReturnedOn(inspection, dto.returnedOn, now);
 
       const contract = await em.findOne(Contract, {
         where: { id: inspection.contractId },
@@ -99,17 +118,27 @@ export class InspectionLifecycleService {
 
       const firstRent =
         inspection.type === InspectionType.PRE_HANDOVER
-          ? await this.assertReadyForHandover(em, contract)
+          ? await assertReadyForHandover(em, contract)
           : null;
 
-      await this.moveUnit(em, contract, transition, inspection);
-      const now = new Date();
+      const storageUnitId = await this.moveUnit(em, contract, transition, inspection);
       // The first paid month runs from the day the customer actually took the unit.
       if (firstRent) {
         const endAt = new Date(now);
         endAt.setMonth(endAt.getMonth() + firstRent.months);
         await em.update(Invoice, { id: firstRent.id }, { startAt: now, endAt });
       }
+      // Before the contract ends: rent still owed is billed on an ACTIVE contract.
+      const settled = returnedOn
+        ? await applyReturnFinalize(em, {
+            inspection,
+            contract,
+            storageUnitId,
+            returnedOn,
+            notifications: this.notifications,
+            now,
+          })
+        : null;
       await em.update(
         Contract,
         { id: contract.id },
@@ -121,31 +150,16 @@ export class InspectionLifecycleService {
       this.logger.log(
         `${inspection.type} ${id} finalized — contract ${contract.contractNo} ${transition.contractTo}`,
       );
-      return saved;
+      const issuedInvoiceIds = settled?.issuedInvoices.map((invoice) => invoice.id) ?? [];
+      return { finalized: withoutRefundAccount(saved), issuedInvoiceIds };
     });
-  }
-
-  /** Handover needs the signed contract files and the first month's rent paid. */
-  private async assertReadyForHandover(em: EntityManager, contract: Contract): Promise<Invoice> {
-    if (!contract.documents?.length) {
-      throw new DomainException(
-        ErrorCode.CONTRACT_DOCUMENTS_REQUIRED,
-        CONTRACT_DOCUMENTS_REQUIRED_MESSAGE,
-        HttpStatus.CONFLICT,
-        { contractId: contract.id },
+    for (const invoiceId of issuedInvoiceIds) {
+      // Committed already; a failure only delays the PDF, as with the daily billing run.
+      await queueInvoicePdf(this.queue, invoiceId).catch((err: unknown) =>
+        this.logger.error(`Queueing the PDF of invoice ${invoiceId} failed`, String(err)),
       );
     }
-    // Locked so a concurrent void or payment cannot change it under the handover.
-    const invoice = await findFirstRentInvoice(em, contract.id, { lock: true });
-    if (invoice?.status !== InvoiceStatus.PAID) {
-      throw new DomainException(
-        ErrorCode.FIRST_RENT_UNPAID,
-        FIRST_RENT_UNPAID_MESSAGE,
-        HttpStatus.CONFLICT,
-        { contractId: contract.id, invoiceStatus: invoice?.status ?? null },
-      );
-    }
-    return invoice;
+    return finalized;
   }
 
   private async moveUnit(
@@ -153,7 +167,7 @@ export class InspectionLifecycleService {
     contract: Contract,
     transition: Transition,
     inspection: Inspection,
-  ): Promise<void> {
+  ): Promise<string> {
     const item = await em.findOneOrFail(BookingItem, { where: { id: contract.bookingItemId } });
     // BOOKED/HELD do not say for whom — never hand over a unit another booking claims.
     if (inspection.type === InspectionType.PRE_HANDOVER) await lockUnitClaimedOnlyBy(em, item);
@@ -162,7 +176,7 @@ export class InspectionLifecycleService {
       { id: item.storageUnitId, status: In(transition.unitFrom) },
       { status: transition.unitTo(inspection) },
     );
-    if (result.affected) return;
+    if (result.affected) return item.storageUnitId;
     const unit = await em.findOne(StorageUnit, { where: { id: item.storageUnitId } });
     throw conflict('The storage unit is not in the expected state for this contract', {
       storageUnitId: item.storageUnitId,

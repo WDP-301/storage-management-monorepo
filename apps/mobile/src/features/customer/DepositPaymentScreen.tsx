@@ -32,13 +32,10 @@ import {
   formatNumber,
 } from '../../../lib/format-vi';
 import { useHold } from '../../../lib/hold';
-import {
-  type SaveImageOutcome,
-  saveRemoteImage,
-  saveViewAsImage,
-} from '../../../lib/save-image-to-library';
-import { CheckIcon, DownloadIcon } from '../../components/ActionIcons';
+import { saveRemoteImage, saveViewAsImage } from '../../../lib/save-image-to-library';
+import { CheckIcon } from '../../components/ActionIcons';
 import type { ApiBooking } from '../../types/booking-api';
+import { SaveImageButton } from './SaveImageButton';
 import { useBookingWarehouses } from './use-booking-warehouses';
 
 /** VietQR's "compact2" template is taller than it is wide; locking the ratio stops it stretching. */
@@ -666,59 +663,6 @@ function PaymentStep({ index, text }: { index: number; text: string }) {
         <Text className="text-caption font-display text-accent">{index}</Text>
       </View>
       <Text className="font-body flex-1 text-body-sm leading-6 text-foreground">{text}</Text>
-    </View>
-  );
-}
-
-const SAVE_IMAGE_LABELS: Record<SaveImageOutcome, string> = {
-  saved: 'Đã lưu vào thư viện ảnh',
-  denied: 'Chưa được cấp quyền lưu ảnh',
-  failed: 'Lưu không được, thử lại',
-};
-
-/**
- * Shared by the QR and the receipt: the button text is the only feedback either save gets, so the
- * outcome replaces the label rather than appearing somewhere else on the screen.
- */
-function SaveImageButton({
-  label,
-  isCompact = false,
-  onSave,
-}: {
-  label: string;
-  isCompact?: boolean;
-  onSave: () => Promise<SaveImageOutcome>;
-}) {
-  const [outcome, setOutcome] = useState<SaveImageOutcome | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [mutedColor] = useThemeColor(['muted']);
-
-  return (
-    <View className="items-center gap-2">
-      <Button
-        className={isCompact ? undefined : 'w-full'}
-        size={isCompact ? 'sm' : 'md'}
-        variant="secondary"
-        isDisabled={isSaving}
-        onPress={async () => {
-          setIsSaving(true);
-          // A retry must start from a clean slate rather than leave the previous result on screen
-          // while the new attempt runs.
-          setOutcome(null);
-          setOutcome(await onSave());
-          setIsSaving(false);
-        }}
-      >
-        <DownloadIcon color={mutedColor} />
-        <Button.Label className="font-ui">
-          {isSaving ? 'Đang lưu...' : outcome ? SAVE_IMAGE_LABELS[outcome] : label}
-        </Button.Label>
-      </Button>
-      {outcome === 'denied' ? (
-        <Text className="font-body text-center text-caption leading-5 text-muted">
-          Cấp quyền ảnh cho ứng dụng trong Cài đặt để lưu được ảnh.
-        </Text>
-      ) : null}
     </View>
   );
 }

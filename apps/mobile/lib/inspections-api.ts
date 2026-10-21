@@ -5,7 +5,7 @@ import type {
   StaffInspection,
 } from '../src/types/inspection-api';
 import { request } from './api';
-import { isEvidenceFile, toDamages } from './evidence';
+import { isEvidenceFile, toStaffDamages } from './evidence';
 
 export const InspectionsApi = {
   /**
@@ -25,17 +25,32 @@ export const InspectionsApi = {
   get: async (id: string, signal?: AbortSignal): Promise<StaffInspection> =>
     normaliseInspection(await request<InspectionResponse>(`/inspections/${id}`, { signal })),
 
-  update: async (id: string, body: Partial<InspectionUpdate>): Promise<StaffInspection> =>
-    normaliseInspection(
-      await request<InspectionResponse>(`/inspections/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      }),
-    ),
+  update: (id: string, body: Partial<InspectionUpdate>): Promise<StaffInspection> =>
+    patchInspection(id, body),
 
-  finalize: (id: string) =>
-    request<InspectionResponse>(`/inspections/${id}/finalize`, { method: 'POST' }),
+  /** Moves a return appointment; noon UTC keeps the Vietnam day equal to `dayIso`. */
+  reschedule: (id: string, dayIso: string): Promise<StaffInspection> =>
+    patchInspection(id, { scheduledAt: `${dayIso}T12:00:00.000Z` }),
+
+  /** `returnedOn` (Vietnam day) is for returns only; without it the API uses today. */
+  finalize: (id: string, returnedOn?: string) =>
+    request<InspectionResponse>(`/inspections/${id}/finalize`, {
+      method: 'POST',
+      body: returnedOn ? JSON.stringify({ returnedOn }) : undefined,
+    }),
 };
+
+async function patchInspection(
+  id: string,
+  body: Partial<InspectionUpdate> | { scheduledAt: string },
+): Promise<StaffInspection> {
+  return normaliseInspection(
+    await request<InspectionResponse>(`/inspections/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  );
+}
 
 export function normaliseInspection(row: InspectionResponse): StaffInspection {
   const unit = row.contract?.bookingItem?.storageUnit;
@@ -47,9 +62,11 @@ export function normaliseInspection(row: InspectionResponse): StaffInspection {
     requestNote: row.requestNote ?? null,
     conditionNotes: row.conditionNotes ?? '',
     evidence: (row.evidence ?? []).filter(isEvidenceFile),
-    damages: toDamages(row.damages),
+    damages: toStaffDamages(row.damages),
     scheduledAt: row.scheduledAt,
     finalizedAt: row.finalizedAt,
+    returnedOn: row.returnedOn ?? null,
+    requestSource: row.requestSource ?? null,
     createdAt: row.createdAt,
     unitCode: unit?.code ?? '—',
     facilityName: unit?.facility?.name ?? '',

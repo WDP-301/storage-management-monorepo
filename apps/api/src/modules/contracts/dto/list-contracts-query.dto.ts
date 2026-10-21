@@ -1,13 +1,30 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { ContractStatus } from '@storage/types';
-import { Type } from 'class-transformer';
+import { ContractStatus, SettlementStatus } from '@storage/types';
+import { Transform, Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+
+/** `settlementStatus` filter values and the settlement status each stands for. */
+export const SETTLEMENT_STATUS_FILTER = {
+  pending: 'PENDING',
+  awaiting_refund: SettlementStatus.AWAITING_REFUND,
+  completed: SettlementStatus.COMPLETED,
+} as const;
+export type SettlementStatusFilter = keyof typeof SETTLEMENT_STATUS_FILTER;
 
 export class ListContractsQueryDto {
   @ApiPropertyOptional({ enum: ContractStatus })
   @IsIn(Object.values(ContractStatus))
   @IsOptional()
   status?: ContractStatus;
+
+  @ApiPropertyOptional({
+    enum: Object.keys(SETTLEMENT_STATUS_FILTER),
+    description: 'Deposit settlement: pending = ENDED and not approved yet',
+  })
+  @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase() : value))
+  @IsIn(Object.keys(SETTLEMENT_STATUS_FILTER))
+  @IsOptional()
+  settlementStatus?: SettlementStatusFilter;
 
   @ApiPropertyOptional({ format: 'uuid', description: 'Only contracts of this facility' })
   @IsUUID('all')

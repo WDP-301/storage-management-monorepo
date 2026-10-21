@@ -1,13 +1,4 @@
-import {
-  Badge,
-  Button,
-  InputGroup,
-  LayerCard,
-  Pagination,
-  Select,
-  Table,
-  Text,
-} from '@cloudflare/kumo';
+import { Badge, Button, InputGroup, LayerCard, Pagination, Table, Text } from '@cloudflare/kumo';
 import { ArrowsClockwise, Eye, MagnifyingGlass, WarningCircle } from '@phosphor-icons/react';
 import { UserRole } from '@storage/types';
 import type React from 'react';
@@ -20,15 +11,18 @@ import type {
   ContractRecord,
   ContractStatus,
 } from '../../types/contract';
+import type { SettlementStatusFilter } from '../../types/settlement';
 import { formatDay } from '../inspections/inspection-display';
 import { formatVnd } from '../warehouses/warehouse-display';
 import { ContractDetailDialog } from './ContractDetailDialog';
+import { ContractFilterSelect } from './ContractFilterSelect';
 import {
   CONTRACT_STATUS_LABEL,
   CONTRACT_STATUSES,
-  plannedEnd,
   shortContractNo,
+  termLastDay,
 } from './contract-display';
+import { SETTLEMENT_FILTER_OPTIONS, SETTLEMENT_STATUS_LABEL } from './settlement-display';
 
 const PAGE_SIZE = 20;
 
@@ -50,6 +44,7 @@ const STATUS_OPTIONS = [
   { value: ALL, label: 'Tất cả' },
   ...CONTRACT_STATUSES.map((s) => ({ value: s, label: CONTRACT_STATUS_LABEL[s].label })),
 ];
+const SETTLEMENT_OPTIONS = [{ value: ALL, label: 'Tất cả' }, ...SETTLEMENT_FILTER_OPTIONS];
 
 /** Contracts of the selected facility (every facility for admin/operations when none is picked). */
 export const ContractsPage: React.FC = () => {
@@ -59,11 +54,12 @@ export const ContractsPage: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState(ALL);
+  const [settlement, setSettlement] = useState(ALL);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<ContractRecord | null>(null);
 
   const facilityId = selectedFacility?.id;
   // A manager always works inside one facility; wait for the picker instead of fetching all.
@@ -99,6 +95,7 @@ export const ContractsPage: React.FC = () => {
         limit: PAGE_SIZE,
         facilityId,
         status: status === ALL ? undefined : (status as ContractStatus),
+        settlementStatus: settlement === ALL ? undefined : (settlement as SettlementStatusFilter),
         search: debouncedSearch || undefined,
       });
       if (request !== latestRequest.current) return;
@@ -116,13 +113,20 @@ export const ContractsPage: React.FC = () => {
     } finally {
       if (request === latestRequest.current) setIsLoading(false);
     }
-  }, [page, facilityId, status, debouncedSearch, waitingForFacility]);
+  }, [page, facilityId, status, settlement, debouncedSearch, waitingForFacility]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const selected = rows.find((row) => row.id === selectedId) ?? null;
+  // The open dialog follows the reloaded row. An ENDED contract that left the settlement filter
+  // (just approved) stays open on its last copy: its settlement loads on its own.
+  useEffect(() => {
+    setSelected((prev) => {
+      if (!prev) return prev;
+      return rows.find((row) => row.id === prev.id) ?? (prev.status === 'ENDED' ? prev : null);
+    });
+  }, [rows]);
 
   return (
     <div className="space-y-6">
@@ -156,19 +160,26 @@ export const ContractsPage: React.FC = () => {
       )}
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="w-60">
-          <Select
-            aria-label="Lọc trạng thái hợp đồng"
+        <div className="flex flex-col sm:flex-row gap-3">
+          <ContractFilterSelect
+            ariaLabel="Lọc trạng thái hợp đồng"
+            prefix="Trạng thái"
             value={status}
-            onValueChange={(v) => {
-              if (!v) return;
-              setStatus(String(v));
+            options={STATUS_OPTIONS}
+            onChange={(v) => {
+              setStatus(v);
               setPage(1);
             }}
-            items={STATUS_OPTIONS}
-            renderValue={(v) =>
-              `Trạng thái: ${STATUS_OPTIONS.find((o) => o.value === v)?.label ?? v}`
-            }
+          />
+          <ContractFilterSelect
+            ariaLabel="Lọc trạng thái quyết toán"
+            prefix="Quyết toán"
+            value={settlement}
+            options={SETTLEMENT_OPTIONS}
+            onChange={(v) => {
+              setSettlement(v);
+              setPage(1);
+            }}
           />
         </div>
         <div className="w-full sm:w-80">
@@ -231,7 +242,8 @@ export const ContractsPage: React.FC = () => {
                     </Table.Cell>
                     <Table.Cell className="whitespace-nowrap">
                       <div>
-                        {formatDay(row.effective_at)} → {formatDay(row.ended_at ?? plannedEnd(row))}
+                        {formatDay(row.effective_at)} →{' '}
+                        {row.ended_at ? formatDay(row.ended_at) : termLastDay(row)}
                       </div>
                       <div className="text-xs text-kumo-subtle">{row.months} tháng</div>
                     </Table.Cell>
@@ -253,6 +265,13 @@ export const ContractsPage: React.FC = () => {
                       <Badge variant={CONTRACT_STATUS_LABEL[row.status].variant} appearance="dot">
                         {CONTRACT_STATUS_LABEL[row.status].label}
                       </Badge>
+                      {row.settlement_status && (
+                        <div className="mt-1">
+                          <Badge variant={SETTLEMENT_STATUS_LABEL[row.settlement_status].variant}>
+                            {SETTLEMENT_STATUS_LABEL[row.settlement_status].label}
+                          </Badge>
+                        </div>
+                      )}
                     </Table.Cell>
                     <Table.Cell className="text-right">
                       <Button
@@ -260,7 +279,7 @@ export const ContractsPage: React.FC = () => {
                         variant="ghost"
                         icon={<Eye />}
                         aria-label={`Xem hợp đồng ${code}`}
-                        onClick={() => setSelectedId(row.id)}
+                        onClick={() => setSelected(row)}
                       >
                         Xem
                       </Button>
@@ -284,7 +303,7 @@ export const ContractsPage: React.FC = () => {
 
       <ContractDetailDialog
         contract={selected}
-        onClose={() => setSelectedId(null)}
+        onClose={() => setSelected(null)}
         onChanged={() => void load()}
       />
     </div>

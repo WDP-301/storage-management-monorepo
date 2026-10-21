@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Text, View } from 'react-native';
 import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
+import { returnSourceNote } from '../../../lib/settlement-format';
 import type { ApiContract, ApiInspection } from '../../types/contract-api';
 import {
   contractEndIso,
@@ -58,7 +59,11 @@ export function ContractSection({
       <InfoRow isNumeric label="Ngày kết thúc" value={formatIsoDate(contractEndIso(contract))} />
       <InfoRow label="Kỳ hạn" value={`${contract.months} tháng`} />
       <InfoRow isNumeric label="Tiền thuê" value={`${formatMoney(contract.monthlyPrice)}/tháng`} />
-      <InfoRow isNumeric label="Tiền cọc" value={formatMoney(contract.deposit)} />
+      <InfoRow
+        isNumeric={contract.deposit !== null}
+        label="Tiền cọc"
+        value={contract.deposit === null ? 'Chưa xác định' : formatMoney(contract.deposit)}
+      />
       {contract.signedAt ? (
         <InfoRow isNumeric label="Ngày ký" value={dayOf(contract.signedAt) ?? ''} />
       ) : null}
@@ -102,13 +107,17 @@ export function HandoverSection({
   );
 }
 
+/** `children` renders last, e.g. the customer's change/withdraw buttons for an open request. */
 export function ReturnSection({
   inspection,
   viewer = 'customer',
+  children,
 }: {
   inspection: ApiInspection | null;
   viewer?: Viewer;
+  children?: ReactNode;
 }) {
+  const sourceNote = returnSourceNote(inspection?.requestSource);
   const returned = dayOf(inspection?.finalizedAt ?? null);
   const scheduled = dayOf(inspection?.scheduledAt ?? null);
   const badge = returned
@@ -122,6 +131,7 @@ export function ReturnSection({
       badge={badge}
       tone={returned ? 'neutral' : inspection ? 'accent' : 'neutral'}
     >
+      {sourceNote ? <Text className="font-ui text-body-sm text-accent">{sourceNote}</Text> : null}
       {inspection ? (
         <InspectionBody
           inspection={inspection}
@@ -136,6 +146,7 @@ export function ReturnSection({
             : 'Khi muốn dọn đi, bấm "Yêu cầu trả kho" để hẹn ngày với nhân viên.'}
         </Text>
       )}
+      {children}
     </SectionCard>
   );
 }

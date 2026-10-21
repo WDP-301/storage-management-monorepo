@@ -101,6 +101,13 @@ export const RentalPeriodKind = {
 } as const;
 export type RentalPeriodKind = (typeof RentalPeriodKind)[keyof typeof RentalPeriodKind];
 
+/** Rental-period invoices reuse the period kinds; SETTLEMENT bills what the deposit could not cover. */
+export const InvoiceKind = {
+  ...RentalPeriodKind,
+  SETTLEMENT: 'SETTLEMENT',
+} as const;
+export type InvoiceKind = (typeof InvoiceKind)[keyof typeof InvoiceKind];
+
 export const ChangeRequestStatus = {
   REQUESTED: 'REQUESTED',
   PROPOSED: 'PROPOSED',
@@ -153,6 +160,8 @@ export const PaymentMethod = {
   VNPAY: 'VNPAY',
   MOMO: 'MOMO',
   SIMULATED: 'SIMULATED',
+  /** Money taken from the customer's held deposit when the contract is settled — no new transfer. */
+  DEPOSIT: 'DEPOSIT',
 } as const;
 export type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod];
 
@@ -181,6 +190,38 @@ export const RefundStatus = {
   CANCELLED: 'CANCELLED',
 } as const;
 export type RefundStatus = (typeof RefundStatus)[keyof typeof RefundStatus];
+
+/** A deposit settlement exists only once approved; "pending" is the absence of a row. */
+export const SettlementStatus = {
+  AWAITING_REFUND: 'AWAITING_REFUND',
+  COMPLETED: 'COMPLETED',
+} as const;
+export type SettlementStatus = (typeof SettlementStatus)[keyof typeof SettlementStatus];
+
+export const SettlementLineType = {
+  /** Rent still owed for a period that started before the return day. */
+  UNPAID_INVOICE: 'UNPAID_INVOICE',
+  /** Returned before the term ended without the required notice: one month of rent. */
+  EARLY_RETURN_SHORT_NOTICE: 'EARLY_RETURN_SHORT_NOTICE',
+  /** Days kept past the end of the term, charged per day. */
+  OVERSTAY: 'OVERSTAY',
+  DAMAGE: 'DAMAGE',
+  /** Rent paid for a period the customer no longer uses; added back to the refund. */
+  UNUSED_PERIOD_CREDIT: 'UNUSED_PERIOD_CREDIT',
+  /** Money received that staff must confirm before it is added back to the refund. */
+  REVIEW_PAYMENT_CREDIT: 'REVIEW_PAYMENT_CREDIT',
+} as const;
+export type SettlementLineType = (typeof SettlementLineType)[keyof typeof SettlementLineType];
+
+/** Who asked for a return: the customer, or the branch on the customer's behalf. */
+export const ReturnRequestSource = {
+  CUSTOMER: 'CUSTOMER',
+  /** The customer phoned the branch. */
+  HOTLINE: 'HOTLINE',
+  /** The customer left and stopped responding; the branch takes the unit back. */
+  ABANDONED: 'ABANDONED',
+} as const;
+export type ReturnRequestSource = (typeof ReturnRequestSource)[keyof typeof ReturnRequestSource];
 
 export const AccessEventType = {
   CHECK_IN: 'CHECK_IN',
@@ -262,6 +303,11 @@ export const NotificationType = {
   TICKET_UPDATED: 'TICKET_UPDATED',
   INVOICE_ISSUED: 'INVOICE_ISSUED',
   INVOICE_PAID: 'INVOICE_PAID',
+  RETURN_FINALIZED: 'RETURN_FINALIZED',
+  SETTLEMENT_APPROVED: 'SETTLEMENT_APPROVED',
+  REFUND_COMPLETED: 'REFUND_COMPLETED',
+  CONTRACT_TERM_ENDING: 'CONTRACT_TERM_ENDING',
+  CONTRACT_OVERDUE: 'CONTRACT_OVERDUE',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 

@@ -23,8 +23,9 @@ import {
 } from '@nestjs/swagger';
 import { RawResponse } from '@shared/decorators/raw-response.decorator';
 import { DomainException } from '@shared/exceptions/domain.exception';
-import { ErrorCode } from '@shared/models/api-response';
+import { ApiErrorResponseDto, ErrorCode } from '@shared/models/api-response';
 import { Response } from 'express';
+import { DataSource } from 'typeorm';
 import { DownloadFileQueryDto, FileKeyParamDto } from './dto/download-file.dto';
 import { GetPresignedUrlDto, MAX_UPLOAD_BYTES } from './dto/upload.dto';
 import {
@@ -33,13 +34,17 @@ import {
   PresignedUploadUrlResponseDto,
   UploadResultDto,
 } from './dto/upload-response.dto';
+import { assertFileKeyUnreferenced } from './file-references.util';
 import { buildUploadKey, UploadService } from './upload.service';
 
 @ApiTags('Uploads (S3)')
 @Controller('uploads')
 @UseGuards(SessionGuard)
 export class UploadController {
-  constructor(private readonly uploadService: UploadService) {}
+  constructor(
+    private readonly uploadService: UploadService,
+    private readonly dataSource: DataSource,
+  ) {}
 
   @Post('presigned-url')
   @ApiOperation({ summary: 'Generate S3 presigned PUT URL for client-side direct upload' })
@@ -109,7 +114,13 @@ export class UploadController {
   @Delete(':key')
   @ApiOperation({ summary: 'Delete file from S3' })
   @ApiResponse({ status: 200, type: DeleteFileResponseDto })
+  @ApiResponse({
+    status: 409,
+    description: 'FILE_IN_USE: evidence of a finalized inspection or a settlement',
+    type: ApiErrorResponseDto,
+  })
   async deleteFile(@Param() params: FileKeyParamDto) {
+    await assertFileKeyUnreferenced(this.dataSource.manager, params.key);
     return this.uploadService.deleteFile(params.key);
   }
 }

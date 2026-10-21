@@ -1,6 +1,7 @@
 import { Text, View } from 'react-native';
 import { formatArea, formatDimensions, formatIsoDate, formatNumber } from '../../../lib/format-vi';
 import { rentalEndIso, toIsoDate } from '../../../lib/rental-schedule';
+import { endedContractHint, lastDayIso } from '../../../lib/settlement-format';
 import type { ApiContract, ApiInspection } from '../../types/contract-api';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -20,11 +21,14 @@ export function contractStartIso(contract: ApiContract): string {
   return localDayIso(contract.effectiveAt);
 }
 
-/** Lease end: the recorded move-out date, or `effectiveAt + months` while it is still open. */
+/**
+ * Lease end: the recorded move-out date, else the last day of the term as the server computes it
+ * (Vietnam calendar). APIs without `termEndAt` fall back to `effectiveAt + months` on the device.
+ */
 export function contractEndIso(contract: ApiContract): string {
-  return contract.endedAt
-    ? localDayIso(contract.endedAt)
-    : rentalEndIso(contractStartIso(contract), contract.months);
+  if (contract.endedAt) return localDayIso(contract.endedAt);
+  const lastDay = contract.termEndAt ? lastDayIso(contract.termEndAt) : null;
+  return lastDay ?? rentalEndIso(contractStartIso(contract), contract.months);
 }
 
 /** Whole local days from today to `dayIso`; negative once it has passed. */
@@ -121,7 +125,7 @@ export function storageState(contract: ApiContract, now: number): StorageState {
       };
     }
     case 'ENDED':
-      return { label: 'Đã trả kho', tone: 'neutral', hint: null };
+      return { label: 'Đã trả kho', tone: 'neutral', hint: endedContractHint(contract.settlement) };
     case 'CANCELLED':
       return { label: 'Đã hủy', tone: 'neutral', hint: null };
     default:

@@ -25,6 +25,7 @@ import { PlacesModule } from './modules/places/places.module';
 import { QueueModule } from './modules/queue/queue.module';
 import { ServiceTicketsModule } from './modules/service-tickets/service-tickets.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { SettlementsModule } from './modules/settlements/settlements.module';
 import { TourAppointmentsModule } from './modules/tour-appointments/tour-appointments.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { ENV_KEY } from './shared/constants';
@@ -79,6 +80,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
     InvoicesModule,
     ServiceTicketsModule,
     SettingsModule,
+    SettlementsModule,
     TourAppointmentsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

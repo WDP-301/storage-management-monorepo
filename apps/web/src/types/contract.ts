@@ -1,4 +1,12 @@
-import type { ContractKind, ContractStatus, PaginationMeta, StorageUnitKind } from '@storage/types';
+import type {
+  ContractKind,
+  ContractSettlementStatus,
+  ContractStatus,
+  PaginationMeta,
+  ReturnRequestSource,
+  StorageUnitKind,
+} from '@storage/types';
+import type { SettlementStatusFilter } from './settlement';
 
 export type { ContractKind, ContractStatus };
 
@@ -9,6 +17,8 @@ export interface ContractInspectionSummary {
   inspected_at: string | null;
   finalized_at: string | null;
   inspector_name: string | null;
+  /** Return only: the customer asked, or the branch did on their behalf. */
+  request_source?: ReturnRequestSource | null;
 }
 
 /** A signed-contract scan or photo kept in the private bucket. */
@@ -40,7 +50,12 @@ export interface ContractRecord {
   months: number;
   /** Decimal columns arrive as strings. */
   monthly_price: number | string;
-  deposit: number | string;
+  /** Deposit paid; null when it cannot be determined — never shown as 0. */
+  deposit: number | string | null;
+  /** 00:00 Vietnam time of the first day after the term (exclusive end). */
+  term_end_at?: string | null;
+  /** Deposit settlement: PENDING once ENDED until approved; null before the contract ends. */
+  settlement_status?: ContractSettlementStatus | null;
   unit: {
     id: string;
     code: string;
@@ -60,6 +75,7 @@ export interface ContractRecord {
 
 export interface ContractListQuery {
   status?: ContractStatus;
+  settlementStatus?: SettlementStatusFilter;
   facilityId?: string;
   search?: string;
   page?: number;

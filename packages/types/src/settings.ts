@@ -46,6 +46,15 @@ export interface ClientBookingSettings {
   maxUnitsPerBooking: number;
 }
 
+/** Return rules a client shows before the customer asks to move out; mirrors the settings. */
+export interface ClientReturnSettings {
+  /** Days of notice needed to return early without losing one month of rent. */
+  noticeDays: number;
+  /** Per-day overstay charge as a percentage of one day's rent (monthly rent / 30). */
+  overduePenaltyPercent: number;
+}
+
 export interface ClientSettingsResponse {
   booking: ClientBookingSettings;
+  return: ClientReturnSettings;
 }

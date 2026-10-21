@@ -61,6 +61,12 @@ const input = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+const STAFF_LINES = [
+  { type: 'DAMAGE', unit_amount: 100000, amount: 0, waived: true, proposed_amount: 100000 },
+  { type: 'OVERSTAY', unit_amount: 50000, amount: 0, waived: true, waive_reason: 'Nội bộ' },
+  { type: 'REVIEW_PAYMENT_CREDIT', direction: 'CREDIT', amount: 0, included: false },
+];
+
 describe('SettlementQueryService', () => {
   let settlement: Record<string, unknown> | null;
   let em: Record<string, jest.Mock>;
@@ -110,7 +116,7 @@ describe('SettlementQueryService', () => {
       status: SettlementStatus.AWAITING_REFUND,
       depositId: 'dep-1',
       deposit: { status: DepositStatus.HELD, paymentId: null },
-      lines: [],
+      lines: STAFF_LINES,
       depositAmount: '2000000.00',
       creditsTotal: '0',
       deductionsTotal: '500000',
@@ -141,6 +147,8 @@ describe('SettlementQueryService', () => {
       approved_by_name: 'Ops',
       warnings: [],
     });
+    // Operations keep the full lines: proposals, waiver reasons, excluded payments.
+    expect(record.lines).toEqual(STAFF_LINES);
     expect(record.refund_qr_url).toContain('970436-0123456789');
     expect(record.refund_qr_url).toContain('amount=1500000');
     expect(record.refund_qr_url).toContain('HOAN+COC+CT-1');

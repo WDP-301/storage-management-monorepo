@@ -33,12 +33,23 @@ export interface ApplySettlementInput {
   /** Lines as approved; debts are already ordered oldest due first. */
   lines: SettlementLine[];
   totals: SettlementTotals;
-  invoiceTotals: Map<string, Decimal.Value>;
+  /** Rent invoices of the contract by id, for their total and due date. */
+  invoices: Map<string, { total: Decimal.Value; dueAt: Date | null }>;
   now: Date;
+}
+
+/** An invoice the deposit did not cover in full: what the customer still owes on it. */
+export interface OpenInvoice {
+  invoiceId: string;
+  invoiceNo: string;
+  amountDue: number;
+  dueAt: Date | null;
 }
 
 export interface AppliedSettlement {
   feeInvoice: Invoice | null;
+  /** Rent invoices left unpaid after the offset, oldest due first, then the fee invoice. */
+  openInvoices: OpenInvoice[];
   status: SettlementStatus;
 }
 
@@ -120,7 +131,8 @@ async function issueSettlementInvoice(
  * Carries out an approved settlement on the caller's transaction (contract, deposit and rent
  * invoices locked): the pool (deposit + credits) pays the debts oldest due first, then the fees,
  * which are billed on a SETTLEMENT invoice — PAID when the pool covered them, open for the
- * shortfall otherwise. Every amount taken is a DEPOSIT payment tagged with the settlement, and
+ * rest otherwise. Rent the pool did not cover stays due on its own invoice, so a shortfall can be
+ * spread over several invoices; each is reported with what is still due on it. Every amount taken is a DEPOSIT payment tagged with the settlement, and
  * so are the credited payments, which can never be credited twice. Nothing to refund completes
  * the settlement and releases the deposit now; otherwise it waits for the manual transfer.
  */
@@ -130,14 +142,27 @@ export async function applySettlement(
 ): Promise<AppliedSettlement> {
   const { lines, totals } = input;
   let pool = new Decimal(totals.deposit_amount).plus(totals.credits_total);
+  const openInvoices: OpenInvoice[] = [];
 
   for (const debt of lines.filter((l) => l.type === SettlementLineType.UNPAID_INVOICE)) {
-    const amount = Decimal.min(pool, debt.amount);
-    if (amount.lte(0)) break;
     const invoiceId = debt.invoice_id as string;
-    const total = input.invoiceTotals.get(invoiceId) ?? debt.amount;
-    await takeFromDeposit(em, { invoiceId, total, amount, type: PaymentType.RENT }, input);
-    pool = pool.minus(amount);
+    const invoice = input.invoices.get(invoiceId);
+    const amount = Decimal.min(pool, debt.amount);
+    if (amount.gt(0)) {
+      const total = invoice?.total ?? debt.amount;
+      await takeFromDeposit(em, { invoiceId, total, amount, type: PaymentType.RENT }, input);
+      pool = pool.minus(amount);
+    }
+    // Rent the deposit could not cover stays on its own invoice, never on the fee invoice.
+    const left = new Decimal(debt.amount).minus(amount);
+    if (left.gt(0)) {
+      openInvoices.push({
+        invoiceId,
+        invoiceNo: debt.invoice_no as string,
+        amountDue: left.toNumber(),
+        dueAt: invoice?.dueAt ?? null,
+      });
+    }
   }
 
   const fees = lines.filter(
@@ -154,6 +179,14 @@ export async function applySettlement(
       await takeFromDeposit(em, args, input);
       pool = pool.minus(amount);
     }
+    if (total.gt(amount)) {
+      openInvoices.push({
+        invoiceId: feeInvoice.id,
+        invoiceNo: feeInvoice.invoiceNo,
+        amountDue: total.minus(amount).toNumber(),
+        dueAt: feeInvoice.dueAt ?? null,
+      });
+    }
   }
 
   const credited = lines
@@ -167,11 +200,13 @@ export async function applySettlement(
     );
   }
 
-  if (totals.refund_amount > 0) return { feeInvoice, status: SettlementStatus.AWAITING_REFUND };
+  if (totals.refund_amount > 0) {
+    return { feeInvoice, openInvoices, status: SettlementStatus.AWAITING_REFUND };
+  }
   await em.update(
     Deposit,
     { id: input.depositId },
     { heldAmount: 0, status: settledDepositStatus(totals) },
   );
-  return { feeInvoice, status: SettlementStatus.COMPLETED };
+  return { feeInvoice, openInvoices, status: SettlementStatus.COMPLETED };
 }

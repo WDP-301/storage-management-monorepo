@@ -8,6 +8,7 @@ import {
   type ContractSettlementStatus,
   ContractStatus,
   type SettlementLine,
+  SettlementLineType,
   type SettlementSummaryRecord,
 } from '@storage/types';
 import Decimal from 'decimal.js';
@@ -70,9 +71,21 @@ export async function loadBackOfficeContractExtras(
   );
 }
 
-/** The customer sees the decided amounts, never what staff first proposed. */
-const forCustomer = (line: SettlementLine): SettlementLine =>
-  line.proposed_amount === undefined ? line : { ...line, proposed_amount: null };
+/**
+ * Settlement lines as the customer reads them: only what was decided. Staff-only detail goes —
+ * the fee first proposed for a damage (also kept as the unit amount of a waived one), the
+ * internal reason for a waiver, and money under review that staff left out.
+ */
+export function customerSettlementLines(lines: readonly SettlementLine[]): SettlementLine[] {
+  return lines
+    .filter((l) => !(l.type === SettlementLineType.REVIEW_PAYMENT_CREDIT && l.included === false))
+    .map((l) => ({
+      ...l,
+      waive_reason: null,
+      ...(l.proposed_amount !== undefined ? { proposed_amount: null } : {}),
+      ...(l.type === SettlementLineType.DAMAGE && l.waived ? { unit_amount: 0 } : {}),
+    }));
+}
 
 function toSummary(
   settlement: ContractSettlement | undefined,
@@ -94,7 +107,7 @@ function toSummary(
   return {
     status: settlement.status,
     deposit_amount: Number(settlement.depositAmount),
-    lines: (settlement.lines ?? []).map(forCustomer),
+    lines: customerSettlementLines(settlement.lines ?? []),
     totals: {
       deposit_amount: Number(settlement.depositAmount),
       credits_total: Number(settlement.creditsTotal),

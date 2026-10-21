@@ -2,6 +2,7 @@ import { ContractSettlement } from '@entities/contract-settlement.entity';
 import { ContractStatus, SettlementLineType, SettlementStatus } from '@storage/types';
 import { maskRefundAccount } from './settlement-records';
 import {
+  customerSettlementLines,
   loadCustomerContractExtras,
   loadSettlementStatuses,
   overduePenaltyPerDay,
@@ -42,6 +43,82 @@ describe('settlement read model', () => {
       contract('c', ContractStatus.ACTIVE),
     ]);
     expect([...statuses.values()]).toEqual(['PENDING', 'COMPLETED', null]);
+  });
+
+  it('shows the customer only what was decided, leaving the stored lines untouched', () => {
+    const base = {
+      direction: 'DEDUCTION' as const,
+      description: 'x',
+      quantity: 1,
+      needs_decision: false,
+      waived: false,
+      waive_reason: null,
+    };
+    const stored = [
+      {
+        ...base,
+        type: SettlementLineType.DAMAGE,
+        unit_amount: 250000,
+        amount: 250000,
+        proposed_amount: 500000,
+      },
+      {
+        ...base,
+        type: SettlementLineType.DAMAGE,
+        unit_amount: 100000,
+        amount: 0,
+        waived: true,
+        proposed_amount: 100000,
+      },
+      {
+        ...base,
+        type: SettlementLineType.OVERSTAY,
+        quantity: 3,
+        unit_amount: 50000,
+        amount: 0,
+        waived: true,
+        waive_reason: 'Nội bộ: khách VIP',
+      },
+      {
+        ...base,
+        type: SettlementLineType.REVIEW_PAYMENT_CREDIT,
+        direction: 'CREDIT' as const,
+        description: 'Khoản tiền cần kiểm tra',
+        unit_amount: 500000,
+        amount: 0,
+        included: false,
+        payment_id: 'p-out',
+      },
+      {
+        ...base,
+        type: SettlementLineType.REVIEW_PAYMENT_CREDIT,
+        direction: 'CREDIT' as const,
+        unit_amount: 200000,
+        amount: 200000,
+        included: true,
+        payment_id: 'p-in',
+      },
+    ];
+    const before = structuredClone(stored);
+
+    const lines = customerSettlementLines(stored);
+
+    expect(
+      lines.map((l) => [
+        l.type,
+        l.unit_amount,
+        l.amount,
+        l.proposed_amount ?? null,
+        l.waive_reason,
+      ]),
+    ).toEqual([
+      [SettlementLineType.DAMAGE, 250000, 250000, null, null],
+      [SettlementLineType.DAMAGE, 0, 0, null, null],
+      [SettlementLineType.OVERSTAY, 50000, 0, null, null],
+      [SettlementLineType.REVIEW_PAYMENT_CREDIT, 200000, 200000, null, null],
+    ]);
+    expect(lines.some((l) => l.payment_id === 'p-out')).toBe(false);
+    expect(stored).toEqual(before);
   });
 
   it('gives the customer the frozen figures without the fees staff first proposed', async () => {

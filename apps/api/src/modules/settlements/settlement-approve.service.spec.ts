@@ -266,12 +266,96 @@ describe('SettlementApproveService', () => {
       { id: 'dep-1' },
       { heldAmount: 0, status: DepositStatus.FORFEITED },
     );
+    expect(notifications.createForUsers.mock.calls[0][2].data).toMatchObject({
+      invoiceIds: ['fee-inv'],
+      openInvoices: [{ invoiceId: 'fee-inv', amountDue: 500000 }],
+    });
     expect(inserted()).toMatchObject({
       status: SettlementStatus.COMPLETED,
       shortfallAmount: 500000,
       bankAccount: null,
       completedBy: 'ops-1',
       completedAt: expect.any(Date),
+    });
+  });
+
+  describe('telling the customer what is still owed', () => {
+    const shortDeposit = (over: Partial<SettlementInput>) =>
+      build({
+        depositRecord: {
+          ...build().depositRecord,
+          amount: '1000000',
+          heldAmount: '1000000',
+        } as never,
+        deposit: { amount: '1000000', paymentId: null },
+        ...over,
+      });
+    const notified = () => notifications.createForUsers.mock.calls[0][2];
+
+    it('lists the rent left on its own invoice and the fees on the settlement invoice', async () => {
+      input = shortDeposit({
+        invoices: [rent('a', 1500000, '2027-03-01T00:00:00+07:00')],
+        damages: [
+          {
+            index: 0,
+            description: 'Móp',
+            severity: DamageSeverity.MINOR,
+            proposedFee: null,
+            evidence: [],
+          },
+        ],
+      });
+      const decisions = { damageDecisions: [{ index: 0, amount: 300000 }] };
+      jest.useFakeTimers({ now: new Date('2027-04-01T10:00:00+07:00') });
+
+      await service.approve(
+        'contract-1',
+        { ...decisions, expectedVersion: versionOf(decisions) },
+        OPS,
+      );
+
+      // The deposit pays 1.000.000 of the rent; nothing is left for the fee invoice.
+      expect(payments().map((p) => [p.invoiceId, p.amount])).toEqual([['a', 1000000]]);
+      expect(inserted()).toMatchObject({ shortfallAmount: 800000, feeInvoiceId: 'fee-inv' });
+      const feeNo = saved.find((x) => x.entity === Invoice)?.data.invoiceNo;
+      const payload = notified();
+      expect(payload.body).toContain('hoá đơn INV-a còn 500.000 VND (hạn 01/03/2027)');
+      expect(payload.body).toContain(`hoá đơn ${feeNo} còn 300.000 VND (hạn 08/04/2027)`);
+      expect(payload.body).not.toContain('800.000');
+      expect(payload.data).toMatchObject({
+        shortfallAmount: 800000,
+        feeInvoiceId: 'fee-inv',
+        invoiceIds: ['a', 'fee-inv'],
+        openInvoices: [
+          { invoiceId: 'a', invoiceNo: 'INV-a', amountDue: 500000 },
+          { invoiceId: 'fee-inv', invoiceNo: feeNo, amountDue: 300000 },
+        ],
+      });
+    });
+
+    it('names the unpaid rent invoice when there are no fees', async () => {
+      input = shortDeposit({ invoices: [rent('a', 1500000, '2027-03-01T00:00:00+07:00')] });
+
+      await service.approve('contract-1', { expectedVersion: versionOf() }, OPS);
+
+      expect(saved.some((x) => x.entity === Invoice)).toBe(false);
+      const payload = notified();
+      expect(payload.body).toContain('hoá đơn INV-a còn 500.000 VND');
+      expect(payload.body).not.toContain('Tiền cọc đã được cấn trừ hết');
+      expect(payload.data).toMatchObject({
+        feeInvoiceId: null,
+        invoiceIds: ['a'],
+        openInvoices: [{ invoiceId: 'a', amountDue: 500000 }],
+      });
+    });
+
+    it('says the deposit covered everything when nothing is left to pay', async () => {
+      input = shortDeposit({ invoices: [rent('a', 1000000, '2027-03-01T00:00:00+07:00')] });
+
+      await service.approve('contract-1', { expectedVersion: versionOf() }, OPS);
+
+      expect(notified().body).toContain('Tiền cọc đã được cấn trừ hết.');
+      expect(notified().data).toMatchObject({ invoiceIds: [], openInvoices: [] });
     });
   });
 

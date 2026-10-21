@@ -97,7 +97,7 @@ export class SettlementApproveService {
           depositId: deposit.id,
           lines: computation.lines,
           totals,
-          invoiceTotals: new Map(input.invoices.map((i) => [i.id, i.total])),
+          invoices: new Map(input.invoices.map((i) => [i.id, i])),
           now,
         });
         const completed = applied.status === SettlementStatus.COMPLETED;
@@ -132,7 +132,7 @@ export class SettlementApproveService {
             settlementId,
             totals,
             account.bankAccount,
-            applied.feeInvoice,
+            applied,
           ),
         );
       });

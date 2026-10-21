@@ -2,6 +2,7 @@ import { Contract } from '@entities/contract.entity';
 import { Invoice } from '@entities/invoice.entity';
 import { InvoiceItem } from '@entities/invoice-item.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { PAYABLE_INVOICE_STATUSES } from '@modules/contracts/first-rent.util';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { buildPaymentQrUrl } from '@modules/payments/vietqr.util';
 import { QueueService } from '@modules/queue/queue.service';
@@ -23,7 +24,7 @@ import {
 export interface InvoiceWithQrResponse extends Invoice {
   /** Sum of the succeeded payments, deposit offsets included. */
   paidAmount: number;
-  /** What is still to pay; 0 once settled. */
+  /** What is still to pay; 0 once settled and on an invoice that takes no money (DRAFT, VOID). */
   amountDue: number;
   /** Transfer QR for `amountDue`; null when the invoice takes no money or nothing is due. */
   paymentQrUrl: string | null;
@@ -216,19 +217,22 @@ export class InvoicesService {
     return new Map(rows.map((row) => [row.invoiceId, new Decimal(row.paid ?? 0)]));
   }
 
-  /** The QR asks for what is still due, so a partly paid or deposit-offset invoice is not overpaid. */
+  /**
+   * What is still due and the QR for it. Only an invoice that takes money (ISSUED or
+   * PARTIALLY_PAID) has anything due: a DRAFT, PAID or VOID one is 0 with no QR, whatever was
+   * paid on it. The QR asks for the rest, so a partly paid or deposit-offset invoice is not overpaid.
+   */
   private attachQr(invoice: Invoice, paid: Decimal = new Decimal(0)): InvoiceWithQrResponse {
-    const isPayable =
-      invoice.status === InvoiceStatus.ISSUED || invoice.status === InvoiceStatus.PARTIALLY_PAID;
-    const amountDue = Decimal.max(new Decimal(invoice.total).minus(paid), 0);
+    const amountDue = PAYABLE_INVOICE_STATUSES.includes(invoice.status)
+      ? Decimal.max(new Decimal(invoice.total).minus(paid), 0)
+      : new Decimal(0);
     return {
       ...invoice,
       paidAmount: paid.toNumber(),
       amountDue: amountDue.toNumber(),
-      paymentQrUrl:
-        isPayable && amountDue.gt(0)
-          ? buildPaymentQrUrl(this.configService, amountDue.toFixed(0), invoice.invoiceNo)
-          : null,
+      paymentQrUrl: amountDue.gt(0)
+        ? buildPaymentQrUrl(this.configService, amountDue.toFixed(0), invoice.invoiceNo)
+        : null,
     };
   }
 }

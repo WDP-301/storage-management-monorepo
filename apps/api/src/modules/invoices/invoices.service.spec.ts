@@ -233,6 +233,18 @@ describe('InvoicesService', () => {
       expect(items[0].paymentQrUrl).toBeNull();
     });
 
+    it.each([InvoiceStatus.VOID, InvoiceStatus.DRAFT, InvoiceStatus.PAID])(
+      'owes nothing and offers no QR on a %s invoice, whatever was paid on it',
+      async (status) => {
+        invoicesRepo.findAndCount.mockResolvedValue([[invoice({ status })], 1]);
+        dataSource.query.mockResolvedValue([{ invoiceId: 'inv-1', paid: '200000.00' }]);
+
+        const { items } = await service.getMyInvoices('cust-1');
+
+        expect(items[0]).toMatchObject({ paidAmount: 200000, amountDue: 0, paymentQrUrl: null });
+      },
+    );
+
     it('narrows to one contract', async () => {
       invoicesRepo.findAndCount.mockResolvedValue([[], 0]);
       await service.getMyInvoices('cust-1', { contractId: 'contract-1' });

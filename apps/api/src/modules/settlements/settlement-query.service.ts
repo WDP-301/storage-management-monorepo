@@ -1,6 +1,6 @@
 import type { Contract } from '@entities/contract.entity';
 import { ContractSettlement } from '@entities/contract-settlement.entity';
-import { sumInvoicePayments } from '@modules/contracts/first-rent.util';
+import { PAYABLE_INVOICE_STATUSES, sumInvoicePayments } from '@modules/contracts/first-rent.util';
 import { SettingsService } from '@modules/settings/settings.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { DomainException } from '@shared/exceptions/domain.exception';
@@ -154,7 +154,10 @@ export class SettlementQueryService {
             invoice_no: fee.invoiceNo,
             status: fee.status,
             total: Number(fee.total),
-            amount_due: Decimal.max(new Decimal(fee.total).minus(feePaid), 0).toNumber(),
+            // Same rule as the customer's invoices: nothing is due on one that takes no money.
+            amount_due: PAYABLE_INVOICE_STATUSES.includes(fee.status)
+              ? Decimal.max(new Decimal(fee.total).minus(feePaid), 0).toNumber()
+              : 0,
           }
         : null,
     });

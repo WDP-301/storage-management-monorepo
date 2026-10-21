@@ -142,6 +142,23 @@ const KEPT_WITHOUT_CONTRACTS = `SELECT DISTINCT b."booking_no" FROM "purge_contr
                     WHERE o."booking_id" = b."id" AND oc."id" NOT IN (SELECT "id" FROM "purge_contracts"))
  ORDER BY 1`;
 
+/**
+ * Live contracts whose item had its unit changed on an ended contract of the same item (a renewal,
+ * or a new contract after the ended one was soft-deleted). Deleting that contract deletes the
+ * change request too, so the item looks unchanged and its overwritten deposit snapshot would pass
+ * for the deposit paid.
+ */
+const LIVE_WITH_PURGED_CHANGE = `SELECT DISTINCT l."contract_no" FROM "contracts" l
+ WHERE l."status" IN ('DRAFT', 'ACTIVE') AND l."deleted_at" IS NULL
+   AND EXISTS (SELECT 1 FROM "contracts" e JOIN "unit_change_requests" r ON r."contract_id" = e."id"
+                WHERE e."booking_item_id" = l."booking_item_id" AND r."status" = 'COMPLETED'
+                  AND e."id" IN (SELECT "id" FROM "purge_contracts"))
+ ORDER BY 1`;
+
+/** Holds the items of the bookings about to go, so no contract can be added to them unseen. */
+const LOCK_PURGED_BOOKING_ITEMS = `SELECT 1 FROM "booking_items"
+  WHERE "booking_id" IN (SELECT "id" FROM "purge_bookings") FOR UPDATE`;
+
 const count = async (queryRunner: QueryRunner, sql: string): Promise<number> =>
   Number((await queryRunner.query(sql))[0].count);
 
@@ -178,6 +195,14 @@ export class PurgeEndedContracts1791965000000 implements MigrationInterface {
       );
     }
 
+    const purgedChange: { contract_no: string }[] =
+      await queryRunner.query(LIVE_WITH_PURGED_CHANGE);
+    if (purgedChange.length > 0) {
+      console.log(
+        `PurgeEndedContracts: the unit change of these live contracts' items is on an ended contract being deleted, so their deposit can no longer be derived; they must be listed in REVIEWED_DEPOSITS: ${purgedChange.map((row) => row.contract_no).join(', ')}`,
+      );
+    }
+
     const expectedBookings = await count(queryRunner, `SELECT count(*) FROM "purge_bookings"`);
     const orphanInvoicesBefore = await count(
       queryRunner,
@@ -185,6 +210,9 @@ export class PurgeEndedContracts1791965000000 implements MigrationInterface {
     );
     const deleted: string[] = [];
     for (const [table, sql] of DELETES) {
+      // A concurrent contract insert needs a key-share lock on its booking item; this waits for
+      // (or blocks) it, so the re-check in the bookings DELETE sees every contract.
+      if (table === 'bookings') await queryRunner.query(LOCK_PURGED_BOOKING_ITEMS);
       const [, affected] = await queryRunner.query(sql);
       deleted.push(`${table}=${affected}`);
       // A purged booking whose deposit payment is already gone must not survive half-deleted.

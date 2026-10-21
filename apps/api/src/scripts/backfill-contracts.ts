@@ -11,7 +11,9 @@
  * apart: a booking whose ended contracts were purged while another item never had a contract is
  * left with no contract at all. PurgeEndedContracts logs those booking numbers; leave them out.
  * A unit confirmed in several bookings (double booking in old data) or already under a live
- * contract is reported and skipped — that needs a human decision, not two contracts.
+ * contract needs a human decision, not two contracts: its whole booking is reported and skipped,
+ * since contracting the other items would make the booking "already has a contract" and the
+ * blocked item would never be picked up once the conflict is resolved.
  */
 import { AppUser } from '@entities/app-user.entity';
 import { Booking } from '@entities/booking.entity';
@@ -60,10 +62,15 @@ async function main(): Promise<void> {
     );
     const conflict = (c: Candidate) =>
       (perUnit.get(c.unit_id) ?? 0) > 1 || liveUnits.has(c.unit_id);
+    const blocked = new Set(candidates.filter(conflict).map((c) => c.booking_id));
 
     console.log(`${candidates.length} confirmed booking item(s) without a contract:`);
     for (const c of candidates) {
-      const note = conflict(c) ? '  ⚠ unit double-booked or already under contract — skip' : '';
+      const note = conflict(c)
+        ? '  ⚠ unit double-booked or already under contract — booking skipped'
+        : blocked.has(c.booking_id)
+          ? '  ⚠ another unit of this booking is in conflict — booking skipped'
+          : '';
       console.log(`  ${c.booking_no}  unit ${c.unit_code} (${c.unit_status})${note}`);
     }
     if (!apply) {
@@ -72,7 +79,7 @@ async function main(): Promise<void> {
     }
 
     const byBooking = new Map<string, Candidate[]>();
-    for (const c of candidates.filter((candidate) => !conflict(candidate))) {
+    for (const c of candidates.filter((candidate) => !blocked.has(candidate.booking_id))) {
       byBooking.set(c.booking_id, [...(byBooking.get(c.booking_id) ?? []), c]);
     }
     for (const [bookingId, items] of byBooking) {

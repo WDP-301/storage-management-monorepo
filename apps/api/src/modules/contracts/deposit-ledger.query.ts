@@ -136,6 +136,8 @@ export async function resolveDeposits(
   const claimedDeposits = new Set(own.map((row) => row.id));
   const claimedItems = new Set<string>();
   for (const contract of contracts) {
+    // A contract listed twice keeps its first answer; a second pass would see its own claim.
+    if (result.has(contract.id)) continue;
     const mine = ownByContract.get(contract.id);
     if (mine) {
       result.set(contract.id, { ...toResolved(mine), id: mine.id });

@@ -255,6 +255,16 @@ describe('resolveDepositAmounts', () => {
     ]);
   });
 
+  it('answers a contract listed twice the same way both times', async () => {
+    const manager = fakeManager({
+      paid: [{ item_id: 'item-1', amount: '1500000.00', payment_id: null }],
+    });
+
+    const amounts = await resolveDepositAmounts(manager as never, [contract(), contract()]);
+
+    expect([...amounts]).toEqual([['contract-1', '1500000.00']]);
+  });
+
   it('derives an item deposit for one of its contracts only', async () => {
     const manager = fakeManager({
       paid: [{ item_id: 'item-1', amount: '1500000.00', payment_id: null }],

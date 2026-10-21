@@ -5,6 +5,7 @@ import { useRef } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import type { ApiContract } from '../../types/contract-api';
+import { ContractInvoicesSection } from './ContractInvoicesSection';
 import { ContractAmenitiesSection } from './contract-amenities-section';
 import {
   contractUnitSummary,
@@ -15,8 +16,12 @@ import {
 } from './contract-display';
 import { ContractDocumentsList } from './contract-documents-section';
 import { ContractSection, HandoverSection, ReturnSection } from './contract-sections';
+import { ReturnRequestActions } from './ReturnRequestActions';
 import { ReturnRequestSheet } from './ReturnRequestSheet';
+import { SettlementSection } from './SettlementSection';
 import { ShelfAccessCard } from './ShelfAccessCard';
+import { TermEndNotice } from './TermEndNotice';
+import { type ContractInvoicesState, useContractInvoices } from './use-contract-invoices';
 
 const MUTED = 'hsl(215 16% 47%)';
 
@@ -41,6 +46,13 @@ export function ContractDetailScreen({
   onSupport,
   onRefresh,
 }: Props) {
+  const hasInvoices = contract?.status === 'ACTIVE' || contract?.status === 'ENDED';
+  const invoices = useContractInvoices(hasInvoices && contract ? contract.id : null);
+  const refresh = () => {
+    onRefresh();
+    if (hasInvoices) invoices.reload();
+  };
+
   return (
     <View className="flex-1">
       <ScreenHeader backLabel="Quay lại Kho của tôi" title="Chi tiết kho thuê" onBack={onBack} />
@@ -48,7 +60,7 @@ export function ContractDetailScreen({
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: contentBottomPadding }}
         refreshControl={
-          <RefreshControl refreshing={isLoading && contract !== null} onRefresh={onRefresh} />
+          <RefreshControl refreshing={isLoading && contract !== null} onRefresh={refresh} />
         }
         showsVerticalScrollIndicator={false}
       >
@@ -60,8 +72,9 @@ export function ContractDetailScreen({
           <ContractDetail
             contract={contract}
             now={now}
+            invoices={hasInvoices ? invoices : null}
             onSupport={onSupport}
-            onReturnRequested={onRefresh}
+            onChanged={refresh}
           />
         )}
       </ScrollView>
@@ -72,18 +85,23 @@ export function ContractDetailScreen({
 function ContractDetail({
   contract,
   now,
+  invoices,
   onSupport,
-  onReturnRequested,
+  onChanged,
 }: {
   contract: ApiContract;
   now: number;
+  /** null when the contract has no invoices to show (not ACTIVE or ENDED). */
+  invoices: ContractInvoicesState | null;
   onSupport: () => void;
-  onReturnRequested: () => void;
+  /** The return request or the contract changed; reload the screen. */
+  onChanged: () => void;
 }) {
   const returnSheet = useRef<BottomSheetModal>(null);
   const state = storageState(contract, now);
   const isActive = contract.status === 'ACTIVE';
-  const canRequestReturn = isActive && !openReturn(contract);
+  const pending = openReturn(contract);
+  const canRequestReturn = isActive && !pending;
   const showReturnSection = isActive || contract.status === 'ENDED' || contract.return !== null;
   // Matches the server: a deposit-paid (DRAFT) or ended contract still allows facility tickets.
   const canFileTicket = isActive || contract.status === 'DRAFT' || contract.status === 'ENDED';
@@ -113,13 +131,34 @@ function ContractDetail({
         ) : null}
       </View>
 
+      <TermEndNotice contract={contract} />
       <ContractSection contract={contract}>
         <ContractDocumentsList contract={contract} />
       </ContractSection>
       <ContractAmenitiesSection contract={contract} />
       <ShelfAccessCard contract={contract} />
       <HandoverSection handover={contract.handover} />
-      {showReturnSection ? <ReturnSection inspection={contract.return} /> : null}
+      {showReturnSection ? (
+        <ReturnSection inspection={contract.return}>
+          {isActive && pending ? (
+            <ReturnRequestActions
+              contractId={contract.id}
+              inspection={pending}
+              onReschedule={() => returnSheet.current?.present()}
+              onChanged={onChanged}
+            />
+          ) : null}
+        </ReturnSection>
+      ) : null}
+      {contract.status === 'ENDED' && contract.settlement ? (
+        <SettlementSection settlement={contract.settlement} />
+      ) : null}
+      {invoices ? (
+        <ContractInvoicesSection
+          state={invoices}
+          returnScheduledAt={pending?.scheduledAt ?? null}
+        />
+      ) : null}
 
       {canRequestReturn ? (
         <Button variant="secondary" onPress={() => returnSheet.current?.present()}>
@@ -132,12 +171,9 @@ function ContractDetail({
         </Button>
       ) : null}
 
-      <ReturnRequestSheet
-        sheetRef={returnSheet}
-        contractId={contract.id}
-        warehouseName={contractWarehouseName(contract)}
-        onSubmitted={onReturnRequested}
-      />
+      {isActive ? (
+        <ReturnRequestSheet sheetRef={returnSheet} contract={contract} onSubmitted={onChanged} />
+      ) : null}
     </View>
   );
 }

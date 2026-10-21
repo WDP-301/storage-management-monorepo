@@ -9,7 +9,7 @@ import {
 } from 'phosphor-react-native';
 import { useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { useBookingSettings } from '../../../lib/client-settings';
+import { useBookingSettings, useReturnSettings } from '../../../lib/client-settings';
 import { formatIsoDate, formatMoney, formatNumber } from '../../../lib/format-vi';
 import type { RentalSchedule } from '../../../lib/hold';
 import { latestStartIso, rentalEndIso, todayIso } from '../../../lib/rental-schedule';
@@ -40,6 +40,7 @@ const SUCCESS = 'hsl(160 84% 31%)';
 export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, onConfirm }: Props) {
   const { rentalMonthsOptions, defaultRentalMonths, minRentalMonths, maxRentalMonths, leadDays } =
     useBookingSettings();
+  const { noticeDays } = useReturnSettings();
   const [pickedStart, setStartDate] = useState(todayIso);
   const [pickedMonths, setPickedMonths] = useState(defaultRentalMonths);
   // Rules can refresh while the screen is open. A pick the API still accepts is kept even when it is
@@ -161,7 +162,7 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
           {/* Each line says WHEN it is charged, not just how much. The rent line reading 0 đ is
               what stops someone believing the whole rental is due up front. */}
           <CostRow
-            caption="Hoàn lại 100% khi trả kho"
+            caption="Hoàn khi trả kho, sau khi trừ công nợ/phí phát sinh (nếu có)"
             label={`Tiền cọc giữ ${warehouses.length} ${unitNoun}`}
             value={formatMoney(deposit)}
           />
@@ -184,7 +185,8 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
         <View className="mx-4 mt-3 flex-row items-start gap-2 rounded-lg bg-success-bg px-3 py-2.5">
           <ShieldCheck color={SUCCESS} size={16} weight="fill" />
           <Text className="flex-1 font-body text-body-sm text-success">
-            Tiền cọc được giữ an toàn, hoàn lại 100% khi kết thúc hợp đồng.
+            Tiền cọc được giữ an toàn. Trả trước hạn cần báo trước {noticeDays} ngày, nếu không sẽ
+            trừ 1 tháng tiền thuê.
           </Text>
         </View>
 

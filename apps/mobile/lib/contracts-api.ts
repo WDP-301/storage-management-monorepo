@@ -4,9 +4,21 @@ import type {
   ContractAmenity,
   CustomerContractResponse,
   InspectionSummaryResponse,
+  RefundBankAccountInput,
+  ReturnPreviewRecord,
+  SettlementSummaryRecord,
 } from '../src/types/contract-api';
 import { request } from './api';
 import { isEvidenceFile, toDamages } from './evidence';
+
+export type ReturnRequestDraft = {
+  dayIso: string;
+  note?: string;
+  refundAccount?: RefundBankAccountInput;
+};
+
+// Noon UTC keeps the same calendar day in Vietnam, like booking start dates.
+const toScheduledAt = (dayIso: string) => `${dayIso}T12:00:00.000Z`;
 
 export const ContractsApi = {
   /** Contracts the signed-in customer holds — the "Kho của tôi" source. */
@@ -15,13 +27,38 @@ export const ContractsApi = {
     return contracts.map(normaliseContract);
   },
 
+  /** What returning on `dayIso` would cost: notice, early-return deduction, overstay. */
+  returnPreview: (contractId: string, dayIso: string, signal?: AbortSignal) =>
+    request<ReturnPreviewRecord>(
+      `/contracts/${contractId}/return-preview?scheduledAt=${encodeURIComponent(toScheduledAt(dayIso))}`,
+      { signal },
+    ),
+
   /** Opens a return request (biên trả) for an active contract. `dayIso` is the local day. */
-  requestReturn: (contractId: string, dayIso: string, note?: string) =>
+  requestReturn: (contractId: string, input: ReturnRequestDraft) =>
     request<{ id: string }>(`/contracts/${contractId}/return-request`, {
       method: 'POST',
-      // Noon UTC keeps the same calendar day in Vietnam, like booking start dates.
-      body: JSON.stringify({ scheduledAt: `${dayIso}T12:00:00.000Z`, note: note || undefined }),
+      body: JSON.stringify({
+        scheduledAt: toScheduledAt(input.dayIso),
+        note: input.note || undefined,
+        refundAccount: input.refundAccount,
+      }),
     }),
+
+  /** Changes the open return request; omitted fields stay, an empty note clears it. */
+  updateReturn: (contractId: string, input: Partial<ReturnRequestDraft>) =>
+    request<{ id: string }>(`/contracts/${contractId}/return-request`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        scheduledAt: input.dayIso ? toScheduledAt(input.dayIso) : undefined,
+        note: input.note,
+        refundAccount: input.refundAccount,
+      }),
+    }),
+
+  /** Withdraws the open return request while staff have recorded nothing on it. */
+  cancelReturn: (contractId: string) =>
+    request<{ id: string }>(`/contracts/${contractId}/return-request`, { method: 'DELETE' }),
 };
 
 export function normaliseContract(contract: CustomerContractResponse): ApiContract {
@@ -35,7 +72,10 @@ export function normaliseContract(contract: CustomerContractResponse): ApiContra
     signedAt: contract.signed_at ?? null,
     months: contract.months,
     monthlyPrice: Number(contract.monthly_price),
-    deposit: Number(contract.deposit),
+    deposit: toOptionalNumber(contract.deposit),
+    termEndAt: contract.term_end_at ?? null,
+    overduePenaltyPerDay: toOptionalNumber(contract.overdue_penalty_per_day),
+    settlement: normaliseSettlement(contract.settlement),
     unit: contract.unit
       ? {
           kind: contract.unit.kind,
@@ -89,6 +129,14 @@ function normaliseAmenities(value: unknown): ContractAmenity[] | null {
   return amenities;
 }
 
+/** A settlement without a status is unreadable; lines always come back as an array. */
+function normaliseSettlement(
+  value: SettlementSummaryRecord | null | undefined,
+): SettlementSummaryRecord | null {
+  if (!value || typeof value !== 'object' || typeof value.status !== 'string') return null;
+  return { ...value, lines: Array.isArray(value.lines) ? value.lines : [] };
+}
+
 function toOptionalNumber(value: string | number | null | undefined): number | null {
   if (value === null || value === undefined) return null;
   const parsed = Number(value);
@@ -103,6 +151,7 @@ function normaliseInspection(inspection: InspectionSummaryResponse): ApiInspecti
     finalizedAt: inspection.finalized_at,
     inspectorName: inspection.inspector_name,
     requestNote: inspection.request_note,
+    requestSource: inspection.request_source ?? null,
     conditionNotes: inspection.condition_notes,
     evidence: (inspection.evidence ?? []).filter(isEvidenceFile),
     damages: toDamages(inspection.damages),

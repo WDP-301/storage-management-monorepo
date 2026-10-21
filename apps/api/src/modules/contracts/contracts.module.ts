@@ -23,6 +23,7 @@ import { FirstRentService } from './first-rent.service';
 import { FirstRentPaymentListener } from './first-rent-payment.listener';
 import { ManagedReturnService } from './managed-return.service';
 import { ReturnPreviewService } from './return-preview.service';
+import { TermEndReminderService } from './term-end-reminder.service';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { ReturnPreviewService } from './return-preview.service';
     ContractCancelService,
     FirstRentService,
     FirstRentPaymentListener,
+    TermEndReminderService,
   ],
   exports: [ContractsService],
 })

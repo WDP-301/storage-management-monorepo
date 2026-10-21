@@ -51,6 +51,8 @@ describe('ContractQueryService', () => {
   let inspections: unknown[];
   let invoices: unknown[];
   let payments: unknown[];
+  let ledger: unknown[];
+  let settlements: unknown[];
   let config: { get: jest.Mock };
   let service: ContractQueryService;
 
@@ -72,12 +74,22 @@ describe('ContractQueryService', () => {
     inspections = [];
     invoices = [];
     payments = [];
+    ledger = [];
+    settlements = [];
+    // Deposit ledger and settlement status reads are plain SQL.
+    const query = jest.fn(async (sql: string) =>
+      sql.includes('FROM contract_settlements')
+        ? settlements
+        : sql.includes('FROM deposits')
+          ? ledger
+          : [],
+    );
     const rows = (entity: unknown) =>
       entity === Inspection ? inspections : entity === Invoice ? invoices : payments;
     const getRepository = jest.fn((entity) => ({ find: jest.fn(async () => rows(entity)) }));
     config = { get: jest.fn((key: string) => `cfg-${key}`) };
     const dataSource = {
-      manager: { find: jest.fn(async () => assignments), getRepository },
+      manager: { find: jest.fn(async () => assignments), getRepository, query },
       getRepository,
     };
     service = new ContractQueryService(
@@ -142,6 +154,16 @@ describe('ContractQueryService', () => {
   });
 
   it('returns customer, unit, facility and the handover with its inspector', async () => {
+    ledger = [
+      {
+        id: 'dep-1',
+        contractId: 'contract-1',
+        paymentId: null,
+        amount: '3200000.00',
+        heldAmount: '3200000.00',
+        status: 'HELD',
+      },
+    ];
     inspections = [
       {
         id: 'insp-1',
@@ -171,7 +193,43 @@ describe('ContractQueryService', () => {
       terms: { note: 'x' },
       documents: [],
       amenities: null,
+      settlement_status: null,
     });
+    expect(contracts[0]).not.toHaveProperty('settlement');
+    expect(contracts[0]).not.toHaveProperty('overdue_penalty_per_day');
+  });
+
+  it('reports an unknown deposit as null, never 0', async () => {
+    const { contracts } = await service.list(ADMIN, {});
+    expect(contracts[0].deposit).toBeNull();
+  });
+
+  it('shows the settlement status: PENDING for an ENDED contract without one, else its own', async () => {
+    qb.getManyAndCount.mockResolvedValueOnce([
+      [
+        contract({ status: ContractStatus.ENDED }),
+        contract({ id: 'contract-2', status: ContractStatus.ENDED }),
+        contract({ id: 'contract-3', status: ContractStatus.ACTIVE }),
+      ],
+      3,
+    ]);
+    settlements = [{ contractId: 'contract-2', status: 'AWAITING_REFUND' }];
+    const { contracts } = await service.list(ADMIN, {});
+    expect(contracts.map((c) => c.settlement_status)).toEqual(['PENDING', 'AWAITING_REFUND', null]);
+  });
+
+  it.each([
+    ['pending', 'NOT EXISTS', { ended: ContractStatus.ENDED }],
+    ['awaiting_refund', 'EXISTS', { settlementStatus: 'AWAITING_REFUND' }],
+    ['completed', 'EXISTS', { settlementStatus: 'COMPLETED' }],
+  ] as const)('filters on settlementStatus=%s', async (filter, sql, params) => {
+    await service.list(ADMIN, { settlementStatus: filter });
+    const [where] = whereCalls();
+    expect(where.sql).toContain(sql);
+    expect(where.sql.replace(/\s+/g, ' ')).toContain(
+      'contract_settlements s WHERE s.contract_id = contract.id',
+    );
+    expect(where.params).toEqual(params);
   });
 
   it('returns the frozen amenities as stored, and null for contracts without a snapshot', async () => {

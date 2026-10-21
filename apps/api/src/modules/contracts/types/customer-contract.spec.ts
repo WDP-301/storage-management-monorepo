@@ -93,3 +93,40 @@ describe('toCustomerContractRecord', () => {
     expect(record.return?.request_source).toBe(ReturnRequestSource.CUSTOMER);
   });
 });
+
+describe('toCustomerContractRecord money fields', () => {
+  const contract = {
+    id: 'contract-1',
+    contractNo: 'CT-1',
+    effectiveAt: new Date('2027-01-31T10:00:00+07:00'),
+    months: 1,
+    bookingItem: { depositSnapshot: 900000 },
+  } as unknown as Contract;
+
+  it('never guesses the deposit: unknown without the resolved amount', () => {
+    const record = toCustomerContractRecord(contract);
+    expect(record.deposit).toBeNull();
+    expect(record.overdue_penalty_per_day).toBeNull();
+    expect(record.settlement).toBeNull();
+  });
+
+  it('ends the term on the clamped Vietnam day a month later', () => {
+    expect(toCustomerContractRecord(contract).term_end_at).toEqual(
+      new Date('2027-02-28T00:00:00+07:00'),
+    );
+  });
+
+  it('carries the extras it is given', () => {
+    const settlement = { status: 'PENDING' } as never;
+    const record = toCustomerContractRecord(
+      contract,
+      {},
+      {
+        deposit: 0,
+        penaltyPerDay: 50000,
+        settlement,
+      },
+    );
+    expect(record).toMatchObject({ deposit: 0, overdue_penalty_per_day: 50000, settlement });
+  });
+});

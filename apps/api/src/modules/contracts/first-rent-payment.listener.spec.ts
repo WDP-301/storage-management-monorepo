@@ -4,7 +4,13 @@ import { Invoice } from '@entities/invoice.entity';
 import { Payment } from '@entities/payment.entity';
 import type { PaymentReceivedEvent } from '@modules/payments/types/payment';
 import { Logger } from '@nestjs/common';
-import { InvoiceStatus, PaymentMethod, PaymentStatus, PaymentType } from '@storage/types';
+import {
+  InvoiceKind,
+  InvoiceStatus,
+  PaymentMethod,
+  PaymentStatus,
+  PaymentType,
+} from '@storage/types';
 import { FirstRentPaymentListener } from './first-rent-payment.listener';
 
 const INVOICE_NO = 'INV-1790760804609-6618';
@@ -79,6 +85,22 @@ describe('FirstRentPaymentListener', () => {
       paidAt: new Date('2026-10-12 10:32:00'),
       metadata: {},
     });
+    expect(em.update).toHaveBeenCalledWith(
+      Invoice,
+      { id: 'inv-1' },
+      { status: InvoiceStatus.PAID },
+    );
+  });
+
+  it('records a transfer for a settlement invoice as a fee', async () => {
+    invoice.kind = InvoiceKind.SETTLEMENT;
+
+    await listener.handlePaymentReceived(transfer());
+
+    expect(em.save).toHaveBeenCalledWith(
+      Payment,
+      expect.objectContaining({ type: PaymentType.FEE, invoiceId: 'inv-1' }),
+    );
     expect(em.update).toHaveBeenCalledWith(
       Invoice,
       { id: 'inv-1' },

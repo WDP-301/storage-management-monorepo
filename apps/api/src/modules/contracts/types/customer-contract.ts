@@ -1,10 +1,12 @@
 import type { Contract, ContractAmenity, ContractDocument } from '@entities/contract.entity';
 import type { Inspection } from '@entities/inspection.entity';
 import { withoutProposedFees } from '@modules/inspection/inspection-access.util';
+import { addVietnamMonths } from '@shared/utils/calendar.util';
 import type {
   ContractKind,
   ContractStatus,
   ReturnRequestSource,
+  SettlementSummaryRecord,
   StorageUnitKind,
 } from '@storage/types';
 
@@ -58,7 +60,12 @@ export interface CustomerContractRecord {
   signed_at: string | Date | null;
   months: number;
   monthly_price: number;
-  deposit: number;
+  /** 00:00 Vietnam time of the first day after the term (exclusive end). */
+  term_end_at: string | Date | null;
+  /** Deposit paid for the contract; null when it cannot be determined — never a guessed 0. */
+  deposit: number | null;
+  /** Charged per day kept past the term; null when not loaded. */
+  overdue_penalty_per_day: number | null;
   unit: CustomerContractUnit | null;
   facility: CustomerContractFacility | null;
   /** Signed contract files (scans/photos); empty until staff upload them. */
@@ -69,6 +76,15 @@ export interface CustomerContractRecord {
   handover: CustomerInspectionSummary | null;
   /** Latest RETURN inspection — open while the customer waits to move out. */
   return: CustomerInspectionSummary | null;
+  /** Deposit settlement of an ENDED contract (PENDING until approved); null otherwise. */
+  settlement: SettlementSummaryRecord | null;
+}
+
+/** Figures loaded in batch beside the contract rows; absent ones read as unknown (null). */
+export interface CustomerContractExtras {
+  deposit: number | null;
+  penaltyPerDay: number | null;
+  settlement: SettlementSummaryRecord | null;
 }
 
 export function toCustomerInspectionSummary(inspection: Inspection): CustomerInspectionSummary {
@@ -90,6 +106,7 @@ export function toCustomerInspectionSummary(inspection: Inspection): CustomerIns
 export function toCustomerContractRecord(
   contract: Contract,
   inspections: { handover?: Inspection; return?: Inspection } = {},
+  extras: Partial<CustomerContractExtras> = {},
 ): CustomerContractRecord {
   const unit = contract.bookingItem?.storageUnit;
   return {
@@ -102,7 +119,11 @@ export function toCustomerContractRecord(
     signed_at: contract.signedAt ?? null,
     months: contract.months,
     monthly_price: contract.monthlyPriceSnapshot,
-    deposit: contract.bookingItem?.depositSnapshot ?? 0,
+    term_end_at: contract.effectiveAt
+      ? addVietnamMonths(contract.effectiveAt, contract.months)
+      : null,
+    deposit: extras.deposit ?? null,
+    overdue_penalty_per_day: extras.penaltyPerDay ?? null,
     unit: unit
       ? {
           id: unit.id,
@@ -132,5 +153,6 @@ export function toCustomerContractRecord(
     amenities: contract.amenitiesSnapshot ?? null,
     handover: inspections.handover ? toCustomerInspectionSummary(inspections.handover) : null,
     return: inspections.return ? toCustomerInspectionSummary(inspections.return) : null,
+    settlement: extras.settlement ?? null,
   };
 }

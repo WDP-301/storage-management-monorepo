@@ -10,8 +10,9 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { ContractStatus, InvoiceStatus, UserRole } from '@storage/types';
-import { DataSource, Repository } from 'typeorm';
+import { ContractStatus, InvoiceStatus, PaymentStatus, UserRole } from '@storage/types';
+import Decimal from 'decimal.js';
+import { DataSource, type FindOptionsWhere, Repository } from 'typeorm';
 import {
   issueRentPeriodInvoice,
   queueInvoicePdf,
@@ -20,7 +21,12 @@ import {
 } from './rent-period-invoice.util';
 
 export interface InvoiceWithQrResponse extends Invoice {
-  paymentQrUrl?: string | null;
+  /** Sum of the succeeded payments, deposit offsets included. */
+  paidAmount: number;
+  /** What is still to pay; 0 once settled. */
+  amountDue: number;
+  /** Transfer QR for `amountDue`; null when the invoice takes no money or nothing is due. */
+  paymentQrUrl: string | null;
   items?: InvoiceItem[];
 }
 
@@ -130,16 +136,15 @@ export class InvoicesService {
    */
   async getMyInvoices(
     customerId: string,
-    options: { status?: InvoiceStatus; page?: number; limit?: number } = {},
+    options: { status?: InvoiceStatus; contractId?: string; page?: number; limit?: number } = {},
   ): Promise<{ items: InvoiceWithQrResponse[]; total: number; page: number; limit: number }> {
     const page = Math.max(1, options.page ?? 1);
     const limit = Math.min(50, Math.max(1, options.limit ?? 20));
     const skip = (page - 1) * limit;
 
-    const where: any = { customerId };
-    if (options.status) {
-      where.status = options.status;
-    }
+    const where: FindOptionsWhere<Invoice> = { customerId };
+    if (options.status) where.status = options.status;
+    if (options.contractId) where.contractId = options.contractId;
 
     const [invoices, total] = await this.invoices.findAndCount({
       where,
@@ -149,7 +154,8 @@ export class InvoicesService {
       take: limit,
     });
 
-    const items: InvoiceWithQrResponse[] = invoices.map((inv) => this.attachQr(inv));
+    const paid = await this.paidByInvoice(invoices.map((inv) => inv.id));
+    const items = invoices.map((inv) => this.attachQr(inv, paid.get(inv.id)));
     return { items, total, page, limit };
   }
 
@@ -181,8 +187,11 @@ export class InvoicesService {
       );
     }
 
-    const items = await this.invoiceItems.find({ where: { invoiceId: invoice.id } });
-    const response = this.attachQr(invoice);
+    const [items, paid] = await Promise.all([
+      this.invoiceItems.find({ where: { invoiceId: invoice.id } }),
+      this.paidByInvoice([invoice.id]),
+    ]);
+    const response = this.attachQr(invoice, paid.get(invoice.id));
     response.items = items;
     return response;
   }
@@ -196,14 +205,30 @@ export class InvoicesService {
     return { queued: true };
   }
 
-  private attachQr(invoice: Invoice): InvoiceWithQrResponse {
+  /** Succeeded payments summed per invoice, in one query. */
+  private async paidByInvoice(invoiceIds: string[]): Promise<Map<string, Decimal>> {
+    if (invoiceIds.length === 0) return new Map();
+    const rows: { invoiceId: string; paid: string }[] = await this.dataSource.query(
+      `SELECT invoice_id AS "invoiceId", sum(amount) AS paid FROM payments
+        WHERE invoice_id = ANY($1::uuid[]) AND status = $2 GROUP BY invoice_id`,
+      [invoiceIds, PaymentStatus.SUCCEEDED],
+    );
+    return new Map(rows.map((row) => [row.invoiceId, new Decimal(row.paid ?? 0)]));
+  }
+
+  /** The QR asks for what is still due, so a partly paid or deposit-offset invoice is not overpaid. */
+  private attachQr(invoice: Invoice, paid: Decimal = new Decimal(0)): InvoiceWithQrResponse {
     const isPayable =
       invoice.status === InvoiceStatus.ISSUED || invoice.status === InvoiceStatus.PARTIALLY_PAID;
+    const amountDue = Decimal.max(new Decimal(invoice.total).minus(paid), 0);
     return {
       ...invoice,
-      paymentQrUrl: isPayable
-        ? buildPaymentQrUrl(this.configService, invoice.total, invoice.invoiceNo)
-        : null,
+      paidAmount: paid.toNumber(),
+      amountDue: amountDue.toNumber(),
+      paymentQrUrl:
+        isPayable && amountDue.gt(0)
+          ? buildPaymentQrUrl(this.configService, amountDue.toFixed(0), invoice.invoiceNo)
+          : null,
     };
   }
 }

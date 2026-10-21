@@ -9,6 +9,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import {
+  InvoiceKind,
   InvoiceStatus,
   NotificationType,
   PaymentMethod,
@@ -79,7 +80,7 @@ export class FirstRentPaymentListener {
           paymentNo: generatePaymentNo(),
           invoiceId: invoice.id,
           customerId: invoice.customerId,
-          type: PaymentType.RENT,
+          type: invoice.kind === InvoiceKind.SETTLEMENT ? PaymentType.FEE : PaymentType.RENT,
           method: PaymentMethod.BANK_TRANSFER,
           status: PaymentStatus.SUCCEEDED,
           amount: event.amount,

@@ -42,6 +42,8 @@ describe('InvoicesService', () => {
 
     dataSource = {
       transaction: jest.fn(async (cb) => cb(em)),
+      // Succeeded payments summed per invoice: none unless a test says otherwise.
+      query: jest.fn().mockResolvedValue([]),
     };
 
     queueService = {
@@ -181,23 +183,83 @@ describe('InvoicesService', () => {
   });
 
   describe('getMyInvoices', () => {
-    it('returns invoices with payment QR attached for payable status', async () => {
-      invoicesRepo.findAndCount.mockResolvedValue([
-        [
-          {
-            id: 'inv-1',
-            invoiceNo: 'INV-1234',
-            status: InvoiceStatus.ISSUED,
-            total: 1500000,
-          },
-        ],
-        1,
-      ]);
+    const invoice = (over: Record<string, unknown> = {}) => ({
+      id: 'inv-1',
+      invoiceNo: 'INV-1234',
+      status: InvoiceStatus.ISSUED,
+      total: '1500000.00',
+      ...over,
+    });
+
+    it('returns invoices with a payment QR for the full amount when nothing is paid', async () => {
+      invoicesRepo.findAndCount.mockResolvedValue([[invoice()], 1]);
 
       const res = await service.getMyInvoices('cust-1');
 
       expect(res.total).toBe(1);
+      expect(res.items[0]).toMatchObject({ paidAmount: 0, amountDue: 1500000 });
       expect(res.items[0].paymentQrUrl).toContain('img.vietqr.io');
+      expect(res.items[0].paymentQrUrl).toContain('amount=1500000&');
     });
+
+    it('asks only for what is still due, deposit offsets included', async () => {
+      invoicesRepo.findAndCount.mockResolvedValue([
+        [
+          invoice({ status: InvoiceStatus.PARTIALLY_PAID }),
+          invoice({ id: 'inv-2', status: InvoiceStatus.PAID }),
+        ],
+        2,
+      ]);
+      dataSource.query.mockResolvedValue([
+        { invoiceId: 'inv-1', paid: '1000000.00' },
+        { invoiceId: 'inv-2', paid: '1500000.00' },
+      ]);
+
+      const { items } = await service.getMyInvoices('cust-1');
+
+      expect(dataSource.query).toHaveBeenCalledWith(
+        expect.stringContaining('GROUP BY invoice_id'),
+        [['inv-1', 'inv-2'], 'SUCCEEDED'],
+      );
+      expect(items[0]).toMatchObject({ paidAmount: 1000000, amountDue: 500000 });
+      expect(items[0].paymentQrUrl).toContain('amount=500000&');
+      expect(items[1]).toMatchObject({ amountDue: 0, paymentQrUrl: null });
+    });
+
+    it('offers no QR when an open invoice has nothing left to pay', async () => {
+      invoicesRepo.findAndCount.mockResolvedValue([[invoice()], 1]);
+      dataSource.query.mockResolvedValue([{ invoiceId: 'inv-1', paid: '1500000.00' }]);
+      const { items } = await service.getMyInvoices('cust-1');
+      expect(items[0].paymentQrUrl).toBeNull();
+    });
+
+    it('narrows to one contract', async () => {
+      invoicesRepo.findAndCount.mockResolvedValue([[], 0]);
+      await service.getMyInvoices('cust-1', { contractId: 'contract-1' });
+      expect(invoicesRepo.findAndCount).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { customerId: 'cust-1', contractId: 'contract-1' } }),
+      );
+      expect(dataSource.query).not.toHaveBeenCalled();
+    });
+  });
+
+  it('builds the invoice detail QR from the amount still due', async () => {
+    invoicesRepo.findOne.mockResolvedValue({
+      id: 'inv-1',
+      invoiceNo: 'INV-1234',
+      customerId: 'cust-1',
+      status: InvoiceStatus.PARTIALLY_PAID,
+      total: 300000,
+    });
+    invoiceItemsRepo.find.mockResolvedValue([]);
+    dataSource.query.mockResolvedValue([{ invoiceId: 'inv-1', paid: '100000' }]);
+
+    const res = await service.getInvoiceById('inv-1', {
+      id: 'cust-1',
+      roles: ['CUSTOMER'],
+    } as never);
+
+    expect(res).toMatchObject({ paidAmount: 100000, amountDue: 200000, items: [] });
+    expect(res.paymentQrUrl).toContain('amount=200000&');
   });
 });

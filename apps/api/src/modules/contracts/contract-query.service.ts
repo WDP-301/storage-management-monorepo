@@ -4,17 +4,21 @@ import {
   isGlobalManager,
   loadManagedFacilityIds,
 } from '@modules/inspection/inspection-access.util';
+import { loadBackOfficeContractExtras } from '@modules/settlements/settlement-summary.util';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
 import { escapeLikePattern } from '@shared/utils/like-pattern.util';
-import type { PaginationMeta } from '@storage/types';
+import { ContractStatus, type PaginationMeta } from '@storage/types';
 import { DataSource, Repository, type SelectQueryBuilder } from 'typeorm';
 import { resolveContractAccess } from './contract-access.util';
 import { loadContractInspections } from './contract-inspections.util';
-import type { ListContractsQueryDto } from './dto/list-contracts-query.dto';
+import {
+  type ListContractsQueryDto,
+  SETTLEMENT_STATUS_FILTER,
+} from './dto/list-contracts-query.dto';
 import { loadFirstRentSummaries, withPaymentQr } from './first-rent.util';
 import {
   type BackOfficeContractRecord,
@@ -46,6 +50,19 @@ export class ContractQueryService {
     const qb = this.baseQuery();
     if (scope) qb.andWhere('unit.facilityId IN (:...scope)', { scope });
     if (query.status) qb.andWhere('contract.status = :status', { status: query.status });
+    if (query.settlementStatus === 'pending') {
+      qb.andWhere(
+        `contract.status = :ended AND NOT EXISTS
+          (SELECT 1 FROM contract_settlements s WHERE s.contract_id = contract.id)`,
+        { ended: ContractStatus.ENDED },
+      );
+    } else if (query.settlementStatus) {
+      qb.andWhere(
+        `EXISTS (SELECT 1 FROM contract_settlements s
+                  WHERE s.contract_id = contract.id AND s.status = :settlementStatus)`,
+        { settlementStatus: SETTLEMENT_STATUS_FILTER[query.settlementStatus] },
+      );
+    }
     const term = query.search?.trim();
     if (term) {
       qb.andWhere(
@@ -64,13 +81,19 @@ export class ContractQueryService {
       .getManyAndCount();
 
     const ids = contracts.map((c) => c.id);
-    const [inspections, firstRents] = await Promise.all([
+    const [inspections, firstRents, extras] = await Promise.all([
       loadContractInspections(this.dataSource, ids),
       loadFirstRentSummaries(this.dataSource, ids),
+      loadBackOfficeContractExtras(this.dataSource.manager, contracts),
     ]);
     return {
       contracts: contracts.map((c) =>
-        toBackOfficeContractRecord(c, inspections.get(c.id), firstRents.get(c.id) ?? null),
+        toBackOfficeContractRecord(
+          c,
+          inspections.get(c.id),
+          firstRents.get(c.id) ?? null,
+          extras.get(c.id),
+        ),
       ),
       meta: buildPaginationMeta(page, limit, total),
     };
@@ -88,14 +111,16 @@ export class ContractQueryService {
         HttpStatus.FORBIDDEN,
       );
     }
-    const [inspections, firstRents] = await Promise.all([
+    const [inspections, firstRents, extras] = await Promise.all([
       loadContractInspections(this.dataSource, [contract.id]),
       loadFirstRentSummaries(this.dataSource, [contract.id]),
+      loadBackOfficeContractExtras(this.dataSource.manager, [contract]),
     ]);
     return toBackOfficeContractRecord(
       contract,
       inspections.get(contract.id),
       firstRents.get(contract.id) ?? null,
+      extras.get(contract.id),
     );
   }
 
@@ -115,14 +140,17 @@ export class ContractQueryService {
       );
     }
     // Staff get the transfer QR too: they show it to the customer at check-in.
-    const firstRent = (await loadFirstRentSummaries(this.dataSource, [contract.id])).get(
-      contract.id,
-    );
+    const [firstRents, extras] = await Promise.all([
+      loadFirstRentSummaries(this.dataSource, [contract.id]),
+      loadBackOfficeContractExtras(this.dataSource.manager, [contract]),
+    ]);
+    const firstRent = firstRents.get(contract.id);
     return toStaffContractRecord(
       contract,
       access.inspections,
       access.permissions,
       firstRent ? withPaymentQr(firstRent, this.config) : null,
+      extras.get(contract.id),
     );
   }
 

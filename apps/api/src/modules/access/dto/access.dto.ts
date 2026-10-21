@@ -18,17 +18,15 @@ const TIMESTAMP_WITH_OFFSET = /T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})
 const TIMESTAMP_MESSAGE =
   '$property must be a full timestamp with offset, e.g. 2026-10-12T23:59:59+07:00';
 
-export class CreatePassDto {
-  @ApiProperty({ format: 'uuid', description: 'ACTIVE shelf contract of the caller' })
-  @IsUUID('all')
-  contractId: string;
-}
-
 export class CheckInDto {
   @ApiProperty({ description: 'Text decoded from the customer QR code', example: 'SMCI1:…' })
   @IsString()
   @MaxLength(100)
   qrPayload: string;
+
+  @ApiProperty({ format: 'uuid', description: 'Shelf warehouse the customer is entering' })
+  @IsUUID('all')
+  warehouseId: string;
 }
 
 export class ListCheckInsQueryDto {
@@ -50,7 +48,7 @@ export class ListCheckInsQueryDto {
   to?: string;
 
   @ApiPropertyOptional({
-    description: 'Contract number, shelf code, customer name or phone contains',
+    description: 'Customer name or phone, or warehouse code or name contains',
   })
   @IsString()
   @MaxLength(150)

@@ -19,7 +19,7 @@ import { UserRole } from '@storage/types';
 import { AccessPassService } from './access-pass.service';
 import { CheckInService } from './check-in.service';
 import { CheckInHistoryService } from './check-in-history.service';
-import { CheckInDto, CreatePassDto, ListCheckInsQueryDto } from './dto/access.dto';
+import { CheckInDto, ListCheckInsQueryDto } from './dto/access.dto';
 
 @ApiTags('Access')
 @Controller('access')
@@ -35,14 +35,18 @@ export class AccessController {
 
   @Post('passes')
   @Roles(UserRole.CUSTOMER)
-  @ApiOperation({ summary: 'Generate a short-lived single-use check-in QR for a shelf contract' })
+  @ApiOperation({
+    summary: 'Issue the caller a short-lived single-use check-in QR',
+    description:
+      'One code for every warehouse where the caller rents a shelf; the app rotates it before expiry.',
+  })
   @ApiResponse({
     status: 409,
     description: 'CHECK_IN_NOT_ALLOWED or INVOICE_OVERDUE',
     type: ApiErrorResponseDto,
   })
-  createPass(@Body() dto: CreatePassDto, @CurrentUser() user: AuthUser) {
-    return this.passes.createPass(user, dto.contractId);
+  createPass(@CurrentUser() user: AuthUser) {
+    return this.passes.createPass(user);
   }
 
   @Post('check-ins')
@@ -53,14 +57,15 @@ export class AccessController {
     UserRole.OPERATIONS_MANAGER,
     UserRole.ADMIN,
   )
-  @ApiOperation({ summary: 'Scan a customer QR and record the entry' })
+  @ApiOperation({ summary: 'Scan a customer QR at the chosen warehouse and record the entry' })
+  @ApiResponse({ status: 404, description: 'Warehouse not found', type: ApiErrorResponseDto })
   @ApiResponse({
     status: 409,
     description: 'ACCESS_PASS_INVALID, CHECK_IN_NOT_ALLOWED or INVOICE_OVERDUE',
     type: ApiErrorResponseDto,
   })
   checkIn(@Body() dto: CheckInDto, @CurrentUser() user: AuthUser) {
-    return this.checkIns.verify(user, dto.qrPayload);
+    return this.checkIns.verify(user, dto.qrPayload, dto.warehouseId);
   }
 
   @Get('check-ins')

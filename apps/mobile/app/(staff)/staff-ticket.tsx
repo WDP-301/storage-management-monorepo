@@ -32,11 +32,15 @@ export default function StaffTicketRoute() {
   // Leaving the screen — confirmed discard included — drops the draft; the route stays mounted,
   // so otherwise a discarded note would come back on the next visit.
   useFocusEffect(useCallback(() => () => setDraft(null), []));
+  // A different ticket never inherits the previous one's draft, even without a blur in between.
+  useEffect(() => {
+    if (id) setDraft(null);
+  }, [id]);
 
   const goBack = useCallback(() => router.navigate('/(staff)/requests'), [router]);
   const confirmLeave = useCallback(() => {
     if (!unsavedRef.current) return goBack();
-    Alert.alert('Bỏ thay đổi?', 'Ghi chú hoặc ảnh chưa gửi sẽ bị mất.', [
+    Alert.alert('Bỏ thay đổi?', 'Ghi chú hoặc ảnh chưa gửi sẽ không được giữ lại.', [
       { text: 'Ở lại', style: 'cancel' },
       { text: 'Bỏ thay đổi', style: 'destructive', onPress: goBack },
     ]);
@@ -72,6 +76,7 @@ export default function StaffTicketRoute() {
 
   const submitFinish = async () => {
     if (!draft) return;
+    const submitted = draft;
     const done = await update(
       {
         status: draft.mode === 'resolve' ? TicketStatus.RESOLVED : TicketStatus.CLOSED,
@@ -79,7 +84,8 @@ export default function StaffTicketRoute() {
       },
       draft.photos,
     );
-    if (done) setDraft(null);
+    // Only clear the draft that was sent — the user may have left and started a new one meanwhile.
+    if (done) setDraft((current) => (current === submitted ? null : current));
   };
 
   return (

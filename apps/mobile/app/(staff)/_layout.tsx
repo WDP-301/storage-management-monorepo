@@ -42,7 +42,7 @@ export default function StaffTabsLayout() {
                 if (!shouldConfirmLeave()) return go();
                 Alert.alert(
                   'Bỏ thay đổi?',
-                  'Biên bản có thay đổi chưa lưu hoặc ảnh đang tải lên.',
+                  'Màn hình đang có thay đổi chưa lưu hoặc ảnh đang tải lên.',
                   [
                     { text: 'Ở lại', style: 'cancel' },
                     { text: 'Bỏ thay đổi', style: 'destructive', onPress: go },

@@ -1,6 +1,6 @@
 import type { TicketStatus } from '@storage/types';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { ApiError } from '../../../lib/api';
 import { TicketsApi } from '../../../lib/tickets-api';
 import type { ServiceTicketRecord } from '../../types/ticket-api';
@@ -20,8 +20,11 @@ export function useStaffTickets() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Switching filters quickly leaves earlier requests in flight; only the latest may write.
+  const latestRequest = useRef(0);
 
   const load = useCallback(async (status: TicketStatus | null, nextPage: number) => {
+    const request = ++latestRequest.current;
     const isFirstPage = nextPage === 1;
     if (isFirstPage) setIsLoading(true);
     else setIsLoadingMore(true);
@@ -32,14 +35,18 @@ export function useStaffTickets() {
         limit: PAGE_SIZE,
         ...(status ? { status } : {}),
       });
+      if (request !== latestRequest.current) return;
       setTickets((prev) => (isFirstPage ? list.tickets : [...prev, ...list.tickets]));
       setPage(list.meta.page);
       setHasMore(list.meta.page < list.meta.totalPages);
     } catch (e) {
+      if (request !== latestRequest.current) return;
       setError(e instanceof ApiError ? e.message : 'Không tải được danh sách yêu cầu.');
     } finally {
-      setIsLoading(false);
-      setIsLoadingMore(false);
+      if (request === latestRequest.current) {
+        setIsLoading(false);
+        setIsLoadingMore(false);
+      }
     }
   }, []);
 

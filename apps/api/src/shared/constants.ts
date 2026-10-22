@@ -36,6 +36,10 @@ export const ENV_KEY = {
   SEPAY_BANK_ID: 'SEPAY_BANK_ID',
   SEPAY_ACCOUNT_NO: 'SEPAY_ACCOUNT_NO',
   SEPAY_ACCOUNT_NAME: 'SEPAY_ACCOUNT_NAME',
+
+  // Holdstation Pay partner API: bank directory and account-holder verification
+  HOLDSTATION_API_URL: 'HOLDSTATION_API_URL',
+  HOLDSTATION_PARTNER_APP_KEY: 'HOLDSTATION_PARTNER_APP_KEY',
 } as const;
 
 /** Goong REST API v2 base URL */

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ApiError } from '../../lib/api';
+import { BanksApi } from '../../lib/banks-api';
 import { SettlementsApi } from '../../lib/settlements-api';
 import { settlementRecord } from '../../test-utils/settlement-fixtures';
 import type { RefundBankAccount } from '../../types/settlement';
@@ -17,25 +18,44 @@ const PREVIEWED = 'b'.repeat(64);
 const approveButton = () =>
   screen.getByRole('button', { name: 'Duyệt quyết toán' }) as HTMLButtonElement;
 
+const VERIFIED = { ...ACCOUNT, bankBin: '970436' };
+const checkButton = () => screen.getByRole('button', { name: 'Kiểm tra' });
+
 const renderForm = () => {
+  vi.spyOn(BanksApi, 'list').mockResolvedValue([
+    { bin: '970436', shortName: 'Vietcombank', name: 'Ngân hàng TMCP Ngoại thương Việt Nam' },
+  ]);
+  const verify = vi.spyOn(BanksApi, 'verify').mockResolvedValue(VERIFIED);
   const record = settlementRecord({ customer_bank_account: ACCOUNT });
   const preview = vi
     .spyOn(SettlementsApi, 'preview')
     .mockResolvedValue({ ...record, version: PREVIEWED });
   const onApproved = vi.fn();
   render(<SettlementDecisionForm record={record} onApproved={onApproved} onStale={vi.fn()} />);
-  return { record, preview, onApproved };
+  return { record, preview, onApproved, verify };
+};
+
+const verifyAccount = async () => {
+  await screen.findByRole('option', { name: /Vietcombank/ });
+  fireEvent.click(checkButton());
+  await waitFor(() => expect(approveButton().disabled).toBe(false));
 };
 
 describe('SettlementDecisionForm', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('approves the figures the server previewed, with their version', async () => {
-    const { record, preview, onApproved } = renderForm();
+    const { record, preview, onApproved, verify } = renderForm();
     const approved = { ...record, status: 'AWAITING_REFUND' as const };
     const approve = vi.spyOn(SettlementsApi, 'approve').mockResolvedValue(approved);
 
+    await waitFor(() => expect(preview).toHaveBeenCalled());
+    expect(approveButton().disabled).toBe(true);
+    await screen.findByRole('option', { name: /Vietcombank/ });
+    fireEvent.click(checkButton());
     await waitFor(() => expect(approveButton().disabled).toBe(false));
+    expect(verify).toHaveBeenCalledWith('970436', '0123456789');
+    expect(screen.getByDisplayValue('NGUYEN VAN AN')).toBeTruthy();
     expect(preview).toHaveBeenCalledWith('c-1', {
       damageDecisions: [{ index: 0, amount: 200000 }],
       creditDecisions: [],
@@ -53,13 +73,13 @@ describe('SettlementDecisionForm', () => {
       creditDecisions: [],
       waivedLines: [],
       expectedVersion: PREVIEWED,
-      bankAccount: ACCOUNT,
+      bankAccount: { bankBin: '970436', accountNo: '0123456789' },
     });
   });
 
   it('previews again after a decision changes and blocks approval until it returns', async () => {
     const { preview } = renderForm();
-    await waitFor(() => expect(approveButton().disabled).toBe(false));
+    await verifyAccount();
 
     fireEvent.click(screen.getByRole('radio', { name: 'Miễn' }));
     expect(approveButton().disabled).toBe(true);
@@ -81,7 +101,7 @@ describe('SettlementDecisionForm', () => {
     }) as ApiError;
     vi.spyOn(SettlementsApi, 'approve').mockRejectedValue(changed);
 
-    await waitFor(() => expect(approveButton().disabled).toBe(false));
+    await verifyAccount();
     fireEvent.click(approveButton());
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận duyệt' }));
 
@@ -90,14 +110,36 @@ describe('SettlementDecisionForm', () => {
     expect(onApproved).not.toHaveBeenCalled();
   });
 
-  it('lists what is missing instead of asking the server', async () => {
-    renderForm();
-    await waitFor(() => expect(approveButton().disabled).toBe(false));
-    fireEvent.change(screen.getByLabelText('Số tài khoản'), { target: { value: '12' } });
+  it('clears the verification when the number changes and shows why a check failed', async () => {
+    const { verify } = renderForm();
+    await screen.findByRole('option', { name: /Vietcombank/ });
+    fireEvent.click(checkButton());
     await waitFor(() => expect(approveButton().disabled).toBe(false));
 
-    fireEvent.click(approveButton());
-    expect(screen.getByText('Số tài khoản gồm 4–30 chữ hoặc số.')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Xác nhận duyệt' })).toBeNull();
+    fireEvent.change(screen.getByLabelText('Số tài khoản'), { target: { value: '99998888' } });
+    expect(approveButton().disabled).toBe(true);
+    expect(screen.queryByDisplayValue('NGUYEN VAN AN')).toBeNull();
+
+    verify.mockRejectedValue(
+      Object.assign(new Error('x'), {
+        status: 400,
+        code: 'BANK_ACCOUNT_INVALID',
+        details: { reason: 'ACCOUNT' },
+      }),
+    );
+    fireEvent.click(checkButton());
+    expect(
+      await screen.findByText('Số tài khoản không tồn tại tại ngân hàng đã chọn'),
+    ).toBeTruthy();
+    expect(approveButton().disabled).toBe(true);
+  });
+
+  it('lists what is missing instead of asking the server', async () => {
+    renderForm();
+    await screen.findByRole('option', { name: /Vietcombank/ });
+    fireEvent.click(checkButton());
+    await waitFor(() => expect(approveButton().disabled).toBe(false));
+    fireEvent.change(screen.getByLabelText('Số tài khoản'), { target: { value: '12' } });
+    expect(approveButton().disabled).toBe(true);
   });
 });

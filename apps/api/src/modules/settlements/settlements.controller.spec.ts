@@ -76,16 +76,16 @@ describe('SettlementsController access and input validation', () => {
     await expect(validate(SettlementDecisionsDto, body)).rejects.toMatchObject({ status: 400 });
   });
 
-  it('needs the previewed version to approve, and accepts an account the old app never sent', async () => {
+  it('needs the previewed version to approve, and takes an account as BIN and number', async () => {
     await expect(validate(ApproveSettlementDto, {})).rejects.toMatchObject({ status: 400 });
     await expect(
       validate(ApproveSettlementDto, {
         expectedVersion: VERSION,
         damageDecisions: [{ index: 0, amount: 100000 }],
-        bankAccount: { bankName: 'Ngân hàng X', accountNo: '123456', accountName: 'Lê Bình' },
+        bankAccount: { bankBin: '970418', accountNo: '123456' },
         bankOverrideReason: 'Khách cung cấp qua kênh khác',
       }),
-    ).resolves.toMatchObject({ bankAccount: { accountName: 'LE BINH' } });
+    ).resolves.toMatchObject({ bankAccount: { bankBin: '970418', accountNo: '123456' } });
   });
 
   it('limits refund proof to five uploads and a 100-character reference', async () => {

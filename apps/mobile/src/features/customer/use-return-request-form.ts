@@ -1,4 +1,3 @@
-import { findVnBank } from '@storage/types';
 import { useEffect, useRef, useState } from 'react';
 import { ContractsApi } from '../../../lib/contracts-api';
 import { todayIso } from '../../../lib/rental-schedule';
@@ -12,8 +11,6 @@ import {
 } from './refund-account-draft';
 import { returnErrorMessage } from './return-errors';
 import { useReturnPreview } from './use-return-preview';
-
-const isListedBin = (bin: string) => findVnBank(bin) !== undefined;
 
 /**
  * State of the return request form: a new request, or a change to the open one (`openReturn`),
@@ -45,7 +42,7 @@ export function useReturnRequestForm(
   const saved = preview.preview?.saved_refund_account;
   useEffect(() => {
     if (!isEdit && saved && !accountTouched.current) {
-      setAccount(draftFromAccount(saved, isListedBin));
+      setAccount(draftFromAccount(saved));
     }
   }, [isEdit, saved]);
 
@@ -59,13 +56,16 @@ export function useReturnRequestForm(
     setError(null);
   };
 
-  const submit = async () => {
-    if (!dayIso || isSubmitting) return;
-    const { problem, refundAccount } = refundAccountPayload(account, {
+  const payload = () =>
+    refundAccountPayload(account, {
       isEdit,
       required: accountRequired,
       touched: accountTouched.current,
     });
+
+  const submit = async () => {
+    if (!dayIso || isSubmitting) return;
+    const { problem, refundAccount } = payload();
     if (problem) {
       setError(problem);
       return;
@@ -104,7 +104,8 @@ export function useReturnRequestForm(
     preview,
     isSubmitting,
     error,
-    canSubmit: dayIso !== null && !preview.isLoading && !isSubmitting,
+    // An account that is filled in but not yet verified at the bank cannot be sent.
+    canSubmit: dayIso !== null && !preview.isLoading && !isSubmitting && payload().problem === null,
     submit,
   };
 }

@@ -81,7 +81,7 @@ describe('ContractReturnController access and input validation', () => {
           accountName: 'Le B',
         },
       }),
-    ).resolves.toMatchObject({ refundAccount: { accountName: 'LE B' } });
+    ).resolves.toMatchObject({ refundAccount: { bankBin: '970436', accountNo: '0123' } });
   });
 
   it.each([
@@ -97,7 +97,7 @@ describe('ContractReturnController access and input validation', () => {
     await expect(
       validate(ReturnRequestDto, {
         scheduledAt: '2027-04-12',
-        refundAccount: { bankBin: '000000', accountNo: '0123', accountName: 'Le B' },
+        refundAccount: { bankBin: '97043', accountNo: '0123', accountName: 'Le B' },
       }),
     ).rejects.toMatchObject({
       response: {

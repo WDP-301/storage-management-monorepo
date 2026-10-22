@@ -3,6 +3,7 @@ import { Roles } from '@modules/auth/decorators/roles.decorator';
 import { RolesGuard } from '@modules/auth/guards/roles.guard';
 import { SessionGuard } from '@modules/auth/guards/session.guard';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { BankLookupThrottle } from '@modules/banks/bank-lookup.throttle';
 import {
   Body,
   Controller,
@@ -71,6 +72,7 @@ export class ContractReturnController {
   }
 
   @Post(':id/return-request')
+  @BankLookupThrottle()
   @ApiOperation({ summary: 'Ask to move out — opens a RETURN inspection on the chosen day' })
   @ApiResponse({ status: 400, description: 'Day outside today..+365', type: ApiErrorResponseDto })
   @ApiResponse({
@@ -87,6 +89,7 @@ export class ContractReturnController {
   }
 
   @Patch(':id/return-request')
+  @BankLookupThrottle()
   @ApiOperation({
     summary: 'Change the day, note or refund account of the open return request',
     description: 'Moving the day earlier restarts the notice from now; later keeps it.',
@@ -120,6 +123,7 @@ export class ContractReturnController {
   }
 
   @Post(':id/return-request/on-behalf')
+  @BankLookupThrottle()
   @Roles(UserRole.FACILITY_MANAGER, UserRole.OPERATIONS_MANAGER, UserRole.ADMIN)
   @ApiOperation({
     summary: 'Open a return request for the customer (phoned the branch, or abandoned the unit)',

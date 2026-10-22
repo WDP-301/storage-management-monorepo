@@ -2,6 +2,7 @@ import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
 import type { Inspection } from '@entities/inspection.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { BanksService } from '@modules/banks/banks.service';
 import { managesFacility, withoutRefundAccount } from '@modules/inspection/inspection-access.util';
 import { SettingsService } from '@modules/settings/settings.service';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
@@ -14,7 +15,6 @@ import {
   openReturnInspection,
 } from './contract-return.util';
 import { ManagedReturnRequestDto } from './dto/managed-return-request.dto';
-import { toRefundBankAccount } from './refund-account.util';
 
 /**
  * Return requests the branch makes for a customer who phoned in or abandoned the unit. Same
@@ -28,6 +28,7 @@ export class ManagedReturnService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly settings: SettingsService,
+    private readonly banks: BanksService,
   ) {}
 
   /** Facility managers only for the facility of the unit; admin and operations everywhere. */
@@ -40,7 +41,10 @@ export class ManagedReturnService {
     const scheduledAt = new Date(dto.scheduledAt);
     assertReturnDayInRange('scheduledAt', scheduledAt, now);
     const rules = await currentReturnRules(this.settings);
-    const refundAccount = dto.refundAccount ? toRefundBankAccount(dto.refundAccount) : null;
+    // Looked up before any lock is taken: the bank call can take seconds.
+    const refundAccount = dto.refundAccount
+      ? await this.banks.verifyAccount(dto.refundAccount)
+      : null;
 
     const created = await this.dataSource.transaction(async (em) => {
       const contract = await em.findOne(Contract, {

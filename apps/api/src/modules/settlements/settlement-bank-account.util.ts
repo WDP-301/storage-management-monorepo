@@ -1,8 +1,7 @@
-import { toRefundBankAccount } from '@modules/contracts/refund-account.util';
 import { HttpStatus } from '@nestjs/common';
 import { DomainException, fieldValidationError } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import type { RefundBankAccount, RefundBankAccountInput } from '@storage/types';
+import type { RefundBankAccount } from '@storage/types';
 
 export interface RefundAccountChoice {
   bankAccount: RefundBankAccount | null;
@@ -10,26 +9,26 @@ export interface RefundAccountChoice {
   overrideReason: string | null;
 }
 
+/**
+ * Same bank and number. The holder name is not compared: it now always comes from the bank, while
+ * accounts saved earlier carry the name the customer typed, and staff confirm identity in person.
+ */
 function sameAccount(a: RefundBankAccount, b: RefundBankAccount): boolean {
   const bank = (account: RefundBankAccount) =>
     account.bankBin ?? `name:${account.bankName.trim().toLowerCase()}`;
-  return (
-    bank(a) === bank(b) &&
-    a.accountNo.trim() === b.accountNo.trim() &&
-    a.accountName.trim() === b.accountName.trim()
-  );
+  return bank(a) === bank(b) && a.accountNo.trim() === b.accountNo.trim();
 }
 
 /**
  * Where the refund goes. With money to refund the reviewer must name the account explicitly;
  * any account other than the one the customer gave (or when they gave none, as older app
  * versions never ask) needs a reason, and the reviewer is recorded as having chosen it.
- * Without a refund no account is kept.
+ * Without a refund no account is kept. `bankAccount` arrives already verified at the bank.
  */
 export function chooseRefundAccount(args: {
   refundAmount: number;
   customerAccount: RefundBankAccount | null;
-  bankAccount?: RefundBankAccountInput;
+  bankAccount?: RefundBankAccount;
   overrideReason?: string;
   actorId: string;
 }): RefundAccountChoice {
@@ -42,7 +41,7 @@ export function chooseRefundAccount(args: {
       { refundAmount: args.refundAmount },
     );
   }
-  const account = toRefundBankAccount(args.bankAccount);
+  const account = args.bankAccount;
   if (args.customerAccount && sameAccount(account, args.customerAccount)) {
     return { bankAccount: account, overrideBy: null, overrideReason: null };
   }

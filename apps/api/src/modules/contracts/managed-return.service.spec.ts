@@ -16,6 +16,7 @@ describe('ManagedReturnService.requestOnBehalf', () => {
   let contract: Partial<Contract> | null;
   let openReturn: Partial<Inspection> | null;
   let service: ManagedReturnService;
+  let banks: { verifyAccount: jest.Mock };
   const dto = {
     scheduledAt: inDays(7),
     note: ' Khách gọi hotline ',
@@ -46,6 +47,14 @@ describe('ManagedReturnService.requestOnBehalf', () => {
       create: jest.fn((_entity, data) => data),
       save: jest.fn(async (_entity, data) => ({ id: 'return-1', ...data })),
     };
+    banks = {
+      verifyAccount: jest.fn(async (input: { bankBin: string; accountNo: string }) => ({
+        bankBin: input.bankBin,
+        bankName: 'BIDV',
+        accountNo: input.accountNo,
+        accountName: 'LE B',
+      })),
+    };
     const settings = {
       getReturnNoticeDays: jest.fn().mockResolvedValue(30),
       getOverduePenaltyPercent: jest.fn().mockResolvedValue(100),
@@ -53,6 +62,7 @@ describe('ManagedReturnService.requestOnBehalf', () => {
     service = new ManagedReturnService(
       { transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)) } as never,
       settings as never,
+      banks as never,
     );
     jest.spyOn(Logger.prototype, 'log').mockImplementation();
   });
@@ -86,14 +96,15 @@ describe('ManagedReturnService.requestOnBehalf', () => {
       {
         ...dto,
         source: ReturnRequestSource.ABANDONED,
-        refundAccount: { bankName: 'Ngân hàng X', accountNo: '1234', accountName: 'lê b' },
+        refundAccount: { bankBin: '970418', accountNo: '1234' },
       },
     );
 
     const saved = em.save.mock.calls[0][1];
+    expect(banks.verifyAccount).toHaveBeenCalledWith({ bankBin: '970418', accountNo: '1234' });
     expect(saved.refundAccount).toEqual({
-      bankBin: null,
-      bankName: 'Ngân hàng X',
+      bankBin: '970418',
+      bankName: 'BIDV',
       accountNo: '1234',
       accountName: 'LE B',
     });

@@ -24,45 +24,38 @@ function load(file) {
 
 const draft = load('../src/features/customer/refund-account-draft.ts');
 const empty = draft.EMPTY_REFUND_ACCOUNT;
-const ready = {
-  ...empty,
-  bankBin: '970436',
-  bankName: 'Vietcombank',
-  accountNo: ' 0123 4567 ',
-  accountName: 'Nguyễn Văn Ạ',
-};
-const sent = {
-  bankBin: '970436',
-  bankName: 'Vietcombank',
-  accountNo: '01234567',
-  accountName: 'NGUYEN VAN A',
-};
+const bank = { bankBin: '970436', bankName: 'Vietcombank' };
+const verified = { ...bank, accountNo: '01234567', accountName: 'NGUYEN VAN A' };
+const ready = { ...empty, ...bank, accountNo: ' 0123 4567 ', verified };
+const sent = { bankBin: '970436', accountNo: '01234567' };
 
-test('refund account draft is pre-filled, validated and sent with the holder name folded', () => {
-  const listed = (bin) => bin === '970436';
-  const saved = {
-    bankBin: '970436',
-    bankName: 'Vietcombank',
-    accountNo: '0123',
-    accountName: 'A B',
-  };
+test('refund account draft is pre-filled, validated and sent as bank + number', () => {
+  const saved = { ...bank, accountNo: '0123 4567', accountName: 'NGUYEN VAN A' };
 
-  assert.equal(draft.draftFromAccount(null, listed), draft.EMPTY_REFUND_ACCOUNT);
-  assert.equal(draft.draftFromAccount(saved, listed).bankBin, '970436');
-  const stale = draft.draftFromAccount({ ...saved, bankBin: '999999' }, listed);
-  assert.deepEqual([stale.bankBin, stale.isOtherBank, stale.bankName], [null, true, 'Vietcombank']);
+  assert.equal(draft.draftFromAccount(null), empty);
+  // Saved before verification existed: no BIN, so nothing to pre-fill.
+  assert.equal(draft.draftFromAccount({ ...saved, bankBin: null }), empty);
+  const prefilled = draft.draftFromAccount(saved);
+  assert.equal(draft.verifiedAccount(prefilled).accountName, 'NGUYEN VAN A');
+  assert.equal(draft.refundAccountProblem(prefilled), null);
 
   assert.equal(draft.isDraftEmpty(empty), true);
   assert.equal(draft.refundAccountProblem(empty), 'Chọn ngân hàng nhận hoàn cọc');
-  assert.equal(draft.refundAccountProblem({ ...empty, isOtherBank: true }), 'Nhập tên ngân hàng');
-  const filled = { ...empty, bankBin: '970436', bankName: 'Vietcombank' };
+  const filled = { ...empty, ...bank };
   assert.match(draft.refundAccountProblem({ ...filled, accountNo: '12' }), /Số tài khoản/);
   assert.equal(
-    draft.refundAccountProblem({ ...filled, accountNo: '0123', accountName: ' ' }),
-    'Nhập tên chủ tài khoản',
+    draft.refundAccountProblem({ ...filled, accountNo: '0123' }),
+    'Kiểm tra tài khoản trước khi gửi',
   );
   assert.equal(draft.refundAccountProblem(ready), null);
   assert.deepEqual(draft.toRefundAccountInput(ready), sent);
+});
+
+test('a verification stops counting once the bank or number changes', () => {
+  assert.equal(draft.verifiedAccount(ready), verified);
+  assert.equal(draft.verifiedAccount({ ...ready, accountNo: '0123 4568' }), null);
+  assert.equal(draft.verifiedAccount({ ...ready, bankBin: '970415' }), null);
+  assert.equal(draft.verifiedAccount({ ...ready, verified: null }), null);
 });
 
 test('a new request needs an account unless the deposit held is known to be zero', () => {
@@ -72,6 +65,11 @@ test('a new request needs an account unless the deposit held is known to be zero
     refundAccount: sent,
   });
   assert.equal(draft.refundAccountPayload(empty, create).problem, 'Chọn ngân hàng nhận hoàn cọc');
+  const unverified = { ...ready, verified: null };
+  assert.equal(
+    draft.refundAccountPayload(unverified, create).problem,
+    'Kiểm tra tài khoản trước khi gửi',
+  );
   const noDeposit = { ...create, required: false };
   assert.deepEqual(draft.refundAccountPayload(empty, noDeposit), { problem: null });
   assert.deepEqual(draft.refundAccountPayload(ready, noDeposit).refundAccount, sent);
@@ -88,9 +86,9 @@ test('a reschedule keeps the stored account unless the customer filled the form 
     problem: null,
     refundAccount: sent,
   });
-  const partial = { ...empty, isOtherBank: true };
-  assert.equal(
+  const partial = { ...empty, ...bank };
+  assert.match(
     draft.refundAccountPayload(partial, { ...edit, touched: true }).problem,
-    'Nhập tên ngân hàng',
+    /Số tài khoản/,
   );
 });

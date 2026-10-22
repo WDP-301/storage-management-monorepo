@@ -6,7 +6,7 @@ import type { ApiError } from '../../lib/api';
 import { SettlementsApi } from '../../lib/settlements-api';
 import type { SettlementDetailRecord } from '../../types/settlement';
 import { RefundBankAccountFields } from './RefundBankAccountFields';
-import { toAccountHolderName } from './refund-account-form';
+import { currentVerification, toAccountHolderName } from './refund-account-form';
 import { SettlementLineDecisions } from './SettlementLineDecisions';
 import { SettlementLinesTable } from './SettlementLinesTable';
 import { approvalOutcome, describeApiError, isStaleSettlementError } from './settlement-display';
@@ -46,7 +46,8 @@ export const SettlementDecisionForm: React.FC<Props> = ({ record, onApproved, on
   const current = preview.record;
   const refund = needsRefundAccount(current);
   const customerName = toAccountHolderName(current.contract.customer.full_name);
-  const holder = toAccountHolderName(form.bank.accountName);
+  const bankVerified = currentVerification(form.bank) !== null;
+  const holder = toAccountHolderName(currentVerification(form.bank)?.accountName ?? '');
   const update = (next: typeof form) => {
     setForm(next);
     setProblems([]);
@@ -112,7 +113,13 @@ export const SettlementDecisionForm: React.FC<Props> = ({ record, onApproved, on
           </p>
           <RefundBankAccountFields
             value={form.bank}
-            onChange={(bank) => update({ ...form, bank })}
+            // Functional update: a bank lookup resolves seconds later, and the reviewer may have
+            // edited other fields meanwhile.
+            onChange={(bank) => {
+              setForm((prev) => ({ ...prev, bank }));
+              setProblems([]);
+              setConfirming(false);
+            }}
             disabled={busy}
           />
           {holder.length > 0 && customerName && holder !== customerName && (
@@ -178,8 +185,14 @@ export const SettlementDecisionForm: React.FC<Props> = ({ record, onApproved, on
         <div className="flex justify-end">
           <Button
             variant="primary"
-            disabled={busy || !preview.fresh}
-            title={preview.fresh ? undefined : 'Đang tính lại số liệu…'}
+            disabled={busy || !preview.fresh || (refund && !bankVerified)}
+            title={
+              preview.fresh
+                ? bankVerified || !refund
+                  ? undefined
+                  : 'Kiểm tra tài khoản nhận tiền hoàn trước'
+                : 'Đang tính lại số liệu…'
+            }
             onClick={askApproval}
           >
             Duyệt quyết toán

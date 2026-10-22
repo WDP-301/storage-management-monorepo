@@ -1,75 +1,78 @@
 import type { RefundBankAccount, RefundBankAccountInput } from '@storage/types';
-import { toAccountHolderName } from '../../../lib/settlement-format';
+import type { VerifiedBankAccount } from '../../../lib/banks-api';
 
-/** The refund account form as typed. `bankBin` null with `isOtherBank` = a bank not listed. */
+/**
+ * The refund account form as filled in. `verified` is the bank's answer for one bank + number; it
+ * only counts while the form still shows that same pair (see `verifiedAccount`).
+ */
 export type RefundAccountDraft = {
   bankBin: string | null;
+  /** Short name of the chosen bank, for display. */
   bankName: string;
-  isOtherBank: boolean;
   accountNo: string;
-  accountName: string;
+  verified: VerifiedBankAccount | null;
 };
 
 export const EMPTY_REFUND_ACCOUNT: RefundAccountDraft = {
   bankBin: null,
   bankName: '',
-  isOtherBank: false,
   accountNo: '',
-  accountName: '',
+  verified: null,
 };
 
 const ACCOUNT_NO = /^[0-9A-Za-z]{4,30}$/;
 
-const compactAccountNo = (value: string) => value.replace(/\s+/g, '');
+export const compactAccountNo = (value: string) => value.replace(/\s+/g, '');
+
+export function isAccountNoValid(value: string): boolean {
+  return ACCOUNT_NO.test(compactAccountNo(value));
+}
 
 /**
- * Pre-fills the form from the account used last time. A BIN the app no longer lists becomes an
- * "other" bank with the saved name, which the server accepts without a BIN.
+ * Pre-fills the form from the account used last time. The server verified it when saving, so it
+ * counts as verified; one saved before verification existed has no bank BIN and is not offered.
  */
 export function draftFromAccount(
   account: RefundBankAccount | null | undefined,
-  isListedBin: (bin: string) => boolean,
 ): RefundAccountDraft {
-  if (!account) return EMPTY_REFUND_ACCOUNT;
-  const listed = account.bankBin !== null && isListedBin(account.bankBin);
+  if (!account || account.bankBin === null) return EMPTY_REFUND_ACCOUNT;
   return {
-    bankBin: listed ? account.bankBin : null,
+    bankBin: account.bankBin,
     bankName: account.bankName,
-    isOtherBank: !listed,
     accountNo: account.accountNo,
-    accountName: account.accountName,
+    verified: {
+      bankBin: account.bankBin,
+      bankName: account.bankName,
+      accountNo: compactAccountNo(account.accountNo),
+      accountName: account.accountName,
+    },
   };
 }
 
+/** The bank's confirmation, only while it still matches the bank and number in the form. */
+export function verifiedAccount(draft: RefundAccountDraft): VerifiedBankAccount | null {
+  const { verified } = draft;
+  if (!verified) return null;
+  const same =
+    verified.bankBin === draft.bankBin && verified.accountNo === compactAccountNo(draft.accountNo);
+  return same ? verified : null;
+}
+
 export function isDraftEmpty(draft: RefundAccountDraft): boolean {
-  return (
-    draft.bankBin === null &&
-    !draft.isOtherBank &&
-    draft.accountNo.trim() === '' &&
-    draft.accountName.trim() === ''
-  );
+  return draft.bankBin === null && draft.accountNo.trim() === '';
 }
 
 /** First problem with the form, worded for the customer; null when it can be sent. */
 export function refundAccountProblem(draft: RefundAccountDraft): string | null {
-  if (draft.bankBin === null && !draft.isOtherBank) return 'Chọn ngân hàng nhận hoàn cọc';
-  if (draft.bankBin === null && draft.bankName.trim() === '') return 'Nhập tên ngân hàng';
-  if (!ACCOUNT_NO.test(compactAccountNo(draft.accountNo))) {
-    return 'Số tài khoản gồm 4–30 chữ số hoặc chữ cái';
-  }
-  const holder = toAccountHolderName(draft.accountName);
-  if (holder.length < 2 || holder.length > 100) return 'Nhập tên chủ tài khoản';
+  if (draft.bankBin === null) return 'Chọn ngân hàng nhận hoàn cọc';
+  if (!isAccountNoValid(draft.accountNo)) return 'Số tài khoản gồm 4–30 chữ số hoặc chữ cái';
+  if (!verifiedAccount(draft)) return 'Kiểm tra tài khoản trước khi gửi';
   return null;
 }
 
-/** Request body form; the server names a listed bank from its BIN. */
+/** Request body form; the server verifies the pair again and names the bank and holder itself. */
 export function toRefundAccountInput(draft: RefundAccountDraft): RefundBankAccountInput {
-  return {
-    bankBin: draft.bankBin,
-    bankName: draft.bankName.trim(),
-    accountNo: compactAccountNo(draft.accountNo),
-    accountName: toAccountHolderName(draft.accountName),
-  };
+  return { bankBin: draft.bankBin ?? '', accountNo: compactAccountNo(draft.accountNo) };
 }
 
 export type RefundAccountPayload = {

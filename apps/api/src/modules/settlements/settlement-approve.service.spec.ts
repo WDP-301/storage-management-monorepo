@@ -72,6 +72,7 @@ describe('SettlementApproveService', () => {
   let saved: { entity: unknown; data: Record<string, any> }[];
   let notifications: { createForUsers: jest.Mock };
   let query: { detail: jest.Mock };
+  let banks: { verifyAccount: jest.Mock };
   let service: SettlementApproveService;
 
   const build = (over: Partial<SettlementInput> = {}): SettlementInput =>
@@ -126,12 +127,22 @@ describe('SettlementApproveService', () => {
       })),
     };
     notifications = { createForUsers: jest.fn(async () => 1) };
+    // The bank answers with its own bank name and holder name.
+    banks = {
+      verifyAccount: jest.fn(async (input: { bankBin: string; accountNo: string }) => ({
+        bankBin: input.bankBin,
+        bankName: 'Vietcombank',
+        accountNo: input.accountNo,
+        accountName: 'NGUYEN VAN A',
+      })),
+    };
     query = { detail: jest.fn(async () => ({ status: 'detail' })) };
     service = new SettlementApproveService(
       { transaction: jest.fn((cb) => cb(em)) } as never,
       {} as never,
       notifications as never,
       query as never,
+      banks as never,
     );
   });
 
@@ -376,12 +387,7 @@ describe('SettlementApproveService', () => {
     const dto = {
       ...decisions,
       expectedVersion: versionOf(decisions),
-      bankAccount: {
-        bankBin: null,
-        bankName: 'Ngân hàng X',
-        accountNo: '999988887777',
-        accountName: 'Lê Bình',
-      },
+      bankAccount: { bankBin: '970418', accountNo: '999988887777' },
     };
 
     await expect(service.approve('contract-1', dto, OPS)).rejects.toMatchObject({
@@ -397,10 +403,32 @@ describe('SettlementApproveService', () => {
     expect(inserted()).toMatchObject({
       refundAmount: 1850000,
       customerBankAccount: null,
-      bankAccount: { bankBin: null, bankName: 'Ngân hàng X', accountName: 'LE BINH' },
+      bankAccount: { bankBin: '970418', accountNo: '999988887777', accountName: 'NGUYEN VAN A' },
       bankOverrideBy: 'ops-1',
       bankOverrideReason: 'Khách cung cấp qua kênh khác',
     });
+  });
+
+  it('stores the account as the bank reports it, looked up before any lock', async () => {
+    const dto = {
+      expectedVersion: versionOf(),
+      bankAccount: { ...ACCOUNT, accountName: 'typed by hand' },
+    };
+    await service.approve('contract-1', dto, OPS);
+
+    expect(banks.verifyAccount).toHaveBeenCalledWith(dto.bankAccount);
+    expect(banks.verifyAccount.mock.invocationCallOrder[0]).toBeLessThan(
+      (em.exists as jest.Mock).mock.invocationCallOrder[0],
+    );
+    expect(inserted()).toMatchObject({ bankAccount: ACCOUNT, bankOverrideBy: null });
+  });
+
+  it('approves nothing when the bank rejects the account', async () => {
+    banks.verifyAccount.mockRejectedValueOnce(Object.assign(new Error('invalid'), { status: 400 }));
+    await expect(
+      service.approve('contract-1', { expectedVersion: versionOf(), bankAccount: ACCOUNT }, OPS),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(em.insert).not.toHaveBeenCalled();
   });
 
   it('needs a reason to send the refund elsewhere than the customer asked', async () => {

@@ -73,6 +73,7 @@ describe('ContractReturnService', () => {
     service = new ContractReturnService(
       { transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)) } as never,
       settings as never,
+      { verifyAccount: jest.fn().mockResolvedValue(ACCOUNT) } as never,
     );
   });
 

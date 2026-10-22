@@ -14,11 +14,12 @@ class ApiError extends Error {
   }
 }
 
-function loadReturnErrors() {
-  const filename = path.join(__dirname, '../src/features/customer/return-errors.ts');
+function loadReturnErrors(file = 'return-errors.ts') {
+  const filename = path.join(__dirname, '../src/features/customer', file);
   const mod = new Module(filename);
   mod.require = (name) => {
     if (name === '../../../lib/api') return { ApiError };
+    if (name === './bank-verify-errors') return loadReturnErrors('bank-verify-errors.ts');
     throw new Error(`Unexpected import: ${name}`);
   };
   mod._compile(

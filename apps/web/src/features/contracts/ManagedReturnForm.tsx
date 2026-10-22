@@ -9,6 +9,7 @@ import type { ManagedReturnRequestInput } from '../../types/settlement';
 import { RefundBankAccountFields } from './RefundBankAccountFields';
 import {
   type BankFormState,
+  currentVerification,
   EMPTY_BANK_FORM,
   toBankAccountInput,
   validateBankForm,
@@ -134,7 +135,7 @@ export const ManagedReturnForm: React.FC<Props> = ({ contract, canRequest, onCha
           disabled={busy}
           onChange={(e) => setWithAccount(e.target.checked)}
         />
-        Nhập tài khoản nhận hoàn cọc (tuỳ chọn)
+        Nhập tài khoản nhận hoàn cọc (tuỳ chọn, phải kiểm tra tại ngân hàng)
       </label>
       {withAccount && <RefundBankAccountFields value={bank} onChange={setBank} disabled={busy} />}
       {error && (
@@ -150,7 +151,12 @@ export const ManagedReturnForm: React.FC<Props> = ({ contract, canRequest, onCha
         <Button type="button" variant="secondary" disabled={busy} onClick={() => setOpen(false)}>
           Đóng
         </Button>
-        <Button type="submit" variant="primary" loading={busy}>
+        <Button
+          type="submit"
+          variant="primary"
+          loading={busy}
+          disabled={withAccount && !currentVerification(bank)}
+        >
           Tạo yêu cầu trả kho
         </Button>
       </div>

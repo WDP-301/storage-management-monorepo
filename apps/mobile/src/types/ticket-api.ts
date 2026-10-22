@@ -96,6 +96,13 @@ export type CreateTicketInput = {
   attachments?: TicketAttachment[];
 };
 
+/** Fields staff may send while processing a ticket; priority is left to managers. */
+export type UpdateTicketInput = {
+  status?: TicketStatus;
+  resolution?: string | null;
+  attachments?: TicketAttachment[];
+};
+
 export type ListTicketsParams = {
   page?: number;
   limit?: number;

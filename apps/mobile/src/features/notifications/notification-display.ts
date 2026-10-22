@@ -25,6 +25,7 @@ export type NotificationDisplay = {
 const KNOWN_TYPES: Record<NotificationType, NotificationDisplay> = {
   TICKET_CREATED: { label: 'Yêu cầu hỗ trợ', icon: 'ticket', tone: 'accent' },
   TICKET_UPDATED: { label: 'Yêu cầu hỗ trợ', icon: 'ticket', tone: 'accent' },
+  TICKET_ASSIGNED: { label: 'Được phân công', icon: 'ticket', tone: 'warning' },
   INVOICE_ISSUED: { label: 'Hóa đơn', icon: 'invoice', tone: 'warning' },
   INVOICE_PAID: { label: 'Thanh toán', icon: 'paid', tone: 'success' },
   RETURN_FINALIZED: { label: 'Trả kho', icon: 'return', tone: 'accent' },
@@ -52,15 +53,27 @@ function idOf(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value : null;
 }
 
+/** Detail screens a notification can open, per app area — staff never land on customer routes. */
+const TARGET_ROUTES = {
+  customer: { contract: '/(customer)/contract-detail', ticket: '/(customer)/ticket-detail' },
+  staff: { contract: '/(staff)/staff-contract', ticket: '/(staff)/staff-ticket' },
+} as const;
+
+export type NotificationArea = keyof typeof TARGET_ROUTES;
+
 /**
  * Screen a notification opens: its contract, else its ticket; null when `data` points nowhere
  * (e.g. an invoice notification), in which case tapping only marks it read.
  */
-export function notificationHref(data: Record<string, unknown>): string | null {
+export function notificationHref(
+  data: Record<string, unknown>,
+  area: NotificationArea = 'customer',
+): string | null {
+  const routes = TARGET_ROUTES[area];
   const contractId = idOf(data.contractId);
-  if (contractId) return `/(customer)/contract-detail?id=${encodeURIComponent(contractId)}`;
+  if (contractId) return `${routes.contract}?id=${encodeURIComponent(contractId)}`;
   const ticketId = idOf(data.ticketId);
-  if (ticketId) return `/(customer)/ticket-detail?id=${encodeURIComponent(ticketId)}`;
+  if (ticketId) return `${routes.ticket}?id=${encodeURIComponent(ticketId)}`;
   return null;
 }
 

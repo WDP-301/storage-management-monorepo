@@ -4,6 +4,7 @@ import type { NotificationRecord } from '../../types/notification-api';
 import { NotificationRow } from './NotificationRow';
 
 type Props = {
+  subtitle: string;
   notifications: NotificationRecord[];
   unread: number;
   error: string | null;
@@ -19,6 +20,7 @@ type Props = {
 };
 
 export function NotificationsScreen({
+  subtitle,
   notifications,
   unread,
   error,
@@ -48,9 +50,7 @@ export function NotificationsScreen({
         <View className="gap-3 pb-1 pt-5">
           <View>
             <Text className="font-strong text-foreground text-title-md">Thông báo</Text>
-            <Text className="font-body mt-1 text-body-sm text-muted">
-              Cập nhật về hợp đồng, hóa đơn và yêu cầu hỗ trợ
-            </Text>
+            <Text className="font-body mt-1 text-body-sm text-muted">{subtitle}</Text>
           </View>
 
           {error ? (

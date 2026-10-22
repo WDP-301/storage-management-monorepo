@@ -1,1 +1,1 @@
-export type StaffTab = 'today' | 'scan' | 'requests' | 'settings';
+export type StaffTab = 'today' | 'scan' | 'requests' | 'notifications' | 'settings';

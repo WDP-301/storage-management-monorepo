@@ -137,6 +137,22 @@ function ticketUpdatedNotification(
   };
 }
 
+function ticketAssignedNotification(
+  ticket: Pick<ServiceTicket, 'id' | 'ticketNo' | 'subject' | 'status' | 'priority'>,
+): NotificationPayload {
+  return {
+    type: NotificationType.TICKET_ASSIGNED,
+    title: `Ticket #${ticket.ticketNo} was assigned to you`,
+    body: `You were assigned ticket "${ticket.subject}" (priority: ${ticket.priority}).`,
+    data: {
+      ticketId: ticket.id,
+      ticketNo: ticket.ticketNo,
+      status: ticket.status,
+      priority: ticket.priority,
+    },
+  };
+}
+
 @Injectable()
 export class ServiceTicketsService {
   constructor(
@@ -432,14 +448,27 @@ export class ServiceTicketsService {
     }
     ticket.history = history;
 
-    const saved = await this.tickets.save(ticket);
+    // The new assignee is told in the same transaction as the save. Re-assigning the same
+    // person, or a manager assigning themselves, is not news to them.
+    const recipients =
+      assignee.id !== previousAssigneeId && assignee.id !== actor.id ? [assignee.id] : [];
+    const saved = await this.dataSource.transaction(async (em) => {
+      const row = await em.getRepository(ServiceTicket).save(ticket);
+      await this.notificationsService.createForUsers(
+        em,
+        recipients,
+        ticketAssignedNotification(row),
+      );
+      return row;
+    });
     return { ticket: toServiceTicketRecord(await this.findTicketOrFail(saved.id)) };
   }
 
   /**
-   * Lets a staff member update processing fields (status/priority/resolution/attachments)
-   * of a ticket assigned to them. `assigned_to`, ownership ids and `resolved_at` are never
-   * taken from the request; `resolved_at` is derived from the status transition. CANCELLED
+   * Lets a staff member update processing fields (status/resolution/attachments) of a ticket
+   * assigned to them; priority stays with facility managers and admins. `assigned_to`,
+   * ownership ids and `resolved_at` are never taken from the request; `resolved_at` is
+   * derived from the status transition. CANCELLED
    * belongs to the cancel endpoint (owner/manager authorization), and terminal tickets
    * are immutable. Status only moves forward along STATUS_FLOW; CLOSED stays settable as
    * its own end state (e.g. dropped or resolved informally) — RESOLVED already ends the
@@ -487,6 +516,22 @@ export class ServiceTicketsService {
         'invalidTransition',
         `Cannot move a ${ticket.status} ticket backwards to ${dto.status}`,
       );
+    }
+
+    // Priority is the manager's call: assigned staff may move the work along but not re-rank it.
+    if (
+      dto.priority !== undefined &&
+      dto.priority !== ticket.priority &&
+      !actor.roles.includes(UserRole.ADMIN)
+    ) {
+      if (!actor.roles.includes(UserRole.FACILITY_MANAGER)) {
+        throw this.fieldValidationError(
+          'priority',
+          'notAllowed',
+          'Only a facility manager can change the priority',
+        );
+      }
+      await this.assertManagesFacility(actor, ticket.facilityId);
     }
 
     // What this update really changes — drives the owner's TICKET_UPDATED notification.

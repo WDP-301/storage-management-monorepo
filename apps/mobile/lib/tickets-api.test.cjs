@@ -89,3 +89,18 @@ test('cancel PATCHes the cancel endpoint and returns the ticket', async () => {
   assert.equal(calls[0].init.method, 'PATCH');
   assert.equal(ticket.status, 'CANCELLED');
 });
+
+test('update PATCHes the ticket with a JSON body and unwraps the ticket', async () => {
+  const calls = [];
+  const { TicketsApi } = loadTicketsApi(async (path, init) => {
+    calls.push({ path, init });
+    return { ticket: { id: 't-1', status: 'IN_PROGRESS' } };
+  });
+
+  const ticket = await TicketsApi.update('t-1', { status: 'IN_PROGRESS' });
+
+  assert.equal(calls[0].path, '/service-tickets/t-1');
+  assert.equal(calls[0].init.method, 'PATCH');
+  assert.deepEqual(JSON.parse(calls[0].init.body), { status: 'IN_PROGRESS' });
+  assert.equal(ticket.status, 'IN_PROGRESS');
+});

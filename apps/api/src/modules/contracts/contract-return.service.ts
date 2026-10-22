@@ -1,5 +1,6 @@
 import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
+import { BanksService } from '@modules/banks/banks.service';
 import { forContractOwner } from '@modules/inspection/inspection-access.util';
 import { SettingsService } from '@modules/settings/settings.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
@@ -17,7 +18,7 @@ import {
   returnConflict,
 } from './contract-return.util';
 import { ReturnRequestDto, UpdateReturnRequestDto } from './dto/return-request.dto';
-import { rememberRefundAccount, toRefundBankAccount } from './refund-account.util';
+import { rememberRefundAccount } from './refund-account.util';
 
 /** Staff wrote something on the return, so it is now part of the inspection record. */
 const staffStarted = (inspection: Inspection): boolean =>
@@ -32,6 +33,7 @@ export class ContractReturnService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly settings: SettingsService,
+    private readonly banks: BanksService,
   ) {}
 
   /** Opens a RETURN inspection on the requested day; the refund account is optional. */
@@ -44,7 +46,10 @@ export class ContractReturnService {
     const scheduledAt = new Date(dto.scheduledAt);
     assertReturnDayInRange('scheduledAt', scheduledAt, now);
     const rules = await currentReturnRules(this.settings);
-    const refundAccount = dto.refundAccount ? toRefundBankAccount(dto.refundAccount) : null;
+    // Looked up before any lock is taken: the bank call can take seconds.
+    const refundAccount = dto.refundAccount
+      ? await this.banks.verifyAccount(dto.refundAccount)
+      : null;
 
     const created = await this.dataSource.transaction(async (em) => {
       // The contract lock serializes double taps: at most one open return per contract.
@@ -79,7 +84,10 @@ export class ContractReturnService {
   ): Promise<Inspection> {
     const now = new Date();
     const scheduledAt = dto.scheduledAt ? new Date(dto.scheduledAt) : null;
-    const refundAccount = dto.refundAccount ? toRefundBankAccount(dto.refundAccount) : null;
+    // Looked up before any lock is taken: the bank call can take seconds.
+    const refundAccount = dto.refundAccount
+      ? await this.banks.verifyAccount(dto.refundAccount)
+      : null;
 
     const saved = await this.dataSource.transaction(async (em) => {
       const inspection = await this.lockOpenReturn(em, contractId, customerId);

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { settlementLine, settlementRecord } from '../../test-utils/settlement-fixtures';
 import type { RefundBankAccount, SettlementTotals } from '../../types/settlement';
-import { OTHER_BANK } from './refund-account-form';
 import { validateRefundProof } from './refund-proof-form';
 import {
   approvalProblems,
@@ -19,7 +18,12 @@ const CUSTOMER_ACCOUNT: RefundBankAccount = {
   accountName: 'NGUYEN VAN AN',
 };
 const TOTALS = settlementRecord().totals as SettlementTotals;
-const VCB_FORM = { bankBin: '970436', bankName: '', accountNo: '0123456789' };
+const VERIFIED_ACCOUNT = {
+  bankBin: '970436',
+  bankName: 'Vietcombank',
+  accountNo: '0123456789',
+  accountName: 'NGUYEN VAN AN',
+};
 
 const REVIEW_CREDIT = settlementLine({
   type: 'REVIEW_PAYMENT_CREDIT',
@@ -60,18 +64,34 @@ describe('settlement form', () => {
   it('pre-fills the account the customer gave and needs no reason to keep it', () => {
     const record = settlementRecord({ customer_bank_account: CUSTOMER_ACCOUNT });
     const form = initSettlementForm(record);
-    expect(form.bank).toEqual({ ...VCB_FORM, accountName: 'NGUYEN VAN AN' });
+    expect(form.bank).toEqual({ bankBin: '970436', accountNo: '0123456789', verified: null });
     expect(form.bankReason).toBe('');
+    expect(approvalProblems(form, record)).toEqual(['Kiểm tra tài khoản ngân hàng trước khi gửi.']);
+    form.bank = { ...form.bank, verified: VERIFIED_ACCOUNT };
     expect(approvalProblems(form, record)).toEqual([]);
     const input = buildApproveInput(form, record);
-    expect(input.bankAccount).toEqual({ ...CUSTOMER_ACCOUNT });
+    expect(input.bankAccount).toEqual({ bankBin: '970436', accountNo: '0123456789' });
     expect(input.bankOverrideReason).toBeUndefined();
+  });
+
+  it('needs no reason when the bank names the holder differently from what the customer typed', () => {
+    const record = settlementRecord({
+      customer_bank_account: { ...CUSTOMER_ACCOUNT, accountName: 'Typed By Customer' },
+    });
+    const form = initSettlementForm(record);
+    form.bank = { ...form.bank, verified: VERIFIED_ACCOUNT };
+    expect(approvalProblems(form, record)).toEqual([]);
+    expect(buildApproveInput(form, record).bankOverrideReason).toBeUndefined();
   });
 
   it('asks for a reason once the reviewer changes the customer account', () => {
     const record = settlementRecord({ customer_bank_account: CUSTOMER_ACCOUNT });
     const form = initSettlementForm(record);
-    form.bank = { ...form.bank, accountNo: '999988887777' };
+    form.bank = {
+      ...form.bank,
+      accountNo: '999988887777',
+      verified: { ...VERIFIED_ACCOUNT, accountNo: '999988887777', accountName: 'TRAN VAN BINH' },
+    };
     expect(approvalProblems(form, record)).toEqual([
       'Nhập lý do dùng tài khoản khác tài khoản khách đã cung cấp.',
     ]);
@@ -81,30 +101,24 @@ describe('settlement form', () => {
     expect(input.bankAccount?.accountNo).toBe('999988887777');
   });
 
-  it('sends a typed account for an unlisted bank, holder name normalized like the bank prints it', () => {
+  it('blocks approval until the bank confirms the account, and drops a stale confirmation', () => {
     const record = settlementRecord();
     const form = initSettlementForm(record);
     expect(approvalProblems(form, record)).toEqual(['Chọn ngân hàng nhận tiền hoàn.']);
-    form.bank = {
-      bankBin: OTHER_BANK,
-      bankName: 'Ngân hàng Địa phương',
-      accountNo: '12345678',
-      accountName: 'Nguyễn  Văn   Đức',
-    };
+    form.bank = { bankBin: '970436', accountNo: '12', verified: null };
+    expect(approvalProblems(form, record)).toEqual(['Số tài khoản gồm 4–30 chữ hoặc số.']);
+    form.bank = { bankBin: '970436', accountNo: '0123456789', verified: VERIFIED_ACCOUNT };
     expect(approvalProblems(form, record)).toEqual([]);
     expect(buildApproveInput(form, record)).toEqual({
       damageDecisions: [{ index: 0, amount: 200000 }],
       creditDecisions: [],
       waivedLines: [],
       expectedVersion: 'a'.repeat(64),
-      bankAccount: {
-        bankBin: null,
-        bankName: 'Ngân hàng Địa phương',
-        accountNo: '12345678',
-        accountName: 'NGUYEN VAN DUC',
-      },
+      bankAccount: { bankBin: '970436', accountNo: '0123456789' },
       bankOverrideReason: DEFAULT_OVERRIDE_REASON,
     });
+    form.bank = { ...form.bank, accountNo: '0123456780' };
+    expect(approvalProblems(form, record)).toEqual(['Kiểm tra tài khoản ngân hàng trước khi gửi.']);
   });
 
   it('needs no account when nothing is refunded', () => {

@@ -5,18 +5,22 @@ import type { ReturnRequestSource } from './domain.enums';
 
 /** Where the customer wants the deposit refunded; frozen on the return request. */
 export interface RefundBankAccount {
-  /** VietQR BIN from VN_BANKS; null when the bank is not listed ("other"). */
+  /** BIN from the bank directory; null only on accounts saved before verification existed. */
   bankBin: string | null;
   bankName: string;
   accountNo: string;
-  /** Account holder as the bank prints it: upper case, no diacritics. */
+  /** Account holder as the bank returns it: upper case, no diacritics. */
   accountName: string;
 }
 
-/** Request body form: an unlisted bank simply omits the BIN. */
-export type RefundBankAccountInput = Omit<RefundBankAccount, 'bankBin'> & {
-  bankBin?: string | null;
-};
+/**
+ * Request body form. The API looks the account up at the bank and stores the bank's own bank
+ * name and holder name, so only the BIN and number are needed.
+ */
+export interface RefundBankAccountInput {
+  bankBin: string;
+  accountNo: string;
+}
 
 /** What the customer sees of a refund account: only the last digits of the number. */
 export interface MaskedRefundBankAccount {

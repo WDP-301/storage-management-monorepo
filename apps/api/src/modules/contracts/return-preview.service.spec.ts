@@ -7,7 +7,7 @@ import { ReturnPreviewService } from './return-preview.service';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const inDays = (days: number) => `${addVietnamDays(vietnamToday(), days)}T05:00:00.000Z`;
-const SAVED = { bankBin: null, bankName: 'Ngân hàng X', accountNo: '1234', accountName: 'LE B' };
+const SAVED = { bankBin: '970418', bankName: 'BIDV', accountNo: '1234', accountName: 'LE B' };
 
 describe('ReturnPreviewService.preview', () => {
   let em: { findOne: jest.Mock; query: jest.Mock };

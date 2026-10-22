@@ -1,4 +1,5 @@
 import { ApiError } from '../../../lib/api';
+import { bankCheckErrorMessage, isBankCheckError } from './bank-verify-errors';
 
 const NOT_FOUND = 'Yêu cầu trả kho không còn — tải lại trang';
 const DAY_OUT_OF_RANGE = 'Chọn ngày trong 365 ngày tới';
@@ -21,6 +22,8 @@ export function returnErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof ApiError)) return fallback;
   // No status: the request never reached the API; its message says so in Vietnamese.
   if (error.statusCode === undefined || error.statusCode === 409) return error.message;
+  // The server re-checks the account on save and can refuse it with the same errors as the check.
+  if (isBankCheckError(error)) return bankCheckErrorMessage(error);
   if (error.statusCode === 404) return NOT_FOUND;
   if (error.statusCode === 400) {
     const fields = invalidFields(error.details);

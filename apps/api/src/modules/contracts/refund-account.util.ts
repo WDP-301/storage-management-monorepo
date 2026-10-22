@@ -1,4 +1,4 @@
-import { findVnBank, type RefundBankAccount, type RefundBankAccountInput } from '@storage/types';
+import type { RefundBankAccount } from '@storage/types';
 import type { EntityManager } from 'typeorm';
 
 /**
@@ -15,26 +15,13 @@ export function toAccountHolderName(name: string): string {
     .trim();
 }
 
-/**
- * The account as stored: a listed bank is named from VN_BANKS so the BIN and name always agree;
- * an unlisted bank keeps the name the customer typed and has no BIN.
- */
-export function toRefundBankAccount(input: RefundBankAccountInput): RefundBankAccount {
-  const bank = input.bankBin ? findVnBank(input.bankBin) : undefined;
-  if (input.bankBin && !bank) throw new RangeError(`Unknown bank BIN: ${input.bankBin}`);
-  return {
-    bankBin: bank?.bin ?? null,
-    bankName: bank?.shortName ?? input.bankName.trim(),
-    accountNo: input.accountNo.trim(),
-    accountName: toAccountHolderName(input.accountName),
-  };
-}
-
 const isText = (value: unknown): value is string => typeof value === 'string' && value !== '';
 
 /**
  * The refund account the customer used last time, to pre-fill the next request. Read with plain
- * SQL: many customers have no profile row, and a soft-deleted profile pre-fills nothing.
+ * SQL: many customers have no profile row, and a soft-deleted profile pre-fills nothing. An
+ * account saved without a BIN (before accounts were verified) cannot be re-verified, so it
+ * pre-fills nothing either.
  */
 export async function loadSavedRefundAccount(
   em: EntityManager,
@@ -47,9 +34,9 @@ export async function loadSavedRefundAccount(
   );
   const account = row?.account;
   if (!account || !isText(account.bankName) || !isText(account.accountNo)) return null;
-  if (!isText(account.accountName)) return null;
+  if (!isText(account.accountName) || !isText(account.bankBin)) return null;
   return {
-    bankBin: isText(account.bankBin) ? account.bankBin : null,
+    bankBin: account.bankBin,
     bankName: account.bankName,
     accountNo: account.accountNo,
     accountName: account.accountName,

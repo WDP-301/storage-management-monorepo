@@ -150,12 +150,7 @@ test('return request calls send the Vietnam day at noon UTC and the refund accou
     calls.push({ path, init });
     return { id: 'r1' };
   });
-  const refundAccount = {
-    bankBin: '970436',
-    bankName: 'Vietcombank',
-    accountNo: '0123',
-    accountName: 'A B',
-  };
+  const refundAccount = { bankBin: '970436', accountNo: '0123' };
   await ContractsApi.returnPreview('c1', '2027-04-12');
   await ContractsApi.requestReturn('c1', { dayIso: '2027-04-12', note: '', refundAccount });
   await ContractsApi.updateReturn('c1', { note: '' });

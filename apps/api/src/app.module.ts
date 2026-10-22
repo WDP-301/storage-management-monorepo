@@ -10,6 +10,7 @@ import { AccessModule } from './modules/access/access.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AmenitiesModule } from './modules/amenities/amenities.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { BanksModule } from './modules/banks/banks.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
 import { ChangeRequestsModule } from './modules/change-requests/change-requests.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
@@ -75,6 +76,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
     UploadModule,
     CustomerModule,
     PlacesModule,
+    BanksModule,
     PaymentsModule,
     QueueModule,
     InvoicesModule,

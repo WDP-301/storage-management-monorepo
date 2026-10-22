@@ -41,6 +41,8 @@ export enum ErrorCode {
   DECISION_REQUIRED = 'DECISION_REQUIRED',
   /** There is money to refund but no bank account to send it to. */
   REFUND_ACCOUNT_REQUIRED = 'REFUND_ACCOUNT_REQUIRED',
+  /** The bank says the BIN or account number does not exist. */
+  BANK_ACCOUNT_INVALID = 'BANK_ACCOUNT_INVALID',
   REFUND_NOT_PENDING = 'REFUND_NOT_PENDING',
   /** The upload is evidence of a finalized inspection or a settlement and cannot be deleted. */
   FILE_IN_USE = 'FILE_IN_USE',

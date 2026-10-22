@@ -1,45 +1,20 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { type RefundBankAccountInput, VN_BANKS } from '@storage/types';
+import type { RefundBankAccountInput } from '@storage/types';
 import { Transform } from 'class-transformer';
-import {
-  IsIn,
-  IsNotEmpty,
-  IsString,
-  Length,
-  Matches,
-  MaxLength,
-  ValidateIf,
-} from 'class-validator';
-import { toAccountHolderName } from '../refund-account.util';
-
-const VN_BANK_BINS = VN_BANKS.map((bank) => bank.bin);
+import { IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
-/** Where the customer wants the deposit refunded. */
+/**
+ * Where the deposit is refunded. The account is looked up at the bank before it is saved; the
+ * bank's own bank name and holder name are stored.
+ */
 export class RefundAccountDto implements RefundBankAccountInput {
-  @ApiPropertyOptional({
-    nullable: true,
-    example: '970436',
-    description: 'VietQR BIN from VN_BANKS; omit (or null) for a bank that is not listed',
-  })
-  // An empty choice means "other bank", same as leaving it out.
-  @Transform(({ value }) => (typeof value === 'string' && value.trim() === '' ? null : value))
-  @ValidateIf((_object, value) => value != null)
-  @IsIn(VN_BANK_BINS, { message: 'bankBin must be the BIN of a bank in VN_BANKS' })
-  bankBin?: string | null;
-
-  @ApiProperty({
-    maxLength: 100,
-    example: 'Vietcombank',
-    description: 'Required for an unlisted bank; replaced by the listed name when bankBin is set',
-  })
+  @ApiProperty({ example: '970436', description: 'BIN from GET /banks' })
   @Transform(trim)
-  @ValidateIf((object: RefundAccountDto) => object.bankBin == null || object.bankName != null)
   @IsString()
-  @IsNotEmpty()
-  @MaxLength(100)
-  bankName: string;
+  @Matches(/^\d{6}$/, { message: 'bankBin must be a 6-digit BIN' })
+  bankBin: string;
 
   @ApiProperty({ example: '0123456789', pattern: '^[0-9A-Za-z]{4,30}$' })
   @Transform(trim)
@@ -47,14 +22,16 @@ export class RefundAccountDto implements RefundBankAccountInput {
   @Matches(/^[0-9A-Za-z]{4,30}$/, { message: 'accountNo must be 4-30 letters or digits' })
   accountNo: string;
 
-  @ApiProperty({
-    minLength: 2,
-    maxLength: 100,
-    example: 'NGUYEN VAN A',
-    description: 'Stored upper case without diacritics, as banks print it',
-  })
-  @Transform(({ value }) => (typeof value === 'string' ? toAccountHolderName(value) : value))
+  // Older app versions still send the names they asked for; they are accepted and ignored.
+  @ApiPropertyOptional({ deprecated: true, description: 'Ignored: the bank name is looked up' })
+  @IsOptional()
   @IsString()
-  @Length(2, 100)
-  accountName: string;
+  @MaxLength(100)
+  bankName?: string;
+
+  @ApiPropertyOptional({ deprecated: true, description: 'Ignored: the holder name is looked up' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  accountName?: string;
 }

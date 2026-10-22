@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { ContractSettlement } from '@entities/contract-settlement.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { BanksService } from '@modules/banks/banks.service';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { SettingsService } from '@modules/settings/settings.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
@@ -35,6 +36,7 @@ export class SettlementApproveService {
     private readonly settings: SettingsService,
     private readonly notifications: NotificationsService,
     private readonly query: SettlementQueryService,
+    private readonly banks: BanksService,
   ) {}
 
   /**
@@ -48,6 +50,10 @@ export class SettlementApproveService {
     actor: AuthUser,
   ): Promise<SettlementDetailRecord> {
     const now = new Date();
+    // Looked up before the locks are taken: the bank call can take seconds.
+    const bankAccount = dto.bankAccount
+      ? await this.banks.verifyAccount(dto.bankAccount)
+      : undefined;
     try {
       await this.dataSource.transaction(async (em) => {
         const contract = await loadEndedContract(em, contractId, { lock: true });
@@ -85,7 +91,7 @@ export class SettlementApproveService {
         const account = chooseRefundAccount({
           refundAmount: totals.refund_amount,
           customerAccount: input.customerBankAccount,
-          bankAccount: dto.bankAccount,
+          bankAccount,
           overrideReason: dto.bankOverrideReason,
           actorId: actor.id,
         });

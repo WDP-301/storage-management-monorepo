@@ -2,12 +2,15 @@ import { useRouter } from 'expo-router';
 import { depositStage } from '../../lib/booking-payment-state';
 import { useHold } from '../../lib/hold';
 import { useSession } from '../../lib/session';
+import { ShelfAccessCard } from '../../src/features/customer/ShelfAccessCard';
+import { useMyContracts } from '../../src/features/customer/use-my-contracts';
 import { SettingsScreen } from '../../src/features/settings/SettingsScreen';
 
 export default function SettingsRoute() {
   const router = useRouter();
   const { user, isLoggingOut, logout } = useSession();
   const { bookings, now, isLoading, error } = useHold();
+  const { contracts } = useMyContracts();
   const rentalUnitCount = bookings
     .filter((booking) => booking.status === 'CONFIRMED')
     .reduce((sum, booking) => sum + booking.items.length, 0);
@@ -25,6 +28,7 @@ export default function SettingsRoute() {
       isLoggingOut={isLoggingOut}
       onLogout={logout}
       onSupport={() => router.navigate('/(customer)/tickets')}
+      accessCard={<ShelfAccessCard contracts={contracts} />}
     />
   );
 }

@@ -7,7 +7,6 @@ import type { ApiBooking } from '../../types/booking-api';
 import type { ApiContract } from '../../types/contract-api';
 import { BookingHoldCard, ClosedBookingRow } from './BookingHoldCard';
 import { ContractCard } from './ContractCard';
-import { ShelfAccessCard } from './ShelfAccessCard';
 
 type Props = {
   bookings: ApiBooking[];
@@ -130,8 +129,6 @@ export function MyStorageScreen({
         <Text className="font-body mt-1 text-body-sm text-muted">
           Theo dõi kho đang thuê, đặt cọc và lịch sử.
         </Text>
-
-        <ShelfAccessCard contracts={contracts} />
 
         {error ? (
           <View className="mt-4 rounded-xl border border-danger/30 bg-danger-bg p-3">

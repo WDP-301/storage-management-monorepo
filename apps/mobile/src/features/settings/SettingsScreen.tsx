@@ -12,6 +12,8 @@ type Props = {
   onSupport?: () => void;
   rentalUnitCount?: number | null;
   pendingDepositCount?: number | null;
+  /** Customer-only: the check-in code, shown right under the identity card. */
+  accessCard?: ReactNode;
 };
 
 /** Mirror the colour tokens in global.css; SVG icons cannot read a Tailwind class. */
@@ -25,6 +27,7 @@ export function SettingsScreen({
   onSupport,
   rentalUnitCount,
   pendingDepositCount,
+  accessCard,
 }: Props) {
   const initial = user.fullName.trim().charAt(0).toUpperCase() || 'S';
 
@@ -79,6 +82,8 @@ export function SettingsScreen({
             </View>
           </View>
         </View>
+
+        {accessCard ? <View className="mx-4">{accessCard}</View> : null}
 
         {rentalUnitCount !== undefined ? (
           <View className="mx-4 mt-4 flex-row rounded-xl bg-surface-secondary p-3">

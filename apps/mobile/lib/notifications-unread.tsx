@@ -24,8 +24,9 @@ type UnreadContextValue = {
 const UnreadContext = createContext<UnreadContextValue | null>(null);
 
 /**
- * Holds the unread count for the customer tab bar. It refreshes on mount and whenever the app
- * returns to the foreground — there is no push and no polling, so that is how new mail shows up.
+ * Holds the unread count for the tab bar's bell, in both the customer and staff areas. It
+ * refreshes on mount and whenever the app returns to the foreground — there is no push and no
+ * polling, so that is how new mail shows up.
  */
 export function NotificationsUnreadProvider({ children }: { children: ReactNode }) {
   const [unread, setUnreadState] = useState(0);

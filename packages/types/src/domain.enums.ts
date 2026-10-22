@@ -301,6 +301,7 @@ export type NotificationStatus = (typeof NotificationStatus)[keyof typeof Notifi
 export const NotificationType = {
   TICKET_CREATED: 'TICKET_CREATED',
   TICKET_UPDATED: 'TICKET_UPDATED',
+  TICKET_ASSIGNED: 'TICKET_ASSIGNED',
   INVOICE_ISSUED: 'INVOICE_ISSUED',
   INVOICE_PAID: 'INVOICE_PAID',
   RETURN_FINALIZED: 'RETURN_FINALIZED',

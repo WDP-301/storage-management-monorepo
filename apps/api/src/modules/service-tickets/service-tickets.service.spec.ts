@@ -998,19 +998,36 @@ describe('ServiceTicketsService', () => {
       },
     );
 
-    it('lets staff change the priority with a history entry', async () => {
+    it("forbids staff from changing the priority — that is the manager's call", async () => {
       tickets.findOne.mockResolvedValue(
         buildTicket({ assignedTo: 'staff-1', status: TicketStatus.IN_PROGRESS }),
       );
 
-      const result = await service.update('ticket-1', { priority: TicketPriority.URGENT }, staff);
+      await expect(
+        service.update('ticket-1', { priority: TicketPriority.URGENT }, staff),
+      ).rejects.toMatchObject({
+        status: 400,
+        response: {
+          code: 'VALIDATION_FAILED',
+          details: { fields: [{ field: 'priority', code: 'notAllowed' }] },
+        },
+      });
+      expect(tickets.save).not.toHaveBeenCalled();
+    });
 
-      expect(tickets.save).toHaveBeenCalledWith(
-        expect.objectContaining({ priority: TicketPriority.URGENT }),
+    it('accepts the current priority echoed back by staff', async () => {
+      tickets.findOne.mockResolvedValue(
+        buildTicket({ assignedTo: 'staff-1', status: TicketStatus.IN_PROGRESS }),
       );
-      expect(result.ticket.priority).toBe(TicketPriority.URGENT);
-      expect(result.ticket.history.map((entry) => entry.action)).toEqual(['PRIORITY_CHANGED']);
-      expect(result.ticket.history[0].from).toBe(TicketPriority.NORMAL);
+
+      const result = await service.update(
+        'ticket-1',
+        { priority: TicketPriority.NORMAL, resolution: 'Done' },
+        staff,
+      );
+
+      expect(result.ticket.priority).toBe(TicketPriority.NORMAL);
+      expect(result.ticket.resolution).toBe('Done');
     });
 
     it('lets a facility manager update a ticket of a facility they manage', async () => {
@@ -1395,6 +1412,7 @@ describe('ServiceTicketsService', () => {
       });
 
       it('lists every changed field when there is no status change', async () => {
+        const admin = buildActor({ id: 'admin-1', roles: [UserRole.ADMIN] });
         tickets.findOne.mockResolvedValue(
           buildTicket({ assignedTo: 'staff-1', status: TicketStatus.IN_PROGRESS }),
         );
@@ -1406,7 +1424,7 @@ describe('ServiceTicketsService', () => {
             resolution: 'Waiting for parts',
             attachments: ['a.png'],
           },
-          staff,
+          admin,
         );
 
         expect(insertedNotifications()[0].data).toMatchObject({
@@ -1456,6 +1474,64 @@ describe('ServiceTicketsService', () => {
           service.update('ticket-1', { status: TicketStatus.IN_PROGRESS }, staff),
         ).rejects.toMatchObject({ status: 403 });
         expect(em.insert).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('assign ticket', () => {
+      const manager = buildActor({ id: 'manager-1', roles: [UserRole.FACILITY_MANAGER] });
+
+      beforeEach(() => {
+        roleAssignments.find.mockResolvedValue([buildManagerAssignment('facility-1')]);
+        users.findOne.mockResolvedValue({
+          id: 'staff-1',
+          status: UserStatus.ACTIVE,
+          fullName: 'Staff One',
+        });
+        roleAssignments.findOne.mockResolvedValue(buildStaffAssignment('facility-1'));
+      });
+
+      it('stores a TICKET_ASSIGNED notification for the new assignee only', async () => {
+        tickets.findOne.mockResolvedValue(
+          buildTicket({ assignedTo: undefined, status: TicketStatus.OPEN }),
+        );
+
+        await service.assign('ticket-1', { assignedTo: 'staff-1' }, manager);
+
+        const rows = insertedNotifications();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({
+          userId: 'staff-1',
+          type: NotificationType.TICKET_ASSIGNED,
+          status: NotificationStatus.SENT,
+          data: {
+            ticketId: 'ticket-1',
+            ticketNo: 'ST-20260101-ABCD1234',
+            status: TicketStatus.ASSIGNED,
+          },
+        });
+        expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+      });
+
+      it('stores nothing when the ticket is re-assigned to the same staff member', async () => {
+        tickets.findOne.mockResolvedValue(
+          buildTicket({ assignedTo: 'staff-1', status: TicketStatus.ASSIGNED }),
+        );
+
+        await service.assign('ticket-1', { assignedTo: 'staff-1' }, manager);
+
+        expect(tickets.save).toHaveBeenCalled();
+        expect(em.insert).not.toHaveBeenCalled();
+      });
+
+      it('fails the assignment when the notification cannot be stored', async () => {
+        tickets.findOne.mockResolvedValue(
+          buildTicket({ assignedTo: undefined, status: TicketStatus.OPEN }),
+        );
+        em.insert.mockRejectedValue(new Error('insert failed'));
+
+        await expect(
+          service.assign('ticket-1', { assignedTo: 'staff-1' }, manager),
+        ).rejects.toThrow('insert failed');
       });
     });
   });

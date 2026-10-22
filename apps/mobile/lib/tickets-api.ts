@@ -5,6 +5,7 @@ import type {
   ServiceTicketListResponse,
   ServiceTicketRecord,
   TicketFormOptions,
+  UpdateTicketInput,
 } from '../src/types/ticket-api';
 import { request } from './api';
 
@@ -41,6 +42,15 @@ export const TicketsApi = {
     (
       await request<{ ticket: ServiceTicketRecord }>(`/service-tickets/${id}/cancel`, {
         method: 'PATCH',
+      })
+    ).ticket,
+
+  /** Staff/manager processing update; `attachments` replaces the whole list, so send the old ones too. */
+  update: async (id: string, input: UpdateTicketInput): Promise<ServiceTicketRecord> =>
+    (
+      await request<{ ticket: ServiceTicketRecord }>(`/service-tickets/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
       })
     ).ticket,
 

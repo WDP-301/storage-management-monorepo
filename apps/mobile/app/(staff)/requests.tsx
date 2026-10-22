@@ -1,15 +1,26 @@
-import { StaffPlaceholderScreen } from '../../src/features/staff/StaffPlaceholderScreen';
+import { useRouter } from 'expo-router';
+import { useSession } from '../../lib/session';
+import { StaffTicketsScreen } from '../../src/features/staff/StaffTicketsScreen';
+import { useStaffTickets } from '../../src/features/staff/use-staff-tickets';
 
 export default function StaffRequestsRoute() {
+  const router = useRouter();
+  const { user } = useSession();
+  const list = useStaffTickets();
+
   return (
-    <StaffPlaceholderScreen
-      title="Yêu cầu"
-      description="Yêu cầu hỗ trợ, bảo trì và đổi kho tại chi nhánh."
-      upcoming={[
-        'Yêu cầu hỗ trợ của khách gắn với chi nhánh hoặc kho',
-        'Yêu cầu bảo trì theo mức ưu tiên và người phụ trách',
-        'Kiểm tra kho cũ trong quy trình đổi kho',
-      ]}
+    <StaffTicketsScreen
+      tickets={list.tickets}
+      isManager={user?.roles.includes('FACILITY_MANAGER') ?? false}
+      isLoading={list.isLoading}
+      isLoadingMore={list.isLoadingMore}
+      hasMore={list.hasMore}
+      error={list.error}
+      statusFilter={list.statusFilter}
+      onFilterStatus={list.setStatusFilter}
+      onRefresh={list.refresh}
+      onLoadMore={list.loadMore}
+      onOpenTicket={(id) => router.navigate(`/(staff)/staff-ticket?id=${encodeURIComponent(id)}`)}
     />
   );
 }

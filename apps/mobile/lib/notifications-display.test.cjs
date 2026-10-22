@@ -35,6 +35,7 @@ test('every notification type has its own label and a type unknown to this build
   for (const type of [
     'TICKET_CREATED',
     'TICKET_UPDATED',
+    'TICKET_ASSIGNED',
     'INVOICE_ISSUED',
     'INVOICE_PAID',
     'RETURN_FINALIZED',
@@ -65,6 +66,12 @@ test('contract notifications open the contract and ticket notifications open the
     notificationHref({ contractId: 'c-1', ticketId: 't-9' }),
     '/(customer)/contract-detail?id=c-1',
   );
+});
+
+test('staff notifications open the staff screens, never the customer ones', () => {
+  assert.equal(notificationHref({ ticketId: 't-9' }, 'staff'), '/(staff)/staff-ticket?id=t-9');
+  assert.equal(notificationHref({ contractId: 'c-1' }, 'staff'), '/(staff)/staff-contract?id=c-1');
+  assert.equal(notificationHref({ invoiceId: 'i-1' }, 'staff'), null);
 });
 
 test('notifications without a usable target resolve to no route', () => {

@@ -1,9 +1,14 @@
 import { Tabs as RouterTabs, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useThemeColor } from 'heroui-native';
+import { Bell } from 'phosphor-react-native';
 import { Alert, View } from 'react-native';
 import { SafeAreaView as RNSafeAreaView } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
+import {
+  NotificationsUnreadProvider,
+  useUnreadNotifications,
+} from '../../lib/notifications-unread';
 import { BottomTabButton } from '../../src/components/BottomTabButton';
 import { CalendarIcon, RequestIcon, ScanIcon, SettingsIcon } from '../../src/components/TabIcons';
 import { shouldConfirmLeave } from '../../src/features/staff/leave-guard';
@@ -15,6 +20,7 @@ const TAB_HREFS = {
   today: '/(staff)/today',
   scan: '/(staff)/scan',
   requests: '/(staff)/requests',
+  notifications: '/(staff)/notifications',
   settings: '/(staff)/settings',
 } as const;
 
@@ -23,31 +29,39 @@ export default function StaffTabsLayout() {
   const router = useRouter();
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-      <StatusBar style="dark" />
-      <RouterTabs
-        screenOptions={{ headerShown: false }}
-        tabBar={({ state }) => (
-          <StaffTabBar
-            activeTab={toStaffTab(state.routes[state.index]?.name)}
-            onSelect={(tab) => {
-              const go = () => router.navigate(TAB_HREFS[tab]);
-              if (!shouldConfirmLeave()) return go();
-              Alert.alert('Bỏ thay đổi?', 'Biên bản có thay đổi chưa lưu hoặc ảnh đang tải lên.', [
-                { text: 'Ở lại', style: 'cancel' },
-                { text: 'Bỏ thay đổi', style: 'destructive', onPress: go },
-              ]);
-            }}
-          />
-        )}
-      >
-        <RouterTabs.Screen name="today" options={{ title: 'Hôm nay' }} />
-        <RouterTabs.Screen name="scan" options={{ title: 'Quét mã' }} />
-        <RouterTabs.Screen name="requests" options={{ title: 'Yêu cầu' }} />
-        <RouterTabs.Screen name="settings" options={{ title: 'Cài đặt' }} />
-        <RouterTabs.Screen name="staff-contract" options={{ title: 'Hợp đồng' }} />
-      </RouterTabs>
-    </SafeAreaView>
+    <NotificationsUnreadProvider>
+      <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
+        <StatusBar style="dark" />
+        <RouterTabs
+          screenOptions={{ headerShown: false }}
+          tabBar={({ state }) => (
+            <StaffTabBar
+              activeTab={toStaffTab(state.routes[state.index]?.name)}
+              onSelect={(tab) => {
+                const go = () => router.navigate(TAB_HREFS[tab]);
+                if (!shouldConfirmLeave()) return go();
+                Alert.alert(
+                  'Bỏ thay đổi?',
+                  'Màn hình đang có thay đổi chưa lưu hoặc ảnh đang tải lên.',
+                  [
+                    { text: 'Ở lại', style: 'cancel' },
+                    { text: 'Bỏ thay đổi', style: 'destructive', onPress: go },
+                  ],
+                );
+              }}
+            />
+          )}
+        >
+          <RouterTabs.Screen name="today" options={{ title: 'Hôm nay' }} />
+          <RouterTabs.Screen name="scan" options={{ title: 'Quét mã' }} />
+          <RouterTabs.Screen name="requests" options={{ title: 'Yêu cầu' }} />
+          <RouterTabs.Screen name="notifications" options={{ title: 'Thông báo' }} />
+          <RouterTabs.Screen name="settings" options={{ title: 'Cài đặt' }} />
+          <RouterTabs.Screen name="staff-contract" options={{ title: 'Hợp đồng' }} />
+          <RouterTabs.Screen name="staff-ticket" options={{ title: 'Chi tiết yêu cầu' }} />
+        </RouterTabs>
+      </SafeAreaView>
+    </NotificationsUnreadProvider>
   );
 }
 
@@ -58,6 +72,7 @@ function StaffTabBar({
   activeTab: StaffTab;
   onSelect: (tab: StaffTab) => void;
 }) {
+  const { unread } = useUnreadNotifications();
   const [accentColor, mutedColor] = useThemeColor(['accent', 'muted']);
   const iconColor = (tab: StaffTab) => (activeTab === tab ? accentColor : mutedColor);
 
@@ -82,6 +97,13 @@ function StaffTabBar({
         onPress={() => onSelect('requests')}
       />
       <BottomTabButton
+        badge={unread > 0 ? unread : undefined}
+        icon={<Bell color={iconColor('notifications')} size={24} />}
+        isSelected={activeTab === 'notifications'}
+        label="Thông báo"
+        onPress={() => onSelect('notifications')}
+      />
+      <BottomTabButton
         icon={<SettingsIcon color={iconColor('settings')} />}
         isSelected={activeTab === 'settings'}
         label="Cài đặt"
@@ -93,7 +115,13 @@ function StaffTabBar({
 
 function toStaffTab(routeName: string | undefined): StaffTab {
   if (routeName === 'staff-contract') return 'today';
-  if (routeName === 'scan' || routeName === 'requests' || routeName === 'settings') {
+  if (routeName === 'staff-ticket') return 'requests';
+  if (
+    routeName === 'scan' ||
+    routeName === 'requests' ||
+    routeName === 'notifications' ||
+    routeName === 'settings'
+  ) {
     return routeName;
   }
   return 'today';

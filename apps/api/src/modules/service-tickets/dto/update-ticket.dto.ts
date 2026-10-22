@@ -3,7 +3,8 @@ import { TicketPriority, TicketStatus } from '@storage/types';
 import { IsArray, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 
 /**
- * Fields an assigned FACILITY_STAFF member may update while processing a ticket.
+ * Fields an assigned FACILITY_STAFF member may update while processing a ticket;
+ * `priority` is accepted only from a manager of the ticket's facility or an admin.
  * Ownership fields (customer_id, facility_id, assigned_to, ticket_no, …) are not
  * accepted here; the update target and the acting user are resolved server-side.
  * CANCELLED is rejected here — it belongs to the cancel endpoint, which carries

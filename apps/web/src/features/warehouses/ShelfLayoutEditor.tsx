@@ -35,6 +35,9 @@ interface Props {
   shelves: Warehouse[];
 }
 
+/** Pointer travel before a press becomes a drag-to-pan instead of a click. */
+const PAN_THRESHOLD_PX = 5;
+
 type ToolMode =
   | 'PAN'
   | 'SELECT'
@@ -152,7 +155,13 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const pressRef = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+    panX: number;
+    panY: number;
+  } | null>(null);
   const [spacePressed, setSpacePressed] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
   const dragDistanceRef = useRef(0);
@@ -250,22 +259,34 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
       const pts = Array.from(activePointersRef.current.values());
       initialPinchDistRef.current = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
       initialZoomRef.current = zoom;
+      pressRef.current = null;
       setIsPanning(false);
       return;
     }
 
-    const shouldPan = tool === 'PAN' || spacePressed || e.button === 1 || e.button === 2;
-    if (shouldPan) {
-      setIsPanning(true);
-      setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
-      dragDistanceRef.current = 0;
-      try {
-        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-      } catch {
-        // ignore
-      }
-    } else {
-      dragDistanceRef.current = 0;
+    dragDistanceRef.current = 0;
+    if (e.button > 2) return;
+    pressRef.current = {
+      pointerId: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      panX: pan.x,
+      panY: pan.y,
+    };
+    // Explicit pan modes grab immediately; a plain press only pans once it moves past
+    // the threshold, so clicking a cell still selects/places it.
+    const forcePan = tool === 'PAN' || spacePressed || e.button === 1 || e.button === 2;
+    if (forcePan) startPanning(e);
+  };
+
+  const startPanning = (e: React.PointerEvent<HTMLDivElement>) => {
+    setIsPanning(true);
+    // Captured only once panning starts: capturing on press would retarget the click
+    // away from the cell button under the cursor.
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
     }
   };
 
@@ -285,12 +306,16 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
       return;
     }
 
-    if (isPanning) {
-      const newX = e.clientX - panStart.x;
-      const newY = e.clientY - panStart.y;
-      dragDistanceRef.current += Math.abs(e.movementX) + Math.abs(e.movementY);
-      setPan({ x: newX, y: newY });
+    const press = pressRef.current;
+    if (!press || press.pointerId !== e.pointerId) return;
+    const dx = e.clientX - press.x;
+    const dy = e.clientY - press.y;
+    dragDistanceRef.current = Math.hypot(dx, dy);
+    if (!isPanning) {
+      if (dragDistanceRef.current <= PAN_THRESHOLD_PX) return;
+      startPanning(e);
     }
+    setPan({ x: Math.round(press.panX + dx), y: Math.round(press.panY + dy) });
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -298,6 +323,7 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
     if (activePointersRef.current.size < 2) {
       initialPinchDistRef.current = null;
     }
+    if (pressRef.current?.pointerId === e.pointerId) pressRef.current = null;
 
     if (isPanning) {
       setIsPanning(false);
@@ -306,6 +332,12 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
       } catch {
         // ignore
       }
+    }
+
+    // A drag is not a tap — don't let it pair with the next click into a double-tap zoom.
+    if (dragDistanceRef.current > PAN_THRESHOLD_PX) {
+      lastTapRef.current = null;
+      return;
     }
 
     // Touchpad / touch tap timing for double tap detection
@@ -430,7 +462,7 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
   };
 
   const handleCellClick = (r: number, c: number) => {
-    if (tool === 'PAN' || dragDistanceRef.current > 5) {
+    if (tool === 'PAN' || dragDistanceRef.current > PAN_THRESHOLD_PX) {
       return;
     }
     setError(null);
@@ -669,12 +701,9 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
+      onContextMenu={(e) => e.preventDefault()}
       className={`relative w-full ${heightClass} overflow-hidden rounded-xl border border-kumo-line bg-slate-900/[0.03] select-none outline-none touch-none ${
-        tool === 'PAN' || spacePressed
-          ? isPanning
-            ? 'cursor-grabbing'
-            : 'cursor-grab'
-          : 'cursor-default'
+        isPanning ? 'cursor-grabbing' : 'cursor-grab'
       }`}
       style={{
         touchAction: 'none',

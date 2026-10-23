@@ -278,6 +278,29 @@ describe('ShelfManagementDialog & ShelfLayoutEditor', () => {
     await waitFor(() => expect(updateStatusSpy).toHaveBeenCalledWith('sh-1', 'MAINTENANCE'));
   });
 
+  it('pans the floor plan by left-dragging in the default select tool', async () => {
+    render(
+      <ShelfManagementDialog
+        warehouse={parentWarehouse}
+        canManageShelves={true}
+        initialTab="layout"
+        onClose={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText('Phiên bản v1')).toBeTruthy();
+
+    const canvas = screen.getByLabelText('Khung sơ đồ mặt bằng tương tác');
+    const pointer = { pointerId: 1, button: 0 };
+    fireEvent.pointerDown(canvas, { ...pointer, clientX: 100, clientY: 100 });
+    // Below the threshold: still a click, the canvas must not move yet.
+    fireEvent.pointerMove(canvas, { ...pointer, clientX: 103, clientY: 101 });
+    expect(canvas.style.backgroundPosition).toBe('0px 0px');
+
+    fireEvent.pointerMove(canvas, { ...pointer, clientX: 160, clientY: 130 });
+    fireEvent.pointerUp(canvas, { ...pointer, clientX: 160, clientY: 130 });
+    expect(canvas.style.backgroundPosition).toBe('60px 30px');
+  });
+
   it('loads, auto-drafts, saves, and deletes the floor plan layout', async () => {
     const draftSpy = vi.spyOn(WarehousesApi, 'draftLayout').mockResolvedValue({
       rows: 1,

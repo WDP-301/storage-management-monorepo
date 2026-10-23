@@ -8,7 +8,7 @@ import {
   type CreateTicketForm,
   CreateTicketScreen,
 } from '../../src/features/customer/CreateTicketScreen';
-import type { TicketFormOptions } from '../../src/types/ticket-api';
+import type { TicketAttachment, TicketFormOptions } from '../../src/types/ticket-api';
 
 const MAX_ATTACHMENTS = 5;
 
@@ -23,9 +23,13 @@ const EMPTY_FORM: CreateTicketForm = {
 
 export default function TicketCreateRoute() {
   const router = useRouter();
-  // One idempotency key per mount — a retry after a failed submit must reuse it,
-  // not mint a new one, or the server-side dedup is defeated.
+  // One idempotency key per ticket — a retry after a failed submit must reuse it, not mint a
+  // new one, or the server-side dedup is defeated. This tab screen never unmounts, so the key is
+  // replaced once a ticket is created; otherwise the next ticket would replay the previous one.
   const idempotencyKey = useRef(TicketsApi.newIdempotencyKey());
+  // Photos already uploaded, by local uri: a retry must send the same file keys, or the request
+  // would no longer match the one the idempotency key was first used with.
+  const uploaded = useRef(new Map<string, TicketAttachment>());
   const [options, setOptions] = useState<TicketFormOptions | null>(null);
   const [form, setForm] = useState<CreateTicketForm>(EMPTY_FORM);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -92,7 +96,12 @@ export default function TicketCreateRoute() {
     try {
       const attachments = [];
       for (const photo of form.photos) {
-        attachments.push(await UploadsApi.uploadFile(photo));
+        let file = uploaded.current.get(photo.uri);
+        if (!file) {
+          file = await UploadsApi.uploadFile(photo);
+          uploaded.current.set(photo.uri, file);
+        }
+        attachments.push(file);
       }
       const ticket = await TicketsApi.create(
         {
@@ -105,6 +114,11 @@ export default function TicketCreateRoute() {
         },
         idempotencyKey.current,
       );
+      // Start the next ticket from a clean form with its own key.
+      idempotencyKey.current = TicketsApi.newIdempotencyKey();
+      uploaded.current.clear();
+      appliedPreset.current = null;
+      setForm(EMPTY_FORM);
       router.replace(`/(customer)/ticket-detail?id=${ticket.id}`);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Không gửi được yêu cầu. Thử lại.');

@@ -15,6 +15,12 @@ import { useBookingSettings } from '../../../lib/client-settings';
 import { formatMoney, formatNumber } from '../../../lib/format-vi';
 import { WarehousesApi } from '../../../lib/warehouses-api';
 import type { ShelfLayout, Warehouse } from '../../types/storage-api';
+import { ShelfUnplacedList } from './ShelfUnplacedList';
+import {
+  rentableUnplacedShelves,
+  shortShelfCode as shortCode,
+  shelfStatusLabel as statusLabel,
+} from './shelf-display';
 
 type Props = {
   warehouse: Warehouse;
@@ -24,19 +30,6 @@ type Props = {
   onToggle: (shelf: Warehouse) => void;
   expanded?: boolean;
 };
-
-const statusLabel: Record<string, string> = {
-  AVAILABLE: 'Còn trống',
-  HELD: 'Đang giữ chỗ',
-  BOOKED: 'Đã đặt',
-  RENTED: 'Đang thuê',
-  PENDING_INSPECTION: 'Chờ kiểm tra',
-  MAINTENANCE: 'Bảo trì',
-  INACTIVE: 'Ngừng sử dụng',
-};
-
-const shortCode = (code: string, parentCode: string) =>
-  code.startsWith(`${parentCode}-`) ? code.slice(parentCode.length + 1) : code;
 
 const CELL = 52;
 const GAP = 5;
@@ -408,12 +401,20 @@ export function ShelfPicker({
   const byId = new Map(shelves.map((shelf) => [shelf.id, shelf]));
   const focused = focusedId ? byId.get(focusedId) : null;
   const placed = layout?.placed ?? [];
-  const availableCount = placed.filter(
-    ({ shelf }) => (byId.get(shelf.id) ?? shelf).status === 'AVAILABLE',
-  ).length;
+  // Shelves the admin has not put on the floor plan yet are still rentable; they are listed
+  // under the map (or instead of it when there is no plan) so the customer can pick them.
+  const unplaced = rentableUnplacedShelves(layout?.unplaced ?? [], byId);
+  const availableCount = [
+    ...placed.map(({ shelf }) => byId.get(shelf.id) ?? shelf),
+    ...unplaced,
+  ].filter((shelf) => shelf.status === 'AVAILABLE').length;
   const grid = layout?.layout;
+  const hasMap = Boolean(grid) && placed.length > 0;
   const handleShelfPress = (id: string) => {
-    const shelf = byId.get(id) ?? placed.find((item) => item.shelf.id === id)?.shelf;
+    const shelf =
+      byId.get(id) ??
+      placed.find((item) => item.shelf.id === id)?.shelf ??
+      unplaced.find((item) => item.id === id);
     if (!shelf) return;
     const selected = selectedIds.includes(id);
     if (!hasHolding && (selected || (shelf.status === 'AVAILABLE' && !selectionFull))) {
@@ -444,7 +445,7 @@ export function ShelfPicker({
 
       {loading ? <ActivityIndicator className="py-8" /> : null}
       {error ? <Text className="font-body text-body-sm text-danger">{error}</Text> : null}
-      {!loading && !error && (!grid || placed.length === 0) ? (
+      {!loading && !error && !hasMap && unplaced.length === 0 ? (
         <View className="rounded-xl bg-surface-secondary px-4 py-6">
           <Text className="text-center font-body text-body-sm text-muted">
             {shelves.length === 0 ? 'Kho này chưa có kệ.' : 'Kho này chưa có sơ đồ kệ.'}
@@ -452,7 +453,7 @@ export function ShelfPicker({
         </View>
       ) : null}
 
-      {!loading && !error && grid && placed.length > 0 ? (
+      {!loading && !error && grid && hasMap ? (
         <View className="overflow-hidden rounded-xl border border-border bg-surface">
           <ShelfMap
             grid={grid}
@@ -480,6 +481,17 @@ export function ShelfPicker({
             Chụm hai ngón để thu phóng · Kéo để xem khi phóng to
           </Text>
         </View>
+      ) : null}
+
+      {!loading && !error && unplaced.length > 0 ? (
+        <ShelfUnplacedList
+          title={hasMap ? 'Kệ chưa có trên sơ đồ' : 'Danh sách kệ'}
+          shelves={unplaced}
+          warehouseCode={warehouse.code}
+          selectedIds={selectedIds}
+          focusedId={focusedId}
+          onShelfPress={handleShelfPress}
+        />
       ) : null}
 
       {focused ? (
@@ -526,7 +538,7 @@ export function ShelfPicker({
           </View>
           {selectedIds.includes(focused.id) ? (
             <Text className="font-body text-caption text-accent">
-              Kệ đã được chọn. Chạm lại ô kệ trên sơ đồ để bỏ chọn.
+              Kệ đã được chọn. Chạm lại kệ để bỏ chọn.
             </Text>
           ) : null}
           {hasHolding && focused.status === 'AVAILABLE' ? (

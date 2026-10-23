@@ -3,7 +3,6 @@ import { Button } from 'heroui-native';
 import { MapPin } from 'phosphor-react-native';
 import { useRef } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
-import { isInvoiceDue } from '../../../lib/settlement-format';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import type { ApiContract } from '../../types/contract-api';
 import { ContractInvoicesSection } from './ContractInvoicesSection';
@@ -77,7 +76,9 @@ export function ContractDetailScreen({
             invoices={
               hasInvoices &&
               // Before the first month is issued a DRAFT has nothing to bill — no "Không còn nợ" card.
-              (contract.status !== 'DRAFT' || invoices.invoices.some(isInvoiceDue))
+              (contract.status !== 'DRAFT' ||
+                invoices.invoices.some((inv) => inv.status !== 'VOID') ||
+                invoices.error !== null)
                 ? invoices
                 : null
             }

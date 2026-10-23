@@ -12,7 +12,13 @@ import { DataSource } from 'typeorm';
 import { type CheckInView, toCheckInView } from './check-in.view';
 import { assertCustomerCanEnter, parsePayload } from './check-in-eligibility';
 import { notifyMissedCheckOuts } from './missed-check-out.notify';
-import { AUTO_CLOSE_NOTES, closeVisit, findOpenVisit } from './open-visit.query';
+import {
+  AUTO_CLOSE_NOTES,
+  closeVisit,
+  findLateExitVisit,
+  findOpenVisit,
+  recordLateExit,
+} from './open-visit.query';
 import { assertWorksAtFacility } from './staff-facility.util';
 
 type PassRow = {
@@ -49,9 +55,11 @@ export class CheckInService {
 
   /**
    * Consumes a scanned pass at the warehouse the staff member chose. The direction follows the
-   * customer's open visit: open here → exit (never refused, whatever the customer owes); otherwise
-   * an entry, which needs a started shelf contract here and no overdue invoice. An entry while a
-   * visit is still open elsewhere closes that one as a missed check-out.
+   * customer's open visit: open here → exit (never refused, whatever the customer owes). So does
+   * a visit here closed without a scan within the late-exit window: the customer was still inside,
+   * and the scan stamps their real exit time. Otherwise an entry, which needs a started shelf
+   * contract here and no overdue invoice. An entry while a visit is still open elsewhere closes
+   * that one as a missed check-out.
    *
    * The pass row stays locked for the whole transaction, so two scanners of one code are
    * serialised and the second sees `used_at`. A refused scan rolls back without touching the
@@ -90,7 +98,13 @@ export class CheckInService {
       if (pass.expired) throw invalidPass('EXPIRED');
 
       const openVisit = await findOpenVisit(em, pass.customerId, { lock: true });
-      const direction: ScanDirection = openVisit?.warehouseId === warehouse.id ? 'OUT' : 'IN';
+      // A visit closed without a scan moments ago (closing-time sweep, manual check-out) whose
+      // customer is still here: this scan is their exit, not a new entry.
+      const lateExit = openVisit
+        ? null
+        : await findLateExitVisit(em, pass.customerId, { warehouseId: warehouse.id, lock: true });
+      const exiting = openVisit?.warehouseId === warehouse.id ? openVisit : lateExit;
+      const direction: ScanDirection = exiting ? 'OUT' : 'IN';
 
       if (direction === 'IN') {
         await assertCustomerCanEnter(em, pass.customerId, new Date(), warehouse.id);
@@ -118,7 +132,9 @@ export class CheckInService {
           direction === 'OUT' ? AccessEventType.CHECK_OUT : AccessEventType.CHECK_IN,
         ],
       );
-      if (direction === 'OUT' && openVisit) {
+      if (lateExit) {
+        await recordLateExit(em, lateExit.id, { by: actor.id, checkOutEventId: pass.id });
+      } else if (direction === 'OUT' && openVisit) {
         await closeVisit(em, openVisit.id, {
           method: CheckOutMethod.SCAN,
           by: actor.id,
@@ -145,7 +161,7 @@ export class CheckInService {
       return {
         ...view,
         direction,
-        checkedInAt: direction === 'OUT' && openVisit ? openVisit.usedAt : null,
+        checkedInAt: exiting?.usedAt ?? null,
       };
     });
   }

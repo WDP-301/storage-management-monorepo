@@ -5,7 +5,7 @@ import { Injectable } from '@nestjs/common';
 import { AccessEventType } from '@storage/types';
 import { DataSource } from 'typeorm';
 import { assertCustomerCanEnter, buildPayload } from './check-in-eligibility';
-import { findOpenVisit } from './open-visit.query';
+import { findLateExitVisit, findOpenVisit } from './open-visit.query';
 
 export interface AccessPassView {
   id: string;
@@ -37,8 +37,10 @@ export class AccessPassService {
       await em.query(`SELECT 1 FROM "app_users" WHERE "id" = $1 FOR NO KEY UPDATE`, [user.id]);
 
       // A customer inside a warehouse always gets a code: it is their way out, and leaving is
-      // never refused. Otherwise the entry rules are checked now so the customer learns early.
-      if (!(await findOpenVisit(em, user.id))) {
+      // never refused — also right after their visit was closed without a scan (late exit).
+      // Otherwise the entry rules are checked now so the customer learns early.
+      const inside = (await findOpenVisit(em, user.id)) ?? (await findLateExitVisit(em, user.id));
+      if (!inside) {
         await assertCustomerCanEnter(em, user.id, new Date());
       }
 

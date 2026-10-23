@@ -20,6 +20,7 @@ describe('CheckInService.verify', () => {
   let contracts: { id: string; effectiveAt: Date }[];
   let warehouse: Record<string, unknown> | null;
   let openVisit: Record<string, unknown> | null;
+  let lateExit: Record<string, unknown> | null;
   let em: { query: jest.Mock; find: jest.Mock; findOne: jest.Mock };
   let notifications: { createForUsers: jest.Mock };
   let service: CheckInService;
@@ -45,6 +46,7 @@ describe('CheckInService.verify', () => {
     ];
     overdue = [];
     openVisit = null;
+    lateExit = null;
     contracts = [{ id: 'c-1', effectiveAt: new Date('2020-01-01T00:00:00Z') }];
     warehouse = {
       id: 'w-1',
@@ -71,6 +73,7 @@ describe('CheckInService.verify', () => {
         if (sql.startsWith('SELECT') && sql.includes('"checked_out_at" IS NULL')) {
           return openVisit ? [openVisit] : [];
         }
+        if (sql.includes('AS "lateExit"')) return lateExit ? [lateExit] : [];
         if (sql.includes('"qr_token_hash" = $1')) return pass ? [pass] : [];
         if (sql.includes('FROM "contracts"')) return contracts;
         if (sql.includes('FROM "invoices"')) return overdue;
@@ -284,6 +287,61 @@ describe('CheckInService.verify', () => {
         response: { code: 'INVOICE_OVERDUE' },
       });
       expect(updated()).toBe(false);
+    });
+  });
+
+  describe('when the visit was just closed without a scan', () => {
+    const since = new Date('2026-03-01T08:00:00Z');
+    const closedHere = (over: Record<string, unknown> = {}) => ({
+      id: 'v-1',
+      warehouseId: 'w-1',
+      facilityId: 'f-1',
+      usedAt: since,
+      lateExit: true,
+      ...over,
+    });
+
+    it('treats the scan at that warehouse as the exit and stamps the real time', async () => {
+      lateExit = closedHere();
+
+      const result = await service.verify(staff, payload, 'w-1');
+
+      expect(passUpdate()[1]).toEqual(['p-1', 'staff-1', 'w-1', 'f-1', 'CHECK_OUT']);
+      const lateStamp = em.query.mock.calls.find(([sql]) =>
+        sql.includes('"check_out_event_id" = $3'),
+      );
+      expect(lateStamp?.[1]).toEqual(['v-1', 'staff-1', 'p-1']);
+      // The method stays as it was, so a missed check-out keeps its flag.
+      expect(lateStamp?.[0]).not.toContain('"check_out_method"');
+      expect(result).toMatchObject({ direction: 'OUT', checkedInAt: since });
+    });
+
+    it('never refuses that exit, even with overdue invoices or no contract left', async () => {
+      lateExit = closedHere();
+      overdue = [{ invoiceNo: 'INV-1' }];
+      contracts = [];
+
+      await expect(service.verify(staff, payload, 'w-1')).resolves.toMatchObject({
+        direction: 'OUT',
+      });
+    });
+
+    it('is a normal entry at another warehouse', async () => {
+      lateExit = closedHere({ warehouseId: 'w-2' });
+
+      const result = await service.verify(staff, payload, 'w-1');
+
+      expect(result).toMatchObject({ direction: 'IN', checkedInAt: null });
+      expect(em.query.mock.calls.some(([sql]) => sql.includes('FROM "invoices"'))).toBe(true);
+    });
+
+    it('is a normal entry once the window has passed', async () => {
+      lateExit = closedHere({ lateExit: false });
+      overdue = [{ invoiceNo: 'INV-1' }];
+
+      await expect(service.verify(staff, payload, 'w-1')).rejects.toMatchObject({
+        response: { code: 'INVOICE_OVERDUE' },
+      });
     });
   });
 });

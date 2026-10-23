@@ -13,6 +13,8 @@ import { describeApiError, SETTLEMENT_STATUS_LABEL } from './settlement-display'
 
 interface Props {
   contractId: string;
+  /** Bumped when another section in the dialog (e.g. manual invoice payment) mutates invoices. */
+  refreshKey?: number;
   /** Called after an approval or a refund so the page reloads the list. */
   onChanged: () => void;
 }
@@ -21,13 +23,17 @@ interface Props {
  * Deposit settlement of an ENDED contract (admin and operations only). Loaded from the
  * settlement endpoint when the dialog opens — never from the contract list.
  */
-export const ContractSettlementSection: React.FC<Props> = ({ contractId, onChanged }) => {
+export const ContractSettlementSection: React.FC<Props> = ({
+  contractId,
+  refreshKey = 0,
+  onChanged,
+}) => {
   const [record, setRecord] = useState<SettlementDetailRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloads, setReloads] = useState(0);
 
-  // `reloads` forces a fresh load of the same contract.
+  // `reloads` and `refreshKey` force a fresh load of the same contract.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -41,7 +47,7 @@ export const ContractSettlementSection: React.FC<Props> = ({ contractId, onChang
     return () => {
       cancelled = true;
     };
-  }, [contractId, reloads]);
+  }, [contractId, reloads, refreshKey]);
 
   const reload = () => setReloads((n) => n + 1);
   const changed = (next: SettlementDetailRecord) => {

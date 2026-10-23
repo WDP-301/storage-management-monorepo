@@ -42,6 +42,8 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
   const [editing, setEditing] = useState(false);
   const [inspection, setInspection] = useState<InspectionRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [invoiceRefresh, setInvoiceRefresh] = useState(0);
+  const [settlementRefresh, setSettlementRefresh] = useState(0);
 
   const contractId = contract?.id;
   // The contract on screen; an action that finishes after another one opened must not touch it.
@@ -71,6 +73,7 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
     setError(null);
     try {
       await action();
+      if (kind === 'cancel' && shownId.current === id) setInvoiceRefresh((n) => n + 1);
       onChanged();
       if (kind === 'remove' && shownId.current === id) onClose();
     } catch (err) {
@@ -188,7 +191,7 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
             onChanged={onChanged}
           />
           <ManagedReturnForm
-            key={contract.id}
+            key={`return-${contract.id}`}
             contract={contract}
             canRequest={canCancel}
             onChanged={onChanged}
@@ -205,17 +208,25 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
 
           {canCancel && (
             <ContractInvoicesSection
-              key={contract.id}
+              key={`invoices-${contract.id}`}
               contractId={contract.id}
-              onChanged={onChanged}
+              refreshKey={invoiceRefresh}
+              onChanged={() => {
+                setSettlementRefresh((n) => n + 1);
+                onChanged();
+              }}
             />
           )}
 
           {canManage && contract.status === 'ENDED' && (
             <ContractSettlementSection
-              key={contract.id}
+              key={`settlement-${contract.id}`}
               contractId={contract.id}
-              onChanged={onChanged}
+              refreshKey={settlementRefresh}
+              onChanged={() => {
+                setInvoiceRefresh((n) => n + 1);
+                onChanged();
+              }}
             />
           )}
 

@@ -20,6 +20,8 @@ const isPayable = (invoice: ContractInvoiceRecord) =>
 
 interface Props {
   contractId: string;
+  /** Bumped when another section in the dialog (e.g. deposit settlement) mutates invoices. */
+  refreshKey?: number;
   /** Called after a payment so the page reloads the contract list. */
   onChanged: () => void;
 }
@@ -28,14 +30,18 @@ interface Props {
  * Invoices of the contract with their payments. An unpaid invoice can be settled by hand when
  * SePay could not match the transfer (wrong content) or the customer paid cash.
  */
-export const ContractInvoicesSection: React.FC<Props> = ({ contractId, onChanged }) => {
+export const ContractInvoicesSection: React.FC<Props> = ({
+  contractId,
+  refreshKey = 0,
+  onChanged,
+}) => {
   const [invoices, setInvoices] = useState<ContractInvoiceRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloads, setReloads] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [paying, setPaying] = useState<string | null>(null);
 
-  // `reloads` forces a fresh load of the same contract.
+  // `reloads` and `refreshKey` force a fresh load of the same contract.
   useEffect(() => {
     let cancelled = false;
     setError(null);
@@ -47,7 +53,7 @@ export const ContractInvoicesSection: React.FC<Props> = ({ contractId, onChanged
     return () => {
       cancelled = true;
     };
-  }, [contractId, reloads]);
+  }, [contractId, reloads, refreshKey]);
 
   const recorded = (next: ContractInvoiceRecord) => {
     setInvoices(

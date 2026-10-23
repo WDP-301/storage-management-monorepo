@@ -21,12 +21,18 @@ export interface PresignedUploadUrlResponse {
 }
 
 /**
- * Storage key for a new upload. The random part keeps keys unguessable from the upload time and
- * file name, and stops two same-named uploads in one millisecond from overwriting each other.
+ * Storage key for a new upload. It starts with the uploader's id, so a customer can be held to
+ * attaching only their own files. The random part keeps keys unguessable from the upload time
+ * and file name, and stops two same-named uploads in one millisecond from overwriting each other.
  */
-export function buildUploadKey(fileName: string): string {
+export function buildUploadKey(fileName: string, ownerId: string): string {
   const cleanFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-  return `uploads/${Date.now()}-${randomBytes(8).toString('hex')}-${cleanFileName}`;
+  return `uploads/${ownerId}-${Date.now()}-${randomBytes(8).toString('hex')}-${cleanFileName}`;
+}
+
+/** Whether `fileKey` was issued to `userId` by `buildUploadKey`. */
+export function isOwnUpload(fileKey: string, userId: string): boolean {
+  return fileKey.startsWith(`uploads/${userId}-`);
 }
 
 @Injectable()
@@ -93,8 +99,9 @@ export class UploadService implements OnModuleInit {
     fileName: string,
     mimeType: string,
     fileSize: number,
+    ownerId: string,
   ): Promise<PresignedUploadUrlResponse> {
-    const fileKey = buildUploadKey(fileName);
+    const fileKey = buildUploadKey(fileName, ownerId);
 
     try {
       // ContentLength is signed into the URL — S3 rejects the PUT if the

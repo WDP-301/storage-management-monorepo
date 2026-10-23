@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream';
-import { buildUploadKey, UploadService } from './upload.service';
+import { buildUploadKey, isOwnUpload, UploadService } from './upload.service';
 
 describe('UploadService error contract', () => {
   const config = {
@@ -65,10 +65,19 @@ describe('UploadService error contract', () => {
 });
 
 describe('buildUploadKey', () => {
-  it('keeps keys under uploads/ with a sanitised name and an unguessable part', () => {
-    const a = buildUploadKey('Hợp đồng ký.pdf');
-    const b = buildUploadKey('Hợp đồng ký.pdf');
-    expect(a).toMatch(/^uploads\/\d+-[0-9a-f]{16}-H_p___ng_k_\.pdf$/);
+  const OWNER = '01a16948-56fa-7f68-bd82-16b640679a96';
+
+  it('keeps keys under uploads/ with the owner, a sanitised name and an unguessable part', () => {
+    const a = buildUploadKey('Hợp đồng ký.pdf', OWNER);
+    const b = buildUploadKey('Hợp đồng ký.pdf', OWNER);
+    expect(a).toMatch(new RegExp(`^uploads/${OWNER}-\\d+-[0-9a-f]{16}-H_p___ng_k_\\.pdf$`));
     expect(a).not.toBe(b);
+  });
+
+  it('tells whose upload a key is', () => {
+    const key = buildUploadKey('a.jpg', OWNER);
+    expect(isOwnUpload(key, OWNER)).toBe(true);
+    expect(isOwnUpload(key, '01a16948-56fa-7f68-bd82-16b640679a97')).toBe(false);
+    expect(isOwnUpload('uploads/1700000000000-abcd-a.jpg', OWNER)).toBe(false);
   });
 });

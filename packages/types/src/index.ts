@@ -1,4 +1,5 @@
 export * from './domain.enums';
+export * from './invoice-payment';
 export * from './return-request';
 export * from './settings';
 export * from './settlement';

@@ -753,6 +753,8 @@ export class BookingsService implements OnApplicationBootstrap {
       amount: event.amount,
       providerRef,
       paidAt: new Date(event.transactionDate),
+      // Kept so a later hand-recorded payment cannot reuse this transfer's bank reference.
+      metadata: event.referenceCode ? { referenceCode: event.referenceCode } : {},
     };
 
     const now = new Date();

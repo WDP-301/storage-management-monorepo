@@ -4,6 +4,8 @@ import { Invoice } from '@entities/invoice.entity';
 import { InvoiceItem } from '@entities/invoice-item.entity';
 import { Payment } from '@entities/payment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { invoiceIssuedNotification } from '@modules/invoices/rent-period-invoice.util';
+import { NotificationsService } from '@modules/notifications/notifications.service';
 import { generateInvoiceNo } from '@modules/payments/invoice-no.util';
 import { generatePaymentNo } from '@modules/payments/payment-no.util';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
@@ -45,6 +47,7 @@ export class FirstRentService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly config: ConfigService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Issues the first-month invoice, or returns the one already issued (repeat taps are safe). */
@@ -90,6 +93,14 @@ export class FirstRentService {
           amount: amount.toNumber(),
         }),
       );
+      // The customer pays from their own phone: the notification opens the contract and its QR.
+      if (invoice.status === InvoiceStatus.ISSUED) {
+        await this.notifications.createForUsers(
+          em,
+          [contract.customerId],
+          invoiceIssuedNotification(invoice),
+        );
+      }
       this.logger.log(
         `First rent ${invoice.invoiceNo} issued for contract ${contract.contractNo} by ${actor.id}`,
       );

@@ -57,6 +57,7 @@ const buildEvent = (overrides: Partial<PaymentReceivedEvent> = {}): PaymentRecei
   amount: 1_000_000,
   content: `CK ${BOOKING_NO}`,
   code: null,
+  referenceCode: null,
   transactionDate: '2026-10-04T00:00:00Z',
   gateway: 'MB',
   ...overrides,

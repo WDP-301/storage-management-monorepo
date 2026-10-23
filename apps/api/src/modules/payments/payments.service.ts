@@ -21,6 +21,7 @@ export class PaymentsService {
     event.amount = dto.transferAmount;
     event.content = dto.content;
     event.code = dto.code ?? null;
+    event.referenceCode = dto.referenceCode ?? null;
     event.transactionDate = dto.transactionDate;
     event.gateway = dto.gateway;
 

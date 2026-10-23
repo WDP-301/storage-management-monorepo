@@ -1,5 +1,6 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import { InvoicesApi } from '../../../lib/invoices-api';
 import type { ApiInvoice } from '../../types/invoice-api';
@@ -46,6 +47,15 @@ export function useContractInvoices(contractId: string | null) {
   );
 
   const reload = useCallback(() => setReloadToken((token) => token + 1), []);
+
+  // Customers pay in their banking app and come back: reload so a settled invoice drops its QR.
+  useEffect(() => {
+    if (!contractId) return;
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'active') reload();
+    });
+    return () => subscription.remove();
+  }, [contractId, reload]);
   // Also guards the render between a contract change and the effect that resets the state.
   const own = contractId !== null && state.contractId === contractId ? state : EMPTY;
   return { invoices: own.invoices, isLoading: own.isLoading, error: own.error, reload };

@@ -20,6 +20,7 @@ const transfer = (over: Partial<PaymentReceivedEvent> = {}): PaymentReceivedEven
   amount: 1500000,
   content: `MBVCB.1 ${INVOICE_NO.replace(/-/g, '')} thanh toan`,
   code: null,
+  referenceCode: null,
   transactionDate: '2026-10-12 10:32:00',
   gateway: 'MBBank',
   ...over,
@@ -89,6 +90,15 @@ describe('FirstRentPaymentListener', () => {
       Invoice,
       { id: 'inv-1' },
       { status: InvoiceStatus.PAID },
+    );
+  });
+
+  it('keeps the bank reference so it cannot be recorded again by hand', async () => {
+    await listener.handlePaymentReceived(transfer({ referenceCode: 'FT2610201234' }));
+
+    expect(em.save).toHaveBeenCalledWith(
+      Payment,
+      expect.objectContaining({ metadata: { referenceCode: 'FT2610201234' } }),
     );
   });
 

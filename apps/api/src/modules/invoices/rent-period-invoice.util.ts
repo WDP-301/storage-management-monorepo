@@ -16,6 +16,9 @@ import Decimal from 'decimal.js';
 import { type EntityManager, Not } from 'typeorm';
 import { formatDateStr, formatVndCurrency } from './invoice-pdf.service';
 
+/** Period 1 of the INITIAL contract is the first month's rent, collected at handover. */
+const FIRST_MONTH_PERIOD_NO = 1;
+
 export interface RentPeriod {
   periodNo: number;
   startAt: Date;
@@ -54,14 +57,26 @@ export function recurringRentPeriods(
   return periods;
 }
 
+/**
+ * Tells the customer an invoice is ready to pay. `contractId` lets the app open the contract,
+ * where the invoice and its transfer QR are shown. The first month is paid at handover, right
+ * away, so it says so instead of naming a due date.
+ */
 export function invoiceIssuedNotification(invoice: Invoice): NotificationPayload {
+  const isFirstMonth =
+    invoice.kind === RentalPeriodKind.INITIAL && invoice.periodNo === FIRST_MONTH_PERIOD_NO;
   return {
     type: NotificationType.INVOICE_ISSUED,
-    title: `Hóa đơn tiền thuê kho kỳ ${invoice.periodNo}`,
-    body: `Hóa đơn ${invoice.invoiceNo} với số tiền ${formatVndCurrency(invoice.total)} đã được phát hành. Hạn thanh toán đến ${formatDateStr(invoice.dueAt)}. Vui lòng thanh toán đúng hạn.`,
+    title: isFirstMonth
+      ? 'Thanh toán tiền thuê tháng đầu'
+      : `Hóa đơn tiền thuê kho kỳ ${invoice.periodNo}`,
+    body: isFirstMonth
+      ? `Hóa đơn ${invoice.invoiceNo} với số tiền ${formatVndCurrency(invoice.total)} đã được phát hành. Mở hợp đồng trong ứng dụng để quét mã QR thanh toán và nhận kho.`
+      : `Hóa đơn ${invoice.invoiceNo} với số tiền ${formatVndCurrency(invoice.total)} đã được phát hành. Hạn thanh toán đến ${formatDateStr(invoice.dueAt)}. Vui lòng thanh toán đúng hạn.`,
     data: {
       invoiceId: invoice.id,
       invoiceNo: invoice.invoiceNo,
+      contractId: invoice.contractId ?? null,
       total: invoice.total,
       dueAt: invoice.dueAt ? invoice.dueAt.toISOString() : null,
     },

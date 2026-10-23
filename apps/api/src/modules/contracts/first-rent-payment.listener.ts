@@ -1,7 +1,6 @@
 import { Invoice } from '@entities/invoice.entity';
 import { Payment } from '@entities/payment.entity';
 import { NotificationsService } from '@modules/notifications/notifications.service';
-import type { NotificationPayload } from '@modules/notifications/types/notification';
 import { extractInvoiceNos } from '@modules/payments/invoice-no.util';
 import { generatePaymentNo } from '@modules/payments/payment-no.util';
 import { PAYMENT_EVENTS, PaymentReceivedEvent } from '@modules/payments/types/payment';
@@ -11,26 +10,13 @@ import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import {
   InvoiceKind,
   InvoiceStatus,
-  NotificationType,
   PaymentMethod,
   PaymentStatus,
   PaymentType,
 } from '@storage/types';
 import { DataSource, In } from 'typeorm';
 import { PAYABLE_INVOICE_STATUSES, sumInvoicePayments } from './first-rent.util';
-
-function invoicePaidNotification(invoice: Invoice, amount: number | string): NotificationPayload {
-  return {
-    type: NotificationType.INVOICE_PAID,
-    title: 'Thanh toán hóa đơn thành công',
-    body: `Hóa đơn ${invoice.invoiceNo} đã được thanh toán thành công số tiền ${Number(amount).toLocaleString('vi-VN')} VND. Cảm ơn Quý khách!`,
-    data: {
-      invoiceId: invoice.id,
-      invoiceNo: invoice.invoiceNo,
-      amount,
-    },
-  };
-}
+import { invoicePaidNotification } from './invoice-notifications';
 
 /**
  * Settles invoices from SePay transfers whose content carries the invoice number. Booking
@@ -86,7 +72,11 @@ export class FirstRentPaymentListener {
           amount: event.amount,
           providerRef,
           paidAt: new Date(event.transactionDate),
-          metadata: payable ? {} : { needsReview: `invoice ${invoice.status}` },
+          metadata: {
+            ...(payable ? {} : { needsReview: `invoice ${invoice.status}` }),
+            // Kept so a later hand-recorded payment cannot reuse this transfer's bank reference.
+            ...(event.referenceCode ? { referenceCode: event.referenceCode } : {}),
+          },
         });
         if (!payable) return 'needs-review';
 

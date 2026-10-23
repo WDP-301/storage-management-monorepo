@@ -3,13 +3,16 @@ import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { Invoice } from '@entities/invoice.entity';
 import { InvoiceItem } from '@entities/invoice-item.entity';
+import { Notification } from '@entities/notification.entity';
 import { Payment } from '@entities/payment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { NotificationsService } from '@modules/notifications/notifications.service';
 import {
   ContractStatus,
   InspectionType,
   InvoiceItemType,
   InvoiceStatus,
+  NotificationType,
   PaymentMethod,
   PaymentStatus,
   PaymentType,
@@ -84,16 +87,57 @@ describe('FirstRentService', () => {
         return { affected: 1 };
       }),
       getRepository: jest.fn(repo),
+      insert: jest.fn(async () => ({ identifiers: [] })),
     };
     const dataSource = {
       transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)),
       getRepository: em.getRepository,
     };
     const config = { get: jest.fn((key: string) => `cfg-${key}`) };
-    service = new FirstRentService(dataSource as never, config as never);
+    service = new FirstRentService(
+      dataSource as never,
+      config as never,
+      // Real service: notifications are written through the transaction's `em.insert`.
+      new NotificationsService({} as never),
+    );
   });
 
   describe('issue', () => {
+    const notified = () =>
+      em.insert.mock.calls
+        .filter(([entity]) => entity === Notification)
+        .flatMap(([, rows]) => rows as Array<Record<string, unknown>>);
+
+    it('tells the customer to pay, with the contract to open', async () => {
+      await service.issue('contract-1', STAFF);
+
+      expect(notified()).toEqual([
+        expect.objectContaining({
+          userId: 'customer-1',
+          type: NotificationType.INVOICE_ISSUED,
+          title: 'Thanh toán tiền thuê tháng đầu',
+          data: expect.objectContaining({ invoiceId: 'inv-1', contractId: 'contract-1' }),
+        }),
+      ]);
+    });
+
+    it('sends nothing for a free unit, settled from the start', async () => {
+      contract = { ...contract, monthlyPriceSnapshot: 0 };
+
+      await service.issue('contract-1', STAFF);
+
+      expect(notified()).toEqual([]);
+    });
+
+    it('does not notify again when the invoice was already issued', async () => {
+      await service.issue('contract-1', STAFF);
+      em.insert.mockClear();
+
+      await service.issue('contract-1', STAFF);
+
+      expect(notified()).toEqual([]);
+    });
+
     it('bills one month of the contract price and returns a QR carrying the invoice number', async () => {
       const summary = await service.issue('contract-1', STAFF);
 

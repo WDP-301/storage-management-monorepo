@@ -15,6 +15,8 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ContractCancelService } from './contract-cancel.service';
 import { ContractDocumentsService } from './contract-documents.service';
+import { ContractInvoicesController } from './contract-invoices.controller';
+import { ContractInvoicesService } from './contract-invoices.service';
 import { ContractQueryService } from './contract-query.service';
 import { ContractReturnController } from './contract-return.controller';
 import { ContractReturnService } from './contract-return.service';
@@ -44,7 +46,7 @@ import { TermEndReminderService } from './term-end-reminder.service';
     NotificationsModule,
     SettingsModule,
   ],
-  controllers: [ContractsController, ContractReturnController],
+  controllers: [ContractsController, ContractReturnController, ContractInvoicesController],
   providers: [
     ContractsService,
     ContractQueryService,
@@ -53,6 +55,7 @@ import { TermEndReminderService } from './term-end-reminder.service';
     ManagedReturnService,
     ReturnPreviewService,
     ContractCancelService,
+    ContractInvoicesService,
     FirstRentService,
     FirstRentPaymentListener,
     TermEndReminderService,

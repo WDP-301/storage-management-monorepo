@@ -6,7 +6,8 @@ import type { EntityManager } from 'typeorm';
 /**
  * Refuses (409 FILE_IN_USE) to delete an upload that is evidence of a finalized inspection —
  * of the inspection itself or of one of its damages — or of a deposit settlement. Files of
- * inspections still being edited may go: staff replace photos while inspecting.
+ * inspections still being edited may go: staff replace photos while inspecting. Proof of a
+ * hand-recorded payment is kept too.
  */
 export async function assertFileKeyUnreferenced(em: EntityManager, fileKey: string): Promise<void> {
   const file = JSON.stringify([{ fileKey }]);
@@ -16,13 +17,15 @@ export async function assertFileKeyUnreferenced(em: EntityManager, fileKey: stri
       WHERE i.finalized_at IS NOT NULL AND (i.evidence @> $1::jsonb OR i.damages @> $2::jsonb)
      UNION ALL
      SELECT 1 FROM contract_settlements s WHERE s.evidence @> $1::jsonb
+     UNION ALL
+     SELECT 1 FROM payments p WHERE p.metadata->'evidence' @> $1::jsonb
      LIMIT 1`,
     [file, damage],
   );
   if (rows.length > 0) {
     throw new DomainException(
       ErrorCode.FILE_IN_USE,
-      'Tệp đang là chứng cứ của biên bản đã chốt hoặc quyết toán cọc — không thể xoá',
+      'Tệp đang là chứng cứ của biên bản đã chốt, quyết toán cọc hoặc khoản thanh toán — không thể xoá',
       HttpStatus.CONFLICT,
       { fileKey },
     );

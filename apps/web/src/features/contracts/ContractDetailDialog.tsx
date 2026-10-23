@@ -13,6 +13,7 @@ import { formatVnd } from '../warehouses/warehouse-display';
 import { ContractAmenitiesSection } from './ContractAmenitiesSection';
 import { ContractDocumentsPanel } from './ContractDocumentsPanel';
 import { ContractEditDialog } from './ContractEditDialog';
+import { ContractInvoicesSection } from './ContractInvoicesSection';
 import { ContractSettlementSection } from './ContractSettlementSection';
 import { ContractStaffSection } from './ContractStaffSection';
 import {
@@ -201,6 +202,14 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
             onSave={saveDocuments}
             onInvalid={setError}
           />
+
+          {canCancel && (
+            <ContractInvoicesSection
+              key={contract.id}
+              contractId={contract.id}
+              onChanged={onChanged}
+            />
+          )}
 
           {canManage && contract.status === 'ENDED' && (
             <ContractSettlementSection

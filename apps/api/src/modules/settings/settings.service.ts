@@ -106,6 +106,11 @@ export class SettingsService {
     return this.getNumber('access.check_in_qr_ttl_minutes');
   }
 
+  /** Hour (Vietnam time) shelf warehouses close; open visits are auto-closed then. */
+  async getAccessClosingHour(): Promise<number> {
+    return this.getNumber('access.closing_hour');
+  }
+
   /** Notice (days) a customer must give to return early without losing a month of rent. */
   async getReturnNoticeDays(): Promise<number> {
     return this.getNumber('contract.return_notice_days');

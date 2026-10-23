@@ -5,6 +5,7 @@ import { Injectable } from '@nestjs/common';
 import { AccessEventType } from '@storage/types';
 import { DataSource } from 'typeorm';
 import { assertCustomerCanEnter, buildPayload } from './check-in-eligibility';
+import { findOpenVisit } from './open-visit.query';
 
 export interface AccessPassView {
   id: string;
@@ -35,7 +36,11 @@ export class AccessPassService {
       // foreign-key checks on the user (sessions, a scan's verified_by) unblocked.
       await em.query(`SELECT 1 FROM "app_users" WHERE "id" = $1 FOR NO KEY UPDATE`, [user.id]);
 
-      await assertCustomerCanEnter(em, user.id, new Date());
+      // A customer inside a warehouse always gets a code: it is their way out, and leaving is
+      // never refused. Otherwise the entry rules are checked now so the customer learns early.
+      if (!(await findOpenVisit(em, user.id))) {
+        await assertCustomerCanEnter(em, user.id, new Date());
+      }
 
       // The app issues a pass on every rotation, so unused ones would pile up forever. Passes that
       // expired over a day ago are dropped here; recent ones stay so a stale scan reads "expired".

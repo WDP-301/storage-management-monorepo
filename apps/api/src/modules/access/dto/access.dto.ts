@@ -29,6 +29,20 @@ export class CheckInDto {
   warehouseId: string;
 }
 
+export class InsideQueryDto {
+  @ApiProperty({ format: 'uuid', description: 'Shelf warehouse to list the visitors of' })
+  @IsUUID('all')
+  warehouseId: string;
+}
+
+export class ManualCheckOutDto {
+  @ApiProperty({ description: 'Why the exit was not scanned', example: 'Khách hết pin điện thoại' })
+  @IsString()
+  @Matches(/\S/, { message: 'note must not be blank' })
+  @MaxLength(255)
+  note: string;
+}
+
 export class ListCheckInsQueryDto {
   @ApiPropertyOptional({ format: 'uuid', description: 'Only check-ins at this facility' })
   @IsUUID('all')

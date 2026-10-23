@@ -19,12 +19,18 @@ describe('CheckInService.verify', () => {
   let overdue: { invoiceNo: string }[];
   let contracts: { id: string; effectiveAt: Date }[];
   let warehouse: Record<string, unknown> | null;
+  let openVisit: Record<string, unknown> | null;
   let em: { query: jest.Mock; find: jest.Mock; findOne: jest.Mock };
+  let notifications: { createForUsers: jest.Mock };
   let service: CheckInService;
 
   const updated = () => em.query.mock.calls.some(([sql]) => sql.startsWith('UPDATE'));
   const passLookups = () =>
-    em.query.mock.calls.filter(([sql]) => sql.includes('FROM "access_events"'));
+    em.query.mock.calls.filter(([sql]) => sql.includes('"qr_token_hash" = $1'));
+  const passUpdate = () =>
+    em.query.mock.calls.find(([sql]) => sql.includes('"verified_by" = $2')) as [string, unknown[]];
+  const visitCloses = () =>
+    em.query.mock.calls.filter(([sql]) => sql.includes('SET "checked_out_at"'));
 
   beforeEach(() => {
     pass = { id: 'p-1', customerId: 'cust-1', usedAt: null, verifiedBy: null, expired: false };
@@ -38,6 +44,7 @@ describe('CheckInService.verify', () => {
       },
     ];
     overdue = [];
+    openVisit = null;
     contracts = [{ id: 'c-1', effectiveAt: new Date('2020-01-01T00:00:00Z') }];
     warehouse = {
       id: 'w-1',
@@ -48,7 +55,23 @@ describe('CheckInService.verify', () => {
     };
     em = {
       query: jest.fn(async (sql: string) => {
-        if (sql.includes('FROM "access_events"')) return pass ? [pass] : [];
+        if (sql.includes('FROM "user_role_assignments"'))
+          return [{ userId: 'fm-1', facilityId: 'f-2' }];
+        if (sql.includes('ANY($1::uuid[])')) {
+          return [
+            {
+              id: 'v-0',
+              facilityId: 'f-2',
+              customerName: 'An',
+              warehouseCode: 'W-2',
+              usedAt: new Date(),
+            },
+          ];
+        }
+        if (sql.startsWith('SELECT') && sql.includes('"checked_out_at" IS NULL')) {
+          return openVisit ? [openVisit] : [];
+        }
+        if (sql.includes('"qr_token_hash" = $1')) return pass ? [pass] : [];
         if (sql.includes('FROM "contracts"')) return contracts;
         if (sql.includes('FROM "invoices"')) return overdue;
         // The postgres driver returns UPDATE … RETURNING as [rows, affectedCount].
@@ -67,7 +90,11 @@ describe('CheckInService.verify', () => {
         return null;
       }),
     };
-    service = new CheckInService({ transaction: jest.fn((cb) => cb(em)) } as never);
+    notifications = { createForUsers: jest.fn(async () => 1) };
+    service = new CheckInService(
+      { transaction: jest.fn((cb) => cb(em)) } as never,
+      notifications as never,
+    );
   });
 
   const reason = (r: string) => ({
@@ -113,17 +140,16 @@ describe('CheckInService.verify', () => {
   it('consumes the pass, records the warehouse and returns the entry view', async () => {
     const result = await service.verify(staff, payload, 'w-1');
 
-    const update = em.query.mock.calls.find(([sql]) => sql.startsWith('UPDATE')) as [
-      string,
-      unknown[],
-    ];
-    expect(update[1]).toEqual(['p-1', 'staff-1', 'w-1', 'f-1']);
+    expect(passUpdate()[1]).toEqual(['p-1', 'staff-1', 'w-1', 'f-1', 'CHECK_IN']);
+    expect(visitCloses()).toHaveLength(0);
     expect(result).toEqual({
       eventId: 'p-1',
       usedAt: new Date('2026-03-01T10:00:00Z'),
       customer: { fullName: 'An', phone: '0900' },
       warehouse: { code: 'W-1', name: 'Warehouse 1' },
       facility: { code: 'F-1', name: 'HCM' },
+      direction: 'IN',
+      checkedInAt: null,
     });
   });
 
@@ -193,5 +219,71 @@ describe('CheckInService.verify', () => {
       response: { code: 'CHECK_IN_NOT_ALLOWED', details: { reason: 'CONTRACT_NOT_STARTED' } },
     });
     expect(updated()).toBe(false);
+  });
+
+  describe('when the customer is inside', () => {
+    const since = new Date('2026-03-01T08:00:00Z');
+
+    it('checks out at the warehouse of the open visit, linking the exit scan', async () => {
+      openVisit = { id: 'v-1', warehouseId: 'w-1', facilityId: 'f-1', usedAt: since };
+
+      const result = await service.verify(staff, payload, 'w-1');
+
+      expect(passUpdate()[1]).toEqual(['p-1', 'staff-1', 'w-1', 'f-1', 'CHECK_OUT']);
+      const [[sql, params]] = visitCloses();
+      expect(sql).toContain('"checked_out_at" IS NULL');
+      expect(params).toEqual(['v-1', 'staff-1', 'SCAN', null, 'p-1']);
+      expect(result).toMatchObject({ direction: 'OUT', checkedInAt: since });
+    });
+
+    it('locks the open visit before deciding the direction', async () => {
+      openVisit = { id: 'v-1', warehouseId: 'w-1', facilityId: 'f-1', usedAt: since };
+      await service.verify(staff, payload, 'w-1');
+
+      const lookup = em.query.mock.calls.find(
+        ([sql]) => sql.startsWith('SELECT') && sql.includes('"checked_out_at" IS NULL'),
+      );
+      expect(lookup?.[0]).toContain('FOR UPDATE');
+      expect(lookup?.[1]).toEqual(['cust-1']);
+    });
+
+    it('never refuses an exit, even with overdue invoices or no contract left', async () => {
+      openVisit = { id: 'v-1', warehouseId: 'w-1', facilityId: 'f-1', usedAt: since };
+      overdue = [{ invoiceNo: 'INV-1' }];
+      contracts = [];
+
+      await expect(service.verify(staff, payload, 'w-1')).resolves.toMatchObject({
+        direction: 'OUT',
+      });
+    });
+
+    it('entering another warehouse closes the forgotten visit and tells its managers', async () => {
+      openVisit = { id: 'v-0', warehouseId: 'w-2', facilityId: 'f-2', usedAt: since };
+
+      const result = await service.verify(staff, payload, 'w-1');
+
+      const [[, params]] = visitCloses();
+      expect(params).toEqual(['v-0', null, 'AUTO', 'Checked in at another warehouse', null]);
+      expect(notifications.createForUsers).toHaveBeenCalledWith(
+        em,
+        ['fm-1'],
+        expect.objectContaining({
+          type: 'CHECK_OUT_MISSED',
+          data: expect.objectContaining({ visitId: 'v-0' }),
+        }),
+      );
+      expect(passUpdate()[1]).toEqual(['p-1', 'staff-1', 'w-1', 'f-1', 'CHECK_IN']);
+      expect(result.direction).toBe('IN');
+    });
+
+    it('keeps the other visit open when the new entry is refused', async () => {
+      openVisit = { id: 'v-0', warehouseId: 'w-2', facilityId: 'f-2', usedAt: since };
+      overdue = [{ invoiceNo: 'INV-1' }];
+
+      await expect(service.verify(staff, payload, 'w-1')).rejects.toMatchObject({
+        response: { code: 'INVOICE_OVERDUE' },
+      });
+      expect(updated()).toBe(false);
+    });
   });
 });

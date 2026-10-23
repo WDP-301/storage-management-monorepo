@@ -2,7 +2,7 @@ import { AppUser } from '@entities/app-user.entity';
 import { Contract } from '@entities/contract.entity';
 import { Facility } from '@entities/facility.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
-import { AccessEventType } from '@storage/types';
+import { AccessEventType, CheckOutMethod } from '@storage/types';
 import {
   Check,
   Column,
@@ -15,8 +15,9 @@ import {
 } from 'typeorm';
 
 /**
- * A row is a check-in pass: inserted when the customer's app shows the QR; `usedAt` and the warehouse
- * are set when staff scan it. Passes belong to the customer; `contractId` and
+ * A row is a pass: inserted when the customer's app shows the QR; `usedAt` and the warehouse
+ * are set when staff scan it. A used CHECK_IN row is a visit, open until `checkedOutAt` is set;
+ * the exit scan's own pass row is stored as CHECK_OUT and linked from `checkOutEventId`. Passes belong to the customer; `contractId` and
  * `storageUnitId` are only set on entries made when passes were still issued per shelf contract.
  */
 @Entity('access_events')
@@ -28,6 +29,9 @@ import {
 )
 // DESC ordering is not expressible in the decorator, so the migration owns the real definition.
 @Index('IDX_access_events_facility_used', { synchronize: false })
+// Partial indexes (one open visit per customer, open visits per warehouse) live in the migration.
+@Index('IDX_access_events_customer_inside', { synchronize: false })
+@Index('IDX_access_events_warehouse_inside', { synchronize: false })
 export class AccessEvent {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -65,6 +69,22 @@ export class AccessEvent {
   @Column({ type: 'uuid', nullable: true, name: 'verified_by' })
   verifiedBy?: string;
 
+  /** Visit end; null while the customer is inside. Only on used CHECK_IN rows. */
+  @Column({ type: 'timestamptz', nullable: true, name: 'checked_out_at' })
+  checkedOutAt: Date | null;
+
+  @Column({ type: 'uuid', nullable: true, name: 'checked_out_by' })
+  checkedOutBy: string | null;
+
+  @Column({ type: 'varchar', length: 10, nullable: true, name: 'check_out_method' })
+  checkOutMethod: CheckOutMethod | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true, name: 'check_out_note' })
+  checkOutNote: string | null;
+
+  @Column({ type: 'uuid', nullable: true, name: 'check_out_event_id' })
+  checkOutEventId: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
@@ -91,4 +111,8 @@ export class AccessEvent {
   @ManyToOne(() => AppUser, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'verified_by' })
   verifier?: AppUser;
+
+  @ManyToOne(() => AppUser, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'checked_out_by' })
+  checkOutVerifier?: AppUser | null;
 }

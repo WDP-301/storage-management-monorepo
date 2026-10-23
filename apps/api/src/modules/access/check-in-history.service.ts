@@ -8,7 +8,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { buildPaginationMeta } from '@shared/models/api-response';
 import { escapeLikePattern } from '@shared/utils/like-pattern.util';
-import type { PaginationMeta } from '@storage/types';
+import { AccessEventType, type PaginationMeta } from '@storage/types';
 import { DataSource, Repository } from 'typeorm';
 import { type CheckInHistoryView, toCheckInView } from './check-in.view';
 import type { ListCheckInsQueryDto } from './dto/access.dto';
@@ -37,7 +37,9 @@ export class CheckInHistoryService {
       .leftJoinAndSelect('pass.warehouse', 'warehouse')
       .innerJoinAndSelect('pass.facility', 'facility')
       .leftJoinAndSelect('pass.verifier', 'verifier')
-      .where('pass.usedAt IS NOT NULL');
+      .where('pass.usedAt IS NOT NULL')
+      // Visits only: an exit scan is shown on its visit, not as an entry of its own.
+      .andWhere('pass.eventType = :entry', { entry: AccessEventType.CHECK_IN });
 
     if (scope) qb.andWhere('pass.facilityId IN (:...scope)', { scope });
     if (query.from) qb.andWhere('pass.usedAt >= :from', { from: new Date(query.from) });

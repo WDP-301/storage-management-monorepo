@@ -1,10 +1,13 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Button } from 'heroui-native';
 import { useRef, useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { ScrollView, Text, TextInput, View } from 'react-native';
 import { AccessApi, type CheckInResult, type ScanWarehouse } from '../../../lib/access-api';
 import { ApiError } from '../../../lib/api';
+import { formatIsoDateTime } from '../../../lib/format-vi';
+import { formatStay } from '../../../lib/visit-format';
 import { ScanWarehousePicker } from './ScanWarehousePicker';
+import { StaffInsideList } from './StaffInsideList';
 
 export function StaffScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -14,6 +17,7 @@ export function StaffScanScreen() {
   const [result, setResult] = useState<CheckInResult | null>(null);
   const [paused, setPaused] = useState(false);
   const [warehouse, setWarehouse] = useState<ScanWarehouse | null>(null);
+  const [insideRefresh, setInsideRefresh] = useState(0);
   const lock = useRef(false);
   const submit = async (value: string) => {
     if (lock.current || !value.trim() || !warehouse) return;
@@ -26,6 +30,7 @@ export function StaffScanScreen() {
       const checkIn = await AccessApi.checkIn(value.trim(), warehouse.id);
       setResult(checkIn);
       setPayload('');
+      setInsideRefresh((key) => key + 1);
     } catch (cause) {
       setError(scanError(cause));
     } finally {
@@ -34,10 +39,15 @@ export function StaffScanScreen() {
     }
   };
   return (
-    <View className="flex-1 gap-4 bg-background px-4 pt-6">
-      <Text className="font-strong text-title-md text-foreground">Quét mã vào kho</Text>
+    <ScrollView
+      className="flex-1 bg-background"
+      contentContainerClassName="gap-4 px-4 pt-6 pb-10"
+      keyboardShouldPersistTaps="handled"
+    >
+      <Text className="font-strong text-title-md text-foreground">Quét mã vào / ra kho</Text>
       <Text className="font-body text-body-sm text-muted">
-        Chọn kho rồi quét mã QR trên điện thoại khách thuê kệ. Mỗi mã chỉ dùng một lần.
+        Chọn kho rồi quét mã QR trên điện thoại khách thuê kệ, cả lúc vào và lúc ra. Hệ thống tự
+        biết khách đang vào hay ra. Mỗi mã chỉ dùng một lần.
       </Text>
       <ScanWarehousePicker value={warehouse} onChange={setWarehouse} />
       {!warehouse ? null : permission?.granted ? (
@@ -89,7 +99,9 @@ export function StaffScanScreen() {
       ) : null}
       {result ? (
         <View className="gap-2 rounded-xl border border-success bg-success-bg p-4">
-          <Text className="font-strong text-body-md text-success">Đã ghi nhận vào kho</Text>
+          <Text className="font-strong text-body-md text-success">
+            {result.direction === 'OUT' ? 'Đã ghi nhận ra kho' : 'Đã ghi nhận vào kho'}
+          </Text>
           <Text className="font-body text-body-sm text-foreground">
             Khách: {result.customer.fullName ?? result.customer.phone ?? '—'}
           </Text>
@@ -97,8 +109,14 @@ export function StaffScanScreen() {
             Kho: {result.warehouse?.name ?? result.facility.name}
           </Text>
           <Text className="font-body text-caption text-muted">
-            {new Date(result.usedAt).toLocaleString('vi-VN')}
+            {result.direction === 'OUT' ? 'Ra lúc' : 'Vào lúc'} {formatIsoDateTime(result.usedAt)}
           </Text>
+          {result.direction === 'OUT' && result.checkedInAt ? (
+            <Text className="font-body text-caption text-muted">
+              Vào lúc {formatIsoDateTime(result.checkedInAt)} · ở trong kho{' '}
+              {formatStay(result.checkedInAt, Date.parse(result.usedAt))}
+            </Text>
+          ) : null}
           <Button
             variant="secondary"
             onPress={() => {
@@ -110,7 +128,8 @@ export function StaffScanScreen() {
           </Button>
         </View>
       ) : null}
-    </View>
+      {warehouse ? <StaffInsideList warehouseId={warehouse.id} refreshKey={insideRefresh} /> : null}
+    </ScrollView>
   );
 }
 

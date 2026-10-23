@@ -7,6 +7,7 @@ const user = { id: 'cust-1' } as AuthUser;
 describe('AccessPassService.createPass', () => {
   let contracts: { id: string; effectiveAt: Date }[];
   let overdue: { invoiceNo: string }[];
+  let openVisit: Record<string, unknown> | null;
   let em: { query: jest.Mock };
   let order: string[];
   let service: AccessPassService;
@@ -15,8 +16,10 @@ describe('AccessPassService.createPass', () => {
     order = [];
     contracts = [{ id: 'c-1', effectiveAt: new Date('2020-01-01T00:00:00Z') }];
     overdue = [];
+    openVisit = null;
     em = {
       query: jest.fn(async (sql: string) => {
+        if (sql.includes('"checked_out_at" IS NULL')) return openVisit ? [openVisit] : [];
         if (sql.includes('FOR NO KEY UPDATE')) {
           order.push('lock');
           return [{}];
@@ -121,5 +124,14 @@ describe('AccessPassService.createPass', () => {
     ];
 
     await expect(service.createPass(user)).resolves.toMatchObject({ id: 'pass-1' });
+  });
+
+  it('issues an exit code to a customer inside, whatever they owe', async () => {
+    openVisit = { id: 'v-1', warehouseId: 'w-1', facilityId: 'f-1', usedAt: new Date() };
+    overdue = [{ invoiceNo: 'INV-1' }];
+    contracts = [];
+
+    await expect(service.createPass(user)).resolves.toMatchObject({ id: 'pass-1' });
+    expect(em.query.mock.calls.some(([sql]) => sql.includes('FROM "invoices"'))).toBe(false);
   });
 });

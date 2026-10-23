@@ -33,6 +33,7 @@ const KNOWN_TYPES: Record<NotificationType, NotificationDisplay> = {
   REFUND_COMPLETED: { label: 'Hoàn tiền', icon: 'refund', tone: 'success' },
   CONTRACT_TERM_ENDING: { label: 'Sắp hết hạn', icon: 'ending', tone: 'warning' },
   CONTRACT_OVERDUE: { label: 'Quá hạn', icon: 'overdue', tone: 'danger' },
+  CHECK_OUT_MISSED: { label: 'Chưa check-out', icon: 'overdue', tone: 'warning' },
 };
 
 const FALLBACK_DISPLAY: NotificationDisplay = {

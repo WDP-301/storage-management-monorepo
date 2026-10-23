@@ -3,18 +3,25 @@ import { Button } from 'heroui-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
-import { AccessApi, type AccessPass } from '../../../lib/access-api';
+import { AccessApi, type AccessPass, type Visit } from '../../../lib/access-api';
 import { ApiError } from '../../../lib/api';
+import { formatIsoDateTime } from '../../../lib/format-vi';
+import { formatStay, visitStatusLabel, visitsSignature } from '../../../lib/visit-format';
 import type { ApiContract } from '../../types/contract-api';
+
+/** How often the card checks whether the shown code was just scanned (entry or exit). */
+const VISIT_POLL_MS = 5000;
+const RECENT_SHOWN = 5;
 
 function vietnamDayIso(time: number): string {
   return new Date(time + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 /**
- * The customer's single check-in code for every shelf warehouse they rent in; staff pick the
- * warehouse when scanning. It is issued when the screen gains focus, replaced as soon as it
- * expires, and dropped when the screen loses focus.
+ * The customer's single code for every shelf warehouse they rent in, shown at entry and again at
+ * exit; staff pick the warehouse when scanning. It is issued when the screen gains focus, replaced
+ * as soon as it expires or is scanned, and dropped when the screen loses focus. While the screen
+ * is open the card polls the customer's visits, so a scan shows up and the used code is replaced.
  */
 export function ShelfAccessCard({ contracts }: { contracts: ApiContract[] }) {
   const shelves = contracts.filter(
@@ -22,10 +29,13 @@ export function ShelfAccessCard({ contracts }: { contracts: ApiContract[] }) {
   );
   // The API stores the chosen rental day at noon UTC (19:00 in Vietnam).
   // Compare calendar days so the code opens at midnight on the displayed start date.
-  const eligible = shelves.some(
+  const started = shelves.some(
     (contract) =>
       vietnamDayIso(new Date(contract.effectiveAt).getTime()) <= vietnamDayIso(Date.now()),
   );
+  const [visits, setVisits] = useState<{ current: Visit | null; recent: Visit[] } | null>(null);
+  // A customer inside always needs a code to leave, whatever their contracts say now.
+  const eligible = started || visits?.current != null;
 
   // The deadline is taken from ttlSeconds on the device clock, so a phone whose clock is off
   // neither shows a dead code nor rotates in a loop.
@@ -75,21 +85,64 @@ export function ShelfAccessCard({ contracts }: { contracts: ApiContract[] }) {
     }, [eligible, create]),
   );
 
+  const hasShelves = shelves.length > 0;
+  const signatureRef = useRef<string | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasShelves) return;
+      let alive = true;
+      const poll = async () => {
+        try {
+          const next = await AccessApi.myVisits();
+          if (!alive) return;
+          setVisits(next);
+          const signature = visitsSignature(next);
+          // An entry or exit since the last poll means the code on screen was just used.
+          if (signatureRef.current !== null && signatureRef.current !== signature) void create();
+          signatureRef.current = signature;
+        } catch {
+          // The code still works without the status; the next poll retries.
+        }
+      };
+      void poll();
+      const timer = setInterval(() => void poll(), VISIT_POLL_MS);
+      return () => {
+        alive = false;
+        clearInterval(timer);
+        signatureRef.current = null;
+      };
+    }, [hasShelves, create]),
+  );
+
   const seconds = pass ? Math.max(0, Math.ceil((pass.deadline - now) / 1000)) : 0;
   const expired = pass !== null && seconds === 0;
   useEffect(() => {
     if (expired) void create();
   }, [expired, create]);
 
-  if (shelves.length === 0) return null;
+  if (!hasShelves) return null;
+  const current = visits?.current ?? null;
 
   return (
     <View className="mt-4 items-center gap-3 rounded-xl border border-border bg-surface p-4">
-      <Text className="self-start font-strong text-body-md text-foreground">Mã vào kho</Text>
+      <Text className="self-start font-strong text-body-md text-foreground">Mã vào / ra kho</Text>
+      {current ? (
+        <View className="self-stretch gap-1 rounded-lg border border-success bg-success-bg p-3">
+          <Text className="font-strong text-body-sm text-success">
+            Bạn đang ở kho {current.warehouse?.name ?? current.facility?.name ?? ''}
+          </Text>
+          <Text className="font-body text-caption text-foreground">
+            Vào lúc {formatIsoDateTime(current.checkedInAt)} ·{' '}
+            {formatStay(current.checkedInAt, now)}. Đưa mã cho nhân viên quét khi ra.
+          </Text>
+        </View>
+      ) : null}
       <Text className="self-start font-body text-body-sm text-muted">
-        {eligible
-          ? 'Một mã dùng cho mọi kho bạn đang thuê kệ. Đưa mã cho nhân viên quét khi vào kho.'
-          : 'Có thể dùng mã khi tới ngày bắt đầu thuê kệ.'}
+        {current
+          ? 'Mã này dùng để ra kho.'
+          : eligible
+            ? 'Một mã dùng cho mọi kho bạn đang thuê kệ. Đưa mã cho nhân viên quét khi vào và khi ra kho.'
+            : 'Có thể dùng mã khi tới ngày bắt đầu thuê kệ.'}
       </Text>
       {eligible && pass && seconds > 0 ? (
         <>
@@ -110,6 +163,24 @@ export function ShelfAccessCard({ contracts }: { contracts: ApiContract[] }) {
         <Button isDisabled={busy} variant="secondary" onPress={() => void create()}>
           <Button.Label>{busy ? 'Đang tạo mã…' : 'Thử lại'}</Button.Label>
         </Button>
+      ) : null}
+      {visits && visits.recent.length > 0 ? (
+        <View className="self-stretch gap-2 border-t border-border pt-3">
+          <Text className="font-strong text-body-sm text-foreground">Lịch sử ra vào</Text>
+          {visits.recent.slice(0, RECENT_SHOWN).map((visit) => (
+            <View key={visit.id} className="gap-0.5">
+              <Text className="font-body text-body-sm text-foreground">
+                {visit.warehouse?.name ?? visit.facility?.name ?? '—'} · {visitStatusLabel(visit)}
+              </Text>
+              <Text className="font-body text-caption text-muted">
+                Vào {formatIsoDateTime(visit.checkedInAt)}
+                {visit.checkedOutAt && visit.checkOutMethod !== 'AUTO'
+                  ? ` · Ra ${formatIsoDateTime(visit.checkedOutAt)}`
+                  : ''}
+              </Text>
+            </View>
+          ))}
+        </View>
       ) : null}
     </View>
   );

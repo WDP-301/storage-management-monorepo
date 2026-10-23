@@ -43,6 +43,7 @@ test('every notification type has its own label and a type unknown to this build
     'REFUND_COMPLETED',
     'CONTRACT_TERM_ENDING',
     'CONTRACT_OVERDUE',
+    'CHECK_OUT_MISSED',
   ]) {
     assert.notEqual(notificationDisplay(type).icon, 'default', type);
   }

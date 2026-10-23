@@ -229,6 +229,14 @@ export const AccessEventType = {
 } as const;
 export type AccessEventType = (typeof AccessEventType)[keyof typeof AccessEventType];
 
+/** How a visit (a used CHECK_IN) was closed: exit scan, staff by hand, or the closing-time sweep. */
+export const CheckOutMethod = {
+  SCAN: 'SCAN',
+  MANUAL: 'MANUAL',
+  AUTO: 'AUTO',
+} as const;
+export type CheckOutMethod = (typeof CheckOutMethod)[keyof typeof CheckOutMethod];
+
 export const InspectionType = {
   PRE_HANDOVER: 'PRE_HANDOVER',
   RETURN: 'RETURN',
@@ -309,6 +317,8 @@ export const NotificationType = {
   REFUND_COMPLETED: 'REFUND_COMPLETED',
   CONTRACT_TERM_ENDING: 'CONTRACT_TERM_ENDING',
   CONTRACT_OVERDUE: 'CONTRACT_OVERDUE',
+  /** A visit was still open at closing time and was closed without an exit scan. */
+  CHECK_OUT_MISSED: 'CHECK_OUT_MISSED',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 

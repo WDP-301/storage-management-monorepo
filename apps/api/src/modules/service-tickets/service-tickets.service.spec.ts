@@ -189,6 +189,51 @@ describe('ServiceTicketsService', () => {
       description: 'The lock is not working.',
     };
 
+    it("keeps the customer's own uploads as attachments", async () => {
+      facilities.findOne.mockResolvedValue({ id: 'facility-1' });
+      ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
+      em.findOneOrFail.mockResolvedValue(buildTicket({ customerId: 'customer-1' }));
+      const photo = {
+        fileKey: 'uploads/customer-1-1729000000000-0123456789abcdef-lock.jpg',
+        name: 'lock.jpg',
+        mimeType: 'image/jpeg',
+        size: 2048,
+      };
+
+      await service.create(
+        { ...dto, attachments: [photo] },
+        buildActor({ id: 'customer-1' }),
+        'key-1',
+      );
+
+      expect(tickets.create).toHaveBeenCalledWith(
+        expect.objectContaining({ attachments: [photo] }),
+      );
+    });
+
+    it("refuses to attach a file the customer didn't upload", async () => {
+      const foreign = {
+        fileKey: 'uploads/customer-2-1729000000000-0123456789abcdef-contract.pdf',
+        name: 'contract.pdf',
+        mimeType: 'application/pdf',
+      };
+
+      await expect(
+        service.create(
+          { ...dto, attachments: [foreign] },
+          buildActor({ id: 'customer-1' }),
+          'key-1',
+        ),
+      ).rejects.toMatchObject({
+        status: 400,
+        response: {
+          code: 'VALIDATION_FAILED',
+          details: { fields: [expect.objectContaining({ field: 'attachments' })] },
+        },
+      });
+      expect(tickets.create).not.toHaveBeenCalled();
+    });
+
     it('creates the ticket owned by the session user with no assignee', async () => {
       facilities.findOne.mockResolvedValue({ id: 'facility-1' });
       ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
@@ -1422,7 +1467,9 @@ describe('ServiceTicketsService', () => {
           {
             priority: TicketPriority.HIGH,
             resolution: 'Waiting for parts',
-            attachments: ['a.png'],
+            attachments: [
+              { fileKey: 'uploads/admin-1-1-ab-a.png', name: 'a.png', mimeType: 'image/png' },
+            ],
           },
           admin,
         );

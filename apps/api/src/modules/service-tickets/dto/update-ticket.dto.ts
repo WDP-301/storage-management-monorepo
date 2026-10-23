@@ -1,6 +1,17 @@
+import { EvidenceFileDto } from '@modules/inspection/dto/inspection-evidence.dto';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { TicketPriority, TicketStatus } from '@storage/types';
-import { IsArray, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsEnum,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
+import { MAX_TICKET_ATTACHMENTS } from './create-ticket.dto';
 
 /**
  * Fields an assigned FACILITY_STAFF member may update while processing a ticket;
@@ -34,8 +45,15 @@ export class UpdateTicketDto {
   @MaxLength(5000)
   resolution?: string | null;
 
-  @ApiPropertyOptional({ type: [Object], description: 'Replaces the attachment list' })
+  @ApiPropertyOptional({
+    type: [EvidenceFileDto],
+    maxItems: MAX_TICKET_ATTACHMENTS,
+    description: 'Replaces the attachment list',
+  })
   @IsOptional()
   @IsArray()
-  attachments?: unknown[];
+  @ArrayMaxSize(MAX_TICKET_ATTACHMENTS)
+  @ValidateNested({ each: true })
+  @Type(() => EvidenceFileDto)
+  attachments?: EvidenceFileDto[];
 }

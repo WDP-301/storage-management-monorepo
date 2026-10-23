@@ -11,6 +11,7 @@ import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import type { NotificationPayload } from '@modules/notifications/types/notification';
+import { isOwnUpload } from '@modules/upload/upload.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
@@ -187,6 +188,15 @@ export class ServiceTicketsService {
     actor: AuthUser,
     idempotencyKey: string,
   ): Promise<{ data: ServiceTicketResponse; isRetry: boolean }> {
+    // Upload keys carry the uploader's id. A customer may only attach their own uploads: a ticket
+    // attachment lets its owner open the file, so a foreign key would expose someone else's file.
+    if ((dto.attachments ?? []).some((file) => !isOwnUpload(file.fileKey, actor.id))) {
+      throw this.fieldValidationError(
+        'attachments',
+        'notOwnUpload',
+        'Chỉ đính kèm được tệp bạn đã tải lên',
+      );
+    }
     const requestHash = hashBody(dto as unknown as Record<string, unknown>);
     const cached = await claimIdempotencyKey(
       this.idempotencyKeys,

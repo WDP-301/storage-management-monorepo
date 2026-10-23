@@ -1,6 +1,9 @@
+import { EvidenceFileDto } from '@modules/inspection/dto/inspection-evidence.dto';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { TicketPriority } from '@storage/types';
+import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsEnum,
   IsNotEmpty,
@@ -8,7 +11,10 @@ import {
   IsString,
   IsUUID,
   MaxLength,
+  ValidateNested,
 } from 'class-validator';
+
+export const MAX_TICKET_ATTACHMENTS = 20;
 
 export class CreateTicketDto {
   @ApiProperty({ format: 'uuid', description: 'Facility the ticket is filed against' })
@@ -41,8 +47,16 @@ export class CreateTicketDto {
   @MaxLength(5000)
   description: string;
 
-  @ApiPropertyOptional({ type: [Object], default: [], description: 'Attached file references' })
+  @ApiPropertyOptional({
+    type: [EvidenceFileDto],
+    default: [],
+    maxItems: MAX_TICKET_ATTACHMENTS,
+    description: 'Files the customer uploaded themselves (POST /uploads/presigned-url)',
+  })
   @IsOptional()
   @IsArray()
-  attachments?: unknown[] = [];
+  @ArrayMaxSize(MAX_TICKET_ATTACHMENTS)
+  @ValidateNested({ each: true })
+  @Type(() => EvidenceFileDto)
+  attachments?: EvidenceFileDto[] = [];
 }

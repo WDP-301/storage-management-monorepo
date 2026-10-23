@@ -75,7 +75,11 @@ export function toServiceTicketRecord(ticket: ServiceTicket): ServiceTicketRecor
     description: ticket.description,
     resolution: ticket.resolution ?? null,
     history: ticket.history ?? [],
-    attachments: ticket.attachments ?? [],
+    // Older rows hold junk where object attachments were flattened; only real files go out, so
+    // a client that sends the list back is not refused by the typed attachment validation.
+    attachments: (ticket.attachments ?? []).filter(
+      (file) => typeof file?.fileKey === 'string' && file.fileKey !== '',
+    ),
     created_at: ticket.createdAt,
     updated_at: ticket.updatedAt,
     resolved_at: ticket.resolvedAt ?? null,

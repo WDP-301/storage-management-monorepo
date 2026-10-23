@@ -78,7 +78,6 @@ export class FirstRentService {
           taxAmount: 0,
           total: amount.toNumber(),
           issuedAt: now,
-          dueAt: now,
         }),
       );
       await em.save(

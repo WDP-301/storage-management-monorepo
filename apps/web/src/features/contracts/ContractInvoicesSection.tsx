@@ -98,12 +98,19 @@ export const ContractInvoicesSection: React.FC<Props> = ({ contractId, onChanged
                 </button>
                 <span className="text-kumo-subtle">{invoicePeriodLabel(invoice)}</span>
                 <Badge variant={badge.variant}>{badge.label}</Badge>
+                {invoice.is_overdue && invoice.status === 'PARTIALLY_PAID' && (
+                  <Badge variant="warning">Thanh toán một phần</Badge>
+                )}
                 <span className="ml-auto text-kumo-default">
                   {formatVnd(invoice.paid_amount)} / {formatVnd(invoice.total)}
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-kumo-subtle">
-                <span>Hạn thanh toán: {formatDay(iso(invoice.due_at))}</span>
+                <span>
+                  {invoice.due_at
+                    ? `Hạn thanh toán: ${formatDay(iso(invoice.due_at))}`
+                    : 'Thanh toán khi nhận kho'}
+                </span>
                 {invoice.amount_due > 0 && (
                   <span>Còn phải thu: {formatVnd(invoice.amount_due)}</span>
                 )}

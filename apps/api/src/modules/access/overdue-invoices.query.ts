@@ -1,10 +1,11 @@
+import { startOfVietnamDay } from '@shared/utils/calendar.util';
 import type { EntityManager } from 'typeorm';
 
 const MAX_LISTED = 5;
 
 /**
- * Numbers of the customer's unpaid invoices past their due date. Invoices of cancelled or deleted
- * contracts are ignored — the customer has no way to pay them — while invoices tied to no
+ * Numbers of the customer's unpaid invoices past their due date (in Vietnam calendar days).
+ * Invoices of draft, cancelled or deleted contracts are ignored, while invoices tied to no
  * contract still count. Raw SQL keeps soft-deleted contracts visible to the filter.
  */
 export async function findOverdueInvoiceNos(
@@ -20,10 +21,10 @@ export async function findOverdueInvoiceNos(
         AND i."status" IN ('ISSUED', 'PARTIALLY_PAID')
         AND i."due_at" IS NOT NULL
         AND i."due_at" < $2
-        AND (i."contract_id" IS NULL OR (c."status" <> 'CANCELLED' AND c."deleted_at" IS NULL))
+        AND (i."contract_id" IS NULL OR (c."status" NOT IN ('DRAFT', 'CANCELLED') AND c."deleted_at" IS NULL))
       ORDER BY i."due_at"
       LIMIT ${MAX_LISTED}`,
-    [customerId, now],
+    [customerId, startOfVietnamDay(now)],
   );
   return rows.map((row) => row.invoiceNo);
 }

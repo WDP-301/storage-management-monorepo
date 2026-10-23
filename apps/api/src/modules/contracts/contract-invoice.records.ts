@@ -1,5 +1,6 @@
 import type { Invoice } from '@entities/invoice.entity';
 import type { Payment } from '@entities/payment.entity';
+import { startOfVietnamDay } from '@shared/utils/calendar.util';
 import type {
   ContractInvoiceRecord,
   EvidenceFile,
@@ -71,7 +72,8 @@ export function toContractInvoiceRecord(
     paid_amount: paid.toNumber(),
     // Rounded up to whole VND — the most a hand-recorded payment may take.
     amount_due: payable ? due.ceil().toNumber() : 0,
-    is_overdue: payable && !!invoice.dueAt && invoice.dueAt < now,
+    // Due dates are shown as Vietnam calendar days; an invoice turns overdue the day after.
+    is_overdue: payable && !!invoice.dueAt && invoice.dueAt < startOfVietnamDay(now),
     payments,
   };
 }

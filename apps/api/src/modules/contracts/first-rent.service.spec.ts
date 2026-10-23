@@ -155,6 +155,7 @@ describe('FirstRentService', () => {
           total: 1500000,
         }),
       );
+      expect(invoices[0].dueAt).toBeUndefined();
       expect(em.save).toHaveBeenCalledWith(
         InvoiceItem,
         expect.objectContaining({

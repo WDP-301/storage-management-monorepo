@@ -6,6 +6,7 @@ import { Payment } from '@entities/payment.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { NotificationsService } from '@modules/notifications/notifications.service';
+import { startOfVietnamDay } from '@shared/utils/calendar.util';
 import {
   InvoiceKind,
   InvoiceStatus,
@@ -302,6 +303,16 @@ describe('ContractInvoicesService', () => {
       expect(row.is_overdue).toBe(false);
       expect(row.amount_due).toBe(0);
       expect(row.payments[0].note).toContain('Cần đối soát');
+    });
+
+    it('keeps an invoice due today or without a due date as not overdue', async () => {
+      invoice.dueAt = startOfVietnamDay(new Date());
+      const [dueToday] = await service.list('contract-1', OPS);
+      expect(dueToday.is_overdue).toBe(false);
+
+      invoice.dueAt = undefined;
+      const [firstRent] = await service.list('contract-1', OPS);
+      expect(firstRent.is_overdue).toBe(false);
     });
   });
 });

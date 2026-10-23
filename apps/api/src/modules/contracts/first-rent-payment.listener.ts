@@ -3,6 +3,11 @@ import { Payment } from '@entities/payment.entity';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { extractInvoiceNos } from '@modules/payments/invoice-no.util';
 import { generatePaymentNo } from '@modules/payments/payment-no.util';
+import {
+  lockTransferRef,
+  normalizedRefSql,
+  normalizeTransferRef,
+} from '@modules/payments/transfer-ref.util';
 import { PAYMENT_EVENTS, PaymentReceivedEvent } from '@modules/payments/types/payment';
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
@@ -14,9 +19,78 @@ import {
   PaymentStatus,
   PaymentType,
 } from '@storage/types';
-import { DataSource, In } from 'typeorm';
+import Decimal from 'decimal.js';
+import { DataSource, type EntityManager, In } from 'typeorm';
 import { PAYABLE_INVOICE_STATUSES, sumInvoicePayments } from './first-rent.util';
 import { invoicePaidNotification } from './invoice-notifications';
+
+type HandRecordedPayment = {
+  id: string;
+  invoiceId: string | null;
+  invoiceNo: string | null;
+  amount: string;
+};
+
+/**
+ * What a delivery found among hand-recorded payments carrying its bank reference: `linked` when
+ * it is that payment (same invoice), otherwise the review note to record the delivery with.
+ */
+type HandRecordedMatch = { linked: boolean; review?: string };
+
+/**
+ * When staff already recorded this transfer by hand (same bank reference) on the invoice it
+ * names, the delivery only stamps SePay's id onto that payment instead of counting the money a
+ * second time; a different amount is flagged, as the bank statement is the source of truth. When
+ * the hand-recorded payment sits on another invoice, the transfer still settles the invoice it
+ * names — its customer must not be locked out for staff's mistake — and both payments are
+ * flagged for reconciliation. Null when no hand-recorded payment carries the reference.
+ */
+async function matchHandRecordedTransfer(
+  em: EntityManager,
+  event: PaymentReceivedEvent,
+  invoice: Invoice,
+): Promise<HandRecordedMatch | null> {
+  const bankRef = normalizeTransferRef(event.referenceCode ?? '');
+  if (!bankRef) return null;
+  // Same lock as the manual path, so a payment being typed in right now is either seen here or
+  // refused there.
+  await lockTransferRef(em, bankRef);
+  const [payment]: HandRecordedPayment[] = await em.query(
+    `SELECT p."id", p."invoice_id" AS "invoiceId", i."invoice_no" AS "invoiceNo", p."amount"
+       FROM "payments" p LEFT JOIN "invoices" i ON i."id" = p."invoice_id"
+      WHERE p."provider_ref" IS NULL AND ${normalizedRefSql(`p."metadata"->>'transferRef'`)} = $1
+      ORDER BY p."created_at" LIMIT 1
+      FOR UPDATE OF p`,
+    [bankRef],
+  );
+  if (!payment) return null;
+
+  const stamp = (id: string, providerRef: string | null, metadata: Record<string, unknown>) =>
+    em.query(
+      `UPDATE "payments"
+          SET "provider_ref" = COALESCE($2, "provider_ref"), "metadata" = "metadata" || $3::jsonb
+        WHERE "id" = $1`,
+      [id, providerRef, JSON.stringify(metadata)],
+    );
+
+  if (payment.invoiceId !== invoice.id) {
+    await stamp(payment.id, null, {
+      needsReview: `trùng mã giao dịch với chuyển khoản SePay cho ${invoice.invoiceNo}`,
+    });
+    return {
+      linked: false,
+      review: `trùng mã giao dịch với khoản ghi tay trên ${payment.invoiceNo ?? 'hóa đơn khác'}`,
+    };
+  }
+  const review = new Decimal(payment.amount).eq(event.amount)
+    ? null
+    : `ghi tay ${new Decimal(payment.amount).toFixed(0)}, SePay báo ${event.amount} cho ${invoice.invoiceNo}`;
+  await stamp(payment.id, String(event.sepayId), {
+    referenceCode: event.referenceCode,
+    ...(review ? { needsReview: review } : {}),
+  });
+  return { linked: true };
+}
 
 /**
  * Settles invoices from SePay transfers whose content carries the invoice number. Booking
@@ -61,7 +135,12 @@ export class FirstRentPaymentListener {
         if (await em.getRepository(Payment).exists({ where: { providerRef } })) {
           return 'already-recorded';
         }
+        const handRecorded = await matchHandRecordedTransfer(em, event, invoice);
+        if (handRecorded?.linked) return 'recorded-by-hand';
         const payable = PAYABLE_INVOICE_STATUSES.includes(invoice.status);
+        const review = [payable ? null : `invoice ${invoice.status}`, handRecorded?.review]
+          .filter(Boolean)
+          .join('; ');
         await em.save(Payment, {
           paymentNo: generatePaymentNo(),
           invoiceId: invoice.id,
@@ -73,7 +152,7 @@ export class FirstRentPaymentListener {
           providerRef,
           paidAt: new Date(event.transactionDate),
           metadata: {
-            ...(payable ? {} : { needsReview: `invoice ${invoice.status}` }),
+            ...(review ? { needsReview: review } : {}),
             // Kept so a later hand-recorded payment cannot reuse this transfer's bank reference.
             ...(event.referenceCode ? { referenceCode: event.referenceCode } : {}),
           },

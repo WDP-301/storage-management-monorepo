@@ -42,8 +42,12 @@ export function toInvoicePaymentRecord(
     transfer_ref:
       text(metadata.transferRef) ?? text(metadata.referenceCode) ?? payment.providerRef ?? null,
     evidence: Array.isArray(metadata.evidence) ? (metadata.evidence as EvidenceFile[]) : [],
-    // A transfer that landed on an already settled invoice is kept for hand reconciliation.
-    note: text(metadata.note) ?? (needsReview ? `Cần đối soát: hóa đơn ${needsReview}` : null),
+    // A transfer that landed on an already settled invoice, or a hand-recorded one the bank
+    // reported differently, is kept for hand reconciliation — shown next to the staff note.
+    note:
+      [text(metadata.note), needsReview ? `Cần đối soát: hóa đơn ${needsReview}` : null]
+        .filter(Boolean)
+        .join(' — ') || null,
     recorded_by: recordedBy
       ? { id: recordedBy, full_name: userNames.get(recordedBy) ?? null }
       : null,

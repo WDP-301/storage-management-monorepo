@@ -30,6 +30,8 @@ describe('FirstRentPaymentListener', () => {
   let invoice: Partial<Invoice>;
   let paidBefore: number;
   let recorded: boolean;
+  /** A payment staff already recorded by hand with the transfer's bank reference. */
+  let handRecorded: Record<string, unknown> | null;
   let em: Record<string, jest.Mock>;
   let listener: FirstRentPaymentListener;
 
@@ -43,7 +45,11 @@ describe('FirstRentPaymentListener', () => {
     };
     paidBefore = 0;
     recorded = false;
+    handRecorded = null;
     em = {
+      query: jest.fn(async (sql: string) =>
+        sql.includes('FROM "payments"') && handRecorded ? [handRecorded] : [],
+      ),
       findOne: jest.fn(async () => invoice),
       save: jest.fn(async (_entity, data) => data),
       update: jest.fn(async () => ({ affected: 1 })),
@@ -99,6 +105,74 @@ describe('FirstRentPaymentListener', () => {
     expect(em.save).toHaveBeenCalledWith(
       Payment,
       expect.objectContaining({ metadata: { referenceCode: 'FT2610201234' } }),
+    );
+  });
+
+  it('links a transfer staff already recorded by hand instead of counting it twice', async () => {
+    handRecorded = { id: 'pay-manual', invoiceId: 'inv-1', amount: '1500000.00' };
+
+    await listener.handlePaymentReceived(transfer({ referenceCode: 'ft 2610201234' }));
+
+    expect(em.query).toHaveBeenCalledWith(expect.stringContaining('pg_advisory_xact_lock'), [
+      'payment-ref:FT2610201234',
+    ]);
+    expect(em.save).not.toHaveBeenCalled();
+    expect(em.update).not.toHaveBeenCalled();
+    expect(em.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE "payments"'), [
+      'pay-manual',
+      '42',
+      JSON.stringify({ referenceCode: 'ft 2610201234' }),
+    ]);
+  });
+
+  it('flags a hand-recorded transfer the bank reports with another amount', async () => {
+    handRecorded = { id: 'pay-manual', invoiceId: 'inv-1', amount: '1000000.00' };
+
+    await listener.handlePaymentReceived(transfer({ referenceCode: 'FT2610201234' }));
+
+    expect(em.save).not.toHaveBeenCalled();
+    expect(em.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE "payments"'), [
+      'pay-manual',
+      '42',
+      JSON.stringify({
+        referenceCode: 'FT2610201234',
+        needsReview: `ghi tay 1000000, SePay báo 1500000 cho ${INVOICE_NO}`,
+      }),
+    ]);
+  });
+
+  it('still settles the invoice a transfer names when staff put it on another, flagging both', async () => {
+    handRecorded = {
+      id: 'pay-manual',
+      invoiceId: 'inv-other',
+      invoiceNo: 'INV-1790760804609-0001',
+      amount: '1500000.00',
+    };
+
+    await listener.handlePaymentReceived(transfer({ referenceCode: 'FT2610201234' }));
+
+    expect(em.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE "payments"'), [
+      'pay-manual',
+      null,
+      JSON.stringify({
+        needsReview: `trùng mã giao dịch với chuyển khoản SePay cho ${INVOICE_NO}`,
+      }),
+    ]);
+    expect(em.save).toHaveBeenCalledWith(
+      Payment,
+      expect.objectContaining({
+        invoiceId: 'inv-1',
+        providerRef: '42',
+        metadata: {
+          needsReview: 'trùng mã giao dịch với khoản ghi tay trên INV-1790760804609-0001',
+          referenceCode: 'FT2610201234',
+        },
+      }),
+    );
+    expect(em.update).toHaveBeenCalledWith(
+      Invoice,
+      { id: 'inv-1' },
+      { status: InvoiceStatus.PAID },
     );
   });
 

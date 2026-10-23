@@ -6,7 +6,11 @@ import type { AuthUser } from '@modules/auth/types/auth-user';
 import { managesFacility } from '@modules/inspection/inspection-access.util';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { generatePaymentNo } from '@modules/payments/payment-no.util';
-import { normalizedRefSql, normalizeTransferRef } from '@modules/payments/transfer-ref.util';
+import {
+  lockTransferRef,
+  normalizedRefSql,
+  normalizeTransferRef,
+} from '@modules/payments/transfer-ref.util';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import {
   DomainException,
@@ -197,7 +201,7 @@ export class ContractInvoicesService {
    * The transaction-scoped advisory lock serializes two people recording the same reference.
    */
   private async isTransferRefUsed(em: EntityManager, transferRef: string): Promise<boolean> {
-    await em.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`payment-ref:${transferRef}`]);
+    await lockTransferRef(em, transferRef);
     const rows: unknown[] = await em.query(
       `SELECT 1 FROM payments
         WHERE ${normalizedRefSql("metadata->>'transferRef'")} = $1

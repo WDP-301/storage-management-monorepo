@@ -82,7 +82,7 @@ const FIELD_LABEL: Record<string, string> = {
   evidence: 'Chứng từ',
   note: 'Ghi chú',
   scheduledAt: 'Ngày hẹn trả',
-  returnedOn: 'Ngày trả thực tế',
+  returnedOn: 'Ngày chốt trả kho',
   source: 'Nguồn yêu cầu',
   damageDecisions: 'Quyết định hư hỏng',
   creditDecisions: 'Khoản tiền cần kiểm tra',

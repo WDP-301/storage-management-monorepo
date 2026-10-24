@@ -16,7 +16,7 @@ export class UpdateInspectionDto {
   @ApiPropertyOptional({
     example: '2027-04-12T12:00:00.000Z',
     description:
-      'Return inspections only: new appointment, its Vietnam day from today to 365 days ahead. Moving it earlier restarts the customer notice from now.',
+      'Return inspections only: new appointment, its Vietnam day from today to 365 days ahead. Managers only; it is a schedule and changes no money.',
   })
   @IsOptional()
   @IsDateString()

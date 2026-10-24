@@ -6,12 +6,7 @@ import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { HttpStatus, Logger } from '@nestjs/common';
-import {
-  addVietnamDays,
-  fromVietnamDate,
-  vietnamDate,
-  vietnamToday,
-} from '@shared/utils/calendar.util';
+import { fromVietnamDate, vietnamToday } from '@shared/utils/calendar.util';
 import {
   ContractStatus,
   InspectionType,
@@ -156,15 +151,6 @@ describe('InspectionLifecycleService.finalize', () => {
     expect(result.returnedOn).toBeUndefined();
     expect(em.query).not.toHaveBeenCalled();
     expect(notifications.createForUsers).not.toHaveBeenCalled();
-  });
-
-  it('refuses a return day on a handover', async () => {
-    stubRows(buildInspection());
-
-    await expect(
-      service.finalize('insp-1', actor('staff-1'), { returnedOn: vietnamToday() }),
-    ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
-    expect(em.update).not.toHaveBeenCalled();
   });
 
   it('refuses to finalize a handover while the contract has no signed files', async () => {
@@ -351,33 +337,15 @@ describe('InspectionLifecycleService.finalize', () => {
     );
   });
 
-  it('records the return day staff picked and voids rent from the later appointment', async () => {
+  it('records the finalize day and voids rent from it, not from a later appointment', async () => {
     const scheduledAt = new Date(Date.now() + 5 * DAY_MS);
-    const picked = addVietnamDays(vietnamToday(), -2);
     stubRows(buildReturn({ scheduledAt }), buildContract({ status: ContractStatus.ACTIVE }));
 
-    const result = await service.finalize('insp-1', actor('staff-1'), { returnedOn: picked });
+    const result = await service.finalize('insp-1', actor('staff-1'));
 
-    expect(result.returnedOn).toBe(picked);
+    expect(result.returnedOn).toBe(vietnamToday());
     const voidCall = em.query.mock.calls.find(([sql]) => sql.startsWith('UPDATE invoices'));
-    expect(voidCall?.[1][1]).toEqual(fromVietnamDate(vietnamDate(scheduledAt)));
-  });
-
-  it.each([
-    ['before the return was requested', () => addVietnamDays(vietnamToday(), -11)],
-    ['in the future', () => addVietnamDays(vietnamToday(), 1)],
-  ])('rejects a return day %s, changing nothing', async (_label, day) => {
-    stubRows(buildReturn(), buildContract({ status: ContractStatus.ACTIVE }));
-
-    await expect(
-      service.finalize('insp-1', actor('staff-1'), { returnedOn: day() }),
-    ).rejects.toMatchObject({
-      status: HttpStatus.BAD_REQUEST,
-      response: { details: { fields: [{ field: 'returnedOn', code: 'outOfRange' }] } },
-    });
-    expect(em.update).not.toHaveBeenCalled();
-    expect(em.query).not.toHaveBeenCalled();
-    expect(em.save).not.toHaveBeenCalled();
+    expect(voidCall?.[1][1]).toEqual(fromVietnamDate(vietnamToday()));
   });
 
   it('finalizes the return even when the deposit cannot be recorded', async () => {
@@ -511,12 +479,12 @@ describe('InspectionLifecycleService.finalize', () => {
     const billed = new Set([1, 2, 3, 4, 5, 6]);
 
     beforeEach(() => {
-      // Returned 01/07 with the appointment on 01/08, finalized on 01/07.
-      jest.useFakeTimers({ now: new Date('2027-07-01T05:00:00.000Z'), doNotFake: ['nextTick'] });
+      // Appointment on 01/07, finalized on 01/08: July (from 15/07) is owed but was never billed.
+      jest.useFakeTimers({ now: new Date('2027-08-01T05:00:00.000Z'), doNotFake: ['nextTick'] });
       stubRows(
         buildReturn({
           createdAt: new Date('2027-06-20T03:00:00.000Z'),
-          scheduledAt: new Date('2027-08-01T05:00:00.000Z'),
+          scheduledAt: new Date('2027-07-01T05:00:00.000Z'),
         }),
         billedContract(),
       );
@@ -571,7 +539,7 @@ describe('InspectionLifecycleService.finalize', () => {
       queue.send.mockRejectedValue(new Error('queue down'));
 
       await expect(service.finalize('insp-1', actor('staff-1'))).resolves.toMatchObject({
-        returnedOn: '2027-07-01',
+        returnedOn: '2027-08-01',
       });
     });
 

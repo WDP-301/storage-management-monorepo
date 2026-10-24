@@ -28,6 +28,7 @@ const KNOWN_TYPES: Record<NotificationType, NotificationDisplay> = {
   TICKET_ASSIGNED: { label: 'Được phân công', icon: 'ticket', tone: 'warning' },
   INVOICE_ISSUED: { label: 'Hóa đơn', icon: 'invoice', tone: 'warning' },
   INVOICE_PAID: { label: 'Thanh toán', icon: 'paid', tone: 'success' },
+  RETURN_RESCHEDULED: { label: 'Lịch trả kho', icon: 'return', tone: 'warning' },
   RETURN_FINALIZED: { label: 'Trả kho', icon: 'return', tone: 'accent' },
   SETTLEMENT_APPROVED: { label: 'Quyết toán', icon: 'settlement', tone: 'accent' },
   REFUND_COMPLETED: { label: 'Hoàn tiền', icon: 'refund', tone: 'success' },

@@ -1,11 +1,11 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { Button, Card, useThemeColor } from 'heroui-native';
-import { type ReactNode, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { Alert, Text, TextInput, View } from 'react-native';
+import { formatIsoDate } from '../../../lib/format-vi';
 import { DamageEditor } from './DamageEditor';
 import { EvidenceEditor } from './EvidenceEditor';
 import { finalizeConsequence } from './inspection-display';
-import { ReturnedOnPicker } from './ReturnedOnPicker';
+import { vietnamDayIso } from './return-dates';
 import type { useInspectionDetail } from './use-inspection-detail';
 
 const MAX_PHOTOS = 20;
@@ -20,19 +20,19 @@ type Props = {
 /** Condition notes, photos, damages and Save/Finalize for one inspection (handover or return). */
 export function InspectionEditor({ detail, finalizeBlockedReason, onFinalized }: Props) {
   const [mutedColor] = useThemeColor(['muted']);
-  const returnedOnSheet = useRef<BottomSheetModal>(null);
   const { inspection, form, updateForm, error, busy, isDirty, isUploading, trackUpload } = detail;
   if (!inspection || !form) return null;
 
   const readOnly = inspection.finalizedAt !== null;
   const isReturn = inspection.type === 'RETURN';
-  // A return asks for the actual return day in a sheet; a handover only needs a yes/no.
+  // A return is recorded on the day it is finalized; staff see that day before confirming.
   const confirmFinalize = () => {
-    if (isReturn) {
-      returnedOnSheet.current?.present();
-      return;
-    }
-    Alert.alert('Chốt biên bản?', finalizeConsequence(inspection, form.damages), [
+    const consequence = finalizeConsequence(inspection, form.damages);
+    const today = formatIsoDate(vietnamDayIso(new Date()));
+    const message = isReturn
+      ? `${consequence}\n\nNgày trả ghi nhận là hôm nay (${today}) — tiền thuê, thời hạn báo trước và phí quá hạn tính tới ngày này.`
+      : consequence;
+    Alert.alert(isReturn ? 'Chốt biên trả kho?' : 'Chốt biên bản?', message, [
       { text: 'Huỷ', style: 'cancel' },
       {
         text: 'Chốt',
@@ -42,12 +42,6 @@ export function InspectionEditor({ detail, finalizeBlockedReason, onFinalized }:
         },
       },
     ]);
-  };
-  const finalizeReturn = async (returnedOn: string) => {
-    const done = await detail.finalize(returnedOn);
-    // Dismissed either way so a failure message in the editor is not hidden behind the sheet.
-    returnedOnSheet.current?.dismiss();
-    if (done) onFinalized();
   };
 
   return (
@@ -135,17 +129,6 @@ export function InspectionEditor({ detail, finalizeBlockedReason, onFinalized }:
           ) : null}
         </View>
       )}
-
-      {isReturn && !readOnly ? (
-        <ReturnedOnPicker
-          sheetRef={returnedOnSheet}
-          inspection={inspection}
-          damages={form.damages}
-          // Finalize saves pending edits first; a tap during that save would finalize twice.
-          isBusy={busy !== null}
-          onConfirm={(returnedOn) => void finalizeReturn(returnedOn)}
-        />
-      ) : null}
     </View>
   );
 }

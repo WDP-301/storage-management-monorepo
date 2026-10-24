@@ -10,50 +10,20 @@ import {
 } from '@modules/invoices/rent-period-invoice.util';
 import type { NotificationsService } from '@modules/notifications/notifications.service';
 import type { NotificationPayload } from '@modules/notifications/types/notification';
-import { effectiveReturnDay } from '@modules/settlements/return-timing';
 import {
   type VoidedInvoice,
   voidUnstartedInvoices,
 } from '@modules/settlements/unstarted-invoices.util';
-import { fieldValidationError } from '@shared/exceptions/domain.exception';
-import {
-  formatVietnamDate,
-  fromVietnamDate,
-  vietnamDate,
-  vietnamToday,
-} from '@shared/utils/calendar.util';
+import { fromVietnamDate, vietnamToday } from '@shared/utils/calendar.util';
 import { InspectionType, NotificationType } from '@storage/types';
 import type { EntityManager } from 'typeorm';
 
 /**
- * The day the unit actually came back, for a return: the day staff picked, or today when they
- * picked none (older clients send no body). It cannot precede the request nor be in the future.
- * Handovers have no such day.
+ * The day recorded on a return: the Vietnam day it is finalized, whatever day a client sends
+ * (older staff apps still let staff pick one). Handovers have no such day.
  */
-export function resolveReturnedOn(
-  inspection: Inspection,
-  requested: string | undefined,
-  now: Date,
-): string | null {
-  if (inspection.type !== InspectionType.RETURN) {
-    if (requested === undefined) return null;
-    throw fieldValidationError(
-      'returnedOn',
-      'returnOnly',
-      'Chỉ biên trả kho mới có ngày trả thực tế',
-    );
-  }
-  const today = vietnamToday(now);
-  const requestedDay = vietnamDate(inspection.createdAt);
-  const day = requested ?? today;
-  if (day < requestedDay || day > today) {
-    throw fieldValidationError(
-      'returnedOn',
-      'outOfRange',
-      `Ngày trả thực tế phải từ ${formatVietnamDate(requestedDay)} đến hôm nay`,
-    );
-  }
-  return day;
+export function resolveReturnedOn(inspection: Inspection, now: Date): string | null {
+  return inspection.type === InspectionType.RETURN ? vietnamToday(now) : null;
 }
 
 export function returnFinalizedNotification(
@@ -95,10 +65,10 @@ export interface ReturnFinalizeResult {
 
 /**
  * Invoices the rent periods that started before `countedTo` but were never billed. The daily run
- * bills a period only from a few days before it starts and only while the contract is active, so
- * a customer handing the unit back before the appointment would otherwise never be billed for a
- * period starting in between. Periods stop at the end of the term: an overstay is charged as a
- * penalty, never as an extra period.
+ * bills only while the contract is active, so a period it missed (the run stopped, or the period
+ * started after it last ran) would otherwise never be billed once the return ends the contract.
+ * Periods stop at the end of the term: an overstay is charged as a penalty, never as an extra
+ * period.
  */
 export async function issueOwedRentPeriods(
   em: EntityManager,
@@ -121,7 +91,7 @@ export async function issueOwedRentPeriods(
 /**
  * What a finalized return settles besides the unit, on the finalize transaction, while the
  * contract is still ACTIVE (the caller ends it afterwards) and its row is locked:
- * 1. the actual return day is recorded; money counts to the later of it and the appointment;
+ * 1. the finalize day is recorded; money counts to it, never to the appointment;
  * 2. periods starting before that day that were never invoiced are invoiced;
  * 3. only then are periods starting on or after it voided — a strictly later set, so nothing
  *    issued in step 2 is voided;
@@ -135,8 +105,7 @@ export async function applyReturnFinalize(
 ): Promise<ReturnFinalizeResult> {
   const { inspection, contract, returnedOn, notifications } = input;
   inspection.returnedOn = returnedOn;
-  const scheduledDay = inspection.scheduledAt ? vietnamDate(inspection.scheduledAt) : returnedOn;
-  const countedTo = effectiveReturnDay(scheduledDay, returnedOn);
+  const countedTo = returnedOn;
   const unit = await em.findOne(StorageUnit, { where: { id: input.storageUnitId } });
 
   const issuedInvoices = await issueOwedRentPeriods(

@@ -71,19 +71,6 @@ test('normaliseInspection defaults the new fields for rows without them', () => 
   assert.equal(inspection.damages[0].proposedFee, null);
 });
 
-test('reschedule patches scheduledAt at noon UTC and returns the normalised inspection', async () => {
-  const calls = [];
-  const { InspectionsApi } = load('inspections-api.ts', async (url, init) => {
-    calls.push([url, init]);
-    return { ...row, scheduledAt: '2026-11-08T12:00:00.000Z' };
-  });
-  const moved = await InspectionsApi.reschedule('i1', '2026-11-08');
-  assert.equal(calls[0][0], '/inspections/i1');
-  assert.equal(calls[0][1].method, 'PATCH');
-  assert.deepEqual(JSON.parse(calls[0][1].body), { scheduledAt: '2026-11-08T12:00:00.000Z' });
-  assert.equal(moved.scheduledAt, '2026-11-08T12:00:00.000Z');
-});
-
 test('update sends damages together with their proposed fees', async () => {
   const calls = [];
   const { InspectionsApi } = load('inspections-api.ts', async (url, init) => {
@@ -95,17 +82,16 @@ test('update sends damages together with their proposed fees', async () => {
   assert.deepEqual(JSON.parse(calls[0][1].body), { damages });
 });
 
-test('finalize sends the actual return day only when one is given', async () => {
+test('finalize posts without a body: a return is recorded on the day it is finalized', async () => {
   const calls = [];
   const { InspectionsApi } = load('inspections-api.ts', async (url, init) => {
     calls.push([url, init]);
     return row;
   });
   await InspectionsApi.finalize('i1');
-  await InspectionsApi.finalize('i1', '2026-11-04');
   assert.equal(calls[0][0], '/inspections/i1/finalize');
+  assert.equal(calls[0][1].method, 'POST');
   assert.equal(calls[0][1].body, undefined);
-  assert.deepEqual(JSON.parse(calls[1][1].body), { returnedOn: '2026-11-04' });
 });
 
 test('finalizeConsequence sends only a major damage to maintenance', () => {
@@ -153,41 +139,6 @@ test('vietnamDayIso rolls over at 17:00 UTC', () => {
   const { vietnamDayIso } = load(`${staffDir}/return-dates.ts`);
   assert.equal(vietnamDayIso(new Date('2026-10-20T16:59:00.000Z')), '2026-10-20');
   assert.equal(vietnamDayIso(new Date('2026-10-20T17:00:00.000Z')), '2026-10-21');
-});
-
-test('returnedOnOptions runs from today back to the request day, newest first', () => {
-  const { returnedOnOptions } = load(`${staffDir}/return-dates.ts`);
-  const options = returnedOnOptions('2026-10-18T09:00:00.000Z', '2026-10-21');
-  assert.deepEqual(
-    options.map((option) => option.iso),
-    ['2026-10-21', '2026-10-20', '2026-10-19', '2026-10-18'],
-  );
-  assert.equal(options[0].isToday, true);
-  assert.equal(options[0].weekday, 'T4');
-  assert.deepEqual(
-    returnedOnOptions('2026-10-21T01:00:00.000Z', '2026-10-21').map((option) => option.iso),
-    ['2026-10-21'],
-  );
-});
-
-test('rescheduleOptions starts today and covers the requested number of days', () => {
-  const { rescheduleOptions } = load(`${staffDir}/return-dates.ts`);
-  const options = rescheduleOptions('2026-10-30', 4);
-  assert.deepEqual(
-    options.map((option) => option.iso),
-    ['2026-10-30', '2026-10-31', '2026-11-01', '2026-11-02'],
-  );
-});
-
-test('returnedOnWarning flags a day other than the appointment', () => {
-  const { returnedOnWarning, isMovedEarlier } = load(`${staffDir}/return-dates.ts`);
-  const inspection = { scheduledAt: '2026-11-05T12:00:00.000Z' };
-  assert.equal(returnedOnWarning(inspection, '2026-11-05'), null);
-  assert.match(returnedOnWarning(inspection, '2026-11-07'), /khác ngày hẹn 05\/11/);
-  assert.equal(returnedOnWarning({ scheduledAt: null }, '2026-11-07'), null);
-  assert.equal(isMovedEarlier(inspection, '2026-11-03'), true);
-  assert.equal(isMovedEarlier(inspection, '2026-11-09'), false);
-  assert.equal(isMovedEarlier({ scheduledAt: null }, '2026-11-09'), false);
 });
 
 test('staffErrorMessage explains forbidden and invalid-date failures in Vietnamese', () => {

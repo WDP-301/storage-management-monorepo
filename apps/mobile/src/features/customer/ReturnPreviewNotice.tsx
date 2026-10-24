@@ -6,12 +6,10 @@ type Props = {
   preview: ReturnPreviewRecord | null;
   isLoading: boolean;
   error: string | null;
-  /** The open request is being moved to an earlier day, which restarts its notice. */
-  movedEarlier: boolean;
 };
 
 /** The server's figures for the chosen day, verbatim — the app never computes the money. */
-export function ReturnPreviewNotice({ preview, isLoading, error, movedEarlier }: Props) {
+export function ReturnPreviewNotice({ preview, isLoading, error }: Props) {
   if (isLoading) {
     return (
       <View className="flex-row items-center gap-2 py-1">
@@ -24,7 +22,6 @@ export function ReturnPreviewNotice({ preview, isLoading, error, movedEarlier }:
   if (!preview) return null;
 
   const warnings: string[] = [];
-  if (movedEarlier) warnings.push('Bạn dời lịch sớm hơn: thời hạn báo trước tính lại từ hôm nay.');
   if (preview.short_notice) {
     warnings.push(
       `Trả trước hạn hợp đồng (${formatIsoDate(preview.last_day)}) nhưng mới báo trước ` +
@@ -47,6 +44,10 @@ export function ReturnPreviewNotice({ preview, isLoading, error, movedEarlier }:
           <Text className="font-body text-body-sm leading-5 text-warning">{warning}</Text>
         </View>
       ))}
+      <Text className="font-body text-body-sm text-muted">
+        Số tiền trên tính cho trường hợp trả đúng ngày này; khi quyết toán, tiền tính tới ngày nhân
+        viên chốt biên trả kho.
+      </Text>
       <Text className="font-body text-body-sm text-muted">
         {preview.deposit_held === null
           ? 'Tiền cọc đang được xác minh.'

@@ -48,9 +48,9 @@ export interface ReturnTimingRecord {
   term_end_at: string | Date;
   last_day: string;
   scheduled_day: string;
-  /** Day money is counted to: the later of the actual return day and the scheduled day. */
+  /** Day money is counted to: the finalize day, or the scheduled day until the return is finalized. */
   effective_return_day: string;
-  /** Since when the notice runs; moved to "now" when the return is brought forward. */
+  /** Since when the notice runs: when the return was requested. */
   notice_from: string | Date;
   notice_days: number;
   required_notice_days: number;

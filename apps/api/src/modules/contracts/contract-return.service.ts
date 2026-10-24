@@ -91,9 +91,7 @@ export class ContractReturnService {
 
     const saved = await this.dataSource.transaction(async (em) => {
       const inspection = await this.lockOpenReturn(em, contractId, customerId);
-      if (scheduledAt) {
-        await moveReturn(inspection, scheduledAt, now, () => currentReturnRules(this.settings));
-      }
+      if (scheduledAt) moveReturn(inspection, scheduledAt, now);
       if (dto.note !== undefined) inspection.requestNote = dto.note.trim() || null;
       if (refundAccount) {
         inspection.refundAccount = refundAccount;

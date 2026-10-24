@@ -200,7 +200,7 @@ describe('Return request endpoints (e2e response contract)', () => {
     expect(managedReturn.requestOnBehalf).not.toHaveBeenCalled();
   });
 
-  it('hands the picked return day to the finalize', async () => {
+  it('accepts the return day older staff apps send, without handing it to the finalize', async () => {
     const response = await call(
       'POST',
       `inspections/${INSPECTION_ID}/finalize`,
@@ -212,7 +212,6 @@ describe('Return request endpoints (e2e response contract)', () => {
     expect(lifecycle.finalize).toHaveBeenCalledWith(
       INSPECTION_ID,
       expect.objectContaining({ id: 'user-1' }),
-      expect.objectContaining({ returnedOn: '2027-04-12' }),
     );
   });
 
@@ -262,7 +261,6 @@ describe('Return request endpoints (e2e response contract)', () => {
     expect(lifecycle.finalize).toHaveBeenCalledWith(
       INSPECTION_ID,
       expect.objectContaining({ id: 'user-1' }),
-      expect.not.objectContaining({ returnedOn: expect.anything() }),
     );
   });
 

@@ -28,21 +28,14 @@ export const InspectionsApi = {
   update: (id: string, body: Partial<InspectionUpdate>): Promise<StaffInspection> =>
     patchInspection(id, body),
 
-  /** Moves a return appointment; noon UTC keeps the Vietnam day equal to `dayIso`. */
-  reschedule: (id: string, dayIso: string): Promise<StaffInspection> =>
-    patchInspection(id, { scheduledAt: `${dayIso}T12:00:00.000Z` }),
-
-  /** `returnedOn` (Vietnam day) is for returns only; without it the API uses today. */
-  finalize: (id: string, returnedOn?: string) =>
-    request<InspectionResponse>(`/inspections/${id}/finalize`, {
-      method: 'POST',
-      body: returnedOn ? JSON.stringify({ returnedOn }) : undefined,
-    }),
+  /** A return is recorded on the day it is finalized. */
+  finalize: (id: string) =>
+    request<InspectionResponse>(`/inspections/${id}/finalize`, { method: 'POST' }),
 };
 
 async function patchInspection(
   id: string,
-  body: Partial<InspectionUpdate> | { scheduledAt: string },
+  body: Partial<InspectionUpdate>,
 ): Promise<StaffInspection> {
   return normaliseInspection(
     await request<InspectionResponse>(`/inspections/${id}`, {

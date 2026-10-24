@@ -20,6 +20,7 @@ import {
   toEvidence,
   unitCode,
 } from './inspection-display';
+import { ReturnRescheduleForm } from './ReturnRescheduleForm';
 
 interface Props {
   inspection: InspectionRecord | null;
@@ -196,6 +197,13 @@ export const InspectionDetailDialog: React.FC<Props> = ({ inspection, onClose, o
 
           {!done && (
             <div className="space-y-3 pt-3 border-t border-kumo-line">
+              {inspection.type === 'RETURN' && (
+                <ReturnRescheduleForm
+                  inspection={inspection}
+                  disabled={busy !== null}
+                  onSaved={onChanged}
+                />
+              )}
               <div className="flex flex-col sm:flex-row gap-2">
                 <select
                   aria-label="Chọn nhân viên phụ trách"
@@ -238,9 +246,7 @@ export const InspectionDetailDialog: React.FC<Props> = ({ inspection, onClose, o
                   inspection={inspection}
                   busy={busy === 'finalize'}
                   onCancel={() => setConfirming(false)}
-                  onConfirm={(returnedOn) =>
-                    run('finalize', () => InspectionsApi.finalize(inspection.id, returnedOn))
-                  }
+                  onConfirm={() => run('finalize', () => InspectionsApi.finalize(inspection.id))}
                 />
               ) : confirmingCancel ? (
                 <div className="p-3 bg-kumo-warning-tint rounded-lg space-y-3 text-sm">

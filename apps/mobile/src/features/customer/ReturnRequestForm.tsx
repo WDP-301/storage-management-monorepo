@@ -68,7 +68,6 @@ export function ReturnRequestForm({
           preview={form.preview.preview}
           isLoading={form.preview.isLoading}
           error={form.preview.error}
-          movedEarlier={form.movedEarlier}
         />
       </View>
 

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as AuthContextModule from '../../context/AuthContext';
 import * as FacilityContextModule from '../../context/FacilityContext';
 import { ContractsApi, FacilitiesApi, InspectionsApi, UploadsApi } from '../../lib/api';
-import { vnToday } from '../../lib/vn-day';
+import { addDays, formatVnDay, vnNoonIso, vnToday } from '../../lib/vn-day';
 import type { InspectionRecord } from '../../types/inspection';
 import { finalizeConsequence, inspectionMetrics, matchesSearch } from './inspection-display';
 import { ManagerInspectionsPage } from './ManagerInspectionsPage';
@@ -209,8 +209,32 @@ describe('ManagerInspectionsPage', () => {
     expect(screen.getByText(/kho chuyển sang Bảo trì/)).toBeTruthy();
     expect(finalize).not.toHaveBeenCalled();
 
+    // A return is recorded on the day it is finalized; there is no day to pick.
+    expect(screen.getByText(new RegExp(`hôm nay \\(${formatVnDay(vnToday())}\\)`))).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận chốt' }));
-    await waitFor(() => expect(finalize).toHaveBeenCalledWith('insp-B-202', vnToday()));
+    await waitFor(() => expect(finalize).toHaveBeenCalledWith('insp-B-202'));
+  });
+
+  it('lets the manager move an open return appointment, then reloads', async () => {
+    const reschedule = vi.spyOn(InspectionsApi, 'reschedule').mockResolvedValue(ASSIGNED_RETURN);
+    const day = addDays(vnToday(), 3);
+    render(<ManagerInspectionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem biên bản B-202' }));
+    const save = screen.getByRole('button', { name: 'Lưu ngày hẹn' }) as HTMLButtonElement;
+    fireEvent.change(screen.getByLabelText('Ngày hẹn trả kho'), { target: { value: day } });
+    expect(save.disabled).toBe(false);
+    fireEvent.click(save);
+
+    await waitFor(() => expect(reschedule).toHaveBeenCalledWith('insp-B-202', vnNoonIso(day)));
+    await waitFor(() => expect(InspectionsApi.list).toHaveBeenCalledTimes(2));
+  });
+
+  it('offers no appointment change on a handover', async () => {
+    render(<ManagerInspectionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem biên bản A-101' }));
+    expect(screen.queryByRole('button', { name: 'Lưu ngày hẹn' })).toBeNull();
   });
 
   it('blocks finalizing a pre-handover while the contract has no signed files', async () => {

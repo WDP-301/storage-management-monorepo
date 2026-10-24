@@ -5,7 +5,13 @@ import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { createApiValidationPipe } from '@shared/pipes/api-validation.pipe';
 import { addVietnamDays, vietnamToday } from '@shared/utils/calendar.util';
-import { ContractStatus, DamageSeverity, InspectionType, UserRole } from '@storage/types';
+import {
+  ContractStatus,
+  DamageSeverity,
+  InspectionType,
+  NotificationType,
+  UserRole,
+} from '@storage/types';
 import { In, IsNull, Not } from 'typeorm';
 import { UpdateInspectionDto } from './dto/update-inspection.dto';
 import { InspectionService } from './inspection.service';
@@ -48,6 +54,7 @@ describe('InspectionService', () => {
   let em: { find: jest.Mock; findOne: jest.Mock; save: jest.Mock };
   let assignments: UserRoleAssignment[];
   let inspection: Inspection | null;
+  let notifications: { createForUsers: jest.Mock };
   let service: InspectionService;
 
   beforeEach(() => {
@@ -68,13 +75,10 @@ describe('InspectionService', () => {
       }),
       save: jest.fn(async (_entity, data) => data),
     };
-    const settings = {
-      getReturnNoticeDays: jest.fn().mockResolvedValue(30),
-      getOverduePenaltyPercent: jest.fn().mockResolvedValue(100),
-    };
+    notifications = { createForUsers: jest.fn().mockResolvedValue(1) };
     service = new InspectionService(
       { manager: em, transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)) } as never,
-      settings as never,
+      notifications as never,
     );
   });
 
@@ -339,30 +343,94 @@ describe('InspectionService', () => {
           scheduledAt: new Date(inDays(30)),
           noticeFrom: anchor,
           returnRules: { noticeDays: 30, penaltyPercent: 100 },
+          contract: {
+            id: 'contract-1',
+            contractNo: 'CT-1',
+            customerId: 'customer-1',
+            bookingItem: { storageUnit: { code: 'A101' } },
+          } as Contract,
         });
       });
 
-      it('restarts the customer notice when it moves earlier', async () => {
-        const before = Date.now();
+      it.each([
+        ['a facility manager', 'earlier', MANAGER, 5],
+        ['a facility manager', 'later', MANAGER, 60],
+        ['operations', 'earlier', OPS, 5],
+      ])(
+        'lets %s move it %s, keeping the notice anchor, and tells the customer',
+        async (_who, _dir, by, days) => {
+          await service.update('inspection-1', { scheduledAt: inDays(days) }, by);
 
-        await service.update('inspection-1', { scheduledAt: inDays(5) }, MANAGER);
+          const saved = em.save.mock.calls[0][1] as Inspection;
+          expect(saved.scheduledAt).toEqual(new Date(inDays(days)));
+          expect(saved.noticeFrom).toBe(anchor);
+          const day = addVietnamDays(vietnamToday(), days).split('-').reverse().join('/');
+          expect(notifications.createForUsers).toHaveBeenCalledWith(em, ['customer-1'], {
+            type: NotificationType.RETURN_RESCHEDULED,
+            title: 'Đổi lịch hẹn trả kho',
+            body: `Chi nhánh đã đổi lịch hẹn trả kho A101 sang ngày ${day}`,
+            data: {
+              contractId: 'contract-1',
+              contractNo: 'CT-1',
+              inspectionId: 'inspection-1',
+              scheduledAt: new Date(inDays(days)).toISOString(),
+            },
+          });
+        },
+      );
 
-        const saved = em.save.mock.calls[0][1] as Inspection;
-        expect(saved.scheduledAt).toEqual(new Date(inDays(5)));
-        expect(saved.noticeFrom?.getTime()).toBeGreaterThanOrEqual(before);
+      it('lets an admin move it', async () => {
+        await service.update(
+          'inspection-1',
+          { scheduledAt: inDays(10) },
+          actor('admin-1', [UserRole.ADMIN]),
+        );
+
+        expect((em.save.mock.calls[0][1] as Inspection).scheduledAt).toEqual(new Date(inDays(10)));
+        expect(notifications.createForUsers).toHaveBeenCalledTimes(1);
       });
 
-      it('keeps the notice anchor when it moves later', async () => {
-        await service.update('inspection-1', { scheduledAt: inDays(60) }, STAFF);
+      it('lets an inspector who also manages the facility move it', async () => {
+        const both = actor('staff-1', [UserRole.FACILITY_STAFF, UserRole.FACILITY_MANAGER]);
+        assignments.push(assignment('staff-1', UserRole.FACILITY_MANAGER, 'facility-1'));
 
-        const saved = em.save.mock.calls[0][1] as Inspection;
-        expect(saved.scheduledAt).toEqual(new Date(inDays(60)));
-        expect(saved.noticeFrom).toBe(anchor);
+        await service.update('inspection-1', { scheduledAt: inDays(10) }, both);
+
+        expect((em.save.mock.calls[0][1] as Inspection).scheduledAt).toEqual(new Date(inDays(10)));
+      });
+
+      it('refuses an inspector who manages only another facility', async () => {
+        const elsewhere = actor('staff-1', [UserRole.FACILITY_STAFF, UserRole.FACILITY_MANAGER]);
+        assignments.push(assignment('staff-1', UserRole.FACILITY_MANAGER, 'facility-2'));
+
+        await expect(
+          service.update('inspection-1', { scheduledAt: inDays(10) }, elsewhere),
+        ).rejects.toMatchObject({ status: 403 });
+      });
+
+      it('tells nobody when a manager sends the same day back', async () => {
+        const sameDay = `${addVietnamDays(vietnamToday(), 30)}T10:00:00.000Z`;
+
+        await service.update(
+          'inspection-1',
+          { scheduledAt: sameDay, conditionNotes: 'OK' },
+          MANAGER,
+        );
+
+        expect(notifications.createForUsers).not.toHaveBeenCalled();
+      });
+
+      it('refuses the assigned inspector moving it, changing nothing', async () => {
+        await expect(
+          service.update('inspection-1', { scheduledAt: inDays(60) }, STAFF),
+        ).rejects.toMatchObject({ status: 403 });
+        expect(em.save).not.toHaveBeenCalled();
+        expect(notifications.createForUsers).not.toHaveBeenCalled();
       });
 
       it.each([-1, 366])('rejects a day %d days from today', async (days) => {
         await expect(
-          service.update('inspection-1', { scheduledAt: inDays(days) }, STAFF),
+          service.update('inspection-1', { scheduledAt: inDays(days) }, MANAGER),
         ).rejects.toMatchObject({
           status: 400,
           response: { details: { fields: [{ field: 'scheduledAt', code: 'outOfRange' }] } },
@@ -389,6 +457,7 @@ describe('InspectionService', () => {
           ),
         ).resolves.toMatchObject({ conditionNotes: 'OK' });
         expect((em.save.mock.calls[0][1] as Inspection).noticeFrom).toBe(anchor);
+        expect(notifications.createForUsers).not.toHaveBeenCalled();
       });
 
       it('still refuses moving a past appointment to another past day', async () => {
@@ -398,7 +467,7 @@ describe('InspectionService', () => {
         });
 
         await expect(
-          service.update('inspection-1', { scheduledAt: inDays(-2) }, STAFF),
+          service.update('inspection-1', { scheduledAt: inDays(-2) }, MANAGER),
         ).rejects.toMatchObject({ status: 400 });
       });
 

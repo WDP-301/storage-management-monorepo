@@ -108,39 +108,24 @@ export async function openReturnInspection(
   );
 }
 
-/**
- * Moves an open return to a new day. Bringing it forward restarts the notice from now (and
- * captures the rules if the request predates them), so booking a far-off day and then moving it
- * earlier cannot dodge the short-notice deduction; pushing it back keeps the original notice.
- */
-export async function rescheduleReturn(
-  inspection: Inspection,
-  scheduledAt: Date,
-  now: Date,
-  loadRules: () => Promise<ReturnRules>,
-): Promise<void> {
-  const current = inspection.scheduledAt ? vietnamDate(inspection.scheduledAt) : null;
-  if (current && vietnamDate(scheduledAt) < current) {
-    inspection.noticeFrom = now;
-    inspection.returnRules ??= await loadRules();
-  }
-  inspection.scheduledAt = scheduledAt;
+/** Whether `scheduledAt` falls on another Vietnam day than the current appointment. */
+export function changesAppointmentDay(inspection: Inspection, scheduledAt: Date): boolean {
+  return (
+    inspection.scheduledAt == null ||
+    vietnamDate(inspection.scheduledAt) !== vietnamDate(scheduledAt)
+  );
 }
 
 /**
- * A requested appointment for an open return, checked and applied. Sending back the day it
- * already has (another time of that Vietnam day) is not a move: it is accepted even once that
- * day is behind us, so a form that resends every field never fails on an old appointment.
+ * A requested appointment for an open return, checked and applied. The appointment is only a
+ * schedule: money counts to the day the return is finalized, so moving it changes no notice or
+ * rent. Sending back the day it already has (another time of that Vietnam day) is not a move: it
+ * is accepted even once that day is behind us, so a form that resends every field never fails on
+ * an old appointment.
  */
-export async function moveReturn(
-  inspection: Inspection,
-  scheduledAt: Date,
-  now: Date,
-  loadRules: () => Promise<ReturnRules>,
-): Promise<void> {
-  const sameDay =
-    inspection.scheduledAt != null &&
-    vietnamDate(inspection.scheduledAt) === vietnamDate(scheduledAt);
-  if (!sameDay) assertReturnDayInRange('scheduledAt', scheduledAt, now);
-  await rescheduleReturn(inspection, scheduledAt, now, loadRules);
+export function moveReturn(inspection: Inspection, scheduledAt: Date, now: Date): void {
+  if (changesAppointmentDay(inspection, scheduledAt)) {
+    assertReturnDayInRange('scheduledAt', scheduledAt, now);
+  }
+  inspection.scheduledAt = scheduledAt;
 }

@@ -81,9 +81,14 @@ export class InspectionController {
   @ApiOperation({
     summary: 'Update an inspection (assigned inspector or manager)',
     description:
-      'A return can be rescheduled (scheduledAt); bringing it forward restarts the customer notice. Damages may carry a proposedFee, never shown to the customer.',
+      'Managers of the facility, operations and admins can move a return appointment (scheduledAt); the assigned inspector gets 403 for a move, and the customer is notified. The appointment is only a schedule: money counts to the day the return is finalized. Damages may carry a proposedFee, never shown to the customer.',
   })
   @ApiResponse({ status: 400, type: ApiErrorResponseDto })
+  @ApiResponse({
+    status: 403,
+    description: 'Not the inspector or a manager, or an inspector moving the appointment',
+    type: ApiErrorResponseDto,
+  })
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateInspectionDto,
@@ -116,11 +121,12 @@ export class InspectionController {
     summary:
       'Finalize an inspection — handover activates the contract, return ends it and frees the unit',
     description:
-      "A handover needs the signed contract files and the first month's rent paid (POST /contracts/:id/first-rent). A return records the actual return day (returnedOn, default today), voids rent periods starting on or after the later of it and the appointment, and frees the unit unless a MAJOR damage sends it to maintenance.",
+      "A handover needs the signed contract files and the first month's rent paid (POST /contracts/:id/first-rent). A return is recorded on the Vietnam day it is finalized (returnedOn): rent and notice count to that day, not to the appointment; rent periods starting on or after it are voided, and the unit is freed unless a MAJOR damage sends it to maintenance.",
   })
   @ApiResponse({
     status: 400,
-    description: 'returnedOn outside request day..today, or sent for a handover',
+    description:
+      'Malformed returnedOn (its value is ignored, but it must still be a YYYY-MM-DD day)',
     type: ApiErrorResponseDto,
   })
   @ApiResponse({
@@ -131,9 +137,10 @@ export class InspectionController {
   })
   finalize(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: FinalizeInspectionDto,
+    // Validated so a malformed body still fails; nothing in it changes the finalize.
+    @Body() _dto: FinalizeInspectionDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.lifecycle.finalize(id, user, dto);
+    return this.lifecycle.finalize(id, user);
   }
 }

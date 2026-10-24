@@ -6,8 +6,9 @@ export class FinalizeInspectionDto {
   @ApiPropertyOptional({
     format: 'date',
     example: '2027-04-12',
+    deprecated: true,
     description:
-      'Return only: Vietnam day the unit was actually handed back, from the day the return was requested to today. Defaults to today.',
+      'Ignored: a return is always recorded on the Vietnam day it is finalized. Still accepted so older staff apps that send the day they picked keep working.',
   })
   @IsOptional()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'returnedOn must be a YYYY-MM-DD day' })

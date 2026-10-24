@@ -81,6 +81,10 @@ export interface SettlementSummaryRecord {
   fee_invoice_id: string | null;
   approved_at: string | Date | null;
   completed_at: string | Date | null;
+  /** Proof of the refund transfer, once staff confirmed it: the bank reference, if given. */
+  refund_transfer_ref: string | null;
+  /** Proof of the refund transfer: the receipts staff attached (empty until it is confirmed). */
+  refund_evidence: EvidenceFile[];
 }
 
 export interface SettlementDamage {
@@ -180,9 +184,10 @@ export interface ApproveSettlementInput extends SettlementDecisionsInput {
   note?: string;
 }
 
-/** Marks the manual refund transfer done; needs evidence or a transfer reference. */
+/** Marks the manual refund transfer done; needs at least one evidence file, the reference is optional. */
 export interface CompleteRefundInput {
-  evidence?: EvidenceFile[];
+  /** At least one file proving the transfer. */
+  evidence: EvidenceFile[];
   transferRef?: string;
   note?: string;
 }

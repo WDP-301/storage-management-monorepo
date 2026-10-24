@@ -5,6 +5,7 @@ import {
   settlementHeadline,
   settlementLineAmount,
 } from '../../../lib/settlement-format';
+import { EvidenceGallery } from '../../components/EvidenceGallery';
 import type { SettlementLine, SettlementSummaryRecord } from '../../types/contract-api';
 import { SectionCard } from './contract-sections';
 import { InfoRow } from './info-row';
@@ -60,6 +61,7 @@ export function SettlementSection({ settlement }: { settlement: SettlementSummar
           value={`${account.bank_name} ${account.account_no_masked} · ${account.account_name}`}
         />
       ) : null}
+      <RefundProof settlement={settlement} />
     </SectionCard>
   );
 }
@@ -84,6 +86,19 @@ function LineRow({ line }: { line: SettlementLine }) {
       {line.waived && line.waive_reason ? (
         <Text className="font-body text-caption text-muted">{line.waive_reason}</Text>
       ) : null}
+    </View>
+  );
+}
+
+/** What the branch attached when it confirmed the refund transfer, for the customer to check. */
+function RefundProof({ settlement }: { settlement: SettlementSummaryRecord }) {
+  const { refund_transfer_ref: transferRef, refund_evidence: evidence } = settlement;
+  if (settlement.status !== 'COMPLETED' || (!transferRef && evidence.length === 0)) return null;
+  return (
+    <View className="gap-2">
+      <Text className="font-strong text-body-sm text-foreground">Chứng từ hoàn cọc</Text>
+      {transferRef ? <InfoRow isNumeric label="Mã giao dịch" value={transferRef} /> : null}
+      {evidence.length > 0 ? <EvidenceGallery files={evidence} /> : null}
     </View>
   );
 }

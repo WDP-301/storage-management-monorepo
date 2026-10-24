@@ -49,7 +49,11 @@ describe('SettlementRefundService', () => {
   });
 
   it('completes the settlement and releases the deposit with the status the refund gives it', async () => {
-    await service.complete('contract-1', { transferRef: ' FT123 ', note: 'Đã CK' }, ADMIN);
+    await service.complete(
+      'contract-1',
+      { evidence: [PROOF], transferRef: ' FT123 ', note: 'Đã CK' },
+      ADMIN,
+    );
 
     expect(em.findOne).toHaveBeenCalledWith(ContractSettlement, {
       where: { contractId: 'contract-1' },
@@ -61,7 +65,7 @@ describe('SettlementRefundService', () => {
       expect.objectContaining({
         status: SettlementStatus.COMPLETED,
         transferRef: 'FT123',
-        evidence: [],
+        evidence: [PROOF],
         note: 'Duyệt\nĐã CK',
         completedBy: 'admin-1',
         completedAt: expect.any(Date),
@@ -80,7 +84,7 @@ describe('SettlementRefundService', () => {
     expect(payload.body).not.toContain('0123456789');
   });
 
-  it('accepts evidence alone', async () => {
+  it('accepts evidence without a transfer reference', async () => {
     await service.complete('contract-1', { evidence: [PROOF] }, ADMIN);
     expect(em.update).toHaveBeenCalledWith(
       ContractSettlement,
@@ -89,10 +93,13 @@ describe('SettlementRefundService', () => {
     );
   });
 
-  it('needs evidence or a transfer reference', async () => {
+  it('needs at least one evidence file, even with a transfer reference', async () => {
     await expect(
-      service.complete('contract-1', { transferRef: '  ', evidence: [] }, ADMIN),
-    ).rejects.toMatchObject({ status: 400 });
+      service.complete('contract-1', { transferRef: 'FT123', evidence: [] }, ADMIN),
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { details: { fields: [{ field: 'evidence', code: 'proofRequired' }] } },
+    });
     expect(em.findOne).not.toHaveBeenCalled();
   });
 
@@ -102,7 +109,7 @@ describe('SettlementRefundService', () => {
   ])('refuses a settlement %s', async (_label, over) => {
     settlement = over && { ...settlement, ...over };
     await expect(
-      service.complete('contract-1', { transferRef: 'FT1' }, ADMIN),
+      service.complete('contract-1', { evidence: [PROOF], transferRef: 'FT1' }, ADMIN),
     ).rejects.toMatchObject({ status: 409, response: { code: 'REFUND_NOT_PENDING' } });
     expect(em.update).not.toHaveBeenCalled();
   });
@@ -110,12 +117,12 @@ describe('SettlementRefundService', () => {
   it('refuses a transfer reference already used, also when a concurrent write catches it', async () => {
     em.exists.mockResolvedValueOnce(true);
     await expect(
-      service.complete('contract-1', { transferRef: 'FT1' }, ADMIN),
+      service.complete('contract-1', { evidence: [PROOF], transferRef: 'FT1' }, ADMIN),
     ).rejects.toMatchObject({ status: 409, response: { code: 'CONFLICT' } });
 
     em.update.mockRejectedValueOnce({ code: '23505' });
     await expect(
-      service.complete('contract-1', { transferRef: 'FT1' }, ADMIN),
+      service.complete('contract-1', { evidence: [PROOF], transferRef: 'FT1' }, ADMIN),
     ).rejects.toMatchObject({ status: 409, response: { code: 'CONFLICT' } });
   });
 });

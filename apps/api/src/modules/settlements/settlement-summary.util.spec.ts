@@ -161,5 +161,45 @@ describe('settlement read model', () => {
       },
     });
     expect(extras.get('b')?.settlement).toBeNull();
+    // Nothing to prove before the refund is confirmed.
+    expect(extras.get('a')?.settlement).toMatchObject({
+      refund_transfer_ref: null,
+      refund_evidence: [],
+    });
+  });
+
+  it('shows the customer the proof of a confirmed refund', async () => {
+    const receipt = { fileKey: 'uploads/ops-1-ck.jpg', name: 'ck.jpg', mimeType: 'image/jpeg' };
+    const settlement = {
+      contractId: 'a',
+      status: SettlementStatus.COMPLETED,
+      depositAmount: '2000000.00',
+      creditsTotal: '0',
+      deductionsTotal: '0',
+      refundAmount: '2000000',
+      shortfallAmount: '0',
+      lines: [],
+      bankAccount: null,
+      feeInvoiceId: null,
+      approvedAt: new Date('2027-04-02'),
+      completedAt: new Date('2027-04-03'),
+      transferRef: 'FT123',
+      evidence: [receipt],
+    };
+    const em = { query: jest.fn(async () => []), find: jest.fn(async () => [settlement]) };
+
+    const extras = await loadCustomerContractExtras(
+      em as never,
+      [contract('a', ContractStatus.ENDED)],
+      new Map(),
+      100,
+    );
+
+    expect(extras.get('a')?.settlement).toMatchObject({
+      status: SettlementStatus.COMPLETED,
+      completed_at: new Date('2027-04-03'),
+      refund_transfer_ref: 'FT123',
+      refund_evidence: [receipt],
+    });
   });
 });

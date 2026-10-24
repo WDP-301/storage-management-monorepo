@@ -135,11 +135,41 @@ describe('returnTiming', () => {
     });
   });
 
-  it('keeps the appointment when the unit came back before it', () => {
-    const timing = returnTiming(base({ scheduledAt: at('2027-03-20'), returnedOn: '2027-03-10' }));
+  it('counts to the finalize day, not to a later appointment', () => {
+    const timing = returnTiming(
+      base({
+        noticeFrom: at('2027-02-01'),
+        scheduledAt: at('2027-03-20'),
+        returnedOn: '2027-02-10',
+      }),
+    );
 
-    expect(timing.effectiveReturnDay).toBe('2027-03-20');
-    expect(timing.early).toBe(true);
+    // Forty-seven days to the appointment, but only nine to the finalize: a short notice.
+    expect(timing).toMatchObject({
+      effectiveReturnDay: '2027-02-10',
+      noticeDays: 9,
+      early: true,
+      shortNotice: true,
+      shortNoticeDeduction: 1500000,
+    });
+  });
+
+  it('counts to the finalize day, not to an earlier appointment', () => {
+    const timing = returnTiming(
+      base({
+        noticeFrom: at('2027-02-01'),
+        scheduledAt: at('2027-02-10'),
+        returnedOn: '2027-03-05',
+      }),
+    );
+
+    // Nine days to the appointment, thirty-two to the finalize: enough notice.
+    expect(timing).toMatchObject({
+      effectiveReturnDay: '2027-03-05',
+      noticeDays: 32,
+      shortNotice: false,
+      shortNoticeDeduction: 0,
+    });
   });
 
   it.each([
@@ -279,10 +309,10 @@ describe('returnTiming', () => {
 });
 
 describe('effectiveReturnDay', () => {
-  it('is the later of the return day and the appointment', () => {
+  it('is the finalize day once there is one, the appointment until then', () => {
     expect(effectiveReturnDay('2027-03-20')).toBe('2027-03-20');
     expect(effectiveReturnDay('2027-03-20', null)).toBe('2027-03-20');
-    expect(effectiveReturnDay('2027-03-20', '2027-03-10')).toBe('2027-03-20');
+    expect(effectiveReturnDay('2027-03-20', '2027-03-10')).toBe('2027-03-10');
     expect(effectiveReturnDay('2027-03-20', '2027-04-05')).toBe('2027-04-05');
   });
 });

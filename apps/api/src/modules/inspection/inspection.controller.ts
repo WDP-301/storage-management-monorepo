@@ -116,12 +116,7 @@ export class InspectionController {
     summary:
       'Finalize an inspection — handover activates the contract, return ends it and frees the unit',
     description:
-      "A handover needs the signed contract files and the first month's rent paid (POST /contracts/:id/first-rent). A return records the actual return day (returnedOn, default today), voids rent periods starting on or after the later of it and the appointment, and frees the unit unless a MAJOR damage sends it to maintenance.",
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'returnedOn outside request day..today, or sent for a handover',
-    type: ApiErrorResponseDto,
+      "A handover needs the signed contract files and the first month's rent paid (POST /contracts/:id/first-rent). A return is recorded on the Vietnam day it is finalized (returnedOn): rent and notice count to that day, not to the appointment; rent periods starting on or after it are voided, and the unit is freed unless a MAJOR damage sends it to maintenance.",
   })
   @ApiResponse({
     status: 409,
@@ -131,9 +126,10 @@ export class InspectionController {
   })
   finalize(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: FinalizeInspectionDto,
+    // Validated so a malformed body still fails; nothing in it changes the finalize.
+    @Body() _dto: FinalizeInspectionDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.lifecycle.finalize(id, user, dto);
+    return this.lifecycle.finalize(id, user);
   }
 }

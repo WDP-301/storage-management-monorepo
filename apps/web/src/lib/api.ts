@@ -287,12 +287,17 @@ export const InspectionsApi = {
     return res.data.data;
   },
 
-  /** `returnedOn` (Vietnam day, return only) defaults to today on the server. */
-  finalize: async (id: string, returnedOn?: string): Promise<InspectionRecord> => {
-    const res = await apiClient.post<ApiResponse<InspectionRecord>>(
-      `/inspections/${id}/finalize`,
-      returnedOn ? { returnedOn } : undefined,
-    );
+  /** Moves an open return's appointment (managers); the customer is notified. */
+  reschedule: async (id: string, scheduledAt: string): Promise<InspectionRecord> => {
+    const res = await apiClient.patch<ApiResponse<InspectionRecord>>(`/inspections/${id}`, {
+      scheduledAt,
+    });
+    return res.data.data;
+  },
+
+  /** A return is recorded on the day it is finalized. */
+  finalize: async (id: string): Promise<InspectionRecord> => {
+    const res = await apiClient.post<ApiResponse<InspectionRecord>>(`/inspections/${id}/finalize`);
     return res.data.data;
   },
 };

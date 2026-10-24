@@ -32,7 +32,7 @@ export function useInspectionDetail(id: string | undefined) {
   const [inspection, setInspection] = useState<StaffInspection | null>(null);
   const [form, setForm] = useState<InspectionUpdate | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'saving' | 'finalizing' | 'rescheduling' | null>(null);
+  const [busy, setBusy] = useState<'saving' | 'finalizing' | null>(null);
   const [uploads, setUploads] = useState(0);
   // The route stays mounted across inspections: async results for a previous id are dropped.
   const idRef = useRef(id);
@@ -123,42 +123,15 @@ export function useInspectionDetail(id: string | undefined) {
   };
 
   /**
-   * Moves a return appointment and returns the reason it failed, or null when it moved. Only the
-   * appointment is taken from the response, so edits typed into the form but not yet saved stay
-   * as they are; the caller shows the reason next to its own control.
+   * Saves pending edits first so the signed record is exactly what is on screen. A return is
+   * recorded on the day it is finalized.
    */
-  const reschedule = async (dayIso: string): Promise<string | null> => {
-    if (!id) return 'Không đổi được ngày hẹn.';
-    setBusy('rescheduling');
-    try {
-      const moved = await InspectionsApi.reschedule(id, dayIso);
-      if (idRef.current === id) {
-        setInspection((current) =>
-          current ? { ...current, scheduledAt: moved.scheduledAt } : current,
-        );
-      }
-      return null;
-    } catch (err) {
-      return staffErrorMessage(
-        err,
-        'Không đổi được ngày hẹn.',
-        'Bạn không có quyền đổi lịch biên bản này.',
-      );
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  /**
-   * Saves pending edits first so the signed record is exactly what is on screen.
-   * `returnedOn` is the Vietnam day a return actually happened; omit it for a handover.
-   */
-  const finalize = async (returnedOn?: string): Promise<boolean> => {
+  const finalize = async (): Promise<boolean> => {
     if (!id) return false;
     if (isDirty && !(await save())) return false;
     setBusy('finalizing');
     try {
-      const done = await InspectionsApi.finalize(id, returnedOn);
+      const done = await InspectionsApi.finalize(id);
       // Locks the screen at once instead of waiting for the next reload.
       if (idRef.current === id) {
         setInspection((current) =>
@@ -166,7 +139,7 @@ export function useInspectionDetail(id: string | undefined) {
             ? {
                 ...current,
                 finalizedAt: done.finalizedAt ?? new Date().toISOString(),
-                returnedOn: done.returnedOn ?? returnedOn ?? current.returnedOn,
+                returnedOn: done.returnedOn ?? current.returnedOn,
               }
             : current,
         );
@@ -190,7 +163,6 @@ export function useInspectionDetail(id: string | undefined) {
     isUploading: uploads > 0,
     trackUpload,
     save,
-    reschedule,
     finalize,
     reload: load,
   };

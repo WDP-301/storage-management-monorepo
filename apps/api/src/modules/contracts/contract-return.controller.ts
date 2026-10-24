@@ -58,7 +58,7 @@ export class ContractReturnController {
   @ApiOperation({
     summary: 'What returning on a day would cost: notice, early-return deduction, overstay',
     description:
-      'Takes the open request into account (moving it earlier restarts the notice). Records nothing.',
+      'Assumes the return is finalized on that day; an open request keeps its notice anchor. Records nothing.',
   })
   @ApiResponse({ status: 200, type: ReturnPreviewResponseDto })
   @ApiResponse({ status: 400, description: 'Day outside today..+365', type: ApiErrorResponseDto })
@@ -92,7 +92,7 @@ export class ContractReturnController {
   @BankLookupThrottle()
   @ApiOperation({
     summary: 'Change the day, note or refund account of the open return request',
-    description: 'Moving the day earlier restarts the notice from now; later keeps it.',
+    description: 'The day is only an appointment: money counts to the day the return is finalized.',
   })
   @ApiResponse({ status: 400, description: 'Day outside today..+365', type: ApiErrorResponseDto })
   @ApiResponse({

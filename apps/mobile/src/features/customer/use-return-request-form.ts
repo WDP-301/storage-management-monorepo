@@ -48,7 +48,6 @@ export function useReturnRequestForm(
 
   // No preview yet counts as required: only a known zero deposit leaves nothing to refund.
   const accountRequired = !isEdit && preview.preview?.deposit_held !== 0;
-  const movedEarlier = Boolean(openReturn && currentDay && dayIso && dayIso < currentDay);
 
   const changeAccount = (draft: RefundAccountDraft) => {
     accountTouched.current = true;
@@ -100,7 +99,6 @@ export function useReturnRequestForm(
     changeAccount,
     accountRequired,
     accountHint: isEdit ? 'Để trống để giữ tài khoản đã gửi' : null,
-    movedEarlier,
     preview,
     isSubmitting,
     error,

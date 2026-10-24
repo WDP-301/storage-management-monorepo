@@ -33,7 +33,7 @@ export class ReturnRequestDto implements ReturnRequestInput {
 export class UpdateReturnRequestDto implements UpdateReturnRequestInput {
   @ApiPropertyOptional({
     example: '2027-04-12T12:00:00.000Z',
-    description: `${SCHEDULED_AT_DESCRIPTION}. Moving it earlier restarts the notice from now`,
+    description: `${SCHEDULED_AT_DESCRIPTION}. Only an appointment: money counts to the day the return is finalized`,
   })
   @IsOptional()
   @IsDateString()

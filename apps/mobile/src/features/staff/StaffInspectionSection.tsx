@@ -3,7 +3,6 @@ import { formatIsoDate } from '../../../lib/format-vi';
 import { SectionCard } from '../customer/contract-sections';
 import { InspectionEditor } from './InspectionEditor';
 import { requestSourceLabel, scheduledLabel } from './inspection-display';
-import { ReturnRescheduleCard } from './ReturnRescheduleCard';
 import type { useInspectionDetail } from './use-inspection-detail';
 
 type Props = {
@@ -39,7 +38,7 @@ export function StaffInspectionSection({
           ) : null}
           {inspection.returnedOn ? (
             <Text className="font-body text-body-sm text-muted">
-              Ngày trả thực tế: {formatIsoDate(inspection.returnedOn)}
+              Ngày trả: {formatIsoDate(inspection.returnedOn)}
             </Text>
           ) : null}
           {inspection.requestNote ? (
@@ -47,7 +46,6 @@ export function StaffInspectionSection({
               {sourceLabel ? 'Ghi chú yêu cầu' : 'Ghi chú của khách'}: {inspection.requestNote}
             </Text>
           ) : null}
-          {kind === 'return' && !finalized ? <ReturnRescheduleCard detail={detail} /> : null}
           <InspectionEditor
             detail={detail}
             finalizeBlockedReason={finalizeBlockedReason}

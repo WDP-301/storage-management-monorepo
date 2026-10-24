@@ -192,37 +192,18 @@ describe('ContractReturnService', () => {
   });
 
   describe('updateReturn', () => {
-    it('restarts the notice from now when the day moves earlier', async () => {
-      const before = Date.now();
-
-      const result = await service.updateReturn('contract-1', 'customer-1', {
-        scheduledAt: inDays(10),
-      });
-
-      expect(result.scheduledAt).toEqual(new Date(inDays(10)));
-      expect(result.noticeFrom?.getTime()).toBeGreaterThanOrEqual(before);
-      // The rules captured with the request stay.
-      expect(result.returnRules).toEqual({ noticeDays: 15, penaltyPercent: 50 });
-    });
-
-    it('captures the current rules when an older request moves earlier', async () => {
-      latestReturn = buildReturn({ returnRules: null });
-
-      await expect(
-        service.updateReturn('contract-1', 'customer-1', { scheduledAt: inDays(10) }),
-      ).resolves.toMatchObject({ returnRules: RULES });
-    });
-
     it.each([
+      ['moves earlier', () => inDays(10)],
       ['moves later', () => inDays(60)],
       // 22:00 in Vietnam on the appointment day.
       ['keeps its day', () => `${addVietnamDays(vietnamToday(), 30)}T15:00:00.000Z`],
-    ])('keeps the notice anchor when the appointment %s', async (_label, scheduledAt) => {
-      const result = await service.updateReturn('contract-1', 'customer-1', {
-        scheduledAt: scheduledAt(),
-      });
+    ])('keeps the notice anchor and the rules when the appointment %s', async (_label, at) => {
+      const scheduledAt = at();
+      const result = await service.updateReturn('contract-1', 'customer-1', { scheduledAt });
 
+      expect(result.scheduledAt).toEqual(new Date(scheduledAt));
       expect(result.noticeFrom).toEqual(new Date('2026-01-01T00:00:00.000Z'));
+      expect(result.returnRules).toEqual({ noticeDays: 15, penaltyPercent: 50 });
       expect(settings.getReturnNoticeDays).not.toHaveBeenCalled();
     });
 

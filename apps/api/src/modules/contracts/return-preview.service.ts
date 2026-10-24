@@ -4,7 +4,6 @@ import { SettingsService } from '@modules/settings/settings.service';
 import { returnTiming, toReturnTimingRecord } from '@modules/settlements/return-timing';
 import { Injectable } from '@nestjs/common';
 import { notFound } from '@shared/exceptions/domain.exception';
-import { vietnamDate } from '@shared/utils/calendar.util';
 import { InspectionType, type ReturnPreviewRecord } from '@storage/types';
 import { DataSource, IsNull } from 'typeorm';
 import {
@@ -24,9 +23,9 @@ export class ReturnPreviewService {
   ) {}
 
   /**
-   * Previews a new request, or moving the open one. Moving it earlier would restart the notice
-   * from now; otherwise the open request keeps its notice anchor and the rules it captured. The
-   * return is assumed to happen on the chosen day. Reads only — nothing is recorded.
+   * Previews a new request, or moving the open one, which keeps its notice anchor and the rules
+   * it captured. Money counts to the day the return is finalized, so the preview assumes it is
+   * finalized on the chosen day. Reads only — nothing is recorded.
    */
   async preview(
     contractId: string,
@@ -45,10 +44,8 @@ export class ReturnPreviewService {
       where: { contractId, type: InspectionType.RETURN, finalizedAt: IsNull() },
     });
 
-    const movedEarlier =
-      open?.scheduledAt != null && vietnamDate(scheduledAt) < vietnamDate(open.scheduledAt);
     // A request made before notice anchors existed counts from when it was made.
-    const noticeFrom = !open || movedEarlier ? now : (open.noticeFrom ?? open.createdAt);
+    const noticeFrom = open ? (open.noticeFrom ?? open.createdAt) : now;
     const [rules, goLiveAt, deposit, savedAccount] = await Promise.all([
       open?.returnRules ?? currentReturnRules(this.settings),
       this.settings.getReturnRulesEffectiveAt(),

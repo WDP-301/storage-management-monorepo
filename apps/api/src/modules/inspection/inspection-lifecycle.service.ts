@@ -13,7 +13,6 @@ import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { ContractStatus, DamageSeverity, InspectionType, StorageUnitStatus } from '@storage/types';
 import { DataSource, type EntityManager, In } from 'typeorm';
-import type { FinalizeInspectionDto } from './dto/finalize-inspection.dto';
 import { assertReadyForHandover } from './handover-ready.util';
 import {
   assertInspectorOrManager,
@@ -68,15 +67,11 @@ export class InspectionLifecycleService {
    * Signs off an inspection and moves the contract and unit along with it (a handover first
    * needs the signed files and the first month paid):
    * handover DRAFT → ACTIVE / unit RENTED, return ACTIVE → ENDED / unit AVAILABLE or
-   * MAINTENANCE, with the actual return day (default today) and the rent it still owes billed.
+   * MAINTENANCE, recorded on the day it is finalized, with the rent it still owes billed.
    * Everything changes in one transaction under row locks, so a concurrent finalize sees the
    * committed finalizedAt (409). PDFs of invoices it issued are queued once committed.
    */
-  async finalize(
-    id: string,
-    actor: AuthUser,
-    dto: FinalizeInspectionDto = {},
-  ): Promise<Inspection> {
+  async finalize(id: string, actor: AuthUser): Promise<Inspection> {
     const { finalized, issuedInvoiceIds } = await this.dataSource.transaction(async (em) => {
       const inspection = await em.findOne(Inspection, {
         where: { id },
@@ -101,7 +96,7 @@ export class InspectionLifecycleService {
         });
       }
       const now = new Date();
-      const returnedOn = resolveReturnedOn(inspection, dto.returnedOn, now);
+      const returnedOn = resolveReturnedOn(inspection, now);
 
       const contract = await em.findOne(Contract, {
         where: { id: inspection.contractId },

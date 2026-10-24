@@ -100,19 +100,22 @@ describe('ReturnPreviewService.preview', () => {
     expect(settings.getReturnNoticeDays).not.toHaveBeenCalled();
   });
 
-  it('restarts the notice from now when the open request moves earlier', async () => {
-    const before = Date.now();
+  it('keeps the notice anchor when the open request moves earlier', async () => {
+    const noticeFrom = new Date(Date.now() - 40 * DAY_MS);
     openReturn = {
       id: 'return-1',
       scheduledAt: new Date(inDays(40)),
-      noticeFrom: new Date(Date.now() - 40 * DAY_MS),
+      noticeFrom,
       returnRules: { noticeDays: 30, penaltyPercent: 100 },
     };
 
     const preview = await service.preview('contract-1', 'customer-1', inDays(20));
 
-    expect((preview.notice_from as Date).getTime()).toBeGreaterThanOrEqual(before);
-    expect(preview).toMatchObject({ notice_days: 20, short_notice: true });
+    expect(preview).toMatchObject({
+      notice_from: noticeFrom,
+      notice_days: 60,
+      short_notice: false,
+    });
   });
 
   it('counts an older request without an anchor from when it was made', async () => {

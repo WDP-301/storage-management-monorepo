@@ -4,7 +4,7 @@ import { Inspection } from '@entities/inspection.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { activeFacilityIds } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { SettingsService } from '@modules/settings/settings.service';
+import { NotificationsService } from '@modules/notifications/notifications.service';
 import { Injectable } from '@nestjs/common';
 import { fieldValidationError, notFound } from '@shared/exceptions/domain.exception';
 import { ContractStatus, UserRole, UserStatus } from '@storage/types';
@@ -21,17 +21,18 @@ import {
   isGlobalManager,
   loadInspectionFacilityId,
   loadManagedFacilityIds,
+  managesInspectionFacility,
   readableInspection,
   withoutRefundAccount,
   withPublicInspector,
 } from './inspection-access.util';
-import { rescheduleInspection } from './inspection-schedule.util';
+import { rescheduleInspection, returnRescheduledNotification } from './inspection-schedule.util';
 
 @Injectable()
 export class InspectionService {
   constructor(
     private readonly dataSource: DataSource,
-    private readonly settings: SettingsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private get em() {
@@ -118,7 +119,7 @@ export class InspectionService {
   /**
    * Updates inspection fields (assigned inspector or a manager of the facility).
    * `inspected_by` only changes through assign, `finalized_at` only through finalize.
-   * A return can be rescheduled; bringing it forward restarts the customer's notice.
+   * Only a manager of the facility moves a return appointment, and the customer is told.
    */
   async update(id: string, dto: UpdateInspectionDto, actor: AuthUser): Promise<Inspection> {
     // Row lock: a save racing a finalize must see the committed finalizedAt (409),
@@ -137,9 +138,13 @@ export class InspectionService {
       );
       assertNotFinalized(inspection);
 
-      if (dto.scheduledAt !== undefined) {
-        await rescheduleInspection(inspection, new Date(dto.scheduledAt), this.settings);
-      }
+      const moved =
+        dto.scheduledAt !== undefined &&
+        rescheduleInspection(
+          inspection,
+          new Date(dto.scheduledAt),
+          await managesInspectionFacility(em, inspection, actor),
+        );
       if (dto.conditionNotes !== undefined) {
         inspection.conditionNotes = dto.conditionNotes;
       }
@@ -151,6 +156,18 @@ export class InspectionService {
         where: { id },
         relations: INSPECTION_RELATIONS,
       });
+      const contract = reloaded?.contract;
+      if (moved && contract) {
+        await this.notifications.createForUsers(
+          em,
+          [contract.customerId],
+          returnRescheduledNotification(
+            contract,
+            inspection,
+            contract.bookingItem?.storageUnit?.code ?? null,
+          ),
+        );
+      }
       return withoutRefundAccount(withPublicInspector(reloaded ?? inspection));
     });
   }

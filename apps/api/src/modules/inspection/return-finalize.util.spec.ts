@@ -34,65 +34,21 @@ const returnInspection = (overrides: Partial<Inspection> = {}): Inspection =>
   }) as Inspection;
 
 describe('resolveReturnedOn', () => {
-  it('defaults to today in Vietnam', () => {
-    // 00:30 on 21/04 in Vietnam.
-    expect(resolveReturnedOn(returnInspection(), undefined, new Date('2027-04-20T17:30:00Z'))).toBe(
+  it('is the Vietnam day of the finalize, whatever the appointment', () => {
+    // 00:30 on 21/04 in Vietnam, still 20/04 in UTC; the appointment is 10/04.
+    expect(resolveReturnedOn(returnInspection(), new Date('2027-04-20T17:30:00Z'))).toBe(
       '2027-04-21',
     );
-  });
-
-  it.each(['2027-04-01', '2027-04-15', '2027-04-20'])('accepts %s', (day) => {
-    expect(resolveReturnedOn(returnInspection(), day, NOW)).toBe(day);
-  });
-
-  it.each([
-    ['before the return was requested', '2027-03-31'],
-    ['in the future', '2027-04-21'],
-  ])('rejects a day %s', (_label, day) => {
-    expect(() => resolveReturnedOn(returnInspection(), day, NOW)).toThrow(
-      expect.objectContaining({
-        status: 400,
-        response: expect.objectContaining({
-          details: {
-            fields: [expect.objectContaining({ field: 'returnedOn', code: 'outOfRange' })],
-          },
-        }),
-      }),
+    // 23:59:59 on 20/04 in Vietnam.
+    expect(resolveReturnedOn(returnInspection(), new Date('2027-04-20T16:59:59Z'))).toBe(
+      '2027-04-20',
     );
   });
 
-  it('reads the day the return was requested in Vietnam time', () => {
-    // 00:00 on 01/04 in Vietnam, still 31/03 in UTC: the earliest allowed day is 01/04.
-    const requestedAtMidnight = returnInspection({ createdAt: new Date('2027-03-31T17:00:00Z') });
-    expect(resolveReturnedOn(requestedAtMidnight, '2027-04-01', NOW)).toBe('2027-04-01');
-    expect(() => resolveReturnedOn(requestedAtMidnight, '2027-03-31', NOW)).toThrow(
-      expect.objectContaining({ status: 400 }),
-    );
-
-    // One second earlier it is still 31/03 in Vietnam.
-    const requestedBefore = returnInspection({ createdAt: new Date('2027-03-31T16:59:59Z') });
-    expect(resolveReturnedOn(requestedBefore, '2027-03-31', NOW)).toBe('2027-03-31');
-  });
-
-  it('closes the range at today in Vietnam time', () => {
-    // 23:59:59 on 20/04 in Vietnam, then 00:00 on 21/04.
-    const lastSecond = new Date('2027-04-20T16:59:59Z');
-    const nextDay = new Date('2027-04-20T17:00:00Z');
-
-    expect(resolveReturnedOn(returnInspection(), '2027-04-20', lastSecond)).toBe('2027-04-20');
-    expect(() => resolveReturnedOn(returnInspection(), '2027-04-21', lastSecond)).toThrow(
-      expect.objectContaining({ status: 400 }),
-    );
-    expect(resolveReturnedOn(returnInspection(), '2027-04-21', nextDay)).toBe('2027-04-21');
-  });
-
-  it('has no return day for a handover, and refuses one', () => {
+  it('has no return day for a handover', () => {
     const handover = returnInspection({ type: InspectionType.PRE_HANDOVER });
 
-    expect(resolveReturnedOn(handover, undefined, NOW)).toBeNull();
-    expect(() => resolveReturnedOn(handover, '2027-04-20', NOW)).toThrow(
-      expect.objectContaining({ status: 400 }),
-    );
+    expect(resolveReturnedOn(handover, NOW)).toBeNull();
   });
 });
 
@@ -136,7 +92,7 @@ describe('applyReturnFinalize', () => {
     return call?.[1][1];
   };
 
-  it('counts to the actual day when the unit came back after the appointment', async () => {
+  it('counts to the finalize day when it is after the appointment', async () => {
     const inspection = returnInspection();
 
     await expect(run(inspection, '2027-04-15')).resolves.toEqual({
@@ -149,14 +105,14 @@ describe('applyReturnFinalize', () => {
     expect(voidFrom()).toEqual(fromVietnamDate('2027-04-15'));
   });
 
-  it('counts to the appointment when the unit came back before it', async () => {
+  it('counts to the finalize day when it is before the appointment', async () => {
     const inspection = returnInspection({ scheduledAt: new Date('2027-04-25T05:00:00.000Z') });
 
     await expect(run(inspection, '2027-04-20')).resolves.toMatchObject({
-      effectiveReturnDay: '2027-04-25',
+      effectiveReturnDay: '2027-04-20',
     });
     expect(inspection.returnedOn).toBe('2027-04-20');
-    expect(voidFrom()).toEqual(fromVietnamDate('2027-04-25'));
+    expect(voidFrom()).toEqual(fromVietnamDate('2027-04-20'));
   });
 
   it('records the deposit if it is still missing', async () => {
@@ -233,7 +189,7 @@ describe('rent owed when a return is finalized', () => {
     months: 12,
     monthlyPriceSnapshot: '1500000.00',
   } as unknown as Contract;
-  const FINALIZED_AT = new Date('2027-07-01T05:00:00.000Z');
+  const FINALIZED_AT = new Date('2027-08-01T05:00:00.000Z');
   const periodStart = (periodNo: number, of: Contract = contract) =>
     recurringRentPeriods(of).find((p) => p.periodNo === periodNo)?.startAt as Date;
   let rows: InvoiceRow[];
@@ -306,11 +262,11 @@ describe('rent owed when a return is finalized', () => {
       ([, , payload]) => payload.type === NotificationType.INVOICE_ISSUED,
     );
 
-  it('bills a period that started between the return and the later appointment', async () => {
-    // Billed through June; back on 01/07, appointment 01/08: July (from 15/07) was never billed.
+  it('bills a period that started before the finalize day but was never billed', async () => {
+    // Billed through June; appointment 01/07, finalized 01/08: July (from 15/07) was never billed.
     rows = [1, 2, 3, 4, 5, 6].map((n) => billed(n));
 
-    const result = await finalize('2027-08-01T05:00:00.000Z', '2027-07-01');
+    const result = await finalize('2027-07-01T05:00:00.000Z', '2027-08-01');
 
     expect(result.effectiveReturnDay).toBe('2027-08-01');
     expect(result.issuedInvoices).toHaveLength(1);
@@ -351,7 +307,7 @@ describe('rent owed when a return is finalized', () => {
       billed(8, { status: InvoiceStatus.ISSUED }),
     ];
 
-    const result = await finalize('2027-08-01T05:00:00.000Z', '2027-07-01');
+    const result = await finalize('2027-07-01T05:00:00.000Z', '2027-08-01');
 
     expect(result.issuedInvoices.map((i) => i.periodNo)).toEqual([7]);
     expect(result.voidedInvoices).toEqual([{ id: 'inv-8', invoiceNo: 'INV-8' }]);
@@ -380,7 +336,7 @@ describe('rent owed when a return is finalized', () => {
       billed(7, { kind: InvoiceKind.SETTLEMENT, status: InvoiceStatus.ISSUED, id: 'fee-7' }),
     ];
 
-    const result = await finalize('2027-08-01T05:00:00.000Z', '2027-07-01');
+    const result = await finalize('2027-07-01T05:00:00.000Z', '2027-08-01');
 
     expect(result.issuedInvoices.map((i) => i.periodNo)).toEqual([6, 7]);
   });
@@ -429,7 +385,7 @@ describe('rent owed when a return is finalized', () => {
       { ...contract, months: 1 },
       { ...contract, monthlyPriceSnapshot: '0.00' },
     ] as unknown as Contract[]) {
-      await expect(finalize('2027-08-01T05:00:00.000Z', '2027-07-01', of)).resolves.toMatchObject({
+      await expect(finalize('2027-07-01T05:00:00.000Z', '2027-08-01', of)).resolves.toMatchObject({
         issuedInvoices: [],
       });
     }

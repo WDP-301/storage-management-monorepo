@@ -1,4 +1,4 @@
-import { chooseRefundAccount } from './settlement-bank-account.util';
+import { chooseRefundAccount, loadCustomerRefundAccount } from './settlement-bank-account.util';
 
 const customerAccount = {
   bankBin: '970436',
@@ -36,5 +36,35 @@ describe('chooseRefundAccount', () => {
       overrideBy: null,
       overrideReason: null,
     });
+  });
+});
+
+describe('loadCustomerRefundAccount', () => {
+  const GIVEN = { bankBin: '970436', bankName: 'Vietcombank', accountNo: '1111', accountName: 'A' };
+  const SAVED = { bankBin: '970415', bankName: 'VietinBank', accountNo: '2222', accountName: 'B' };
+  const emWith = (saved: unknown) => ({ query: jest.fn(async () => [{ account: saved }]) });
+
+  it('uses the account given with the return request, without reading the saved one', async () => {
+    const em = emWith(SAVED);
+
+    await expect(
+      loadCustomerRefundAccount(em as never, { refundAccount: GIVEN }, 'customer-1'),
+    ).resolves.toEqual({ account: GIVEN, source: 'RETURN_REQUEST' });
+    expect(em.query).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the account the customer saved with an earlier request', async () => {
+    const em = emWith(SAVED);
+
+    await expect(
+      loadCustomerRefundAccount(em as never, { refundAccount: null }, 'customer-1'),
+    ).resolves.toEqual({ account: SAVED, source: 'SAVED' });
+    expect(em.query).toHaveBeenCalledWith(expect.any(String), ['customer-1']);
+  });
+
+  it('has no account when the customer never gave one', async () => {
+    await expect(
+      loadCustomerRefundAccount(emWith(null) as never, { refundAccount: null }, 'customer-1'),
+    ).resolves.toEqual({ account: null, source: null });
   });
 });

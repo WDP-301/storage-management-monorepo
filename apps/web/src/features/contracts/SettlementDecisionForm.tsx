@@ -106,11 +106,7 @@ export const SettlementDecisionForm: React.FC<Props> = ({ record, onApproved, on
           <span className="text-xs font-semibold text-kumo-default block">
             Tài khoản nhận tiền hoàn
           </span>
-          <p className="text-xs text-kumo-subtle">
-            {current.customer_bank_account
-              ? 'Đã điền sẵn tài khoản khách cung cấp khi yêu cầu trả kho.'
-              : 'Khách chưa cung cấp tài khoản (ứng dụng cũ) — nhập tài khoản khách gửi qua kênh khác.'}
-          </p>
+          <p className="text-xs text-kumo-subtle">{refundAccountHint(current)}</p>
           <RefundBankAccountFields
             value={form.bank}
             // Functional update: a bank lookup resolves seconds later, and the reviewer may have
@@ -202,3 +198,15 @@ export const SettlementDecisionForm: React.FC<Props> = ({ record, onApproved, on
     </div>
   );
 };
+
+/** Where the pre-filled refund account comes from, naming it so operations know whose it is. */
+function refundAccountHint(record: SettlementDetailRecord): string {
+  const account = record.customer_bank_account;
+  if (!account) {
+    return 'Khách chưa cung cấp tài khoản nhận tiền hoàn — liên hệ khách để lấy số tài khoản, nhập bên dưới và ghi lý do.';
+  }
+  const named = `${account.bankName} ${account.accountNo} — ${account.accountName}`;
+  return record.customer_bank_account_source === 'SAVED'
+    ? `Yêu cầu trả kho không kèm tài khoản — đã điền sẵn tài khoản khách đã dùng ở lần trả kho trước (ngân hàng đã xác nhận tên): ${named}.`
+    : `Đã điền sẵn tài khoản khách cung cấp khi yêu cầu trả kho: ${named}.`;
+}

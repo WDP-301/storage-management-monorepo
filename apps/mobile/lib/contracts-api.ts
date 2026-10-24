@@ -129,12 +129,23 @@ function normaliseAmenities(value: unknown): ContractAmenity[] | null {
   return amenities;
 }
 
-/** A settlement without a status is unreadable; lines always come back as an array. */
+/**
+ * A settlement without a status is unreadable; lines always come back as an array, and the refund
+ * proof is empty when an older server sends none.
+ */
 function normaliseSettlement(
   value: SettlementSummaryRecord | null | undefined,
 ): SettlementSummaryRecord | null {
   if (!value || typeof value !== 'object' || typeof value.status !== 'string') return null;
-  return { ...value, lines: Array.isArray(value.lines) ? value.lines : [] };
+  return {
+    ...value,
+    lines: Array.isArray(value.lines) ? value.lines : [],
+    refund_transfer_ref:
+      typeof value.refund_transfer_ref === 'string' ? value.refund_transfer_ref : null,
+    refund_evidence: Array.isArray(value.refund_evidence)
+      ? value.refund_evidence.filter(isEvidenceFile)
+      : [],
+  };
 }
 
 function toOptionalNumber(value: string | number | null | undefined): number | null {

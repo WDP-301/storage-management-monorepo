@@ -181,10 +181,14 @@ describe('settlement form', () => {
   it('needs a transfer reference or evidence to confirm the refund', () => {
     const file = { fileKey: 'uploads/1-slip.jpg', name: 'slip.jpg', mimeType: 'image/jpeg' };
     expect(validateRefundProof({ evidence: [], transferRef: '  ', note: '' })).toBe(
-      'Nhập mã giao dịch hoặc đính kèm ảnh chứng từ chuyển khoản.',
+      'Đính kèm ít nhất 1 ảnh chứng từ chuyển khoản.',
     );
-    expect(validateRefundProof({ evidence: [], transferRef: 'FT2610', note: '' })).toBeNull();
+    // A bank reference alone is no longer enough.
+    expect(validateRefundProof({ evidence: [], transferRef: 'FT2610', note: '' })).toBe(
+      'Đính kèm ít nhất 1 ảnh chứng từ chuyển khoản.',
+    );
     expect(validateRefundProof({ evidence: [file], transferRef: '', note: '' })).toBeNull();
+    expect(validateRefundProof({ evidence: [file], transferRef: 'FT2610', note: '' })).toBeNull();
     expect(validateRefundProof({ evidence: Array(6).fill(file), transferRef: '', note: '' })).toBe(
       'Tối đa 5 ảnh chứng từ.',
     );

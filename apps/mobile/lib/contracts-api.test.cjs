@@ -139,9 +139,32 @@ test('normaliseContract maps the term end, per-day penalty, settlement and reque
   });
   assert.equal(contract.termEndAt, '2027-03-31T17:00:00.000Z');
   assert.equal(contract.overduePenaltyPerDay, 33333);
-  assert.deepEqual(contract.settlement, { ...settlement, lines: [] });
+  assert.deepEqual(contract.settlement, {
+    ...settlement,
+    lines: [],
+    refund_transfer_ref: null,
+    refund_evidence: [],
+  });
   assert.equal(contract.return.requestSource, 'HOTLINE');
   assert.equal(normaliseContract({ ...baseContract, settlement: {} }).settlement, null);
+});
+
+test('normaliseContract keeps the refund proof and drops entries that are not files', () => {
+  const { normaliseContract } = load('contracts-api.ts', async () => null);
+  const receipt = { fileKey: 'uploads/ops-1-ck.jpg', name: 'ck.jpg', mimeType: 'image/jpeg' };
+  const contract = normaliseContract({
+    ...baseContract,
+    settlement: {
+      status: 'COMPLETED',
+      deposit_amount: 2000000,
+      lines: [],
+      totals: null,
+      refund_transfer_ref: 'FT123',
+      refund_evidence: [receipt, 'https://old.example/ck.jpg'],
+    },
+  });
+  assert.equal(contract.settlement.refund_transfer_ref, 'FT123');
+  assert.deepEqual(contract.settlement.refund_evidence, [receipt]);
 });
 
 test('return request calls send the Vietnam day at noon UTC and the refund account', async () => {

@@ -26,11 +26,10 @@ export function validateProofFiles(existing: number, files: readonly File[]): st
   return null;
 }
 
-/** The transfer needs proof: a bank reference, evidence files, or both. */
+/** The transfer needs proof: at least one evidence file; the bank reference is optional. */
 export function validateRefundProof(state: RefundProofState): string | null {
   const ref = state.transferRef.trim();
-  if (state.evidence.length === 0 && !ref)
-    return 'Nhập mã giao dịch hoặc đính kèm ảnh chứng từ chuyển khoản.';
+  if (state.evidence.length === 0) return 'Đính kèm ít nhất 1 ảnh chứng từ chuyển khoản.';
   if (state.evidence.length > MAX_REFUND_EVIDENCE)
     return `Tối đa ${MAX_REFUND_EVIDENCE} ảnh chứng từ.`;
   if (ref.length > MAX_TRANSFER_REF_LENGTH)
@@ -40,8 +39,7 @@ export function validateRefundProof(state: RefundProofState): string | null {
 }
 
 export function buildRefundInput(state: RefundProofState): CompleteRefundInput {
-  const input: CompleteRefundInput = {};
-  if (state.evidence.length > 0) input.evidence = state.evidence;
+  const input: CompleteRefundInput = { evidence: state.evidence };
   const ref = state.transferRef.trim();
   if (ref) input.transferRef = ref;
   const note = state.note.trim();

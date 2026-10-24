@@ -71,7 +71,7 @@ export const SettlementRefundForm: React.FC<Props> = ({ record, onCompleted, onS
 
       <section className="space-y-2">
         <span className="text-xs font-semibold text-kumo-default block">
-          Chứng từ chuyển khoản ({proof.evidence.length}/{MAX_REFUND_EVIDENCE})
+          Ảnh chứng từ chuyển khoản — bắt buộc ({proof.evidence.length}/{MAX_REFUND_EVIDENCE})
         </span>
         <ul className="flex flex-wrap gap-2">
           {proof.evidence.map((file) => (
@@ -126,7 +126,7 @@ export const SettlementRefundForm: React.FC<Props> = ({ record, onCompleted, onS
 
       <div className="grid sm:grid-cols-2 gap-3">
         <Input
-          label="Mã giao dịch"
+          label="Mã giao dịch (tuỳ chọn)"
           value={proof.transferRef}
           maxLength={MAX_TRANSFER_REF_LENGTH}
           disabled={busy !== null}

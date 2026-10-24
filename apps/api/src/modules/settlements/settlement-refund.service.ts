@@ -35,7 +35,8 @@ export class SettlementRefundService {
   ) {}
 
   /**
-   * Needs proof — a transfer reference or evidence files. The settlement row is locked, then the
+   * Needs proof — at least one evidence file of the transfer; the bank reference is optional but
+   * unique when given. The settlement row is locked, then the
    * deposit (approval locks the contract and deposit before the settlement exists, so the two
    * never wait on each other). The deposit is released with the status the refund gives it.
    */
@@ -46,11 +47,11 @@ export class SettlementRefundService {
   ): Promise<SettlementDetailRecord> {
     const evidence = dto.evidence ?? [];
     const transferRef = dto.transferRef?.trim() || null;
-    if (evidence.length === 0 && !transferRef) {
+    if (evidence.length === 0) {
       throw fieldValidationError(
-        'transferRef',
+        'evidence',
         'proofRequired',
-        'Nhập mã giao dịch hoặc đính kèm ảnh chứng từ chuyển khoản',
+        'Đính kèm ít nhất 1 ảnh chứng từ chuyển khoản',
       );
     }
     const now = new Date();

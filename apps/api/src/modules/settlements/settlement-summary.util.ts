@@ -102,6 +102,8 @@ function toSummary(
       fee_invoice_id: null,
       approved_at: null,
       completed_at: null,
+      refund_transfer_ref: null,
+      refund_evidence: [],
     };
   }
   return {
@@ -119,6 +121,9 @@ function toSummary(
     fee_invoice_id: settlement.feeInvoiceId ?? null,
     approved_at: settlement.approvedAt,
     completed_at: settlement.completedAt ?? null,
+    // Only the refund confirmation writes these, so the customer sees exactly its proof.
+    refund_transfer_ref: settlement.transferRef ?? null,
+    refund_evidence: settlement.evidence ?? [],
   };
 }
 

@@ -55,6 +55,7 @@ const input = (over: Record<string, unknown> = {}) => ({
   },
   deposit: { amount: '2000000', paymentId: null },
   customerBankAccount: ACCOUNT,
+  customerBankAccountSource: 'SAVED',
   invoices: [],
   payments: [],
   damages: [],
@@ -91,6 +92,8 @@ describe('SettlementQueryService', () => {
       deposit: { id: null, amount: 2000000, status: DepositStatus.HELD },
       totals: { refund_amount: 2000000 },
       customer_bank_account: ACCOUNT,
+      // Tells operations where the pre-filled account comes from.
+      customer_bank_account_source: 'SAVED',
       bank_account: null,
       transfer_content: 'HOAN COC CT-1',
       refund_qr_url: null,

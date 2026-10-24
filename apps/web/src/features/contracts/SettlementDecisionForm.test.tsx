@@ -4,7 +4,7 @@ import type { ApiError } from '../../lib/api';
 import { BanksApi } from '../../lib/banks-api';
 import { SettlementsApi } from '../../lib/settlements-api';
 import { settlementRecord } from '../../test-utils/settlement-fixtures';
-import type { RefundBankAccount } from '../../types/settlement';
+import type { RefundBankAccount, SettlementDetailRecord } from '../../types/settlement';
 import { SettlementDecisionForm } from './SettlementDecisionForm';
 
 const ACCOUNT: RefundBankAccount = {
@@ -21,12 +21,16 @@ const approveButton = () =>
 const VERIFIED = { ...ACCOUNT, bankBin: '970436' };
 const checkButton = () => screen.getByRole('button', { name: 'Kiểm tra' });
 
-const renderForm = () => {
+const renderForm = (over: Partial<SettlementDetailRecord> = {}) => {
   vi.spyOn(BanksApi, 'list').mockResolvedValue([
     { bin: '970436', shortName: 'Vietcombank', name: 'Ngân hàng TMCP Ngoại thương Việt Nam' },
   ]);
   const verify = vi.spyOn(BanksApi, 'verify').mockResolvedValue(VERIFIED);
-  const record = settlementRecord({ customer_bank_account: ACCOUNT });
+  const record = settlementRecord({
+    customer_bank_account: ACCOUNT,
+    customer_bank_account_source: 'RETURN_REQUEST',
+    ...over,
+  });
   const preview = vi
     .spyOn(SettlementsApi, 'preview')
     .mockResolvedValue({ ...record, version: PREVIEWED });
@@ -43,6 +47,37 @@ const verifyAccount = async () => {
 
 describe('SettlementDecisionForm', () => {
   afterEach(() => vi.restoreAllMocks());
+
+  it('names the account the customer gave with the return request', async () => {
+    renderForm();
+
+    expect(
+      await screen.findByText(
+        'Đã điền sẵn tài khoản khách cung cấp khi yêu cầu trả kho: Vietcombank 0123456789 — NGUYEN VAN AN.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('says when the account is the one the customer saved earlier, asking no reason for it', async () => {
+    renderForm({ customer_bank_account_source: 'SAVED' });
+
+    expect(
+      await screen.findByText(/đã điền sẵn tài khoản khách đã dùng ở lần trả kho trước/),
+    ).toBeTruthy();
+    expect(screen.getByText(/Vietcombank 0123456789 — NGUYEN VAN AN/)).toBeTruthy();
+    // Once the bank confirms it, the pre-filled account needs no reason, like one given with the request.
+    await verifyAccount();
+    expect(screen.queryByLabelText('Lý do đổi tài khoản')).toBeNull();
+  });
+
+  it('asks operations to get an account from the customer when there is none', async () => {
+    renderForm({ customer_bank_account: null, customer_bank_account_source: null });
+
+    expect(
+      await screen.findByText(/Khách chưa cung cấp tài khoản nhận tiền hoàn — liên hệ khách/),
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Lý do đổi tài khoản')).toBeTruthy();
+  });
 
   it('approves the figures the server previewed, with their version', async () => {
     const { record, preview, onApproved, verify } = renderForm();

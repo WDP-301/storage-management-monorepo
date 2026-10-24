@@ -379,6 +379,47 @@ describe('InspectionService', () => {
         },
       );
 
+      it('lets an admin move it', async () => {
+        await service.update(
+          'inspection-1',
+          { scheduledAt: inDays(10) },
+          actor('admin-1', [UserRole.ADMIN]),
+        );
+
+        expect((em.save.mock.calls[0][1] as Inspection).scheduledAt).toEqual(new Date(inDays(10)));
+        expect(notifications.createForUsers).toHaveBeenCalledTimes(1);
+      });
+
+      it('lets an inspector who also manages the facility move it', async () => {
+        const both = actor('staff-1', [UserRole.FACILITY_STAFF, UserRole.FACILITY_MANAGER]);
+        assignments.push(assignment('staff-1', UserRole.FACILITY_MANAGER, 'facility-1'));
+
+        await service.update('inspection-1', { scheduledAt: inDays(10) }, both);
+
+        expect((em.save.mock.calls[0][1] as Inspection).scheduledAt).toEqual(new Date(inDays(10)));
+      });
+
+      it('refuses an inspector who manages only another facility', async () => {
+        const elsewhere = actor('staff-1', [UserRole.FACILITY_STAFF, UserRole.FACILITY_MANAGER]);
+        assignments.push(assignment('staff-1', UserRole.FACILITY_MANAGER, 'facility-2'));
+
+        await expect(
+          service.update('inspection-1', { scheduledAt: inDays(10) }, elsewhere),
+        ).rejects.toMatchObject({ status: 403 });
+      });
+
+      it('tells nobody when a manager sends the same day back', async () => {
+        const sameDay = `${addVietnamDays(vietnamToday(), 30)}T10:00:00.000Z`;
+
+        await service.update(
+          'inspection-1',
+          { scheduledAt: sameDay, conditionNotes: 'OK' },
+          MANAGER,
+        );
+
+        expect(notifications.createForUsers).not.toHaveBeenCalled();
+      });
+
       it('refuses the assigned inspector moving it, changing nothing', async () => {
         await expect(
           service.update('inspection-1', { scheduledAt: inDays(60) }, STAFF),

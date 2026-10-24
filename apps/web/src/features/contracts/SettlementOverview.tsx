@@ -33,7 +33,7 @@ export const SettlementOverview: React.FC<{ record: SettlementDetailRecord }> = 
         />
         <Fact label="Ngày cuối hợp đồng" value={formatVnDay(timing.last_day)} />
         <Fact label="Ngày hẹn trả" value={formatVnDay(record.return.scheduled_day)} />
-        <Fact label="Ngày trả thực tế" value={formatVnDay(record.return.returned_on)} />
+        <Fact label="Ngày chốt trả kho" value={formatVnDay(record.return.returned_on)} />
         <Fact label="Ngày tính tiền" value={formatVnDay(timing.effective_return_day)} />
         <Fact label="Báo trước" value={notice} />
         <Fact label="Quá hạn" value={overstay} />

@@ -38,7 +38,7 @@ export function StaffInspectionSection({
           ) : null}
           {inspection.returnedOn ? (
             <Text className="font-body text-body-sm text-muted">
-              Ngày trả: {formatIsoDate(inspection.returnedOn)}
+              Ngày chốt trả: {formatIsoDate(inspection.returnedOn)}
             </Text>
           ) : null}
           {inspection.requestNote ? (

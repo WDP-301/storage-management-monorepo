@@ -1,7 +1,10 @@
+import type { Inspection } from '@entities/inspection.entity';
+import { loadSavedRefundAccount } from '@modules/contracts/refund-account.util';
 import { HttpStatus } from '@nestjs/common';
 import { DomainException, fieldValidationError } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import type { RefundBankAccount } from '@storage/types';
+import type { CustomerBankAccountSource, RefundBankAccount } from '@storage/types';
+import type { EntityManager } from 'typeorm';
 
 export interface RefundAccountChoice {
   bankAccount: RefundBankAccount | null;
@@ -21,8 +24,9 @@ function sameAccount(a: RefundBankAccount, b: RefundBankAccount): boolean {
 
 /**
  * Where the refund goes. With money to refund the reviewer must name the account explicitly;
- * any account other than the one the customer gave (or when they gave none, as older app
- * versions never ask) needs a reason, and the reviewer is recorded as having chosen it.
+ * any account other than the customer's (given with the request, or else saved with an earlier
+ * one) — or any account at all when there is none — needs a reason, and the reviewer is recorded
+ * as having chosen it.
  * Without a refund no account is kept. `bankAccount` arrives already verified at the bank.
  */
 export function chooseRefundAccount(args: {
@@ -56,4 +60,20 @@ export function chooseRefundAccount(args: {
     );
   }
   return { bankAccount: account, overrideBy: args.actorId, overrideReason: reason };
+}
+
+/**
+ * The customer's refund account for a settlement: the one given with the return request, else —
+ * for a request made without one (an older app, or made on the customer's behalf) — the one the
+ * customer saved with an earlier request of their own, which the bank confirmed then.
+ */
+export async function loadCustomerRefundAccount(
+  em: EntityManager,
+  inspection: Pick<Inspection, 'refundAccount'>,
+  customerId: string,
+): Promise<{ account: RefundBankAccount | null; source: CustomerBankAccountSource | null }> {
+  if (inspection.refundAccount)
+    return { account: inspection.refundAccount, source: 'RETURN_REQUEST' };
+  const saved = await loadSavedRefundAccount(em, customerId);
+  return { account: saved, source: saved ? 'SAVED' : null };
 }

@@ -47,9 +47,7 @@ export const WarehouseTable: React.FC<Props> = ({
           <Table.Head>Mã kho</Table.Head>
           <Table.Head>Tên kho</Table.Head>
           <Table.Head>Địa chỉ</Table.Head>
-          <Table.Head>Kích thước (D×R×C)</Table.Head>
-          <Table.Head>Diện tích</Table.Head>
-          <Table.Head>Thể tích</Table.Head>
+          <Table.Head>Kích thước</Table.Head>
           <Table.Head>Giá / tháng</Table.Head>
           <Table.Head>Đặt cọc</Table.Head>
           <Table.Head>Trạng thái</Table.Head>
@@ -59,7 +57,7 @@ export const WarehouseTable: React.FC<Props> = ({
       <Table.Body>
         {warehouses.length === 0 && (
           <Table.Row>
-            <Table.Cell className="p-0" colSpan={11}>
+            <Table.Cell className="p-0" colSpan={9}>
               <Empty
                 size="sm"
                 icon={<WarehouseIcon className="w-8 h-8" />}
@@ -102,11 +100,13 @@ export const WarehouseTable: React.FC<Props> = ({
                 </div>
               </Table.Cell>
               <Table.Cell className="text-kumo-subtle min-w-[200px]">{w.addressLine}</Table.Cell>
-              <Table.Cell className="whitespace-nowrap text-kumo-default">
-                {formatDimensions(w)}
+              {/* D×R×C on top, area and volume under it: one column instead of three. */}
+              <Table.Cell className="whitespace-nowrap">
+                <div className="text-kumo-default">{formatDimensions(w)}</div>
+                <div className="text-xs text-kumo-subtle">
+                  {formatArea(w.areaM2)} · {formatVolume(w.volumeM3)}
+                </div>
               </Table.Cell>
-              <Table.Cell className="whitespace-nowrap">{formatArea(w.areaM2)}</Table.Cell>
-              <Table.Cell className="whitespace-nowrap">{formatVolume(w.volumeM3)}</Table.Cell>
               <Table.Cell className="whitespace-nowrap font-medium text-kumo-default">
                 {formatWarehousePrice(w)}
               </Table.Cell>

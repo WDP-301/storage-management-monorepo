@@ -1,6 +1,13 @@
 import { Button, Dialog, Input, Select } from '@cloudflare/kumo';
 import { X } from '@phosphor-icons/react';
 import React, { useEffect, useState } from 'react';
+import {
+  DIALOG_FORM,
+  DIALOG_SHELL,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+} from '../../components/dialog-layout';
 import { FacilitiesApi, type FacilityRecord, LocationsApi } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
 import type { Province } from '../../types/warehouse';
@@ -76,9 +83,9 @@ export const FacilityFormDialog: React.FC<Props> = ({ open, facility, onClose, o
 
   return (
     <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
-      <Dialog size="lg" className="p-6 sm:p-7 sm:w-[520px] w-full max-h-[90vh] overflow-y-auto">
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="flex items-center justify-between border-b border-kumo-line pb-3.5">
+      <Dialog size="lg" className={`${DIALOG_SHELL} sm:w-[520px] w-full`}>
+        <form onSubmit={handleSubmit} className={DIALOG_FORM}>
+          <DialogHeader>
             <Dialog.Title className="text-base font-semibold text-kumo-default">
               {isEdit ? `Chỉnh sửa chi nhánh ${facility.code}` : 'Thêm chi nhánh mới'}
             </Dialog.Title>
@@ -94,35 +101,37 @@ export const FacilityFormDialog: React.FC<Props> = ({ open, facility, onClose, o
                 </button>
               )}
             />
-          </div>
+          </DialogHeader>
 
-          <div className="grid grid-cols-1 gap-3">
-            <Input
-              label="Mã chi nhánh"
-              value={form.code}
-              onChange={(e) => set('code', e.target.value)}
-            />
-            <Input
-              label="Tên chi nhánh"
-              value={form.name}
-              onChange={(e) => set('name', e.target.value)}
-            />
-            <Select
-              label="Khu vực (tỉnh/thành, không bắt buộc)"
-              value={form.provinceCode}
-              onValueChange={(v) => set('provinceCode', String(v))}
-              items={regionItems}
-            />
-          </div>
+          <DialogBody>
+            <div className="grid grid-cols-1 gap-3">
+              <Input
+                label="Mã chi nhánh"
+                value={form.code}
+                onChange={(e) => set('code', e.target.value)}
+              />
+              <Input
+                label="Tên chi nhánh"
+                value={form.name}
+                onChange={(e) => set('name', e.target.value)}
+              />
+              <Select
+                label="Khu vực (tỉnh/thành, không bắt buộc)"
+                value={form.provinceCode}
+                onValueChange={(v) => set('provinceCode', String(v))}
+                items={regionItems}
+              />
+            </div>
+          </DialogBody>
 
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-kumo-line">
+          <DialogFooter>
             <Button variant="secondary" onClick={onClose} disabled={isSaving}>
               Hủy bỏ
             </Button>
             <Button type="submit" variant="primary" loading={isSaving}>
               {isEdit ? 'Lưu thay đổi' : 'Tạo chi nhánh'}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </Dialog>
     </Dialog.Root>

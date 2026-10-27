@@ -2,6 +2,7 @@ import { Button } from '@cloudflare/kumo';
 import { ClipboardText } from '@phosphor-icons/react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
+import { StaffSelect } from '../../components/StaffSelect';
 import { FacilitiesApi, InspectionsApi } from '../../lib/api';
 import type { ContractInspectionSummary, ContractRecord } from '../../types/contract';
 import type { FacilityStaffMember } from '../../types/inspection';
@@ -121,22 +122,13 @@ const StepRow: React.FC<{
       </div>
       {canAssign && !done && (
         <div className="flex flex-col sm:flex-row gap-2">
-          <select
-            aria-label={`Chọn nhân viên ${label.toLowerCase()}`}
+          <StaffSelect
+            ariaLabel={`Chọn nhân viên ${label.toLowerCase()}`}
+            className="flex-1"
+            staff={staff}
             value={staffId}
-            onChange={(e) => setStaffId(e.target.value)}
-            className="flex-1 h-9 px-3 text-sm bg-kumo-base border border-kumo-line rounded-lg"
-          >
-            <option value="">
-              {staff.length > 0 ? '-- Chọn nhân viên --' : 'Chi nhánh chưa có nhân viên'}
-            </option>
-            {staff.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.fullName}
-                {member.phone ? ` · ${member.phone}` : ''}
-              </option>
-            ))}
-          </select>
+            onChange={setStaffId}
+          />
           <Button variant="secondary" disabled={!staffId || busy} loading={busy} onClick={assign}>
             {inspection.inspector_name ? 'Đổi nhân viên' : 'Giao nhân viên'}
           </Button>

@@ -3,6 +3,12 @@ import { FileText, PencilSimple, Trash, WarningCircle, X } from '@phosphor-icons
 import { UserRole } from '@storage/types';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
+import {
+  DIALOG_SHELL,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+} from '../../components/dialog-layout';
 import { useAuth } from '../../context/AuthContext';
 import { ContractsApi, InspectionsApi } from '../../lib/api';
 import type { ContractDocument, ContractRecord } from '../../types/contract';
@@ -121,17 +127,37 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
     );
   }
 
+  // A pending settlement is why an ENDED contract gets opened, so it sits right under the facts.
+  const showSettlement = canManage && contract.status === 'ENDED';
+  const settlementFirst = showSettlement && contract.settlement_status === 'PENDING';
+  const settlement = showSettlement && (
+    <div id={sectionId('settlement')}>
+      <ContractSettlementSection
+        key={`settlement-${contract.id}`}
+        contractId={contract.id}
+        refreshKey={settlementRefresh}
+        onChanged={() => {
+          setInvoiceRefresh((n) => n + 1);
+          onChanged();
+        }}
+      />
+    </div>
+  );
+  const navKeys: SectionKey[] = ['info', 'handover', 'documents'];
+  if (canCancel) navKeys.push('invoices');
+  if (showSettlement) navKeys.splice(settlementFirst ? 1 : navKeys.length, 0, 'settlement');
+
+  const hasActions =
+    (canCancel && contract.status === 'DRAFT') || (canManage && (removable || editable));
+
   const saveDocuments = (build: () => Promise<ContractDocument[]>) =>
     run('documents', async () => ContractsApi.replaceDocuments(contract.id, await build()));
 
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
-      <Dialog
-        size="xl"
-        className="p-6 sm:p-7 max-w-2xl sm:w-[640px] w-full max-h-[90vh] overflow-y-auto"
-      >
-        <div className="space-y-5">
-          <div className="flex items-start justify-between border-b border-kumo-line pb-3.5">
+      <Dialog size="xl" className={`${DIALOG_SHELL} max-w-2xl sm:w-[640px] w-full`}>
+        <DialogHeader className="flex-col items-stretch gap-3 pb-2">
+          <div className="flex items-start justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-lg bg-kumo-fill flex items-center justify-center shrink-0">
                 <FileText className="w-5 h-5" />
@@ -155,80 +181,83 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
               </button>
             </div>
           </div>
+          <SectionNav sections={navKeys} />
+        </DialogHeader>
 
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            <Fact label="Khách hàng" value={contract.customer.full_name ?? 'Khách hàng'} />
-            <Fact label="Điện thoại" value={contract.customer.phone ?? '—'} />
-            <Fact label="Email" value={contract.customer.email ?? '—'} />
-            <Fact label="Loại hợp đồng" value={CONTRACT_KIND_LABEL[contract.kind]} />
-            <Fact
-              label="Kho"
-              value={contract.unit ? `${contract.unit.code} · ${contract.unit.name}` : '—'}
+        <DialogBody>
+          <div id={sectionId('info')} className="space-y-5">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+              <Fact label="Khách hàng" value={contract.customer.full_name ?? 'Khách hàng'} />
+              <Fact label="Điện thoại" value={contract.customer.phone ?? '—'} />
+              <Fact label="Email" value={contract.customer.email ?? '—'} />
+              <Fact label="Loại hợp đồng" value={CONTRACT_KIND_LABEL[contract.kind]} />
+              <Fact
+                label="Kho"
+                value={contract.unit ? `${contract.unit.code} · ${contract.unit.name}` : '—'}
+              />
+              <Fact label="Địa chỉ kho" value={contract.unit?.address_line ?? '—'} />
+              <Fact label="Hiệu lực từ" value={formatDay(contract.effective_at)} />
+              <Fact
+                label="Thời hạn"
+                value={`${contract.months} tháng · đến ${termLastDay(contract)}`}
+              />
+              <Fact label="Giá thuê / tháng" value={formatVnd(contract.monthly_price)} />
+              <Fact label="Tiền cọc" value={formatDepositAmount(contract.deposit)} />
+              <Fact label="Ngày ký" value={formatDay(contract.signed_at)} />
+              <Fact label="Ngày kết thúc" value={formatDay(contract.ended_at)} />
+              <Fact label="Mã đầy đủ" value={contract.contract_no} mono />
+              <Fact label="Tạo lúc" value={formatDateTime(contract.created_at)} />
+            </dl>
+
+            <ContractAmenitiesSection
+              amenities={contract.amenities ?? null}
+              unitKind={contract.unit?.kind}
             />
-            <Fact label="Địa chỉ kho" value={contract.unit?.address_line ?? '—'} />
-            <Fact label="Hiệu lực từ" value={formatDay(contract.effective_at)} />
-            <Fact
-              label="Thời hạn"
-              value={`${contract.months} tháng · đến ${termLastDay(contract)}`}
+          </div>
+
+          {settlementFirst && settlement}
+
+          <div id={sectionId('handover')} className="space-y-5">
+            <ContractStaffSection
+              contract={contract}
+              canAssign={canCancel}
+              onOpenInspection={openInspection}
+              onChanged={onChanged}
             />
-            <Fact label="Giá thuê / tháng" value={formatVnd(contract.monthly_price)} />
-            <Fact label="Tiền cọc" value={formatDepositAmount(contract.deposit)} />
-            <Fact label="Ngày ký" value={formatDay(contract.signed_at)} />
-            <Fact label="Ngày kết thúc" value={formatDay(contract.ended_at)} />
-            <Fact label="Mã đầy đủ" value={contract.contract_no} mono />
-            <Fact label="Tạo lúc" value={formatDateTime(contract.created_at)} />
-          </dl>
+            <ManagedReturnForm
+              key={`return-${contract.id}`}
+              contract={contract}
+              canRequest={canCancel}
+              onChanged={onChanged}
+            />
+          </div>
 
-          <ContractAmenitiesSection
-            amenities={contract.amenities ?? null}
-            unitKind={contract.unit?.kind}
-          />
-
-          <ContractStaffSection
-            contract={contract}
-            canAssign={canCancel}
-            onOpenInspection={openInspection}
-            onChanged={onChanged}
-          />
-          <ManagedReturnForm
-            key={`return-${contract.id}`}
-            contract={contract}
-            canRequest={canCancel}
-            onChanged={onChanged}
-          />
-
-          <ContractDocumentsPanel
-            documents={contract.documents}
-            canEdit={canEditDocuments}
-            keepOne={contract.status === 'ACTIVE'}
-            busy={busy !== null}
-            onSave={saveDocuments}
-            onInvalid={setError}
-          />
+          <div id={sectionId('documents')}>
+            <ContractDocumentsPanel
+              documents={contract.documents}
+              canEdit={canEditDocuments}
+              keepOne={contract.status === 'ACTIVE'}
+              busy={busy !== null}
+              onSave={saveDocuments}
+              onInvalid={setError}
+            />
+          </div>
 
           {canCancel && (
-            <ContractInvoicesSection
-              key={`invoices-${contract.id}`}
-              contractId={contract.id}
-              refreshKey={invoiceRefresh}
-              onChanged={() => {
-                setSettlementRefresh((n) => n + 1);
-                onChanged();
-              }}
-            />
+            <div id={sectionId('invoices')}>
+              <ContractInvoicesSection
+                key={`invoices-${contract.id}`}
+                contractId={contract.id}
+                refreshKey={invoiceRefresh}
+                onChanged={() => {
+                  setSettlementRefresh((n) => n + 1);
+                  onChanged();
+                }}
+              />
+            </div>
           )}
 
-          {canManage && contract.status === 'ENDED' && (
-            <ContractSettlementSection
-              key={`settlement-${contract.id}`}
-              contractId={contract.id}
-              refreshKey={settlementRefresh}
-              onChanged={() => {
-                setInvoiceRefresh((n) => n + 1);
-                onChanged();
-              }}
-            />
-          )}
+          {!settlementFirst && settlement}
 
           {error && (
             <div
@@ -239,69 +268,105 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
               {error}
             </div>
           )}
+        </DialogBody>
 
-          {confirm ? (
-            <div className="p-3 bg-kumo-warning-tint rounded-lg space-y-3 text-sm">
-              <p className="text-kumo-default">
-                {confirm === 'cancel'
-                  ? 'Hủy hợp đồng này? Kho sẽ trở về trạng thái trống để cho thuê lại. Không hoàn tác được.'
-                  : 'Xóa hợp đồng này khỏi danh sách? Không hoàn tác được.'}
-              </p>
-              <div className="flex justify-end gap-2">
-                <Button variant="secondary" onClick={() => setConfirm(null)}>
-                  Quay lại
-                </Button>
-                <Button
-                  variant="primary"
-                  loading={busy === confirm}
-                  onClick={() =>
-                    confirm === 'cancel'
-                      ? run('cancel', () => ContractsApi.cancel(contract.id))
-                      : run('remove', () => ContractsApi.remove(contract.id))
-                  }
-                >
-                  {confirm === 'cancel' ? 'Xác nhận hủy hợp đồng' : 'Xác nhận xóa'}
-                </Button>
+        {(confirm || hasActions) && (
+          <DialogFooter>
+            {confirm ? (
+              <div className="w-full p-3 bg-kumo-warning-tint rounded-lg space-y-3 text-sm">
+                <p className="text-kumo-default">
+                  {confirm === 'cancel'
+                    ? 'Hủy hợp đồng này? Kho sẽ trở về trạng thái trống để cho thuê lại. Không hoàn tác được.'
+                    : 'Xóa hợp đồng này khỏi danh sách? Không hoàn tác được.'}
+                </p>
+                <div className="flex justify-end gap-2">
+                  <Button variant="secondary" onClick={() => setConfirm(null)}>
+                    Quay lại
+                  </Button>
+                  <Button
+                    variant="primary"
+                    loading={busy === confirm}
+                    onClick={() =>
+                      confirm === 'cancel'
+                        ? run('cancel', () => ContractsApi.cancel(contract.id))
+                        : run('remove', () => ContractsApi.remove(contract.id))
+                    }
+                  >
+                    {confirm === 'cancel' ? 'Xác nhận hủy hợp đồng' : 'Xác nhận xóa'}
+                  </Button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="flex flex-wrap justify-end gap-2 pt-3 border-t border-kumo-line">
-              {canCancel && contract.status === 'DRAFT' && (
-                <Button
-                  variant="secondary"
-                  disabled={busy !== null}
-                  onClick={() => setConfirm('cancel')}
-                >
-                  Hủy hợp đồng
-                </Button>
-              )}
-              {canManage && removable && (
-                <Button
-                  variant="secondary"
-                  icon={<Trash className="w-3.5 h-3.5" />}
-                  disabled={busy !== null}
-                  onClick={() => setConfirm('remove')}
-                >
-                  Xóa
-                </Button>
-              )}
-              {canManage && editable && (
-                <Button
-                  variant="primary"
-                  icon={<PencilSimple className="w-3.5 h-3.5" />}
-                  disabled={busy !== null}
-                  onClick={() => setEditing(true)}
-                >
-                  Sửa hợp đồng
-                </Button>
-              )}
-            </div>
-          )}
-        </div>
+            ) : (
+              <>
+                {canCancel && contract.status === 'DRAFT' && (
+                  <Button
+                    variant="secondary"
+                    disabled={busy !== null}
+                    onClick={() => setConfirm('cancel')}
+                  >
+                    Hủy hợp đồng
+                  </Button>
+                )}
+                {canManage && removable && (
+                  <Button
+                    variant="secondary"
+                    icon={<Trash className="w-3.5 h-3.5" />}
+                    disabled={busy !== null}
+                    onClick={() => setConfirm('remove')}
+                  >
+                    Xóa
+                  </Button>
+                )}
+                {canManage && editable && (
+                  <Button
+                    variant="primary"
+                    icon={<PencilSimple className="w-3.5 h-3.5" />}
+                    disabled={busy !== null}
+                    onClick={() => setEditing(true)}
+                  >
+                    Sửa hợp đồng
+                  </Button>
+                )}
+              </>
+            )}
+          </DialogFooter>
+        )}
       </Dialog>
     </Dialog.Root>
   );
 };
+
+type SectionKey = 'info' | 'handover' | 'documents' | 'invoices' | 'settlement';
+
+const SECTION_LABEL: Record<SectionKey, string> = {
+  info: 'Thông tin',
+  handover: 'Nhận / trả kho',
+  documents: 'File hợp đồng',
+  invoices: 'Hóa đơn',
+  settlement: 'Quyết toán cọc',
+};
+
+const sectionId = (key: SectionKey) => `contract-section-${key}`;
+
+/** Jump links in the pinned header: the body is long and the task at hand is often near the bottom. */
+const SectionNav: React.FC<{ sections: SectionKey[] }> = ({ sections }) => (
+  <nav aria-label="Các phần của hợp đồng" className="-mx-2.5 flex flex-wrap gap-1.5">
+    {sections.map((key) => (
+      <button
+        key={key}
+        type="button"
+        onClick={() =>
+          document
+            .getElementById(sectionId(key))
+            ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+        className="px-2.5 py-1 rounded-md text-xs font-medium text-kumo-subtle hover:bg-kumo-control hover:text-kumo-default cursor-pointer"
+      >
+        {SECTION_LABEL[key]}
+      </button>
+    ))}
+  </nav>
+);
 
 const Fact: React.FC<{ label: string; value: string; mono?: boolean }> = ({
   label,

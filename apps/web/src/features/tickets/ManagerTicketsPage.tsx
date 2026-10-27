@@ -29,7 +29,14 @@ import {
 } from '@phosphor-icons/react';
 import { TicketPriority, TicketStatus, UserRole } from '@storage/types';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  DIALOG_SHELL,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+} from '../../components/dialog-layout';
 import { type FileRef, SignedFileLink } from '../../components/SignedFile';
+import { StaffSelect } from '../../components/StaffSelect';
 import { useAuth } from '../../context/AuthContext';
 import { FacilitiesApi, TicketsApi } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
@@ -834,39 +841,39 @@ export const ManagerTicketsPage: React.FC = () => {
         open={Boolean(assignModalTicket)}
         onOpenChange={(open) => !open && setAssignModalTicket(null)}
       >
-        <Dialog size="xl" className="p-6 sm:p-7 max-w-2xl sm:w-[640px] w-full">
-          <div className="space-y-5">
-            <div className="flex items-center justify-between border-b border-kumo-line pb-3.5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-lg bg-kumo-fill text-kumo-default flex items-center justify-center shrink-0">
-                  <UserPlus className="w-5 h-5" />
-                </div>
-                <div>
-                  <Dialog.Title className="text-base font-semibold text-kumo-default">
-                    Phân công kỹ thuật viên phụ trách
-                  </Dialog.Title>
-                  <div className="text-xs">
-                    <Text variant="secondary">
-                      Chỉ định nhân viên chịu trách nhiệm xử lý sự cố tại chi nhánh
-                    </Text>
-                  </div>
+        <Dialog size="xl" className={`${DIALOG_SHELL} max-w-2xl sm:w-[640px] w-full`}>
+          <DialogHeader>
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-lg bg-kumo-fill text-kumo-default flex items-center justify-center shrink-0">
+                <UserPlus className="w-5 h-5" />
+              </div>
+              <div>
+                <Dialog.Title className="text-base font-semibold text-kumo-default">
+                  Phân công kỹ thuật viên phụ trách
+                </Dialog.Title>
+                <div className="text-xs">
+                  <Text variant="secondary">
+                    Chỉ định nhân viên chịu trách nhiệm xử lý sự cố tại chi nhánh
+                  </Text>
                 </div>
               </div>
-              <Dialog.Close
-                render={(props) => (
-                  <button
-                    type="button"
-                    {...props}
-                    className="p-1.5 rounded-md text-kumo-subtle hover:text-kumo-default hover:bg-kumo-control cursor-pointer transition"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              />
             </div>
+            <Dialog.Close
+              render={(props) => (
+                <button
+                  type="button"
+                  {...props}
+                  className="p-1.5 rounded-md text-kumo-subtle hover:text-kumo-default hover:bg-kumo-control cursor-pointer transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            />
+          </DialogHeader>
 
-            {assignModalTicket && (
-              <div className="space-y-4">
+          {assignModalTicket && (
+            <>
+              <DialogBody className="space-y-4">
                 {/* Ticket Context Pill */}
                 <div className="p-4 bg-kumo-control rounded-lg ring ring-kumo-line space-y-2.5 text-xs">
                   <div className="flex items-center justify-between">
@@ -905,34 +912,22 @@ export const ManagerTicketsPage: React.FC = () => {
 
                 {/* Staff Selection */}
                 <div className="space-y-3">
-                  <label
-                    htmlFor="staff-select"
-                    className="block text-xs font-semibold text-kumo-default"
-                  >
+                  <p className="text-xs font-semibold text-kumo-default">
                     Chọn nhân viên tiếp nhận ca trực
-                  </label>
+                  </p>
                   {facilityStaff === null ? (
                     <Text variant="secondary">Đang tải danh sách nhân viên…</Text>
                   ) : facilityStaff.length === 0 ? (
                     <Text variant="secondary">Chi nhánh này chưa có nhân viên đang làm việc.</Text>
                   ) : (
-                    <select
-                      id="staff-select"
-                      aria-label="Chọn nhân viên tiếp nhận ca trực"
+                    <StaffSelect
+                      ariaLabel="Chọn nhân viên tiếp nhận ca trực"
+                      className="w-full"
+                      staff={facilityStaff}
                       value={selectedStaffId}
-                      onChange={(e) => setSelectedStaffId(e.target.value)}
-                      className="w-full h-10 px-3 text-sm bg-kumo-base border border-kumo-line text-kumo-default rounded-lg focus:outline-none focus:ring-2 focus:ring-kumo-brand/30"
-                    >
-                      <option value="">
-                        -- Chọn nhân viên của chi nhánh ({facilityStaff.length} người) --
-                      </option>
-                      {facilityStaff.map((staff) => (
-                        <option key={staff.id} value={staff.id}>
-                          {staff.fullName}
-                          {staff.phone ? ` · ${staff.phone}` : ''}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={setSelectedStaffId}
+                      placeholder={`Chọn nhân viên của chi nhánh (${facilityStaff.length} người)`}
+                    />
                   )}
                 </div>
 
@@ -949,29 +944,27 @@ export const ManagerTicketsPage: React.FC = () => {
                     </span>
                   </div>
                 )}
-
-                {/* Action Buttons */}
-                <div className="flex items-center justify-end gap-3 pt-3 border-t border-kumo-line">
-                  <Button
-                    variant="secondary"
-                    onClick={() => setAssignModalTicket(null)}
-                    disabled={isAssigning}
-                  >
-                    Hủy bỏ
-                  </Button>
-                  <Button
-                    variant="primary"
-                    disabled={!selectedStaffId || isAssigning}
-                    loading={isAssigning}
-                    icon={<UserCheck className="w-4 h-4" />}
-                    onClick={handleConfirmAssign}
-                  >
-                    Xác nhận phân công
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
+              </DialogBody>
+              <DialogFooter>
+                <Button
+                  variant="secondary"
+                  onClick={() => setAssignModalTicket(null)}
+                  disabled={isAssigning}
+                >
+                  Hủy bỏ
+                </Button>
+                <Button
+                  variant="primary"
+                  disabled={!selectedStaffId || isAssigning}
+                  loading={isAssigning}
+                  icon={<UserCheck className="w-4 h-4" />}
+                  onClick={handleConfirmAssign}
+                >
+                  Xác nhận phân công
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </Dialog>
       </Dialog.Root>
 
@@ -980,8 +973,8 @@ export const ManagerTicketsPage: React.FC = () => {
         open={Boolean(selectedTicket)}
         onOpenChange={(open) => !open && setSelectedTicket(null)}
       >
-        <Dialog size="xl" className="p-0 max-w-3xl sm:w-[768px] w-full max-h-[88vh] flex flex-col">
-          <div className="flex items-center justify-between border-b border-kumo-line px-6 sm:px-8 pt-6 sm:pt-8 pb-3.5 shrink-0">
+        <Dialog size="xl" className={`${DIALOG_SHELL} max-w-3xl sm:w-[768px] w-full`}>
+          <DialogHeader>
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-lg bg-kumo-fill text-kumo-default flex items-center justify-center shrink-0">
                 <Lifebuoy className="w-5 h-5" />
@@ -1011,11 +1004,11 @@ export const ManagerTicketsPage: React.FC = () => {
                 </button>
               )}
             />
-          </div>
+          </DialogHeader>
 
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 sm:px-8 py-5">
+          <DialogBody className="space-y-4">
             {selectedTicket && (
-              <div className="space-y-4">
+              <>
                 {/* Header Information Card */}
                 <div className="p-4 bg-kumo-control rounded-lg ring ring-kumo-line space-y-2">
                   <div className="flex items-center justify-between">
@@ -1202,13 +1195,13 @@ export const ManagerTicketsPage: React.FC = () => {
                     </div>
                   </div>
                 )}
-              </div>
+              </>
             )}
-          </div>
+          </DialogBody>
 
           {/* Action Buttons — pinned footer, never scrolls away */}
           {selectedTicket && (
-            <div className="px-6 sm:px-8 py-4 border-t border-kumo-line flex items-center justify-end gap-3 shrink-0">
+            <DialogFooter>
               <Button variant="secondary" onClick={() => setSelectedTicket(null)}>
                 Đóng
               </Button>
@@ -1234,7 +1227,7 @@ export const ManagerTicketsPage: React.FC = () => {
                   {selectedTicket.assigned_to ? 'Chuyển ca trực' : 'Phân công ngay'}
                 </Button>
               )}
-            </div>
+            </DialogFooter>
           )}
         </Dialog>
       </Dialog.Root>
@@ -1244,31 +1237,31 @@ export const ManagerTicketsPage: React.FC = () => {
         open={Boolean(ticketToDelete)}
         onOpenChange={(open) => !open && !isDeleting && setTicketToDelete(null)}
       >
-        <Dialog size="lg" className="p-6 max-w-lg sm:w-[500px] w-full">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-kumo-line pb-3">
-              <div className="flex items-center gap-2">
-                <WarningCircle className="w-5 h-5 text-kumo-danger" />
-                <Dialog.Title className="text-base font-semibold text-kumo-default">
-                  Xác nhận xóa phiếu sự cố
-                </Dialog.Title>
-              </div>
-              <Dialog.Close
-                render={(props) => (
-                  <button
-                    type="button"
-                    {...props}
-                    disabled={isDeleting}
-                    className="p-1 rounded-md text-kumo-subtle hover:text-kumo-default cursor-pointer transition disabled:opacity-50"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              />
+        <Dialog size="lg" className={`${DIALOG_SHELL} max-w-lg sm:w-[500px] w-full`}>
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <WarningCircle className="w-5 h-5 text-kumo-danger" />
+              <Dialog.Title className="text-base font-semibold text-kumo-default">
+                Xác nhận xóa phiếu sự cố
+              </Dialog.Title>
             </div>
+            <Dialog.Close
+              render={(props) => (
+                <button
+                  type="button"
+                  {...props}
+                  disabled={isDeleting}
+                  className="p-1 rounded-md text-kumo-subtle hover:text-kumo-default cursor-pointer transition disabled:opacity-50"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            />
+          </DialogHeader>
 
-            {ticketToDelete && (
-              <div className="space-y-3">
+          {ticketToDelete && (
+            <>
+              <DialogBody className="space-y-3">
                 <Text variant="secondary">
                   Bạn có chắc chắn muốn xóa vĩnh viễn phiếu sự cố này không? Thao tác này sẽ xóa
                   toàn bộ dữ liệu phiếu khỏi hệ thống và không thể hoàn tác.
@@ -1288,28 +1281,27 @@ export const ManagerTicketsPage: React.FC = () => {
                     Khách báo: {ticketToDelete.customer?.full_name || 'Khách vãng lai'}
                   </div>
                 </div>
-
-                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-kumo-line">
-                  <Button
-                    variant="secondary"
-                    onClick={() => setTicketToDelete(null)}
-                    disabled={isDeleting}
-                  >
-                    Hủy bỏ
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    loading={isDeleting}
-                    disabled={isDeleting}
-                    icon={<Trash className="w-4 h-4" />}
-                    onClick={handleConfirmDelete}
-                  >
-                    Xác nhận xóa
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
+              </DialogBody>
+              <DialogFooter>
+                <Button
+                  variant="secondary"
+                  onClick={() => setTicketToDelete(null)}
+                  disabled={isDeleting}
+                >
+                  Hủy bỏ
+                </Button>
+                <Button
+                  variant="destructive"
+                  loading={isDeleting}
+                  disabled={isDeleting}
+                  icon={<Trash className="w-4 h-4" />}
+                  onClick={handleConfirmDelete}
+                >
+                  Xác nhận xóa
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </Dialog>
       </Dialog.Root>
 
@@ -1318,31 +1310,31 @@ export const ManagerTicketsPage: React.FC = () => {
         open={Boolean(ticketToCancel)}
         onOpenChange={(open) => !open && !isCancelling && setTicketToCancel(null)}
       >
-        <Dialog size="lg" className="p-6 max-w-lg sm:w-[500px] w-full">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-kumo-line pb-3">
-              <div className="flex items-center gap-2">
-                <WarningCircle className="w-5 h-5 text-kumo-warning" />
-                <Dialog.Title className="text-base font-semibold text-kumo-default">
-                  Xác nhận hủy phiếu sự cố
-                </Dialog.Title>
-              </div>
-              <Dialog.Close
-                render={(props) => (
-                  <button
-                    type="button"
-                    {...props}
-                    disabled={isCancelling}
-                    className="p-1 rounded-md text-kumo-subtle hover:text-kumo-default cursor-pointer transition disabled:opacity-50"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              />
+        <Dialog size="lg" className={`${DIALOG_SHELL} max-w-lg sm:w-[500px] w-full`}>
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <WarningCircle className="w-5 h-5 text-kumo-warning" />
+              <Dialog.Title className="text-base font-semibold text-kumo-default">
+                Xác nhận hủy phiếu sự cố
+              </Dialog.Title>
             </div>
+            <Dialog.Close
+              render={(props) => (
+                <button
+                  type="button"
+                  {...props}
+                  disabled={isCancelling}
+                  className="p-1 rounded-md text-kumo-subtle hover:text-kumo-default cursor-pointer transition disabled:opacity-50"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            />
+          </DialogHeader>
 
-            {ticketToCancel && (
-              <div className="space-y-3">
+          {ticketToCancel && (
+            <>
+              <DialogBody className="space-y-3">
                 <Text variant="secondary">
                   Bạn có chắc chắn muốn hủy phiếu sự cố này không? Phiếu sẽ chuyển sang trạng thái
                   "Đã hủy" và không thể tiếp tục xử lý.
@@ -1362,28 +1354,27 @@ export const ManagerTicketsPage: React.FC = () => {
                     Khách báo: {ticketToCancel.customer?.full_name || 'Khách vãng lai'}
                   </div>
                 </div>
-
-                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-kumo-line">
-                  <Button
-                    variant="secondary"
-                    onClick={() => setTicketToCancel(null)}
-                    disabled={isCancelling}
-                  >
-                    Quay lại
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    loading={isCancelling}
-                    disabled={isCancelling}
-                    icon={<XCircle className="w-4 h-4" />}
-                    onClick={handleConfirmCancel}
-                  >
-                    Xác nhận hủy phiếu
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
+              </DialogBody>
+              <DialogFooter>
+                <Button
+                  variant="secondary"
+                  onClick={() => setTicketToCancel(null)}
+                  disabled={isCancelling}
+                >
+                  Quay lại
+                </Button>
+                <Button
+                  variant="destructive"
+                  loading={isCancelling}
+                  disabled={isCancelling}
+                  icon={<XCircle className="w-4 h-4" />}
+                  onClick={handleConfirmCancel}
+                >
+                  Xác nhận hủy phiếu
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </Dialog>
       </Dialog.Root>
     </div>

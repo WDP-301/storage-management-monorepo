@@ -7,6 +7,7 @@ import {
   InputArea,
   InputGroup,
   LayerCard,
+  Pagination,
   Select,
   Table,
   Text,
@@ -27,8 +28,10 @@ import {
   X,
 } from '@phosphor-icons/react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { DIALOG_SHELL, DialogBody, DialogHeader } from '../../components/dialog-layout';
 import { WarehousesApi } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
+import { useClientPagination } from '../../lib/use-client-pagination';
 import type { Warehouse, WarehouseStatus } from '../../types/warehouse';
 import { MaintenanceToggleButton } from '../roles/manager/MaintenanceToggleButton';
 import { ShelfLayoutEditor } from './ShelfLayoutEditor';
@@ -70,6 +73,8 @@ interface Props {
 }
 
 type ActiveTab = 'shelves' | 'layout';
+
+const SHELF_PAGE_SIZE = 20;
 type FormMode = 'none' | 'create' | 'edit' | 'bulk';
 
 const DEPOSIT_ITEMS = [
@@ -148,6 +153,12 @@ export const ShelfManagementDialog: React.FC<Props> = ({
         (q === '' || s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)),
     );
   }, [shelves, search, statusFilter]);
+
+  const shelfPages = useClientPagination(
+    filteredShelves,
+    SHELF_PAGE_SIZE,
+    `${warehouseId}|${search}|${statusFilter}`,
+  );
 
   if (!warehouse) return null;
 
@@ -426,57 +437,53 @@ export const ShelfManagementDialog: React.FC<Props> = ({
 
   return (
     <Dialog.Root open={Boolean(warehouse)} onOpenChange={(next) => !next && onClose()}>
-      <Dialog
-        size="xl"
-        className="p-6 sm:p-7 max-w-6xl sm:w-[1100px] w-full max-h-[92vh] overflow-y-auto"
-      >
-        <div className="space-y-5">
-          {/* Header */}
-          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-kumo-line pb-3.5">
-            <div>
-              <div className="flex items-center gap-2">
-                <Dialog.Title className="text-base font-semibold text-kumo-default">
-                  Kho kệ: {warehouse.name} ({warehouse.code})
-                </Dialog.Title>
-                <Badge variant="primary">Kho kệ</Badge>
-              </div>
-              <Text variant="secondary" size="xs">
-                {warehouse.facility.name} · {warehouse.addressLine}
-              </Text>
-            </div>
-
+      <Dialog size="xl" className={`${DIALOG_SHELL} max-w-6xl sm:w-[1100px] w-full`}>
+        <DialogHeader className="flex-wrap gap-4">
+          <div>
             <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant={tab === 'shelves' ? 'primary' : 'secondary'}
-                icon={<ListBullets className="w-4 h-4" />}
-                onClick={() => setTab('shelves')}
-              >
-                Danh sách kệ ({shelves.length})
-              </Button>
-              <Button
-                size="sm"
-                variant={tab === 'layout' ? 'primary' : 'secondary'}
-                icon={<GridFour className="w-4 h-4" />}
-                onClick={() => setTab('layout')}
-              >
-                Sơ đồ mặt bằng
-              </Button>
-              <Dialog.Close
-                render={(props) => (
-                  <button
-                    type="button"
-                    {...props}
-                    className="p-1.5 rounded-md text-kumo-subtle hover:text-kumo-default hover:bg-kumo-control cursor-pointer"
-                    aria-label="Đóng"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              />
+              <Dialog.Title className="text-base font-semibold text-kumo-default">
+                Kho kệ: {warehouse.name} ({warehouse.code})
+              </Dialog.Title>
+              <Badge variant="primary">Kho kệ</Badge>
             </div>
+            <Text variant="secondary" size="xs">
+              {warehouse.facility.name} · {warehouse.addressLine}
+            </Text>
           </div>
 
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant={tab === 'shelves' ? 'primary' : 'secondary'}
+              icon={<ListBullets className="w-4 h-4" />}
+              onClick={() => setTab('shelves')}
+            >
+              Danh sách kệ ({shelves.length})
+            </Button>
+            <Button
+              size="sm"
+              variant={tab === 'layout' ? 'primary' : 'secondary'}
+              icon={<GridFour className="w-4 h-4" />}
+              onClick={() => setTab('layout')}
+            >
+              Sơ đồ mặt bằng
+            </Button>
+            <Dialog.Close
+              render={(props) => (
+                <button
+                  type="button"
+                  {...props}
+                  className="p-1.5 rounded-md text-kumo-subtle hover:text-kumo-default hover:bg-kumo-control cursor-pointer"
+                  aria-label="Đóng"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            />
+          </div>
+        </DialogHeader>
+
+        <DialogBody>
           {tab === 'layout' ? (
             <ShelfLayoutEditor warehouse={warehouse} shelves={shelves} />
           ) : (
@@ -773,7 +780,7 @@ export const ShelfManagementDialog: React.FC<Props> = ({
                         </Table.Cell>
                       </Table.Row>
                     ) : (
-                      filteredShelves.map((shelf) => {
+                      shelfPages.pageItems.map((shelf) => {
                         const isConfirmingDelete = deletingShelf?.id === shelf.id;
                         const isEditingRow = formMode === 'edit' && editingShelf?.id === shelf.id;
                         return (
@@ -888,9 +895,23 @@ export const ShelfManagementDialog: React.FC<Props> = ({
                   </Table.Body>
                 </Table>
               </LayerCard>
+
+              {shelfPages.paged && (
+                <div className="pt-2 border-t border-kumo-line">
+                  <Pagination
+                    page={shelfPages.page}
+                    setPage={shelfPages.setPage}
+                    perPage={SHELF_PAGE_SIZE}
+                    totalCount={filteredShelves.length}
+                  >
+                    <Pagination.Info />
+                    <Pagination.Controls />
+                  </Pagination>
+                </div>
+              )}
             </div>
           )}
-        </div>
+        </DialogBody>
       </Dialog>
     </Dialog.Root>
   );

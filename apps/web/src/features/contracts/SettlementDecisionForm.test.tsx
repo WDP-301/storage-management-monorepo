@@ -35,8 +35,16 @@ const renderForm = () => {
   return { record, preview, onApproved, verify };
 };
 
+// The bank trigger shows the short name only once the bank list has loaded (the BIN before).
+const banksLoaded = () =>
+  waitFor(() =>
+    expect(screen.getByRole('combobox', { name: 'Ngân hàng nhận tiền' }).textContent).toContain(
+      'Vietcombank',
+    ),
+  );
+
 const verifyAccount = async () => {
-  await screen.findByRole('option', { name: /Vietcombank/ });
+  await banksLoaded();
   fireEvent.click(checkButton());
   await waitFor(() => expect(approveButton().disabled).toBe(false));
 };
@@ -51,7 +59,7 @@ describe('SettlementDecisionForm', () => {
 
     await waitFor(() => expect(preview).toHaveBeenCalled());
     expect(approveButton().disabled).toBe(true);
-    await screen.findByRole('option', { name: /Vietcombank/ });
+    await banksLoaded();
     fireEvent.click(checkButton());
     await waitFor(() => expect(approveButton().disabled).toBe(false));
     expect(verify).toHaveBeenCalledWith('970436', '0123456789');
@@ -112,7 +120,7 @@ describe('SettlementDecisionForm', () => {
 
   it('clears the verification when the number changes and shows why a check failed', async () => {
     const { verify } = renderForm();
-    await screen.findByRole('option', { name: /Vietcombank/ });
+    await banksLoaded();
     fireEvent.click(checkButton());
     await waitFor(() => expect(approveButton().disabled).toBe(false));
 
@@ -136,7 +144,7 @@ describe('SettlementDecisionForm', () => {
 
   it('lists what is missing instead of asking the server', async () => {
     renderForm();
-    await screen.findByRole('option', { name: /Vietcombank/ });
+    await banksLoaded();
     fireEvent.click(checkButton());
     await waitFor(() => expect(approveButton().disabled).toBe(false));
     fireEvent.change(screen.getByLabelText('Số tài khoản'), { target: { value: '12' } });

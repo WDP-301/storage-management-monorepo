@@ -1,11 +1,12 @@
 import { UserRole } from '@storage/types';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as AuthContextModule from '../../context/AuthContext';
 import * as FacilityContextModule from '../../context/FacilityContext';
 import { ContractsApi, FacilitiesApi, InspectionsApi, UploadsApi } from '../../lib/api';
 import { addDays, formatVnDay, vnNoonIso, vnToday } from '../../lib/vn-day';
+import { pickSelectOption } from '../../test-utils/pick-select-option';
 import type { InspectionRecord } from '../../types/inspection';
 import { finalizeConsequence, inspectionMetrics, matchesSearch } from './inspection-display';
 import { ManagerInspectionsPage } from './ManagerInspectionsPage';
@@ -178,14 +179,13 @@ describe('ManagerInspectionsPage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Xem biên bản A-101' }));
     const select = await screen.findByRole('combobox', { name: 'Chọn nhân viên phụ trách' });
-    await waitFor(() => expect(within(select).getByText('Võ Kỹ Thuật · 0909')).toBeTruthy());
-    expect(FacilitiesApi.listStaff).toHaveBeenCalledWith('fac-1');
+    await waitFor(() => expect(FacilitiesApi.listStaff).toHaveBeenCalledWith('fac-1'));
     // Finalizing needs an assignee first.
     expect(
       (screen.getByRole('button', { name: 'Chốt biên bản' }) as HTMLButtonElement).disabled,
     ).toBe(true);
 
-    fireEvent.change(select, { target: { value: 'staff-2' } });
+    await pickSelectOption(select, 'Võ Kỹ Thuật · 0909');
     fireEvent.click(screen.getByRole('button', { name: 'Giao nhân viên' }));
 
     await waitFor(() => expect(assign).toHaveBeenCalledWith('insp-A-101', 'staff-2'));

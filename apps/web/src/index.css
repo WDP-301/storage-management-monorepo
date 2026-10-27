@@ -4,6 +4,41 @@
 @source "../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
 @source "../../../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
 
+/*
+ * One thin scrollbar for every scroll area (page, dialogs, tables, popups), no arrow buttons.
+ * Chromium ignores ::-webkit-scrollbar once scrollbar-width/color are set, so the standard
+ * properties only apply where the WebKit pseudo-elements are unsupported (Firefox).
+ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-button {
+  display: none;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--text-color-kumo-subtle) 45%, transparent);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--text-color-kumo-subtle) 75%, transparent);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--text-color-kumo-subtle) 45%, transparent) transparent;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

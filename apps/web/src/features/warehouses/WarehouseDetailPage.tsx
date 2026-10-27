@@ -7,6 +7,7 @@ import {
   InputArea,
   InputGroup,
   LayerCard,
+  Pagination,
   Select,
   Table,
   Text,
@@ -35,6 +36,7 @@ import { useAuth } from '../../context/AuthContext';
 import { FacilitiesApi, type FacilityRecord, WarehousesApi } from '../../lib/api';
 import { hasAllowedRole } from '../../lib/roles';
 import { useAppToast } from '../../lib/toast';
+import { useClientPagination } from '../../lib/use-client-pagination';
 import type { Warehouse, WarehouseStatus } from '../../types/warehouse';
 import { ShelfLayoutEditor } from './ShelfLayoutEditor';
 import {
@@ -70,6 +72,8 @@ import {
 import { computeDerived, DEPOSIT_DEFAULT, isIdleStatus } from './warehouse-form';
 
 type ActiveTab = 'shelves' | 'layout';
+
+const SHELF_PAGE_SIZE = 20;
 type FormMode = 'none' | 'create' | 'edit' | 'bulk';
 
 const DEPOSIT_ITEMS = [
@@ -170,6 +174,13 @@ export const WarehouseDetailPage: React.FC = () => {
         (q === '' || s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)),
     );
   }, [shelves, search, statusFilter]);
+
+  // All shelves are loaded for the floor plan, so the list pages them on the client.
+  const shelfPages = useClientPagination(
+    filteredShelves,
+    SHELF_PAGE_SIZE,
+    `${search}|${statusFilter}`,
+  );
 
   if (isLoading) {
     return (
@@ -856,7 +867,7 @@ export const WarehouseDetailPage: React.FC = () => {
                       </Table.Cell>
                     </Table.Row>
                   ) : (
-                    filteredShelves.map((shelf) => {
+                    shelfPages.pageItems.map((shelf) => {
                       const isConfirmingDelete = deletingShelf?.id === shelf.id;
                       const isEditingRow = formMode === 'edit' && editingShelf?.id === shelf.id;
                       return (
@@ -1033,6 +1044,20 @@ export const WarehouseDetailPage: React.FC = () => {
                 </Table.Body>
               </Table>
             </LayerCard>
+
+            {shelfPages.paged && (
+              <div className="pt-2 border-t border-kumo-line">
+                <Pagination
+                  page={shelfPages.page}
+                  setPage={shelfPages.setPage}
+                  perPage={SHELF_PAGE_SIZE}
+                  totalCount={filteredShelves.length}
+                >
+                  <Pagination.Info />
+                  <Pagination.Controls />
+                </Pagination>
+              </div>
+            )}
           </div>
 
           <div hidden={tab !== 'layout'}>

@@ -27,6 +27,12 @@ import {
 } from '@phosphor-icons/react';
 import { UserRole, UserStatus } from '@storage/types';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  DIALOG_SHELL,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+} from '../../components/dialog-layout';
 import { useAuth } from '../../context/AuthContext';
 import { AdminUsersApi, FacilitiesApi, type FacilityRecord } from '../../lib/api';
 import { getRoleTitle } from '../../lib/roles';
@@ -661,14 +667,11 @@ export const UserManagementPage: React.FC = () => {
         open={Boolean(selectedUser)}
         onOpenChange={(open) => !open && setSelectedUser(null)}
       >
-        <Dialog
-          size="xl"
-          className="p-6 sm:p-7 max-w-2xl sm:w-[680px] w-full max-h-[90vh] overflow-y-auto"
-        >
+        <Dialog size="xl" className={`${DIALOG_SHELL} max-w-2xl sm:w-[680px] w-full`}>
           {selectedUser && (
-            <div className="space-y-6">
+            <>
               {/* Dialog Header */}
-              <div className="flex items-center justify-between border-b border-kumo-line pb-3.5">
+              <DialogHeader>
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-kumo-fill text-kumo-default flex items-center justify-center shrink-0">
                     <UserGear className="w-5 h-5 text-kumo-brand" />
@@ -697,272 +700,277 @@ export const UserManagementPage: React.FC = () => {
                     </button>
                   )}
                 />
-              </div>
+              </DialogHeader>
 
-              {/* User Overview Profile Box */}
-              <div className="p-4 bg-kumo-control rounded-lg ring ring-kumo-line space-y-3">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="text-sm font-semibold text-kumo-default">
-                      {selectedUser.fullName}
+              <DialogBody className="space-y-6">
+                {/* User Overview Profile Box */}
+                <div className="p-4 bg-kumo-control rounded-lg ring ring-kumo-line space-y-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-sm font-semibold text-kumo-default">
+                        {selectedUser.fullName}
+                      </div>
+                      <div className="text-xs text-kumo-subtle mt-0.5">{selectedUser.email}</div>
                     </div>
-                    <div className="text-xs text-kumo-subtle mt-0.5">{selectedUser.email}</div>
-                  </div>
-                  <div>{getStatusBadge(selectedUser.status)}</div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-kumo-line text-xs">
-                  <div>
-                    <span className="text-kumo-subtle">Điện thoại:</span>{' '}
-                    <span className="font-mono text-kumo-default">
-                      {selectedUser.phone || 'Chưa cập nhật'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-kumo-subtle">Ngày tạo:</span>{' '}
-                    <span className="text-kumo-default">{formatDate(selectedUser.createdAt)}</span>
-                  </div>
-                  <div>
-                    <span className="text-kumo-subtle">Xác thực email:</span>{' '}
-                    <span className="text-kumo-default">
-                      {selectedUser.emailVerifiedAt ? 'Đã xác thực' : 'Chưa'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 1: Update Account Status */}
-              <div className="space-y-3 border-b border-kumo-line pb-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-semibold text-kumo-default">
-                      Trạng thái tài khoản
-                    </span>
-                    <div className="text-xs text-kumo-subtle">
-                      Đình chỉ hoặc vô hiệu hóa sẽ lập tức hủy bỏ các phiên làm việc đang hoạt động.
-                    </div>
-                  </div>
-                </div>
-
-                {selectedUser.id === currentAdmin?.id && (
-                  <div className="p-3 bg-kumo-warning-tint text-kumo-warning rounded-lg text-xs flex items-center gap-2">
-                    <WarningCircle className="w-4 h-4 shrink-0" />
-                    <span>
-                      Bạn đang quản lý tài khoản của chính mình. Hệ thống bảo mật cấm tự khóa tài
-                      khoản của bản thân.
-                    </span>
-                  </div>
-                )}
-
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                  <div className="w-full sm:w-56">
-                    <Select
-                      aria-label="Chọn trạng thái mới"
-                      value={editStatus}
-                      onValueChange={(val) => val && setEditStatus(val as UserStatus)}
-                      items={[
-                        { value: UserStatus.ACTIVE, label: 'Hoạt động (ACTIVE)' },
-                        { value: UserStatus.SUSPENDED, label: 'Tạm ngưng (SUSPENDED)' },
-                        { value: UserStatus.DISABLED, label: 'Vô hiệu hóa (DISABLED)' },
-                      ]}
-                      disabled={selectedUser.id === currentAdmin?.id}
-                    />
-                  </div>
-                  <Button
-                    variant="primary"
-                    size="base"
-                    onClick={handleSaveStatus}
-                    loading={isUpdatingStatus}
-                    disabled={
-                      editStatus === selectedUser.status || selectedUser.id === currentAdmin?.id
-                    }
-                  >
-                    Lưu trạng thái
-                  </Button>
-                </div>
-              </div>
-
-              {/* Section 2: Active Role Assignments */}
-              <div className="space-y-3 border-b border-kumo-line pb-5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-kumo-default">
-                    Danh sách vai trò hiện tại ({selectedUser.roles?.length || 0})
-                  </span>
-                  {isRefreshingDetail && (
-                    <span className="text-xs text-kumo-subtle flex items-center gap-1">
-                      <ArrowsClockwise className="w-3 h-3 animate-spin" /> Đang cập nhật...
-                    </span>
-                  )}
-                </div>
-
-                {selectedUser.roles && selectedUser.roles.length > 0 ? (
-                  <div className="space-y-2">
-                    {selectedUser.roles.map((assignment) => {
-                      const facilityName = assignment.facilityId
-                        ? facilityNameMap.get(assignment.facilityId) || assignment.facilityId
-                        : null;
-
-                      return (
-                        <div
-                          key={assignment.id}
-                          className="flex items-center justify-between p-3 rounded-lg bg-kumo-control ring ring-kumo-line text-xs"
-                        >
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              {getRoleBadge(assignment.role)}
-                              {facilityName ? (
-                                <span className="font-medium text-kumo-default flex items-center gap-1">
-                                  <Warehouse className="w-3.5 h-3.5 text-kumo-brand" />
-                                  {facilityName}
-                                </span>
-                              ) : (
-                                <span className="text-kumo-subtle">Toàn hệ thống</span>
-                              )}
-                            </div>
-                            <div className="text-[11px] text-kumo-subtle flex items-center gap-2">
-                              <span>Hiệu lực: {formatDate(assignment.startsAt)}</span>
-                              <span>→</span>
-                              <span>
-                                {assignment.endsAt
-                                  ? formatDate(assignment.endsAt)
-                                  : 'Không thời hạn'}
-                              </span>
-                            </div>
-                          </div>
-
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            icon={<Trash className="w-3.5 h-3.5" />}
-                            onClick={() => setAssignmentToRevoke(assignment)}
-                            aria-label={`Thu hồi vai trò ${getRoleTitle(assignment.role)}`}
-                            title="Thu hồi vai trò"
-                          >
-                            Thu hồi
-                          </Button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="p-4 text-center text-xs text-kumo-subtle bg-kumo-control rounded-lg ring ring-kumo-line">
-                    Người dùng này chưa được gán vai trò nào.
-                  </div>
-                )}
-              </div>
-
-              {/* Section 3: Grant New Role Form */}
-              <form onSubmit={handleAssignRole} className="space-y-4">
-                <div className="grid gap-1">
-                  <span className="text-xs font-semibold text-kumo-default flex items-center gap-1.5">
-                    <UserPlus className="w-4 h-4 text-kumo-brand" />
-                    Cấp thêm vai trò mới cho người dùng
-                  </span>
-                  <Text variant="secondary" size="xs">
-                    Nhân viên chi nhánh hoặc Quản lý chi nhánh bắt buộc phải được gắn với một chi
-                    nhánh và phụ trách toàn bộ kho của chi nhánh đó.
-                  </Text>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Select Role */}
-                  <div className="space-y-1.5">
-                    <label
-                      htmlFor="select-role"
-                      className="block text-xs font-medium text-kumo-default"
-                    >
-                      Chọn vai trò
-                    </label>
-                    <Select
-                      id="select-role"
-                      aria-label="Chọn vai trò mới"
-                      value={newRole}
-                      onValueChange={(val) => val && setNewRole(val as UserRole)}
-                      items={assignRoleOptions}
-                    />
+                    <div>{getStatusBadge(selectedUser.status)}</div>
                   </div>
 
-                  {/* Select Facility (if facility-scoped role) */}
-                  {roleRequiresFacility ? (
-                    <div className="space-y-1.5">
-                      <label
-                        htmlFor="select-facility"
-                        className="block text-xs font-medium text-kumo-default"
-                      >
-                        Chi nhánh phụ trách <span className="text-kumo-danger">*</span>
-                      </label>
-                      <Select
-                        id="select-facility"
-                        aria-label="Chọn chi nhánh phụ trách"
-                        value={newFacilityId}
-                        onValueChange={(val) => val && setNewFacilityId(String(val))}
-                        items={facilities.map((f) => ({
-                          value: f.id,
-                          label: `${f.name} (${f.code})`,
-                        }))}
-                      />
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5">
-                      <span className="block text-xs font-medium text-kumo-subtle">
-                        Phạm vi áp dụng
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-kumo-line text-xs">
+                    <div>
+                      <span className="text-kumo-subtle">Điện thoại:</span>{' '}
+                      <span className="font-mono text-kumo-default">
+                        {selectedUser.phone || 'Chưa cập nhật'}
                       </span>
-                      <div className="h-9 px-3 flex items-center bg-kumo-control rounded-md text-xs text-kumo-subtle">
-                        Toàn hệ thống (Không gắn với chi nhánh riêng)
+                    </div>
+                    <div>
+                      <span className="text-kumo-subtle">Ngày tạo:</span>{' '}
+                      <span className="text-kumo-default">
+                        {formatDate(selectedUser.createdAt)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-kumo-subtle">Xác thực email:</span>{' '}
+                      <span className="text-kumo-default">
+                        {selectedUser.emailVerifiedAt ? 'Đã xác thực' : 'Chưa'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 1: Update Account Status */}
+                <div className="space-y-3 border-b border-kumo-line pb-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-semibold text-kumo-default">
+                        Trạng thái tài khoản
+                      </span>
+                      <div className="text-xs text-kumo-subtle">
+                        Đình chỉ hoặc vô hiệu hóa sẽ lập tức hủy bỏ các phiên làm việc đang hoạt
+                        động.
                       </div>
                     </div>
+                  </div>
+
+                  {selectedUser.id === currentAdmin?.id && (
+                    <div className="p-3 bg-kumo-warning-tint text-kumo-warning rounded-lg text-xs flex items-center gap-2">
+                      <WarningCircle className="w-4 h-4 shrink-0" />
+                      <span>
+                        Bạn đang quản lý tài khoản của chính mình. Hệ thống bảo mật cấm tự khóa tài
+                        khoản của bản thân.
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <div className="w-full sm:w-56">
+                      <Select
+                        aria-label="Chọn trạng thái mới"
+                        value={editStatus}
+                        onValueChange={(val) => val && setEditStatus(val as UserStatus)}
+                        items={[
+                          { value: UserStatus.ACTIVE, label: 'Hoạt động (ACTIVE)' },
+                          { value: UserStatus.SUSPENDED, label: 'Tạm ngưng (SUSPENDED)' },
+                          { value: UserStatus.DISABLED, label: 'Vô hiệu hóa (DISABLED)' },
+                        ]}
+                        disabled={selectedUser.id === currentAdmin?.id}
+                      />
+                    </div>
+                    <Button
+                      variant="primary"
+                      size="base"
+                      onClick={handleSaveStatus}
+                      loading={isUpdatingStatus}
+                      disabled={
+                        editStatus === selectedUser.status || selectedUser.id === currentAdmin?.id
+                      }
+                    >
+                      Lưu trạng thái
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Section 2: Active Role Assignments */}
+                <div className="space-y-3 border-b border-kumo-line pb-5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-kumo-default">
+                      Danh sách vai trò hiện tại ({selectedUser.roles?.length || 0})
+                    </span>
+                    {isRefreshingDetail && (
+                      <span className="text-xs text-kumo-subtle flex items-center gap-1">
+                        <ArrowsClockwise className="w-3 h-3 animate-spin" /> Đang cập nhật...
+                      </span>
+                    )}
+                  </div>
+
+                  {selectedUser.roles && selectedUser.roles.length > 0 ? (
+                    <div className="space-y-2">
+                      {selectedUser.roles.map((assignment) => {
+                        const facilityName = assignment.facilityId
+                          ? facilityNameMap.get(assignment.facilityId) || assignment.facilityId
+                          : null;
+
+                        return (
+                          <div
+                            key={assignment.id}
+                            className="flex items-center justify-between p-3 rounded-lg bg-kumo-control ring ring-kumo-line text-xs"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                {getRoleBadge(assignment.role)}
+                                {facilityName ? (
+                                  <span className="font-medium text-kumo-default flex items-center gap-1">
+                                    <Warehouse className="w-3.5 h-3.5 text-kumo-brand" />
+                                    {facilityName}
+                                  </span>
+                                ) : (
+                                  <span className="text-kumo-subtle">Toàn hệ thống</span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-kumo-subtle flex items-center gap-2">
+                                <span>Hiệu lực: {formatDate(assignment.startsAt)}</span>
+                                <span>→</span>
+                                <span>
+                                  {assignment.endsAt
+                                    ? formatDate(assignment.endsAt)
+                                    : 'Không thời hạn'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              icon={<Trash className="w-3.5 h-3.5" />}
+                              onClick={() => setAssignmentToRevoke(assignment)}
+                              aria-label={`Thu hồi vai trò ${getRoleTitle(assignment.role)}`}
+                              title="Thu hồi vai trò"
+                            >
+                              Thu hồi
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-4 text-center text-xs text-kumo-subtle bg-kumo-control rounded-lg ring ring-kumo-line">
+                      Người dùng này chưa được gán vai trò nào.
+                    </div>
                   )}
                 </div>
 
-                {/* Optional startsAt and endsAt dates */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label
-                      htmlFor="input-starts-at"
-                      className="block text-xs font-medium text-kumo-default"
-                    >
-                      Ngày bắt đầu hiệu lực (Tùy chọn)
-                    </label>
-                    <input
-                      id="input-starts-at"
-                      type="date"
-                      aria-label="Ngày bắt đầu hiệu lực"
-                      value={newStartsAt}
-                      onChange={(e) => setNewStartsAt(e.target.value)}
-                      className="w-full h-9 px-3 rounded-md border border-kumo-line bg-kumo-base text-xs text-kumo-default focus:outline-none focus:ring-1 focus:ring-kumo-focus"
-                    />
+                {/* Section 3: Grant New Role Form */}
+                <form onSubmit={handleAssignRole} className="space-y-4">
+                  <div className="grid gap-1">
+                    <span className="text-xs font-semibold text-kumo-default flex items-center gap-1.5">
+                      <UserPlus className="w-4 h-4 text-kumo-brand" />
+                      Cấp thêm vai trò mới cho người dùng
+                    </span>
+                    <Text variant="secondary" size="xs">
+                      Nhân viên chi nhánh hoặc Quản lý chi nhánh bắt buộc phải được gắn với một chi
+                      nhánh và phụ trách toàn bộ kho của chi nhánh đó.
+                    </Text>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label
-                      htmlFor="input-ends-at"
-                      className="block text-xs font-medium text-kumo-default"
-                    >
-                      Ngày kết thúc hiệu lực (Tùy chọn)
-                    </label>
-                    <input
-                      id="input-ends-at"
-                      type="date"
-                      aria-label="Ngày kết thúc hiệu lực"
-                      value={newEndsAt}
-                      onChange={(e) => setNewEndsAt(e.target.value)}
-                      className="w-full h-9 px-3 rounded-md border border-kumo-line bg-kumo-base text-xs text-kumo-default focus:outline-none focus:ring-1 focus:ring-kumo-focus"
-                    />
-                  </div>
-                </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Select Role */}
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor="select-role"
+                        className="block text-xs font-medium text-kumo-default"
+                      >
+                        Chọn vai trò
+                      </label>
+                      <Select
+                        id="select-role"
+                        aria-label="Chọn vai trò mới"
+                        value={newRole}
+                        onValueChange={(val) => val && setNewRole(val as UserRole)}
+                        items={assignRoleOptions}
+                      />
+                    </div>
 
-                <div className="flex justify-end pt-2">
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    icon={<UserCheck className="w-4 h-4" />}
-                    loading={isAssigningRole}
-                  >
-                    Xác nhận gán vai trò
-                  </Button>
-                </div>
-              </form>
-            </div>
+                    {/* Select Facility (if facility-scoped role) */}
+                    {roleRequiresFacility ? (
+                      <div className="space-y-1.5">
+                        <label
+                          htmlFor="select-facility"
+                          className="block text-xs font-medium text-kumo-default"
+                        >
+                          Chi nhánh phụ trách <span className="text-kumo-danger">*</span>
+                        </label>
+                        <Select
+                          id="select-facility"
+                          aria-label="Chọn chi nhánh phụ trách"
+                          value={newFacilityId}
+                          onValueChange={(val) => val && setNewFacilityId(String(val))}
+                          items={facilities.map((f) => ({
+                            value: f.id,
+                            label: `${f.name} (${f.code})`,
+                          }))}
+                        />
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <span className="block text-xs font-medium text-kumo-subtle">
+                          Phạm vi áp dụng
+                        </span>
+                        <div className="h-9 px-3 flex items-center bg-kumo-control rounded-md text-xs text-kumo-subtle">
+                          Toàn hệ thống (Không gắn với chi nhánh riêng)
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Optional startsAt and endsAt dates */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor="input-starts-at"
+                        className="block text-xs font-medium text-kumo-default"
+                      >
+                        Ngày bắt đầu hiệu lực (Tùy chọn)
+                      </label>
+                      <input
+                        id="input-starts-at"
+                        type="date"
+                        aria-label="Ngày bắt đầu hiệu lực"
+                        value={newStartsAt}
+                        onChange={(e) => setNewStartsAt(e.target.value)}
+                        className="w-full h-9 px-3 rounded-md border border-kumo-line bg-kumo-base text-xs text-kumo-default focus:outline-none focus:ring-1 focus:ring-kumo-focus"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor="input-ends-at"
+                        className="block text-xs font-medium text-kumo-default"
+                      >
+                        Ngày kết thúc hiệu lực (Tùy chọn)
+                      </label>
+                      <input
+                        id="input-ends-at"
+                        type="date"
+                        aria-label="Ngày kết thúc hiệu lực"
+                        value={newEndsAt}
+                        onChange={(e) => setNewEndsAt(e.target.value)}
+                        className="w-full h-9 px-3 rounded-md border border-kumo-line bg-kumo-base text-xs text-kumo-default focus:outline-none focus:ring-1 focus:ring-kumo-focus"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      icon={<UserCheck className="w-4 h-4" />}
+                      loading={isAssigningRole}
+                    >
+                      Xác nhận gán vai trò
+                    </Button>
+                  </div>
+                </form>
+              </DialogBody>
+            </>
           )}
         </Dialog>
       </Dialog.Root>
@@ -972,10 +980,10 @@ export const UserManagementPage: React.FC = () => {
         open={Boolean(assignmentToRevoke)}
         onOpenChange={(open) => !open && setAssignmentToRevoke(null)}
       >
-        <Dialog size="base" className="p-6 max-w-md w-full">
+        <Dialog size="base" className={`${DIALOG_SHELL} max-w-md w-full`}>
           {assignmentToRevoke && selectedUser && (
-            <div className="space-y-5">
-              <div className="flex items-center gap-3 text-kumo-danger">
+            <>
+              <DialogHeader className="justify-start text-kumo-danger">
                 <div className="w-10 h-10 rounded-full bg-kumo-danger-tint flex items-center justify-center shrink-0">
                   <WarningCircle className="w-6 h-6 text-kumo-danger" />
                 </div>
@@ -987,24 +995,27 @@ export const UserManagementPage: React.FC = () => {
                     <Text variant="secondary">Hành động này sẽ xóa quyền hạn ngay lập tức</Text>
                   </div>
                 </div>
-              </div>
+              </DialogHeader>
 
-              <div className="text-xs text-kumo-default space-y-2">
-                <p>
-                  Bạn có chắc chắn muốn thu hồi vai trò{' '}
-                  <span className="font-semibold">{getRoleTitle(assignmentToRevoke.role)}</span> của
-                  người dùng <span className="font-semibold">{selectedUser.fullName}</span> không?
-                </p>
-                {assignmentToRevoke.facilityId && (
-                  <p className="text-kumo-subtle">
-                    Chi nhánh ảnh hưởng:{' '}
-                    {facilityNameMap.get(assignmentToRevoke.facilityId) ||
-                      assignmentToRevoke.facilityId}
+              <DialogBody>
+                <div className="text-xs text-kumo-default space-y-2">
+                  <p>
+                    Bạn có chắc chắn muốn thu hồi vai trò{' '}
+                    <span className="font-semibold">{getRoleTitle(assignmentToRevoke.role)}</span>{' '}
+                    của người dùng <span className="font-semibold">{selectedUser.fullName}</span>{' '}
+                    không?
                   </p>
-                )}
-              </div>
+                  {assignmentToRevoke.facilityId && (
+                    <p className="text-kumo-subtle">
+                      Chi nhánh ảnh hưởng:{' '}
+                      {facilityNameMap.get(assignmentToRevoke.facilityId) ||
+                        assignmentToRevoke.facilityId}
+                    </p>
+                  )}
+                </div>
+              </DialogBody>
 
-              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-kumo-line">
+              <DialogFooter>
                 <Button
                   variant="secondary"
                   onClick={() => setAssignmentToRevoke(null)}
@@ -1019,8 +1030,8 @@ export const UserManagementPage: React.FC = () => {
                 >
                   Xác nhận thu hồi
                 </Button>
-              </div>
-            </div>
+              </DialogFooter>
+            </>
           )}
         </Dialog>
       </Dialog.Root>

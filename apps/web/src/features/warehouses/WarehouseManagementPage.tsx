@@ -1,16 +1,5 @@
 import { Button, LayerCard, Pagination, Text } from '@cloudflare/kumo';
-import {
-  ArrowsClockwise,
-  CheckCircle,
-  List,
-  MapTrifold,
-  PencilSimple,
-  Plus,
-  Rows,
-  Stack,
-  Warehouse as WarehouseIcon,
-  Wrench,
-} from '@phosphor-icons/react';
+import { ArrowsClockwise, List, MapTrifold, PencilSimple, Plus, Rows } from '@phosphor-icons/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFacility } from '../../context/FacilityContext';
@@ -42,20 +31,12 @@ const toPositive = (raw: string): number | undefined => {
   return raw.trim() !== '' && Number.isFinite(n) && n >= 0 ? n : undefined;
 };
 
-const KpiCard: React.FC<{ label: string; value: number; icon: React.ReactNode; hint: string }> = ({
-  label,
-  value,
-  icon,
-  hint,
-}) => (
+/** The number is what gets scanned, so it carries the weight; the label already says what it counts. */
+const KpiCard: React.FC<{ label: string; value: number }> = ({ label, value }) => (
   <LayerCard className="px-5 py-4 ring ring-kumo-line">
-    <div className="flex items-center justify-between">
-      <Text variant="secondary">{label}</Text>
-      {icon}
-    </div>
-    <div className="mt-2 flex items-baseline gap-2">
-      <span className="text-2xl font-semibold text-kumo-default">{value}</span>
-      <span className="text-xs text-kumo-subtle">{hint}</span>
+    <Text variant="secondary">{label}</Text>
+    <div className="mt-1.5 text-3xl font-semibold leading-tight tabular-nums text-kumo-default">
+      {value}
     </div>
   </LayerCard>
 );
@@ -308,30 +289,13 @@ export const WarehouseManagementPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard
-          label="Tổng số kho"
-          value={snapshotTotal}
-          icon={<WarehouseIcon className="w-4 h-4 text-kumo-subtle" />}
-          hint="kho"
-        />
-        <KpiCard
-          label="Đang trống"
-          value={count('AVAILABLE')}
-          icon={<CheckCircle className="w-4 h-4 text-kumo-success" />}
-          hint="sẵn sàng cho thuê"
-        />
+        <KpiCard label="Tổng số kho" value={snapshotTotal} />
+        <KpiCard label="Đang trống" value={count('AVAILABLE')} />
         <KpiCard
           label="Đang thuê / giữ chỗ"
           value={count('HELD', 'BOOKED', 'RENTED', 'PENDING_INSPECTION')}
-          icon={<Stack className="w-4 h-4 text-kumo-brand" />}
-          hint="có khách"
         />
-        <KpiCard
-          label="Bảo trì / ngừng"
-          value={count('MAINTENANCE', 'INACTIVE')}
-          icon={<Wrench className="w-4 h-4 text-kumo-danger" />}
-          hint="tạm không cho thuê"
-        />
+        <KpiCard label="Bảo trì / tạm ngừng" value={count('MAINTENANCE', 'INACTIVE')} />
       </div>
 
       <WarehouseFilters

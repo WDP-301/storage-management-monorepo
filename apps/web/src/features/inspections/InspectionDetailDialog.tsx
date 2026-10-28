@@ -3,7 +3,14 @@ import { ClipboardText, WarningCircle, X } from '@phosphor-icons/react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  DIALOG_SHELL,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+} from '../../components/dialog-layout';
 import { SignedImageThumb } from '../../components/SignedFile';
+import { StaffSelect } from '../../components/StaffSelect';
 import { ContractsApi, FacilitiesApi, InspectionsApi } from '../../lib/api';
 import type { FacilityStaffMember, InspectionRecord } from '../../types/inspection';
 import { describeApiError } from '../contracts/settlement-display';
@@ -76,36 +83,33 @@ export const InspectionDetailDialog: React.FC<Props> = ({ inspection, onClose, o
 
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
-      <Dialog
-        size="xl"
-        className="p-6 sm:p-7 max-w-2xl sm:w-[640px] w-full max-h-[90vh] overflow-y-auto"
-      >
-        <div className="space-y-5">
-          <div className="flex items-start justify-between border-b border-kumo-line pb-3.5">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-lg bg-kumo-fill flex items-center justify-center shrink-0">
-                <ClipboardText className="w-5 h-5" />
-              </div>
-              <div>
-                <Dialog.Title className="text-base font-semibold text-kumo-default">
-                  Biên bản {INSPECTION_KIND_LABEL[inspection.type].toLowerCase()} ·{' '}
-                  {unitCode(inspection)}
-                </Dialog.Title>
-                <Text variant="secondary">
-                  {inspection.contract?.bookingItem?.storageUnit?.facility?.name ?? ''}
-                </Text>
-              </div>
+      <Dialog size="xl" className={`${DIALOG_SHELL} max-w-2xl sm:w-[640px] w-full`}>
+        <DialogHeader>
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-kumo-fill flex items-center justify-center shrink-0">
+              <ClipboardText className="w-5 h-5" />
             </div>
-            <button
-              type="button"
-              aria-label="Đóng"
-              onClick={onClose}
-              className="p-1.5 rounded-md text-kumo-subtle hover:bg-kumo-control cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div>
+              <Dialog.Title className="text-base font-semibold text-kumo-default">
+                Biên bản {INSPECTION_KIND_LABEL[inspection.type].toLowerCase()} ·{' '}
+                {unitCode(inspection)}
+              </Dialog.Title>
+              <Text variant="secondary">
+                {inspection.contract?.bookingItem?.storageUnit?.facility?.name ?? ''}
+              </Text>
+            </div>
           </div>
+          <button
+            type="button"
+            aria-label="Đóng"
+            onClick={onClose}
+            className="p-1.5 rounded-md text-kumo-subtle hover:bg-kumo-control cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </DialogHeader>
 
+        <DialogBody>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             <Fact label="Khách hàng" value={customerName(inspection)} />
             <Fact label="Điện thoại" value={customerPhone(inspection) ?? '—'} />
@@ -185,18 +189,8 @@ export const InspectionDetailDialog: React.FC<Props> = ({ inspection, onClose, o
             </section>
           )}
 
-          {error && (
-            <div
-              role="alert"
-              className="p-3 bg-kumo-danger-tint text-kumo-danger rounded-lg text-sm flex gap-2"
-            >
-              <WarningCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              {error}
-            </div>
-          )}
-
           {!done && (
-            <div className="space-y-3 pt-3 border-t border-kumo-line">
+            <div className="space-y-3">
               {inspection.type === 'RETURN' && (
                 <ReturnRescheduleForm
                   inspection={inspection}
@@ -205,22 +199,13 @@ export const InspectionDetailDialog: React.FC<Props> = ({ inspection, onClose, o
                 />
               )}
               <div className="flex flex-col sm:flex-row gap-2">
-                <select
-                  aria-label="Chọn nhân viên phụ trách"
+                <StaffSelect
+                  ariaLabel="Chọn nhân viên phụ trách"
+                  className="flex-1"
+                  staff={staff}
                   value={staffId}
-                  onChange={(e) => setStaffId(e.target.value)}
-                  className="flex-1 h-9 px-3 text-sm bg-kumo-base border border-kumo-line rounded-lg"
-                >
-                  <option value="">
-                    {staff.length > 0 ? '-- Chọn nhân viên --' : 'Chi nhánh chưa có nhân viên'}
-                  </option>
-                  {staff.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.fullName}
-                      {member.phone ? ` · ${member.phone}` : ''}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setStaffId}
+                />
                 <Button
                   variant="secondary"
                   disabled={!staffId || staffId === inspection.inspectedBy || busy !== null}
@@ -240,61 +225,74 @@ export const InspectionDetailDialog: React.FC<Props> = ({ inspection, onClose, o
                   trước khi chốt biên nhận.
                 </p>
               )}
-
-              {confirming ? (
-                <InspectionFinalizeConfirm
-                  inspection={inspection}
-                  busy={busy === 'finalize'}
-                  onCancel={() => setConfirming(false)}
-                  onConfirm={() => run('finalize', () => InspectionsApi.finalize(inspection.id))}
-                />
-              ) : confirmingCancel ? (
-                <div className="p-3 bg-kumo-warning-tint rounded-lg space-y-3 text-sm">
-                  <p className="text-kumo-default">
-                    Huỷ hợp đồng nháp này? Kho sẽ được trả về trạng thái trống để cho thuê lại.
-                    Không hoàn tác được.
-                  </p>
-                  <div className="flex justify-end gap-2">
-                    <Button variant="secondary" onClick={() => setConfirmingCancel(false)}>
-                      Không huỷ
-                    </Button>
-                    <Button
-                      variant="primary"
-                      loading={busy === 'cancel'}
-                      onClick={() =>
-                        inspection.contract &&
-                        run('cancel', () => ContractsApi.cancel(inspection.contract?.id ?? ''))
-                      }
-                    >
-                      Xác nhận huỷ hợp đồng
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex justify-end gap-2">
-                  {inspection.type === 'PRE_HANDOVER' &&
-                    inspection.contract?.status === 'DRAFT' && (
-                      <Button
-                        variant="secondary"
-                        disabled={busy !== null}
-                        onClick={() => setConfirmingCancel(true)}
-                      >
-                        Khách không nhận kho
-                      </Button>
-                    )}
-                  <Button
-                    variant="primary"
-                    disabled={!inspection.inspectedBy || missingContractFiles || busy !== null}
-                    title={inspection.inspectedBy ? undefined : 'Giao nhân viên trước khi chốt'}
-                    onClick={() => setConfirming(true)}
-                  >
-                    Chốt biên bản
-                  </Button>
-                </div>
-              )}
             </div>
           )}
-        </div>
+
+          {error && (
+            <div
+              role="alert"
+              className="p-3 bg-kumo-danger-tint text-kumo-danger rounded-lg text-sm flex gap-2"
+            >
+              <WarningCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              {error}
+            </div>
+          )}
+        </DialogBody>
+
+        {!done && (
+          <DialogFooter className={confirming || confirmingCancel ? 'block' : undefined}>
+            {confirming ? (
+              <InspectionFinalizeConfirm
+                inspection={inspection}
+                busy={busy === 'finalize'}
+                onCancel={() => setConfirming(false)}
+                onConfirm={() => run('finalize', () => InspectionsApi.finalize(inspection.id))}
+              />
+            ) : confirmingCancel ? (
+              <div className="p-3 bg-kumo-warning-tint rounded-lg space-y-3 text-sm">
+                <p className="text-kumo-default">
+                  Huỷ hợp đồng nháp này? Kho sẽ được trả về trạng thái trống để cho thuê lại. Không
+                  hoàn tác được.
+                </p>
+                <div className="flex justify-end gap-2">
+                  <Button variant="secondary" onClick={() => setConfirmingCancel(false)}>
+                    Không huỷ
+                  </Button>
+                  <Button
+                    variant="primary"
+                    loading={busy === 'cancel'}
+                    onClick={() =>
+                      inspection.contract &&
+                      run('cancel', () => ContractsApi.cancel(inspection.contract?.id ?? ''))
+                    }
+                  >
+                    Xác nhận huỷ hợp đồng
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-end gap-2">
+                {inspection.type === 'PRE_HANDOVER' && inspection.contract?.status === 'DRAFT' && (
+                  <Button
+                    variant="secondary"
+                    disabled={busy !== null}
+                    onClick={() => setConfirmingCancel(true)}
+                  >
+                    Khách không nhận kho
+                  </Button>
+                )}
+                <Button
+                  variant="primary"
+                  disabled={!inspection.inspectedBy || missingContractFiles || busy !== null}
+                  title={inspection.inspectedBy ? undefined : 'Giao nhân viên trước khi chốt'}
+                  onClick={() => setConfirming(true)}
+                >
+                  Chốt biên bản
+                </Button>
+              </div>
+            )}
+          </DialogFooter>
+        )}
       </Dialog>
     </Dialog.Root>
   );

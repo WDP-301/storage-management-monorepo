@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FacilitiesApi, InspectionsApi } from '../../lib/api';
 import { contractRecord } from '../../test-utils/contract-fixtures';
+import { pickSelectOption } from '../../test-utils/pick-select-option';
 import type { ContractInspectionSummary, ContractRecord } from '../../types/contract';
 import { ContractStaffSection } from './ContractStaffSection';
 
@@ -46,12 +47,11 @@ describe('ContractStaffSection', () => {
 
     expect(screen.getByText('Chưa giao nhân viên')).toBeTruthy();
     await waitFor(() => expect(listStaff).toHaveBeenCalledWith('fac-1'));
-    const select = screen.getByLabelText('Chọn nhân viên nhận kho');
-    await waitFor(() => expect(within(select).getByText('Võ Kỹ Thuật')).toBeTruthy());
+    const select = screen.getByRole('combobox', { name: 'Chọn nhân viên nhận kho' });
     const button = screen.getByRole('button', { name: 'Giao nhân viên' }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
 
-    fireEvent.change(select, { target: { value: 's-2' } });
+    await pickSelectOption(select, 'Võ Kỹ Thuật');
     fireEvent.click(button);
     await waitFor(() => expect(assign).toHaveBeenCalledWith('i-1', 's-2'));
     expect(onChanged).toHaveBeenCalled();
@@ -80,9 +80,10 @@ describe('ContractStaffSection', () => {
       new Error('Staff user is not assigned to this facility'),
     );
     const { onChanged } = renderSection(contractRecord({ handover: step() }));
-    const select = screen.getByLabelText('Chọn nhân viên nhận kho');
-    await waitFor(() => expect(within(select).getByText('Võ Kỹ Thuật')).toBeTruthy());
-    fireEvent.change(select, { target: { value: 's-2' } });
+    await pickSelectOption(
+      screen.getByRole('combobox', { name: 'Chọn nhân viên nhận kho' }),
+      'Võ Kỹ Thuật',
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Giao nhân viên' }));
     expect((await screen.findByRole('alert')).textContent).toContain('not assigned');
     expect(onChanged).not.toHaveBeenCalled();

@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as AuthContextModule from '../../context/AuthContext';
 import { FacilitiesApi, TicketsApi } from '../../lib/api';
+import { pickSelectOption } from '../../test-utils/pick-select-option';
 import type { ServiceTicketRecord, TicketUserInfo } from '../../types/service-tickets';
 import { ManagerTicketsPage } from './ManagerTicketsPage';
 
@@ -203,7 +204,7 @@ describe('ManagerTicketsPage Component', () => {
     });
     expect(FacilitiesApi.listStaff).toHaveBeenCalledWith('fac-1');
     expect(screen.queryByPlaceholderText(/01925b6a/)).toBeNull();
-    fireEvent.change(select, { target: { value: 'staff-tuannv' } });
+    await pickSelectOption(select, /Nguyễn Văn Tuấn/);
 
     const confirmBtn = screen.getByRole('button', { name: /xác nhận phân công/i });
     fireEvent.click(confirmBtn);

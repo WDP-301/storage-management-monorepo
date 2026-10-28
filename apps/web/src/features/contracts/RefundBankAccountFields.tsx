@@ -1,4 +1,4 @@
-import { Button, Input } from '@cloudflare/kumo';
+import { Button, Input, Select } from '@cloudflare/kumo';
 import { CheckCircle } from '@phosphor-icons/react';
 import type { VnBank } from '@storage/types';
 import type React from 'react';
@@ -75,23 +75,21 @@ export const RefundBankAccountFields: React.FC<Props> = ({ value, onChange, disa
         disabled={busy || !banks}
         onChange={(e) => setSearch(e.target.value)}
       />
-      <label className="grid gap-1 text-sm text-kumo-default">
-        <span className="text-xs font-medium">Ngân hàng</span>
-        <select
-          aria-label="Ngân hàng nhận tiền"
-          value={value.bankBin}
-          disabled={busy || !banks}
-          onChange={(e) => edit({ bankBin: e.target.value })}
-          className="h-9 px-3 text-sm bg-kumo-base border border-kumo-line rounded-lg"
-        >
-          <option value="">{banks ? '-- Chọn ngân hàng --' : 'Đang tải danh sách…'}</option>
-          {options.map((bank) => (
-            <option key={bank.bin} value={bank.bin}>
-              {bank.shortName} — {bank.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <Select
+        label="Ngân hàng"
+        aria-label="Ngân hàng nhận tiền"
+        className="w-full"
+        placeholder={banks ? 'Chọn ngân hàng' : 'Đang tải danh sách…'}
+        value={value.bankBin || null}
+        disabled={busy || !banks}
+        onValueChange={(v) => edit({ bankBin: v ? String(v) : '' })}
+        items={options.map((bank) => ({
+          value: bank.bin,
+          label: `${bank.shortName} - ${bank.name}`,
+        }))}
+        // The search can filter the chosen bank out of the list, so the trigger looks it up in full.
+        renderValue={(bin) => banks?.find((bank) => bank.bin === bin)?.shortName ?? String(bin)}
+      />
       {banksError && (
         <div className="sm:col-span-2 flex items-center justify-between gap-2 text-sm text-kumo-danger">
           <span role="alert">{banksError}</span>

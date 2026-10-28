@@ -91,7 +91,8 @@ const AppSidebar: React.FC = () => {
           <div className="w-8 h-8 rounded-md bg-kumo-brand text-white flex items-center justify-center shrink-0">
             <Package className="w-4.5 h-4.5" />
           </div>
-          <div className="min-w-0">
+          {/* The role badge can't shrink, so the text is hidden outright in the icon-only rail. */}
+          <div className="min-w-0 in-data-[state=collapsed]:hidden">
             <Text as="strong" bold>
               Storage Hub
             </Text>
@@ -113,6 +114,8 @@ const AppSidebar: React.FC = () => {
                   icon={item.icon}
                   active={activePath === item.to}
                   onClick={() => go(item.to)}
+                  // Kumo's largest preset (base) still reads small on desktop.
+                  className="h-10 text-base [&_svg]:size-5 [&_svg]:opacity-60"
                 >
                   {item.label}
                 </Sidebar.MenuButton>
@@ -136,27 +139,29 @@ const AppSidebar: React.FC = () => {
         )}
       </Sidebar.Content>
 
-      <Sidebar.Footer>
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-full bg-kumo-fill ring ring-kumo-line flex items-center justify-center text-kumo-default shrink-0">
+      {/* Kumo fixes the footer at h-12; the larger avatar and two text lines need more room. */}
+      <Sidebar.Footer className="h-16">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-full bg-kumo-fill ring ring-kumo-line flex items-center justify-center text-base font-medium text-kumo-default shrink-0">
             {user?.fullName?.charAt(0).toUpperCase() || (
-              <User className="w-4 h-4 text-kumo-subtle" />
+              <User className="w-5 h-5 text-kumo-subtle" />
             )}
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate">
-              <Text as="strong" bold size="sm">
+              <Text as="strong" bold size="base">
                 {user?.fullName || 'Người dùng'}
               </Text>
             </div>
-            <Text variant="secondary" size="xs" truncate>
+            <Text variant="secondary" size="sm" truncate>
               {user?.email || 'Chưa đăng nhập'}
             </Text>
           </div>
           <Button
             variant="ghost"
-            size="sm"
-            icon={<SignOut className="w-4 h-4" />}
+            size="base"
+            shape="square"
+            icon={<SignOut className="w-5 h-5" />}
             onClick={handleLogout}
             aria-label="Đăng xuất"
             title="Đăng xuất"
@@ -168,7 +173,6 @@ const AppSidebar: React.FC = () => {
 };
 
 export const AppShell: React.FC = () => {
-  const { user } = useAuth();
   const { facilities, selectedFacility, selectFacility, canSelectAll } = useFacility();
   const pickerItems = [
     ...(canSelectAll ? [{ value: ALL_FACILITIES, label: 'Tất cả chi nhánh' }] : []),
@@ -181,29 +185,27 @@ export const AppShell: React.FC = () => {
 
       <div className="flex h-full min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-kumo-line bg-kumo-base px-4">
-          <Sidebar.Trigger />
+          <Sidebar.Trigger className="size-9 [&_svg]:size-5" />
 
           {facilities.length > 0 && (
-            <div className="w-56">
+            <div className="w-64">
               <Select
                 aria-label="Chi nhánh đang quản lý"
-                size="sm"
+                size="base"
                 value={selectedFacility?.id ?? (canSelectAll ? ALL_FACILITIES : '')}
                 onValueChange={(val) => selectFacility(val === ALL_FACILITIES ? null : String(val))}
                 items={pickerItems}
               />
             </div>
           )}
-
-          <div className="ml-auto flex items-center gap-2 min-w-0">
-            <Text variant="secondary" size="sm" truncate>
-              {user?.fullName || 'Người dùng'}
-            </Text>
-          </div>
         </header>
 
-        <main className="min-h-0 flex-1 overflow-y-auto" style={{ scrollbarGutter: 'stable' }}>
-          <div className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
+        <main
+          className="relative min-h-0 flex-1 overflow-y-auto"
+          style={{ scrollbarGutter: 'stable' }}
+        >
+          {/* Wide enough for the data tables on desktop; still capped so lines stay readable on ultrawide. */}
+          <div className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8">
             <Outlet />
           </div>
         </main>

@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native';
-import { formatArea, formatDimensions, formatIsoDate, formatNumber } from '../../../lib/format-vi';
+import { formatArea, formatDimensions, formatIsoDate } from '../../../lib/format-vi';
 import { rentalEndIso, toIsoDate } from '../../../lib/rental-schedule';
 import { endedContractHint, lastDayIso } from '../../../lib/settlement-format';
 import type { ApiContract, ApiInspection } from '../../types/contract-api';
@@ -175,19 +175,28 @@ export function contractWarehouseName(contract: ApiContract): string {
 }
 
 /** `KHO-01 · 5 × 8 × 3,5 m · 40 m² · 140 m³` — whichever parts the API provided. */
-export function contractUnitSummary(contract: ApiContract): string {
+/** "R × D × C m · S m²": the size a customer recognises their unit by. */
+export function contractUnitSize(contract: ApiContract): string {
   const unit = contract.unit;
   if (!unit) return '';
   const dimensions =
     unit.widthM !== null && unit.lengthM !== null
       ? formatDimensions(unit.widthM, unit.lengthM, unit.heightM)
       : null;
-  return [
-    unit.code,
-    dimensions,
-    formatArea(unit.areaM2),
-    unit.volumeM3 !== null ? `${formatNumber(unit.volumeM3)} m³` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  return [dimensions, formatArea(unit.areaM2)].filter(Boolean).join(' · ');
+}
+
+/**
+ * The unit code on its own line, its size on the next. Packing code, dimensions, area and volume
+ * into one dotted line wrapped mid-value on phones.
+ */
+export function ContractUnitLines({ contract }: { contract: ApiContract }) {
+  if (!contract.unit) return null;
+  const size = contractUnitSize(contract);
+  return (
+    <View className="gap-0.5">
+      <Text className="font-numeric text-caption text-muted">{contract.unit.code}</Text>
+      {size ? <Text className="font-body text-body-sm text-muted">{size}</Text> : null}
+    </View>
+  );
 }

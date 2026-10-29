@@ -12,7 +12,7 @@ type Props = {
   onFinalized: () => void;
 };
 
-const TITLE = { handover: 'Biên nhận kho', return: 'Biên trả kho' } as const;
+const TITLE = { handover: 'Biên bản nhận kho', return: 'Biên bản trả kho' } as const;
 
 /** An inspection the signed-in staff member may edit, inside the same card as the read-only view. */
 export function StaffInspectionSection({

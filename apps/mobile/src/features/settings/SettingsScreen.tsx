@@ -53,9 +53,6 @@ export function SettingsScreen({
             </View>
             <View className="flex-1">
               <Text className="font-strong text-foreground text-body-lg">{user.fullName}</Text>
-              {user.phone ? (
-                <Text className="font-numeric mt-0.5 text-num-sm text-muted">{user.phone}</Text>
-              ) : null}
               <Text className="font-body text-body-sm text-muted" numberOfLines={1}>
                 {user.email}
               </Text>
@@ -113,14 +110,17 @@ export function SettingsScreen({
           <View className="h-px bg-separator" />
           <SettingItem title="Hỗ trợ" description="Liên hệ và yêu cầu hỗ trợ" onPress={onSupport} />
         </View>
+
+        {/* Signing out ends the page instead of being pinned over it: a destructive action
+            should not be the loudest thing on screen, nor cover the check-in history. */}
+        <View className="mx-4 mt-6">
+          <Button isDisabled={isLoggingOut} variant="ghost" onPress={onLogout}>
+            <Button.Label className="font-ui text-danger">
+              {isLoggingOut ? 'Đang đăng xuất...' : 'Đăng xuất'}
+            </Button.Label>
+          </Button>
+        </View>
       </ScrollView>
-      <View className="border-border border-t bg-background px-4 py-3">
-        <Button isDisabled={isLoggingOut} variant="danger-soft" onPress={onLogout}>
-          <Button.Label className="font-ui">
-            {isLoggingOut ? 'Đang đăng xuất...' : 'Đăng xuất tài khoản'}
-          </Button.Label>
-        </Button>
-      </View>
     </View>
   );
 }

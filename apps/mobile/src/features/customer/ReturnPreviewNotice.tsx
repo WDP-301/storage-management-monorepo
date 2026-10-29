@@ -46,7 +46,7 @@ export function ReturnPreviewNotice({ preview, isLoading, error }: Props) {
       ))}
       <Text className="font-body text-body-sm text-muted">
         Số tiền trên tính cho trường hợp trả đúng ngày này; khi quyết toán, tiền tính tới ngày nhân
-        viên chốt biên trả kho.
+        viên chốt biên bản trả kho.
       </Text>
       <Text className="font-body text-body-sm text-muted">
         {preview.deposit_held === null

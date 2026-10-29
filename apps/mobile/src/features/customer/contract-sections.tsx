@@ -87,7 +87,7 @@ export function HandoverSection({
   const received = dayOf(handover?.finalizedAt ?? null);
   return (
     <SectionCard
-      title="Biên nhận kho"
+      title="Biên bản nhận kho"
       badge={received ? `Đã nhận ${received.slice(0, 5)}` : 'Chưa nhận kho'}
       tone={received ? 'success' : 'neutral'}
     >
@@ -127,7 +127,7 @@ export function ReturnSection({
       : 'Chưa yêu cầu';
   return (
     <SectionCard
-      title="Biên trả kho"
+      title="Biên bản trả kho"
       badge={badge}
       tone={returned ? 'neutral' : inspection ? 'accent' : 'neutral'}
     >

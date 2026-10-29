@@ -53,7 +53,7 @@ export function BrowseBrandHeader({
           adjustsFontSizeToFit
           minimumFontScale={0.8}
         >
-          Hệ Thống Thuê Kho Việt Nam
+          Hệ thống thuê kho Việt Nam
         </Text>
       </View>
       <Pressable

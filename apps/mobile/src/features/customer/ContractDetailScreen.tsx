@@ -8,7 +8,7 @@ import type { ApiContract } from '../../types/contract-api';
 import { ContractInvoicesSection } from './ContractInvoicesSection';
 import { ContractAmenitiesSection } from './contract-amenities-section';
 import {
-  contractUnitSummary,
+  ContractUnitLines,
   contractWarehouseName,
   openReturn,
   StatusPill,
@@ -124,9 +124,7 @@ function ContractDetail({
           </Text>
           <StatusPill label={state.label} tone={state.tone} />
         </View>
-        <Text className="font-numeric text-caption text-muted">
-          {contractUnitSummary(contract)}
-        </Text>
+        <ContractUnitLines contract={contract} />
         {contract.unit ? (
           <View className="flex-row items-start gap-1.5">
             <MapPin color={MUTED} size={14} weight="fill" />

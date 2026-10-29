@@ -205,9 +205,10 @@ export function MyStorageScreen({
 
             <View className="mt-5 flex-row items-center justify-between gap-2">
               <Text className="font-strong text-body-md text-foreground">{currentLabel}</Text>
-              {entries.length > 0 ? (
+              {/* The chip already shows the count; the range only helps once there are pages. */}
+              {pageCount > 1 ? (
                 <Text className="font-numeric text-caption text-muted">
-                  {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, entries.length)} /{' '}
+                  {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, entries.length)} /{' '}
                   {entries.length}
                 </Text>
               ) : null}

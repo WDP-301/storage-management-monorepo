@@ -1,4 +1,5 @@
-import { CheckCircle, MapPin, Plus } from 'phosphor-react-native';
+import { CheckCircle, MapPin, Plus, Rows } from 'phosphor-react-native';
+import type React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { formatDimensions, formatMoney, formatNumber } from '../../../lib/format-vi';
 import { displayMonthlyPrice, isShelfWarehouse } from '../../../lib/shelf-rental';
@@ -23,15 +24,38 @@ type Props = {
 
 /** Size, volume, rent and deposit — the figures customers compare between warehouses. */
 export function WarehouseSpecs({ warehouse }: { warehouse: Warehouse }) {
-  if (isShelfWarehouse(warehouse)) {
-    return (
-      <Text className="font-body text-body-sm text-muted">
-        {warehouse.shelfSummary?.available ?? 0} kệ còn trống · Chọn kệ để xem kích thước và tiền
-        cọc
-      </Text>
-    );
-  }
-  const specs = [
+  const specs = isShelfWarehouse(warehouse) ? shelfSpecs(warehouse) : unitSpecs(warehouse);
+  return (
+    <View className="gap-1">
+      {specs.map(([label, value]) => (
+        <View key={label} className="flex-row justify-between gap-3">
+          <Text className="font-body text-body-sm text-muted">{label}</Text>
+          <Text className="flex-1 text-right font-ui text-body-sm text-foreground">{value}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** A shelf warehouse rents shelf by shelf, so its rows describe the shelves, not the building. */
+function shelfSpecs(warehouse: Warehouse): [string, string][] {
+  const summary = warehouse.shelfSummary;
+  const { minAreaM2: min, maxAreaM2: max } = summary ?? {};
+  const area =
+    min == null || max == null
+      ? null
+      : min === max
+        ? `${formatNumber(min)} m²`
+        : `${formatNumber(min)} - ${formatNumber(max)} m²`;
+  return [
+    ['Kệ còn trống', `${summary?.available ?? 0}/${summary?.total ?? 0} kệ`],
+    ...(area ? [['Diện tích mỗi kệ', area] as [string, string]] : []),
+    ['Tiền cọc', 'Theo từng kệ'],
+  ];
+}
+
+function unitSpecs(warehouse: Warehouse): [string, string][] {
+  return [
     [
       'Kích thước (R × D × C)',
       formatDimensions(warehouse.widthM, warehouse.lengthM, warehouse.heightM),
@@ -43,16 +67,6 @@ export function WarehouseSpecs({ warehouse }: { warehouse: Warehouse }) {
       `${formatMoney(warehouseDeposit(warehouse))} (${warehouse.effectiveDepositMonths} tháng)`,
     ],
   ];
-  return (
-    <View className="gap-1">
-      {specs.map(([label, value]) => (
-        <View key={label} className="flex-row justify-between gap-3">
-          <Text className="font-body text-body-sm text-muted">{label}</Text>
-          <Text className="flex-1 text-right font-ui text-body-sm text-foreground">{value}</Text>
-        </View>
-      ))}
-    </View>
-  );
 }
 
 /** One warehouse as an outlined card that can be toggled into the booking selection. */
@@ -117,12 +131,55 @@ export function WarehouseCard({
         <View className="flex-row items-center justify-between gap-2">
           <Text className="font-numeric text-caption text-muted">{warehouse.code}</Text>
           <View className="flex-row items-center gap-2">
-            <Text className="font-ui text-caption text-accent">Xem chi tiết</Text>
-            {isShelfWarehouse(warehouse) ? null : (
-              <SelectPill isDisabled={isDisabled} isSelected={isSelected} onPress={onToggle} />
+            {isShelfWarehouse(warehouse) ? (
+              // Shelves are chosen on the floor plan, so the card's action opens it.
+              <ActionPill
+                label="Chọn kệ"
+                icon={<Rows color={ON_ACCENT} size={14} weight="bold" />}
+                onPress={onOpen}
+              />
+            ) : (
+              <>
+                <Text className="font-ui text-caption text-accent">Xem chi tiết</Text>
+                <SelectPill isDisabled={isDisabled} isSelected={isSelected} onPress={onToggle} />
+              </>
             )}
           </View>
         </View>
+      </View>
+    </Pressable>
+  );
+}
+
+/** The card's single call to action, shared by unit and shelf warehouses so both read the same. */
+function ActionPill({
+  label,
+  icon,
+  onPress,
+  isSelected = false,
+  isDisabled = false,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  onPress: () => void;
+  isSelected?: boolean;
+  isDisabled?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: isSelected, disabled: isDisabled }}
+      disabled={isDisabled}
+      style={({ pressed }) => ({ opacity: isDisabled ? 0.4 : pressed ? 0.7 : 1 })}
+      onPress={onPress}
+    >
+      <View
+        className={`flex-row items-center gap-1 rounded-full px-3 py-1.5 ${
+          isSelected ? 'bg-accent' : 'bg-foreground'
+        }`}
+      >
+        {icon}
+        <Text className="font-ui text-caption text-surface">{label}</Text>
       </View>
     </Pressable>
   );
@@ -138,27 +195,18 @@ function SelectPill({
   onPress: () => void;
 }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: isSelected, disabled: isDisabled }}
-      disabled={isDisabled}
-      style={({ pressed }) => ({ opacity: isDisabled ? 0.4 : pressed ? 0.7 : 1 })}
-      onPress={onPress}
-    >
-      <View
-        className={`flex-row items-center gap-1 rounded-full px-3 py-1.5 ${
-          isSelected ? 'bg-accent' : 'bg-foreground'
-        }`}
-      >
-        {isSelected ? (
+    <ActionPill
+      label={isSelected ? 'Đã chọn' : 'Chọn kho'}
+      icon={
+        isSelected ? (
           <CheckCircle color={ON_ACCENT} size={14} weight="fill" />
         ) : (
           <Plus color={ON_ACCENT} size={14} weight="bold" />
-        )}
-        <Text className="font-ui text-caption text-surface">
-          {isSelected ? 'Đã chọn' : 'Chọn kho'}
-        </Text>
-      </View>
-    </Pressable>
+        )
+      }
+      isSelected={isSelected}
+      isDisabled={isDisabled}
+      onPress={onPress}
+    />
   );
 }

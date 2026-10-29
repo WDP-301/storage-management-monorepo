@@ -50,6 +50,11 @@ export default function ShelvesRoute() {
 
   const selectedIds = selected.map((item) => item.id);
   const totalRent = selected.reduce((sum, item) => sum + item.monthlyPrice, 0);
+  const blockedReason = heldBooking
+    ? 'Đang có đơn giữ chỗ'
+    : selected.length === 0
+      ? 'Chọn ít nhất 1 kệ'
+      : null;
   const continueBooking = () => {
     if (heldBooking || selected.length === 0) return;
     selectWarehouses(selected);
@@ -96,11 +101,14 @@ export default function ShelvesRoute() {
               {formatMoney(totalRent)}/tháng
             </Text>
           </View>
+          {/* heroui's disabled style washes the label out. A blocked step stays a readable neutral
+              button that says what is missing; continueBooking ignores the press. */}
           <Button
-            isDisabled={Boolean(heldBooking) || selected.length === 0}
+            variant={blockedReason ? 'secondary' : 'primary'}
+            accessibilityState={{ disabled: blockedReason !== null }}
             onPress={continueBooking}
           >
-            <Button.Label className="font-ui">Tiếp tục đặt lịch</Button.Label>
+            <Button.Label className="font-ui">{blockedReason ?? 'Tiếp tục đặt lịch'}</Button.Label>
           </Button>
         </View>
       ) : null}

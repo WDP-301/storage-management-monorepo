@@ -3,9 +3,9 @@ import { Pressable, Text, View } from 'react-native';
 import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import type { ApiContract } from '../../types/contract-api';
 import {
+  ContractUnitLines,
   contractEndIso,
   contractStartIso,
-  contractUnitSummary,
   contractWarehouseName,
   StatusPill,
   storageState,
@@ -38,9 +38,7 @@ export function ContractCard({
             <Text className="font-strong text-foreground text-title-sm" numberOfLines={1}>
               {contractWarehouseName(contract)}
             </Text>
-            <Text className="font-numeric text-caption text-muted">
-              {contractUnitSummary(contract)}
-            </Text>
+            <ContractUnitLines contract={contract} />
             {contract.unit ? (
               <View className="flex-row items-start gap-1.5">
                 <MapPin color={MUTED} size={14} weight="fill" />

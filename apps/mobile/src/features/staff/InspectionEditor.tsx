@@ -32,7 +32,7 @@ export function InspectionEditor({ detail, finalizeBlockedReason, onFinalized }:
     const message = isReturn
       ? `${consequence}\n\nNgày trả ghi nhận là hôm nay (${today}) — tiền thuê, thời hạn báo trước và phí quá hạn tính tới ngày này.`
       : consequence;
-    Alert.alert(isReturn ? 'Chốt biên trả kho?' : 'Chốt biên bản?', message, [
+    Alert.alert(isReturn ? 'Chốt biên bản trả kho?' : 'Chốt biên bản?', message, [
       { text: 'Huỷ', style: 'cancel' },
       {
         text: 'Chốt',

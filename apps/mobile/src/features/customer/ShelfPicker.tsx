@@ -35,6 +35,26 @@ const CELL = 52;
 const GAP = 5;
 const MAX_ZOOM = 3;
 
+const LEGEND = [
+  ['bg-success-bg border-success', 'Còn trống'],
+  ['bg-accent border-accent', 'Đã chọn'],
+  ['bg-surface-secondary border-border', 'Không khả dụng'],
+] as const;
+
+/** Colour key, kept in the map toolbar so it is on screen whenever the plan is. */
+function ShelfLegend() {
+  return (
+    <View className="flex-1 flex-row flex-wrap gap-x-3 gap-y-1">
+      {LEGEND.map(([colors, label]) => (
+        <View key={label} className="flex-row items-center gap-1.5">
+          <View className={`size-3 rounded border ${colors}`} />
+          <Text className="font-body text-caption text-muted">{label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function ShelfMap({
   grid,
   placed,
@@ -62,10 +82,14 @@ function ShelfMap({
   const maxViewportHeight = expanded ? Math.min(680, Math.max(380, height * 0.68)) : 420;
   const fitScale = Math.min(1, viewportWidth / contentWidth, maxViewportHeight / contentHeight);
   const dense = fitScale < 0.72;
-  const viewportHeight = dense
-    ? maxViewportHeight
-    : Math.min(maxViewportHeight, Math.max(220, contentHeight * fitScale + 32));
-  const initialScale = dense ? 1 : fitScale;
+  // The frame hugs the fitted plan; a dense plan keeps a taller floor so zooming in has room.
+  const viewportHeight = Math.min(
+    maxViewportHeight,
+    Math.max(dense ? 320 : 220, contentHeight * fitScale + 32),
+  );
+  // A dense plan opens fitted to the frame so the customer sees every zone first, then taps
+  // an area to zoom in. Opening at 100% showed a cropped middle with shelves cut off at the edges.
+  const initialScale = fitScale;
   const [overview, setOverview] = useState(false);
   const scale = useSharedValue(initialScale);
   const savedScale = useSharedValue(initialScale);
@@ -81,7 +105,7 @@ function ShelfMap({
     savedScale.value = initialScale;
     offsetX.value = Math.max(0, (contentWidth * initialScale - viewportWidth) / 2);
     offsetY.value = Math.max(0, (contentHeight * initialScale - viewportHeight) / 2);
-    setOverview(false);
+    setOverview(dense);
   }, [
     initialScale,
     grid.version,
@@ -188,8 +212,8 @@ function ShelfMap({
 
   return (
     <>
-      <View className="flex-row items-center justify-between border-b border-border px-3 py-2">
-        <Text className="font-ui text-body-sm text-foreground">Mặt bằng kệ</Text>
+      <View className="flex-row items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <ShelfLegend />
         <View className="flex-row items-center gap-2">
           <Pressable
             accessibilityRole="button"
@@ -341,17 +365,13 @@ function ShelfMap({
             );
           })}
         </Animated.View>
-        {overview ? (
-          <View
-            pointerEvents="none"
-            className="absolute inset-x-3 bottom-3 rounded-lg bg-foreground/85 px-3 py-2"
-          >
-            <Text className="text-center font-ui text-caption text-background">
-              Chạm vào vùng muốn xem để phóng to
-            </Text>
-          </View>
-        ) : null}
       </View>
+      {/* Sits under the plan instead of over it, so the bottom row of shelves stays visible. */}
+      <Text className="border-t border-border px-3 py-2 font-body text-caption text-muted">
+        {overview
+          ? 'Chạm vào vùng muốn xem để phóng to'
+          : 'Chụm hai ngón để thu phóng · Kéo để xem khi phóng to'}
+      </Text>
     </>
   );
 }
@@ -465,21 +485,6 @@ export function ShelfPicker({
             onShelfPress={handleShelfPress}
             expanded={expanded}
           />
-          <View className="flex-row flex-wrap gap-x-4 gap-y-2 border-t border-border px-3 py-3">
-            {[
-              ['bg-success-bg border-success', 'Còn trống'],
-              ['bg-surface-secondary border-border', 'Không khả dụng'],
-              ['bg-accent border-accent', 'Đã chọn'],
-            ].map(([colors, label]) => (
-              <View key={label} className="flex-row items-center gap-1.5">
-                <View className={`size-3 rounded border ${colors}`} />
-                <Text className="font-body text-caption text-muted">{label}</Text>
-              </View>
-            ))}
-          </View>
-          <Text className="border-t border-border px-3 py-2 font-body text-caption text-muted">
-            Chụm hai ngón để thu phóng · Kéo để xem khi phóng to
-          </Text>
         </View>
       ) : null}
 

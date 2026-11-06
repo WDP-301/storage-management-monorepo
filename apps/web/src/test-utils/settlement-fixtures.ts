@@ -90,6 +90,7 @@ export const settlementRecord = (
   },
   warnings: [],
   customer_bank_account: null,
+  customer_bank_account_source: null,
   bank_account: null,
   bank_override: null,
   transfer_content: 'HOAN COC CT-41bf439c-f69b-44ee-a615-3ccd5fa65e8f',

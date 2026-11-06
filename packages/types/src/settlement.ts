@@ -70,6 +70,12 @@ export interface SettlementWarning {
 }
 
 /** Customer view of a settlement in `/contracts/mine` (ENDED contracts only). */
+/**
+ * RETURN_REQUEST: given with the return request. SAVED: the request carried none, so it is the
+ * account the customer gave (and the bank confirmed) on an earlier return request.
+ */
+export type CustomerBankAccountSource = 'RETURN_REQUEST' | 'SAVED';
+
 export interface SettlementSummaryRecord {
   status: ContractSettlementStatus;
   deposit_amount: number | null;
@@ -129,8 +135,13 @@ export interface SettlementDetailRecord {
   lines: SettlementLine[];
   totals: SettlementTotals | null;
   warnings: SettlementWarning[];
-  /** Account the customer gave with the return request; null when they gave none. */
+  /**
+   * Account the customer gave with the return request — or, when they gave none, the one they
+   * saved on an earlier return request; null when there is neither.
+   */
   customer_bank_account: RefundBankAccount | null;
+  /** Where `customer_bank_account` comes from until approval; null once approved or when none. */
+  customer_bank_account_source: CustomerBankAccountSource | null;
   /** Account the refund goes to, once approved. */
   bank_account: RefundBankAccount | null;
   bank_override: { by_name: string | null; reason: string } | null;

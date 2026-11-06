@@ -35,6 +35,9 @@ const KNOWN_TYPES: Record<NotificationType, NotificationDisplay> = {
   CONTRACT_TERM_ENDING: { label: 'Sắp hết hạn', icon: 'ending', tone: 'warning' },
   CONTRACT_OVERDUE: { label: 'Quá hạn', icon: 'overdue', tone: 'danger' },
   CHECK_OUT_MISSED: { label: 'Chưa check-out', icon: 'overdue', tone: 'warning' },
+  SHIFT_ASSIGNED: { label: 'Ca làm việc', icon: 'ending', tone: 'accent' },
+  SHIFT_UPDATED: { label: 'Ca làm việc', icon: 'ending', tone: 'warning' },
+  SHIFT_CANCELLED: { label: 'Hủy ca làm', icon: 'overdue', tone: 'danger' },
 };
 
 const FALLBACK_DISPLAY: NotificationDisplay = {

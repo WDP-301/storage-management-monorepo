@@ -38,6 +38,11 @@ const KNOWN_TYPES: Record<NotificationType, NotificationDisplay> = {
   SHIFT_ASSIGNED: { label: 'Ca làm việc', icon: 'ending', tone: 'accent' },
   SHIFT_UPDATED: { label: 'Ca làm việc', icon: 'ending', tone: 'warning' },
   SHIFT_CANCELLED: { label: 'Hủy ca làm', icon: 'overdue', tone: 'danger' },
+  SHELF_DROP_OFF: { label: 'Gửi đồ', icon: 'return', tone: 'accent' },
+  SHELF_PICK_UP: { label: 'Lấy đồ', icon: 'return', tone: 'accent' },
+  SHELF_RECEIPT_VOIDED: { label: 'Hủy phiếu', icon: 'overdue', tone: 'warning' },
+  PICKUP_REQUEST_READY: { label: 'Đồ sẵn sàng', icon: 'paid', tone: 'success' },
+  PICKUP_REQUEST_CREATED: { label: 'Yêu cầu lấy đồ', icon: 'ticket', tone: 'warning' },
 };
 
 const FALLBACK_DISPLAY: NotificationDisplay = {

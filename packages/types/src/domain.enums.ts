@@ -226,6 +226,8 @@ export type ReturnRequestSource = (typeof ReturnRequestSource)[keyof typeof Retu
 export const AccessEventType = {
   CHECK_IN: 'CHECK_IN',
   CHECK_OUT: 'CHECK_OUT',
+  /** A customer's pass consumed at the counter; opens a short counter session. */
+  COUNTER_SCAN: 'COUNTER_SCAN',
 } as const;
 export type AccessEventType = (typeof AccessEventType)[keyof typeof AccessEventType];
 
@@ -236,6 +238,26 @@ export const CheckOutMethod = {
   AUTO: 'AUTO',
 } as const;
 export type CheckOutMethod = (typeof CheckOutMethod)[keyof typeof CheckOutMethod];
+
+export const ShelfReceiptType = {
+  DROP_OFF: 'DROP_OFF',
+  PICK_UP: 'PICK_UP',
+} as const;
+export type ShelfReceiptType = (typeof ShelfReceiptType)[keyof typeof ShelfReceiptType];
+
+export const ShelfReceiptStatus = {
+  ACTIVE: 'ACTIVE',
+  VOIDED: 'VOIDED',
+} as const;
+export type ShelfReceiptStatus = (typeof ShelfReceiptStatus)[keyof typeof ShelfReceiptStatus];
+
+export const PickupRequestStatus = {
+  PENDING: 'PENDING',
+  READY: 'READY',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type PickupRequestStatus = (typeof PickupRequestStatus)[keyof typeof PickupRequestStatus];
 
 export const InspectionType = {
   PRE_HANDOVER: 'PRE_HANDOVER',
@@ -319,11 +341,20 @@ export const NotificationType = {
   REFUND_COMPLETED: 'REFUND_COMPLETED',
   CONTRACT_TERM_ENDING: 'CONTRACT_TERM_ENDING',
   CONTRACT_OVERDUE: 'CONTRACT_OVERDUE',
-  /** A visit was still open at closing time and was closed without an exit scan. */
+  /** No longer sent: customers no longer enter shelf warehouses. Old rows keep this type. */
   CHECK_OUT_MISSED: 'CHECK_OUT_MISSED',
   SHIFT_ASSIGNED: 'SHIFT_ASSIGNED',
   SHIFT_UPDATED: 'SHIFT_UPDATED',
   SHIFT_CANCELLED: 'SHIFT_CANCELLED',
+  /** Staff recorded goods the customer handed over onto their shelf. */
+  SHELF_DROP_OFF: 'SHELF_DROP_OFF',
+  /** Staff handed goods back to the customer (or recovered them from an abandoned shelf). */
+  SHELF_PICK_UP: 'SHELF_PICK_UP',
+  SHELF_RECEIPT_VOIDED: 'SHELF_RECEIPT_VOIDED',
+  /** The branch prepared the goods of a pick-up request. */
+  PICKUP_REQUEST_READY: 'PICKUP_REQUEST_READY',
+  /** To facility staff and managers: a customer asked to collect goods. */
+  PICKUP_REQUEST_CREATED: 'PICKUP_REQUEST_CREATED',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 

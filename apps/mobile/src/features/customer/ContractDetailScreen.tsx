@@ -19,6 +19,7 @@ import { ContractSection, HandoverSection, ReturnSection } from './contract-sect
 import { ReturnRequestActions } from './ReturnRequestActions';
 import { ReturnRequestSheet } from './ReturnRequestSheet';
 import { SettlementSection } from './SettlementSection';
+import { ShelfStorageSection } from './shelf-storage-section';
 import { TermEndNotice } from './TermEndNotice';
 import { type ContractInvoicesState, useContractInvoices } from './use-contract-invoices';
 
@@ -143,6 +144,7 @@ function ContractDetail({
         <ContractDocumentsList contract={contract} />
       </ContractSection>
       <ContractAmenitiesSection contract={contract} />
+      <ShelfStorageSection contract={contract} />
       <HandoverSection handover={contract.handover} />
       {showReturnSection ? (
         <ReturnSection inspection={contract.return}>

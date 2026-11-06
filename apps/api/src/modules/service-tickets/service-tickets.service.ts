@@ -33,6 +33,7 @@ import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { DEFAULT_PAGE_SIZE, ListTicketsQueryDto } from './dto/list-tickets-query.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
+import { resolveReceiptLink } from './ticket-receipt-link';
 import type {
   ServiceTicketDeleteResponse,
   ServiceTicketListResponse,
@@ -91,6 +92,7 @@ const TICKET_RELATIONS = {
   storageUnit: true,
   customer: true,
   assignee: true,
+  shelfReceipt: true,
 } as const;
 
 /** One field changed by `update()` — stored in the TICKET_UPDATED notification's data. */
@@ -210,8 +212,11 @@ export class ServiceTicketsService {
 
     let isCommitted = false;
     try {
+      // Owning the disputed receipt proves the customer rented there, so the contract-window
+      // check is skipped: a report about a receipt stays possible after move-out or overstay.
+      const link = await resolveReceiptLink(this.dataSource.manager, actor.id, dto);
       const type = await this.validateTicketReferences(dto);
-      await this.assertCustomerCanFile(actor.id, dto, type);
+      if (!link) await this.assertCustomerCanFile(actor.id, dto, type);
 
       // The facility's managers are told about the new ticket. Their notifications are
       // inserted in the same transaction as the ticket, so both exist or neither does.
@@ -225,7 +230,8 @@ export class ServiceTicketsService {
         {
           typeId: dto.typeId,
           facilityId: dto.facilityId,
-          storageUnitId: dto.storageUnitId,
+          storageUnitId: link?.storageUnitId ?? dto.storageUnitId,
+          shelfReceiptId: link?.receiptId ?? null,
           customerId: actor.id,
           priority: dto.priority ?? TicketPriority.NORMAL,
           status: TicketStatus.OPEN,
@@ -241,6 +247,9 @@ export class ServiceTicketsService {
             managerIds,
             ticketCreatedNotification(ticket),
           ),
+        // The check above gives early errors; this one, under the receipt lock, is authoritative
+        // against a concurrent void or a second report that committed in between.
+        link ? (em) => resolveReceiptLink(em, actor.id, dto, { lock: true }) : undefined,
       );
 
       isCommitted = true;
@@ -296,6 +305,7 @@ export class ServiceTicketsService {
       .leftJoinAndSelect('ticket.storageUnit', 'storageUnit')
       .leftJoinAndSelect('ticket.customer', 'customer')
       .leftJoinAndSelect('ticket.assignee', 'assignee')
+      .leftJoinAndSelect('ticket.shelfReceipt', 'shelfReceipt')
       .orderBy('ticket.createdAt', 'DESC')
       .addOrderBy('ticket.id', 'DESC')
       .skip((page - 1) * limit)
@@ -824,11 +834,13 @@ export class ServiceTicketsService {
     idempotencyKey: string,
     userId: string,
     afterInsert: (em: EntityManager, ticket: ServiceTicketRecord) => Promise<unknown>,
+    beforeInsert?: (em: EntityManager) => Promise<unknown>,
   ): Promise<ServiceTicketResponse> {
     for (let attempt = 1; ; attempt++) {
       const ticket = this.tickets.create({ ...values, ticketNo: this.generateTicketNo() });
       try {
         return await this.dataSource.transaction(async (em) => {
+          await beforeInsert?.(em);
           const saved = await em.save(ticket);
           const full = await em.findOneOrFail(ServiceTicket, {
             where: { id: saved.id },

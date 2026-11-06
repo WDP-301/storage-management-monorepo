@@ -4,8 +4,7 @@ import { SettingsService } from '@modules/settings/settings.service';
 import { Injectable } from '@nestjs/common';
 import { AccessEventType } from '@storage/types';
 import { DataSource } from 'typeorm';
-import { assertCustomerCanEnter, buildPayload } from './check-in-eligibility';
-import { findLateExitVisit, findOpenVisit } from './open-visit.query';
+import { assertCanIssuePass, buildPayload } from './check-in-eligibility';
 
 export interface AccessPassView {
   id: string;
@@ -22,8 +21,8 @@ export class AccessPassService {
   ) {}
 
   /**
-   * Issues the caller's single live check-in pass, valid at every warehouse where they rent a
-   * shelf; staff choose the warehouse when scanning. The app rotates it before it expires, and
+   * Issues the caller's single live drop-off / pick-up code, valid at every warehouse where they
+   * rent a shelf; staff choose the warehouse when scanning it at the counter. The app rotates it before it expires, and
    * issuing a new one expires the earlier unused ones, so a screenshot shared before stops working.
    */
   async createPass(user: AuthUser): Promise<AccessPassView> {
@@ -36,13 +35,7 @@ export class AccessPassService {
       // foreign-key checks on the user (sessions, a scan's verified_by) unblocked.
       await em.query(`SELECT 1 FROM "app_users" WHERE "id" = $1 FOR NO KEY UPDATE`, [user.id]);
 
-      // A customer inside a warehouse always gets a code: it is their way out, and leaving is
-      // never refused — also right after their visit was closed without a scan (late exit).
-      // Otherwise the entry rules are checked now so the customer learns early.
-      const inside = (await findOpenVisit(em, user.id)) ?? (await findLateExitVisit(em, user.id));
-      if (!inside) {
-        await assertCustomerCanEnter(em, user.id, new Date());
-      }
+      await assertCanIssuePass(em, user.id, new Date());
 
       // The app issues a pass on every rotation, so unused ones would pile up forever. Passes that
       // expired over a day ago are dropped here; recent ones stay so a stale scan reads "expired".
@@ -61,7 +54,7 @@ export class AccessPassService {
         `INSERT INTO "access_events" ("customer_id", "event_type", "qr_token_hash", "expires_at")
          VALUES ($1, $2, $3, now() + make_interval(mins => $4))
          RETURNING "id", "expires_at"`,
-        [user.id, AccessEventType.CHECK_IN, hashSessionToken(token), ttlMinutes],
+        [user.id, AccessEventType.COUNTER_SCAN, hashSessionToken(token), ttlMinutes],
       );
 
       return {

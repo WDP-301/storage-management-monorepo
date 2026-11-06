@@ -1,4 +1,4 @@
-import type { PaginationMeta, TicketPriority, TicketStatus } from '@storage/types';
+import type { PaginationMeta, ShelfReceiptRef, TicketPriority, TicketStatus } from '@storage/types';
 
 export type TicketTypeInfo = {
   id: string;
@@ -65,6 +65,9 @@ export type ServiceTicketRecord = {
   storage_unit: TicketStorageUnitInfo | null;
   customer: TicketUserInfo | null;
   assignee: TicketUserInfo | null;
+  /** Receipt the customer reported as wrong; absent on older API responses. */
+  shelf_receipt_id?: string | null;
+  shelf_receipt?: ShelfReceiptRef | null;
 };
 
 export type ServiceTicketListResponse = {
@@ -90,6 +93,8 @@ export type CreateTicketInput = {
   typeId: string;
   facilityId: string;
   storageUnitId?: string;
+  /** Links the ticket to a wrong receipt; the API then derives the shelf and skips the rental window. */
+  shelfReceiptId?: string;
   priority?: TicketPriority;
   subject: string;
   description: string;

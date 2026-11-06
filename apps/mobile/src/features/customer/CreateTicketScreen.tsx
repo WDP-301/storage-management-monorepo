@@ -29,6 +29,8 @@ type Props = {
   onSubmit: () => void;
   onRetryOptions: () => void;
   onBack: () => void;
+  /** Set while reporting a wrong receipt; shows which receipt the ticket is linked to. */
+  linkedReceiptCode?: string | null;
 };
 
 export function CreateTicketScreen({
@@ -42,6 +44,7 @@ export function CreateTicketScreen({
   onSubmit,
   onRetryOptions,
   onBack,
+  linkedReceiptCode,
 }: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);
@@ -121,6 +124,14 @@ export function CreateTicketScreen({
               <Button className="mt-3" size="sm" variant="secondary" onPress={onRetryOptions}>
                 <Button.Label className="font-ui">Tải lại</Button.Label>
               </Button>
+            </View>
+          ) : null}
+
+          {linkedReceiptCode ? (
+            <View className="rounded-xl bg-warning-bg p-3">
+              <Text className="font-strong text-body-sm text-warning">
+                Liên quan phiếu {linkedReceiptCode}
+              </Text>
             </View>
           ) : null}
 

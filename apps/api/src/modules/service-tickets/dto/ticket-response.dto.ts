@@ -1,6 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { PaginationMetaDto } from '@shared/models/api-response';
-import { TicketPriority, TicketStatus } from '@storage/types';
+import {
+  type ShelfReceiptRef,
+  ShelfReceiptStatus,
+  ShelfReceiptType,
+  TicketPriority,
+  TicketStatus,
+} from '@storage/types';
 import type {
   ServiceTicketDeleteResponse,
   ServiceTicketListResponse,
@@ -44,6 +50,20 @@ export class TicketStorageUnitInfoDto implements TicketStorageUnitInfo {
 
   @ApiProperty({ example: 'Kho Thủ Đức 40m²' })
   name: string;
+}
+
+export class TicketShelfReceiptInfoDto implements ShelfReceiptRef {
+  @ApiProperty({ format: 'uuid' })
+  id: string;
+
+  @ApiProperty({ example: 'PH-20261107-0001' })
+  code: string;
+
+  @ApiProperty({ enum: ShelfReceiptType })
+  type: ShelfReceiptType;
+
+  @ApiProperty({ enum: ShelfReceiptStatus })
+  status: ShelfReceiptStatus;
 }
 
 export class TicketUserInfoDto implements TicketUserInfo {
@@ -91,6 +111,9 @@ export class ServiceTicketRecordDto implements ServiceTicketRecord {
   storage_unit_id: string | null;
 
   @ApiProperty({ format: 'uuid', nullable: true })
+  shelf_receipt_id: string | null;
+
+  @ApiProperty({ format: 'uuid', nullable: true })
   customer_id: string | null;
 
   @ApiProperty({ format: 'uuid', nullable: true })
@@ -134,6 +157,9 @@ export class ServiceTicketRecordDto implements ServiceTicketRecord {
 
   @ApiProperty({ type: TicketStorageUnitInfoDto, nullable: true })
   storage_unit: TicketStorageUnitInfoDto | null;
+
+  @ApiProperty({ type: TicketShelfReceiptInfoDto, nullable: true })
+  shelf_receipt: TicketShelfReceiptInfoDto | null;
 
   @ApiProperty({ type: TicketUserInfoDto, nullable: true })
   customer: TicketUserInfoDto | null;

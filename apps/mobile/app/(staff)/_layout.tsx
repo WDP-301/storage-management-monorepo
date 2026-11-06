@@ -53,12 +53,14 @@ export default function StaffTabsLayout() {
           )}
         >
           <RouterTabs.Screen name="today" options={{ title: 'Hôm nay' }} />
-          <RouterTabs.Screen name="scan" options={{ title: 'Quét mã' }} />
+          <RouterTabs.Screen name="scan" options={{ title: 'Gửi / lấy đồ' }} />
           <RouterTabs.Screen name="requests" options={{ title: 'Yêu cầu' }} />
           <RouterTabs.Screen name="notifications" options={{ title: 'Thông báo' }} />
           <RouterTabs.Screen name="settings" options={{ title: 'Cài đặt' }} />
           <RouterTabs.Screen name="staff-contract" options={{ title: 'Hợp đồng' }} />
           <RouterTabs.Screen name="staff-ticket" options={{ title: 'Chi tiết yêu cầu' }} />
+          <RouterTabs.Screen name="shelf-receipt-form" options={{ title: 'Phiếu gửi / lấy đồ' }} />
+          <RouterTabs.Screen name="shelf-receipt" options={{ title: 'Chi tiết phiếu' }} />
         </RouterTabs>
       </SafeAreaView>
     </NotificationsUnreadProvider>
@@ -87,7 +89,7 @@ function StaffTabBar({
       <BottomTabButton
         icon={<ScanIcon color={iconColor('scan')} />}
         isSelected={activeTab === 'scan'}
-        label="Quét mã"
+        label="Gửi / lấy đồ"
         onPress={() => onSelect('scan')}
       />
       <BottomTabButton
@@ -116,6 +118,7 @@ function StaffTabBar({
 function toStaffTab(routeName: string | undefined): StaffTab {
   if (routeName === 'staff-contract') return 'today';
   if (routeName === 'staff-ticket') return 'requests';
+  if (routeName === 'shelf-receipt-form' || routeName === 'shelf-receipt') return 'scan';
   if (
     routeName === 'scan' ||
     routeName === 'requests' ||

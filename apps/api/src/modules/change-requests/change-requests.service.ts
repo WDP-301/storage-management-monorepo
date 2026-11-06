@@ -9,6 +9,10 @@ import { activeFacilityIds } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { findUnrentable, lockShelfParents } from '@modules/bookings/rentable-units.util';
 import { SettingsService } from '@modules/settings/settings.service';
+import {
+  assertShelfEmpty,
+  cancelOpenPickupRequests,
+} from '@modules/shelf-storage/shelf-empty-guard.util';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
@@ -269,6 +273,12 @@ export class ChangeRequestsService {
     await this.dataSource.transaction(async (manager) => {
       await this.lockUndecidedRequest(manager, request.id);
       await this.assertContractStillMovable(manager, contract.id, request.oldUnitId);
+      // Moving to another shelf keeps the goods with the contract; any other unit cannot hold them.
+      if (request.newUnit.kind !== StorageUnitKind.SHELF) {
+        await assertShelfEmpty(manager, contract.id, 'UNIT_CHANGE');
+        // The shelf is gone from the customer's view; a request left open would be unreachable.
+        await cancelOpenPickupRequests(manager, contract.id);
+      }
 
       // Shared facility lock first (same order as warehouse writes): a concurrent deactivation
       // waits for this commit, and the unit's facility is pinned in the claim below.

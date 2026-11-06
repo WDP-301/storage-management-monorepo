@@ -1,5 +1,5 @@
 import type { ServiceTicket } from '@entities/service-ticket.entity';
-import type { PaginationMeta, TicketPriority, TicketStatus } from '@storage/types';
+import type { PaginationMeta, ShelfReceiptRef, TicketPriority, TicketStatus } from '@storage/types';
 
 export interface TicketTypeInfo {
   id: string;
@@ -40,6 +40,7 @@ export interface ServiceTicketRecord {
   type_id: string;
   facility_id: string;
   storage_unit_id: string | null;
+  shelf_receipt_id: string | null;
   customer_id: string | null;
   assigned_to: string | null;
   priority: TicketPriority;
@@ -55,6 +56,7 @@ export interface ServiceTicketRecord {
   type: TicketTypeInfo | null;
   facility: TicketFacilityInfo | null;
   storage_unit: TicketStorageUnitInfo | null;
+  shelf_receipt: ShelfReceiptRef | null;
   customer: TicketUserInfo | null;
   assignee: TicketUserInfo | null;
 }
@@ -67,6 +69,7 @@ export function toServiceTicketRecord(ticket: ServiceTicket): ServiceTicketRecor
     type_id: ticket.typeId,
     facility_id: ticket.facilityId,
     storage_unit_id: ticket.storageUnitId ?? null,
+    shelf_receipt_id: ticket.shelfReceiptId ?? null,
     customer_id: ticket.customerId ?? null,
     assigned_to: ticket.assignedTo ?? null,
     priority: ticket.priority,
@@ -91,6 +94,14 @@ export function toServiceTicketRecord(ticket: ServiceTicket): ServiceTicketRecor
       : null,
     storage_unit: ticket.storageUnit
       ? { id: ticket.storageUnit.id, code: ticket.storageUnit.code, name: ticket.storageUnit.name }
+      : null,
+    shelf_receipt: ticket.shelfReceipt
+      ? {
+          id: ticket.shelfReceipt.id,
+          code: ticket.shelfReceipt.code,
+          type: ticket.shelfReceipt.type,
+          status: ticket.shelfReceipt.status,
+        }
       : null,
     customer: ticket.customer
       ? {

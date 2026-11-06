@@ -20,7 +20,7 @@ export class CheckInHistoryService {
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
-  /** Actual entries (used passes), newest first. Facility managers see only their facilities. */
+  /** Used passes (counter scans, and legacy entries), newest first. Facility managers see only their facilities. */
   async list(
     actor: AuthUser,
     query: ListCheckInsQueryDto,
@@ -38,8 +38,10 @@ export class CheckInHistoryService {
       .innerJoinAndSelect('pass.facility', 'facility')
       .leftJoinAndSelect('pass.verifier', 'verifier')
       .where('pass.usedAt IS NOT NULL')
-      // Visits only: an exit scan is shown on its visit, not as an entry of its own.
-      .andWhere('pass.eventType = :entry', { entry: AccessEventType.CHECK_IN });
+      // Legacy visit entries plus counter scans; legacy exit scans are shown on their visit.
+      .andWhere('pass.eventType IN (:...scanTypes)', {
+        scanTypes: [AccessEventType.CHECK_IN, AccessEventType.COUNTER_SCAN],
+      });
 
     if (scope) qb.andWhere('pass.facilityId IN (:...scope)', { scope });
     if (query.from) qb.andWhere('pass.usedAt >= :from', { from: new Date(query.from) });

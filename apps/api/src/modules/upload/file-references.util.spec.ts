@@ -12,6 +12,7 @@ describe('assertFileKeyUnreferenced', () => {
     expect(sql).toContain('i.finalized_at IS NOT NULL');
     expect(sql).toContain('FROM contract_settlements');
     expect(sql).toContain('FROM contracts c WHERE c.documents @> $1::jsonb');
+    expect(sql).toContain('FROM shelf_receipts r WHERE r.photos @> $1::jsonb');
     expect(params.map((p) => JSON.parse(p))).toEqual([
       [{ fileKey: KEY }],
       [{ evidence: [{ fileKey: KEY }] }],
@@ -50,6 +51,9 @@ describe('assertCanReadFile', () => {
     const [sql, params] = em.query.mock.calls[0] as unknown as [string, string[]];
     expect(sql).toContain('c.customer_id = $1 AND c.documents @> $2::jsonb');
     expect(sql).toContain('t.customer_id = $1');
+    expect(sql).toContain(
+      'FROM shelf_receipts r WHERE r.customer_id = $1 AND r.photos @> $2::jsonb',
+    );
     expect(params[0]).toBe('user-1');
     expect(params.slice(1).map((p) => JSON.parse(p))).toEqual([
       [{ fileKey: KEY }],

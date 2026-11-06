@@ -52,6 +52,15 @@ export enum ErrorCode {
   STAFF_SHIFT_LOCKED = 'STAFF_SHIFT_LOCKED',
   STAFF_SHIFT_CHECK_IN_NOT_ALLOWED = 'STAFF_SHIFT_CHECK_IN_NOT_ALLOWED',
   STAFF_SHIFT_CHECK_OUT_NOT_ALLOWED = 'STAFF_SHIFT_CHECK_OUT_NOT_ALLOWED',
+  /** The counter session is unknown, expired, or belongs to another customer, warehouse or staff member. */
+  COUNTER_SESSION_INVALID = 'COUNTER_SESSION_INVALID',
+  /** A drop-off / pick-up receipt cannot be recorded or voided for this contract or request. */
+  SHELF_RECEIPT_NOT_ALLOWED = 'SHELF_RECEIPT_NOT_ALLOWED',
+  /** A pick-up or a void would take more of an item than the shelf holds. */
+  SHELF_STOCK_INSUFFICIENT = 'SHELF_STOCK_INSUFFICIENT',
+  PICKUP_REQUEST_NOT_ALLOWED = 'PICKUP_REQUEST_NOT_ALLOWED',
+  /** Goods are still on the shelf, so the return cannot be finalized or the unit changed. */
+  SHELF_NOT_EMPTY = 'SHELF_NOT_EMPTY',
 }
 
 export interface ValidationFieldDetail {

@@ -3,6 +3,8 @@ export * from './invoice-payment';
 export * from './return-request';
 export * from './settings';
 export * from './settlement';
+export * from './shelf-records';
+export * from './shelf-storage';
 export * from './vn-banks';
 
 export interface ApiResponse<T = any> {

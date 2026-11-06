@@ -46,6 +46,7 @@ import type {
   TicketUserInfo,
   UpdateTicketDto,
 } from '../../types/service-tickets';
+import { TicketShelfReceiptCard } from './TicketShelfReceiptCard';
 
 const PAGE_SIZE = 20;
 
@@ -216,6 +217,17 @@ export const ManagerTicketsPage: React.FC = () => {
       console.warn('Failed to fetch ticket detail:', err);
     } finally {
       setIsLoadingDetail(false);
+    }
+  };
+
+  // The receipt card voids a receipt behind this dialog; reload so its status is not stale. The
+  // edit fields are left alone so unsaved changes survive.
+  const refreshSelectedTicket = async (id: string) => {
+    try {
+      const fresh = await TicketsApi.getOne(id);
+      setSelectedTicket((current) => (current?.id === id ? fresh : current));
+    } catch (err: unknown) {
+      console.warn('Failed to refresh ticket detail:', err);
     }
   };
 
@@ -1076,6 +1088,11 @@ export const ManagerTicketsPage: React.FC = () => {
                     )}
                   </div>
                 </div>
+
+                <TicketShelfReceiptCard
+                  ticket={selectedTicket}
+                  onChanged={() => void refreshSelectedTicket(selectedTicket.id)}
+                />
 
                 {/* Problem Description */}
                 <div className="space-y-1.5">

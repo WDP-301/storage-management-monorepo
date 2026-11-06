@@ -53,6 +53,13 @@ describe('CheckInHistoryService.list', () => {
     expect(scopeCall()).toBeUndefined();
   });
 
+  it('lists counter scans together with legacy entries, not legacy exit scans', async () => {
+    await service.list(actor('a', [UserRole.ADMIN]), {});
+
+    const types = qb.andWhere.mock.calls.find(([sql]) => sql.includes('eventType IN'));
+    expect(types?.[1]).toEqual({ scanTypes: ['CHECK_IN', 'COUNTER_SCAN'] });
+  });
+
   it('limits a facility manager to the facilities they manage', async () => {
     await service.list(actor('fm-1', [UserRole.FACILITY_MANAGER]), {});
     expect(scopeCall()?.[1]).toEqual({ scope: ['f-1'] });

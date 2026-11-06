@@ -125,9 +125,10 @@ describe('ServiceTicketsService', () => {
     findOneOrFail: jest.Mock;
     update: jest.Mock;
     insert: jest.Mock;
+    query: jest.Mock;
     getRepository: jest.Mock;
   };
-  let dataSource: { transaction: jest.Mock };
+  let dataSource: { transaction: jest.Mock; manager: { query: jest.Mock } };
   let service: ServiceTicketsService;
 
   beforeEach(() => {
@@ -161,10 +162,14 @@ describe('ServiceTicketsService', () => {
       findOneOrFail: jest.fn().mockResolvedValue(buildTicket()),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       insert: jest.fn().mockResolvedValue({ identifiers: [] }),
+      query: jest.fn().mockResolvedValue([]),
       // update() saves through the transaction's repository — the same `tickets` mock.
       getRepository: jest.fn(() => tickets),
     };
-    dataSource = { transaction: jest.fn((cb: (manager: typeof em) => unknown) => cb(em)) };
+    dataSource = {
+      transaction: jest.fn((cb: (manager: typeof em) => unknown) => cb(em)),
+      manager: { query: jest.fn() },
+    };
 
     service = new ServiceTicketsService(
       tickets as never,
@@ -188,6 +193,131 @@ describe('ServiceTicketsService', () => {
       subject: '  Broken lock  ',
       description: 'The lock is not working.',
     };
+
+    it('files a report on an own receipt: no contract-window check, unit and receipt stored', async () => {
+      facilities.findOne.mockResolvedValue({ id: 'facility-1' });
+      ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
+      em.findOneOrFail.mockResolvedValue(buildTicket({ customerId: 'customer-1' }));
+      const lookup = async (sql: string) =>
+        sql.includes('FROM "shelf_receipts"')
+          ? [
+              {
+                id: 'receipt-1',
+                customer_id: 'customer-1',
+                facility_id: 'facility-1',
+                storage_unit_id: 'shelf-1',
+                status: 'ACTIVE',
+              },
+            ]
+          : [];
+      dataSource.manager.query.mockImplementation(lookup);
+      em.query.mockImplementation(lookup);
+
+      await service.create(
+        { ...dto, shelfReceiptId: 'receipt-1' },
+        buildActor({ id: 'customer-1' }),
+        'key-1',
+      );
+
+      expect(contracts.createQueryBuilder).not.toHaveBeenCalled();
+      expect(tickets.create).toHaveBeenCalledWith(
+        expect.objectContaining({ shelfReceiptId: 'receipt-1', storageUnitId: 'shelf-1' }),
+      );
+    });
+
+    describe('a report on a receipt that changed after the early check', () => {
+      const receiptRow = {
+        id: 'receipt-1',
+        customer_id: 'customer-1',
+        facility_id: 'facility-1',
+        storage_unit_id: 'shelf-1',
+        status: 'ACTIVE',
+      };
+      const arrange = (inTx: (sql: string) => unknown[]) => {
+        facilities.findOne.mockResolvedValue({ id: 'facility-1' });
+        ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
+        dataSource.manager.query.mockImplementation(async (sql: string) =>
+          sql.includes('FROM "shelf_receipts"') ? [receiptRow] : [],
+        );
+        em.query.mockImplementation(async (sql: string) => inTx(sql));
+      };
+      const file = () =>
+        service.create(
+          { ...dto, shelfReceiptId: 'receipt-1' },
+          buildActor({ id: 'customer-1' }),
+          'key-1',
+        );
+
+      it('refuses when a concurrent void won, and saves nothing', async () => {
+        arrange((sql) =>
+          sql.includes('FROM "shelf_receipts"') ? [{ ...receiptRow, status: 'VOIDED' }] : [],
+        );
+        await expect(file()).rejects.toMatchObject({
+          status: 409,
+          response: { details: { reason: 'RECEIPT_VOIDED' } },
+        });
+        expect(em.save).not.toHaveBeenCalled();
+        expect(idempotencyKeys.delete).toHaveBeenCalled();
+      });
+
+      it('refuses when a concurrent report opened first, naming it', async () => {
+        arrange((sql) =>
+          sql.includes('FROM "shelf_receipts"') ? [receiptRow] : [{ id: 't-9', ticket_no: 'ST-9' }],
+        );
+        await expect(file()).rejects.toMatchObject({
+          status: 409,
+          response: {
+            details: { reason: 'OPEN_DISPUTE_EXISTS', ticketId: 't-9', ticketNo: 'ST-9' },
+          },
+        });
+        expect(em.save).not.toHaveBeenCalled();
+      });
+
+      it('locks the receipt inside the transaction before inserting the ticket', async () => {
+        arrange((sql) => (sql.includes('FROM "shelf_receipts"') ? [receiptRow] : []));
+        em.findOneOrFail.mockResolvedValue(buildTicket({ customerId: 'customer-1' }));
+        await file();
+        expect(em.query.mock.calls[0][0]).toContain('FOR UPDATE');
+        expect(em.query.mock.invocationCallOrder[0]).toBeLessThan(
+          em.save.mock.invocationCallOrder[0],
+        );
+      });
+    });
+
+    it('keeps the receipt link empty on an ordinary ticket', async () => {
+      facilities.findOne.mockResolvedValue({ id: 'facility-1' });
+      ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
+      em.findOneOrFail.mockResolvedValue(buildTicket({ customerId: 'customer-1' }));
+
+      await service.create(dto, buildActor({ id: 'customer-1' }), 'key-1');
+
+      expect(tickets.create).toHaveBeenCalledWith(
+        expect.objectContaining({ shelfReceiptId: null }),
+      );
+    });
+
+    it('returns the receipt summary on the ticket record', async () => {
+      facilities.findOne.mockResolvedValue({ id: 'facility-1' });
+      ticketTypes.findOne.mockResolvedValue({ id: 'type-1', isActive: true });
+      em.findOneOrFail.mockResolvedValue(
+        buildTicket({
+          shelfReceiptId: 'receipt-1',
+          shelfReceipt: {
+            id: 'receipt-1',
+            code: 'PG-1',
+            type: 'DROP_OFF',
+            status: 'ACTIVE',
+          } as never,
+        }),
+      );
+
+      const { data } = await service.create(dto, buildActor({ id: 'customer-1' }), 'key-1');
+
+      expect(data.ticket).toMatchObject({
+        shelf_receipt_id: 'receipt-1',
+        shelf_receipt: { id: 'receipt-1', code: 'PG-1', type: 'DROP_OFF', status: 'ACTIVE' },
+      });
+    });
 
     it("keeps the customer's own uploads as attachments", async () => {
       facilities.findOne.mockResolvedValue({ id: 'facility-1' });

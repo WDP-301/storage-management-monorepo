@@ -8,8 +8,8 @@ import { isOwnUpload } from './upload.service';
 
 /**
  * Refuses (409 FILE_IN_USE) to delete an upload that is evidence of a finalized inspection —
- * of the inspection itself or of one of its damages — a contract's signed file or a deposit
- * settlement. Files of inspections still being edited may go: staff replace photos while
+ * of the inspection itself or of one of its damages — a contract's signed file, a deposit
+ * settlement or a shelf receipt photo. Files of inspections still being edited may go: staff replace photos while
  * inspecting. Proof of a hand-recorded payment is kept too.
  */
 export async function assertFileKeyUnreferenced(em: EntityManager, fileKey: string): Promise<void> {
@@ -24,13 +24,15 @@ export async function assertFileKeyUnreferenced(em: EntityManager, fileKey: stri
      SELECT 1 FROM contract_settlements s WHERE s.evidence @> $1::jsonb
      UNION ALL
      SELECT 1 FROM payments p WHERE p.metadata->'evidence' @> $1::jsonb
+     UNION ALL
+     SELECT 1 FROM shelf_receipts r WHERE r.photos @> $1::jsonb
      LIMIT 1`,
     [file, damage],
   );
   if (rows.length > 0) {
     throw new DomainException(
       ErrorCode.FILE_IN_USE,
-      'Tệp đang là chứng cứ của biên bản đã chốt, hợp đồng, quyết toán cọc hoặc khoản thanh toán — không thể xoá',
+      'Tệp đang là chứng cứ của biên bản đã chốt, hợp đồng, quyết toán cọc, khoản thanh toán hoặc phiếu gửi / lấy đồ — không thể xoá',
       HttpStatus.CONFLICT,
       { fileKey },
     );
@@ -48,7 +50,7 @@ const STAFF_ROLES: readonly UserRole[] = [
 /**
  * Staff open any upload. Anyone else — a customer, or an account whose staff roles ended — only
  * opens a file they uploaded or one attached to something of theirs: their contracts' signed
- * files, the inspections and settlement of those contracts, their tickets and payments; or a
+ * files, the inspections and settlement of those contracts, their tickets, payments and shelf receipts; or a
  * warehouse photo, which is public catalogue content. 403 otherwise, whether or not the key
  * exists. Customers can only attach their own uploads to a ticket, so the ticket clause cannot be
  * used to reach someone else's file.
@@ -76,6 +78,8 @@ export async function assertCanReadFile(
      SELECT 1 FROM payments p WHERE p.customer_id = $1 AND p.metadata->'evidence' @> $2::jsonb
      UNION ALL
      SELECT 1 FROM storage_units u WHERE u.images @> $2::jsonb
+     UNION ALL
+     SELECT 1 FROM shelf_receipts r WHERE r.customer_id = $1 AND r.photos @> $2::jsonb
      LIMIT 1`,
     [user.id, file, damage],
   );

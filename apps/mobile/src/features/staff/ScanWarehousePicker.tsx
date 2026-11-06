@@ -1,8 +1,8 @@
 import { Button } from 'heroui-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
-import { AccessApi, type ScanWarehouse } from '../../../lib/access-api';
 import { ApiError } from '../../../lib/api';
+import { type ScanWarehouse, ShelfStorageApi } from '../../../lib/shelf-storage-api';
 
 // Kept for the app session so staff switching tabs do not pick the warehouse again.
 let lastWarehouseId: string | null = null;
@@ -29,7 +29,7 @@ export function ScanWarehousePicker({
   const load = useCallback(async () => {
     setError(null);
     try {
-      const list = await AccessApi.scanWarehouses();
+      const list = await ShelfStorageApi.scanWarehouses();
       setWarehouses(list);
       const remembered = list.find((warehouse) => warehouse.id === lastWarehouseId);
       const preset = remembered ?? (list.length === 1 ? list[0] : undefined);
@@ -63,7 +63,7 @@ export function ScanWarehousePicker({
   }
   return (
     <View className="gap-2">
-      <Text className="font-ui text-body-sm text-foreground">Kho đang trực</Text>
+      <Text className="font-ui text-body-sm text-foreground">Kho đang phục vụ</Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}

@@ -1,4 +1,5 @@
 import { ApiError } from '../../../lib/api';
+import { shelfErrorMessage } from '../../../lib/shelf-storage-format';
 
 const DATE_FIELDS = ['returnedOn', 'scheduledAt'];
 
@@ -28,7 +29,8 @@ export function staffErrorMessage(
   if (!(error instanceof ApiError)) return fallback;
   if (error.code === 'FORBIDDEN' || error.statusCode === 403) return forbidden;
   // The API message for this code is already Vietnamese and says exactly what is missing.
-  if (error.code === 'CONTRACT_DOCUMENTS_REQUIRED') return error.message;
+  if (error.code === 'CONTRACT_DOCUMENTS_REQUIRED' || error.code === 'SHELF_NOT_EMPTY')
+    return error.message;
   if (error.code === 'FIRST_RENT_UNPAID')
     return 'Khách chưa thanh toán tiền thuê tháng đầu — thu tiền trước khi chốt biên nhận.';
   if (error.statusCode === 400 && isDateFieldError(error)) return 'Ngày không hợp lệ.';
@@ -47,4 +49,13 @@ export function staffErrorMessage(
     return 'Thao tác bị xung đột — tải lại biên bản rồi thử lại.';
   if (error.statusCode === 400) return 'Thông tin chưa hợp lệ, kiểm tra lại ghi chú và hư hỏng.';
   return error.message || fallback;
+}
+
+/** Message for any failure of the counter flows (scan, receipts, requests, void, recovery). */
+export function shelfApiError(error: unknown, fallback: string): string {
+  if (!(error instanceof ApiError)) return fallback;
+  if (error.code === 'FORBIDDEN' || error.statusCode === 403) {
+    return 'Bạn không có quyền thực hiện thao tác này ở kho này.';
+  }
+  return shelfErrorMessage(error.code, error.details, error.message || fallback);
 }

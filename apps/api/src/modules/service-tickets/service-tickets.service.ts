@@ -247,6 +247,9 @@ export class ServiceTicketsService {
             managerIds,
             ticketCreatedNotification(ticket),
           ),
+        // The check above gives early errors; this one, under the receipt lock, is authoritative
+        // against a concurrent void or a second report that committed in between.
+        link ? (em) => resolveReceiptLink(em, actor.id, dto, { lock: true }) : undefined,
       );
 
       isCommitted = true;
@@ -831,11 +834,13 @@ export class ServiceTicketsService {
     idempotencyKey: string,
     userId: string,
     afterInsert: (em: EntityManager, ticket: ServiceTicketRecord) => Promise<unknown>,
+    beforeInsert?: (em: EntityManager) => Promise<unknown>,
   ): Promise<ServiceTicketResponse> {
     for (let attempt = 1; ; attempt++) {
       const ticket = this.tickets.create({ ...values, ticketNo: this.generateTicketNo() });
       try {
         return await this.dataSource.transaction(async (em) => {
+          await beforeInsert?.(em);
           const saved = await em.save(ticket);
           const full = await em.findOneOrFail(ServiceTicket, {
             where: { id: saved.id },

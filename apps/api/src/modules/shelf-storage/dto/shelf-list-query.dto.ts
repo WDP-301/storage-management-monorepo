@@ -64,7 +64,8 @@ export class ShelfReceiptSearchQueryDto extends ShelfPageQueryDto {
   to?: string;
 
   @ApiPropertyOptional({ description: 'true = only receipts with an open dispute ticket' })
-  @Transform(({ value }) => value === true || value === 'true')
+  // Implicit conversion turns any non-empty string (even "false") into true — read the raw value.
+  @Transform(({ obj, key }) => obj[key] === true || obj[key] === 'true')
   @IsBoolean()
   @IsOptional()
   disputed?: boolean;

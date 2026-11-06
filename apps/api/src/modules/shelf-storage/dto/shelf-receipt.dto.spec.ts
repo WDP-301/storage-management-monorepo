@@ -96,8 +96,18 @@ describe('list query DTOs', () => {
       disputed: 'true',
     };
     await expect(failed(ShelfReceiptSearchQueryDto, query)).resolves.toEqual([]);
-    expect(plainToInstance(ShelfReceiptSearchQueryDto, query).disputed).toBe(true);
-    expect(plainToInstance(ShelfReceiptSearchQueryDto, { disputed: 'false' }).disputed).toBe(false);
+  });
+
+  it.each([
+    ['true', true],
+    ['false', false],
+  ])('reads disputed=%s as %s under the global implicit conversion', (raw, expected) => {
+    const dto = plainToInstance(
+      ShelfReceiptSearchQueryDto,
+      { disputed: raw },
+      { enableImplicitConversion: true },
+    );
+    expect(dto.disputed).toBe(expected);
   });
 
   it('rejects an unknown type or status and a malformed or impossible day', async () => {

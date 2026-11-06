@@ -220,6 +220,17 @@ export const ManagerTicketsPage: React.FC = () => {
     }
   };
 
+  // The receipt card voids a receipt behind this dialog; reload so its status is not stale. The
+  // edit fields are left alone so unsaved changes survive.
+  const refreshSelectedTicket = async (id: string) => {
+    try {
+      const fresh = await TicketsApi.getOne(id);
+      setSelectedTicket((current) => (current?.id === id ? fresh : current));
+    } catch (err: unknown) {
+      console.warn('Failed to refresh ticket detail:', err);
+    }
+  };
+
   const handleOpenAssignModal = (ticket: ServiceTicketRecord) => {
     setAssignModalTicket(ticket);
     setSelectedStaffId(ticket.assigned_to || '');
@@ -1078,7 +1089,10 @@ export const ManagerTicketsPage: React.FC = () => {
                   </div>
                 </div>
 
-                <TicketShelfReceiptCard ticket={selectedTicket} />
+                <TicketShelfReceiptCard
+                  ticket={selectedTicket}
+                  onChanged={() => void refreshSelectedTicket(selectedTicket.id)}
+                />
 
                 {/* Problem Description */}
                 <div className="space-y-1.5">

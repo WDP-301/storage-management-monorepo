@@ -6,7 +6,11 @@ import { ShelfReceiptDetailDialog } from '../shelf-storage/ShelfReceiptDetailDia
 import { RECEIPT_STATUS_LABEL, RECEIPT_TYPE_LABEL } from '../shelf-storage/shelf-records-display';
 
 /** Links a ticket the customer filed about a shelf receipt to that receipt. */
-export const TicketShelfReceiptCard: React.FC<{ ticket: ServiceTicketRecord }> = ({ ticket }) => {
+export const TicketShelfReceiptCard: React.FC<{
+  ticket: ServiceTicketRecord;
+  /** Called after the receipt was voided from the dialog, so the ticket can be reloaded. */
+  onChanged?: () => void;
+}> = ({ ticket, onChanged }) => {
   const [open, setOpen] = useState(false);
   const receipt = ticket.shelf_receipt;
   if (!receipt) return null;
@@ -28,6 +32,7 @@ export const TicketShelfReceiptCard: React.FC<{ ticket: ServiceTicketRecord }> =
       <ShelfReceiptDetailDialog
         receiptId={open ? receipt.id : null}
         onClose={() => setOpen(false)}
+        onChanged={onChanged}
       />
     </div>
   );

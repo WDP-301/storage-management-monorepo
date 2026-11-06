@@ -64,6 +64,13 @@ export function receiptBlockedMessage(
 
 type ErrorLike = { statusCode?: number; message?: string; details?: unknown };
 
+/** True when the API refused because the receipt itself can no longer be reported. */
+export function isDisputeEnding(err: unknown): boolean {
+  const e = (err ?? {}) as ErrorLike;
+  const reason = ((e.details ?? {}) as { reason?: string }).reason;
+  return e.statusCode === 404 || reason === 'RECEIPT_VOIDED' || reason === 'OPEN_DISPUTE_EXISTS';
+}
+
 /** Vietnamese wording for the refusals the ticket API gives when the linked receipt is not valid. */
 export function disputeErrorMessage(err: unknown): string {
   const e = (err ?? {}) as ErrorLike;

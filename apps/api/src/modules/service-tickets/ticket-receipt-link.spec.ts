@@ -86,4 +86,14 @@ describe('resolveReceiptLink', () => {
       storageUnitId: 's-1',
     });
   });
+
+  it('locks the receipt row only when asked to', async () => {
+    const plain = setup(RECEIPT);
+    await resolveReceiptLink(plain.em, 'cust-1', dto);
+    expect(plain.query.mock.calls[0][0]).not.toContain('FOR UPDATE');
+
+    const locked = setup(RECEIPT);
+    await resolveReceiptLink(locked.em, 'cust-1', dto, { lock: true });
+    expect(locked.query.mock.calls[0][0]).toContain('FOR UPDATE');
+  });
 });

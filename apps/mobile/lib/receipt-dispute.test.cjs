@@ -80,6 +80,18 @@ test('refusals map to Vietnamese messages', () => {
   assert.equal(d.disputeErrorMessage(null), 'Không gửi được yêu cầu. Thử lại.');
 });
 
+test('only refusals about the receipt itself end the dispute', () => {
+  assert.equal(d.isDisputeEnding({ statusCode: 404 }), true);
+  assert.equal(d.isDisputeEnding({ statusCode: 409, details: { reason: 'RECEIPT_VOIDED' } }), true);
+  assert.equal(
+    d.isDisputeEnding({ statusCode: 409, details: { reason: 'OPEN_DISPUTE_EXISTS' } }),
+    true,
+  );
+  assert.equal(d.isDisputeEnding({ statusCode: 400, details: { fields: [] } }), false);
+  assert.equal(d.isDisputeEnding({ statusCode: 500 }), false);
+  assert.equal(d.isDisputeEnding(null), false);
+});
+
 test('a loaded receipt that cannot be reported explains why', () => {
   assert.equal(d.receiptBlockedMessage({ status: 'ACTIVE', openDisputeTicket: null }), null);
   assert.equal(

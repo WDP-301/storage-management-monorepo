@@ -32,17 +32,21 @@ interface ReceiptRow {
  * Checks a customer's report of a wrong receipt and returns what the ticket must store.
  * The receipt of another customer reads as unknown (404) so ids reveal nothing. The shelf comes
  * from the receipt, never from the request.
+ *
+ * With `lock`, the receipt row is locked until the surrounding transaction ends: a concurrent
+ * void or second report then waits, and the checks below see its committed outcome.
  */
 export async function resolveReceiptLink(
   em: EntityManager,
   customerId: string,
   dto: { shelfReceiptId?: string; storageUnitId?: string; facilityId: string },
+  options: { lock?: boolean } = {},
 ): Promise<TicketReceiptLink | null> {
   if (!dto.shelfReceiptId) return null;
 
   const [receipt]: ReceiptRow[] = await em.query(
     `SELECT "id", "customer_id", "facility_id", "storage_unit_id", "status"
-       FROM "shelf_receipts" WHERE "id" = $1`,
+       FROM "shelf_receipts" WHERE "id" = $1${options.lock ? ' FOR UPDATE' : ''}`,
     [dto.shelfReceiptId],
   );
   if (!receipt || receipt.customer_id !== customerId) notFound('Receipt', dto.shelfReceiptId);

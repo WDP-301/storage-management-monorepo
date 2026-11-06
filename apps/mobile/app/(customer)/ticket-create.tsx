@@ -7,6 +7,7 @@ import {
   disputeErrorMessage,
   disputeFormOptions,
   disputeSubject,
+  isDisputeEnding,
   supportTypeId,
 } from '../../lib/receipt-dispute';
 import { TicketsApi } from '../../lib/tickets-api';
@@ -55,16 +56,28 @@ export default function TicketCreateRoute() {
   const [leftKey, setLeftKey] = useState<string | null>(null);
   const disputeReceipt = dispute.key !== leftKey ? dispute.receipt : null;
   const disputeNotice = dispute.key !== leftKey ? dispute.notice : null;
-  const activeKey = useRef<string | null>(null);
-  activeKey.current = disputeReceipt ? dispute.key : null;
+  // Tracked from the first render, not once the receipt has loaded: leaving while it still loads
+  // must end the visit too, or the late response would fill the form of a screen nobody is on.
+  const visitKey = useRef<string | null>(null);
+  visitKey.current = dispute.key;
+  const leftKeyRef = useRef<string | null>(null);
   const appliedDispute = useRef<string | null>(null);
   const formOptions =
     options && disputeReceipt ? disputeFormOptions(options, disputeReceipt) : options;
 
   const endDispute = useCallback(() => {
-    if (!activeKey.current) return;
-    setLeftKey(activeKey.current);
+    const key = visitKey.current;
+    // No dispute in the route, or this visit already ended: a normal draft stays untouched.
+    if (!key || key === leftKeyRef.current) return;
+    leftKeyRef.current = key;
+    setLeftKey(key);
     setForm(EMPTY_FORM);
+    if (appliedDispute.current === key) {
+      // The dispute filled the form, so the next ticket must not reuse its key or uploads (the
+      // server would answer 422 for a different body under the same key).
+      idempotencyKey.current = TicketsApi.newIdempotencyKey();
+      uploaded.current.clear();
+    }
   }, []);
   // Leaving the tab ends the report; the next tap on "Báo sai phiếu" brings a new nonce.
   useFocusEffect(useCallback(() => endDispute, [endDispute]));
@@ -87,6 +100,16 @@ export default function TicketCreateRoute() {
       setOptions(await TicketsApi.formOptions());
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Không tải được dữ liệu.');
+    }
+  }, []);
+
+  // Background refresh after a failed submit: it must not clear the submit error, and a failed
+  // refresh keeps the options already shown instead of replacing that error.
+  const refreshOptions = useCallback(async () => {
+    try {
+      setOptions(await TicketsApi.formOptions());
+    } catch {
+      // Stale options are still usable; the submit error stays on screen.
     }
   }, []);
 
@@ -180,7 +203,9 @@ export default function TicketCreateRoute() {
       );
       // The rental window may have moved — refresh options so a stale facility does not
       // keep offering itself. Keep the typed fields intact either way.
-      void loadOptions();
+      void refreshOptions();
+      // The receipt was voided, already reported or is gone: nothing left to report on it.
+      if (disputeReceipt && isDisputeEnding(e)) endDispute();
     } finally {
       setIsSubmitting(false);
     }

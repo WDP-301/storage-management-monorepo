@@ -321,8 +321,24 @@ export const NotificationType = {
   CONTRACT_OVERDUE: 'CONTRACT_OVERDUE',
   /** A visit was still open at closing time and was closed without an exit scan. */
   CHECK_OUT_MISSED: 'CHECK_OUT_MISSED',
+  SHIFT_ASSIGNED: 'SHIFT_ASSIGNED',
+  SHIFT_UPDATED: 'SHIFT_UPDATED',
+  SHIFT_CANCELLED: 'SHIFT_CANCELLED',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
+
+/**
+ * SCHEDULED → CHECKED_IN → COMPLETED; a SCHEDULED shift that ends without a check-in becomes
+ * ABSENT, and only a SCHEDULED shift can be CANCELLED. A forgotten check-out stays CHECKED_IN.
+ */
+export const StaffShiftStatus = {
+  SCHEDULED: 'SCHEDULED',
+  CHECKED_IN: 'CHECKED_IN',
+  COMPLETED: 'COMPLETED',
+  ABSENT: 'ABSENT',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type StaffShiftStatus = (typeof StaffShiftStatus)[keyof typeof StaffShiftStatus];
 
 export const DocumentType = {
   IDENTITY: 'IDENTITY',

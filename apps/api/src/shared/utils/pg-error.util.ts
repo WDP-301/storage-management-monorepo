@@ -4,6 +4,8 @@ export const PG_UNIQUE_VIOLATION = '23505';
 export const PG_FK_VIOLATION = '23503';
 /** PostgreSQL SQLSTATE for check-constraint violations. */
 export const PG_CHECK_VIOLATION = '23514';
+/** PostgreSQL SQLSTATE for exclusion-constraint violations. */
+export const PG_EXCLUSION_VIOLATION = '23P01';
 /** PostgreSQL SQLSTATE for a value out of range for its numeric column. */
 export const PG_NUMERIC_OVERFLOW = '22003';
 
@@ -21,4 +23,8 @@ export function pgErrorCode(error: unknown): string | undefined {
 
 export function isUniqueViolation(error: unknown): boolean {
   return pgErrorCode(error) === PG_UNIQUE_VIOLATION;
+}
+
+export function isExclusionViolation(error: unknown): boolean {
+  return pgErrorCode(error) === PG_EXCLUSION_VIOLATION;
 }

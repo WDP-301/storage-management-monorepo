@@ -46,6 +46,7 @@ import type {
   TicketUserInfo,
   UpdateTicketDto,
 } from '../../types/service-tickets';
+import { TicketShelfReceiptCard } from './TicketShelfReceiptCard';
 
 const PAGE_SIZE = 20;
 
@@ -1076,6 +1077,8 @@ export const ManagerTicketsPage: React.FC = () => {
                     )}
                   </div>
                 </div>
+
+                <TicketShelfReceiptCard ticket={selectedTicket} />
 
                 {/* Problem Description */}
                 <div className="space-y-1.5">

@@ -1,4 +1,4 @@
-import type { PaginationMeta, TicketPriority, TicketStatus } from '@storage/types';
+import type { PaginationMeta, ShelfReceiptRef, TicketPriority, TicketStatus } from '@storage/types';
 
 export interface TicketTypeInfo {
   id: string;
@@ -37,6 +37,9 @@ export interface ServiceTicketRecord {
   type_id: string;
   facility_id: string;
   storage_unit_id: string | null;
+  /** Receipt the customer reported as wrong; absent on responses from older servers. */
+  shelf_receipt_id?: string | null;
+  shelf_receipt?: ShelfReceiptRef | null;
   customer_id: string | null;
   assigned_to: string | null;
   priority: TicketPriority;

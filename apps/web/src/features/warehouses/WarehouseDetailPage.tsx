@@ -22,6 +22,7 @@ import {
   ListBullets,
   MagnifyingGlass,
   MapPin,
+  Package,
   PencilSimple,
   Plus,
   Rows,
@@ -38,6 +39,7 @@ import { hasAllowedRole } from '../../lib/roles';
 import { useAppToast } from '../../lib/toast';
 import { useClientPagination } from '../../lib/use-client-pagination';
 import type { Warehouse, WarehouseStatus } from '../../types/warehouse';
+import { ShelfRecordsTab } from '../shelf-storage/ShelfRecordsTab';
 import { ShelfLayoutEditor } from './ShelfLayoutEditor';
 import {
   type BulkShelfFormState,
@@ -71,7 +73,7 @@ import {
 } from './warehouse-display';
 import { computeDerived, DEPOSIT_DEFAULT, isIdleStatus } from './warehouse-form';
 
-type ActiveTab = 'shelves' | 'layout';
+type ActiveTab = 'shelves' | 'layout' | 'records';
 
 const SHELF_PAGE_SIZE = 20;
 type FormMode = 'none' | 'create' | 'edit' | 'bulk';
@@ -557,6 +559,14 @@ export const WarehouseDetailPage: React.FC = () => {
                 onClick={() => setTab('layout')}
               >
                 Sơ đồ mặt bằng
+              </Button>
+              <Button
+                size="sm"
+                variant={tab === 'records' ? 'primary' : 'secondary'}
+                icon={<Package className="w-4 h-4" />}
+                onClick={() => setTab('records')}
+              >
+                Đồ gửi & phiếu
               </Button>
             </div>
           )}
@@ -1063,6 +1073,8 @@ export const WarehouseDetailPage: React.FC = () => {
           <div hidden={tab !== 'layout'}>
             <ShelfLayoutEditor warehouse={warehouse} shelves={shelves} />
           </div>
+
+          {tab === 'records' && <ShelfRecordsTab warehouseId={warehouse.id} />}
         </>
       ) : (
         /* Self Storage Warehouse Details */

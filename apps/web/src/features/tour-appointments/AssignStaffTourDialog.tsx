@@ -116,9 +116,9 @@ export const AssignStaffTourDialog: React.FC<Props> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-kumo-default mb-1.5">
+                <span className="block text-xs font-medium text-kumo-default mb-1.5">
                   Nhân viên phụ trách đón & dẫn khách <span className="text-kumo-danger">*</span>
-                </label>
+                </span>
                 {isLoadingStaff ? (
                   <Text variant="secondary" size="xs">
                     Đang tải danh sách nhân viên chi nhánh...

@@ -43,6 +43,10 @@ const KNOWN_TYPES: Record<NotificationType, NotificationDisplay> = {
   SHELF_RECEIPT_VOIDED: { label: 'Hủy phiếu', icon: 'overdue', tone: 'warning' },
   PICKUP_REQUEST_READY: { label: 'Đồ sẵn sàng', icon: 'paid', tone: 'success' },
   PICKUP_REQUEST_CREATED: { label: 'Yêu cầu lấy đồ', icon: 'ticket', tone: 'warning' },
+  TOUR_APPOINTMENT_CREATED: { label: 'Lịch xem kho', icon: 'ticket', tone: 'accent' },
+  TOUR_APPOINTMENT_CONFIRMED: { label: 'Xác nhận xem kho', icon: 'ticket', tone: 'success' },
+  TOUR_APPOINTMENT_ASSIGNED: { label: 'Ca dẫn khách', icon: 'ticket', tone: 'warning' },
+  TOUR_APPOINTMENT_CANCELLED: { label: 'Hủy lịch xem kho', icon: 'overdue', tone: 'danger' },
 };
 
 const FALLBACK_DISPLAY: NotificationDisplay = {
@@ -84,6 +88,12 @@ export function notificationHref(
   if (contractId) return `${routes.contract}?id=${encodeURIComponent(contractId)}`;
   const ticketId = idOf(data.ticketId);
   if (ticketId) return `${routes.ticket}?id=${encodeURIComponent(ticketId)}`;
+  const tourAppointmentId = idOf(data.tourAppointmentId);
+  if (tourAppointmentId) {
+    return area === 'staff'
+      ? `/(staff)/staff-tour?id=${encodeURIComponent(tourAppointmentId)}`
+      : '/(customer)/tours';
+  }
   return null;
 }
 

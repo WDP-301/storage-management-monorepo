@@ -136,7 +136,7 @@ describe('TourAppointmentsService', () => {
       ),
     };
 
-    service = new TourAppointmentsService(appointmentsRepo, usersRepo, roleAssignmentsRepo);
+    service = new TourAppointmentsService(appointmentsRepo, roleAssignmentsRepo);
   });
 
   describe('createContactRequest', () => {

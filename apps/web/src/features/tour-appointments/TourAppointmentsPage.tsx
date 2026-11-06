@@ -38,17 +38,12 @@ import { CancelTourDialog } from './CancelTourDialog';
 import { CompleteTourDialog } from './CompleteTourDialog';
 import { ConfirmTourDialog } from './ConfirmTourDialog';
 import { TourAppointmentDetailDialog } from './TourAppointmentDetailDialog';
-import {
-  formatTourDate,
-  formatTourDateTime,
-  TOUR_STATUS_LABELS,
-  TOUR_STATUS_VARIANTS,
-} from './tour-display';
+import { formatTourDate, TOUR_STATUS_LABELS, TOUR_STATUS_VARIANTS } from './tour-display';
 
 const PAGE_SIZE = 20;
 
 export const TourAppointmentsPage: React.FC = () => {
-  const toast = useAppToast();
+  const _toast = useAppToast();
   const { user, activeRole } = useAuth();
   const { selectedFacility } = useFacility();
   const role = activeRole ?? user?.roles?.[0];
@@ -128,8 +123,8 @@ export const TourAppointmentsPage: React.FC = () => {
         a.fullName.toLowerCase().includes(q) ||
         a.phone.includes(q) ||
         a.email.toLowerCase().includes(q) ||
-        (a.storageUnit?.name && a.storageUnit.name.toLowerCase().includes(q)) ||
-        (a.storageUnit?.code && a.storageUnit.code.toLowerCase().includes(q)),
+        a.storageUnit?.name?.toLowerCase().includes(q) ||
+        a.storageUnit?.code?.toLowerCase().includes(q),
     );
   }, [appointments, search]);
 
@@ -230,6 +225,7 @@ export const TourAppointmentsPage: React.FC = () => {
           <div className="relative">
             <Input
               type="text"
+              aria-label="Tìm kiếm lịch hẹn"
               placeholder="Tìm theo tên, SĐT, email..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -406,48 +402,58 @@ export const TourAppointmentsPage: React.FC = () => {
 
                           {!isTerminal && (
                             <DropdownMenu>
-                              <DropdownMenu.Trigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  icon={<DotsThree className="w-4 h-4" />}
-                                  aria-label="Thao tác khác"
-                                />
-                              </DropdownMenu.Trigger>
+                              <DropdownMenu.Trigger
+                                render={
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    icon={<DotsThree className="w-4 h-4" />}
+                                    aria-label="Thao tác khác"
+                                  />
+                                }
+                              />
                               <DropdownMenu.Content align="end" className="w-44">
                                 {apt.status === TourAppointmentStatus.PENDING && (
-                                  <DropdownMenu.Item onClick={() => openAction(apt, 'confirm')}>
-                                    <CalendarCheck className="w-4 h-4 mr-2 text-kumo-info" />
+                                  <DropdownMenu.Item
+                                    icon={CalendarCheck}
+                                    onClick={() => openAction(apt, 'confirm')}
+                                  >
                                     Xác nhận lịch
                                   </DropdownMenu.Item>
                                 )}
 
                                 {(apt.status === TourAppointmentStatus.CONFIRMED ||
                                   apt.status === TourAppointmentStatus.ASSIGNED) && (
-                                  <DropdownMenu.Item onClick={() => openAction(apt, 'confirm')}>
-                                    <Clock className="w-4 h-4 mr-2 text-kumo-info" />
+                                  <DropdownMenu.Item
+                                    icon={Clock}
+                                    onClick={() => openAction(apt, 'confirm')}
+                                  >
                                     Đổi ngày/giờ hẹn
                                   </DropdownMenu.Item>
                                 )}
 
-                                <DropdownMenu.Item onClick={() => openAction(apt, 'assign')}>
-                                  <UserPlus className="w-4 h-4 mr-2 text-kumo-brand" />
+                                <DropdownMenu.Item
+                                  icon={UserPlus}
+                                  onClick={() => openAction(apt, 'assign')}
+                                >
                                   {apt.assignedTo ? 'Đổi nhân viên' : 'Gán nhân viên'}
                                 </DropdownMenu.Item>
 
                                 {(apt.status === TourAppointmentStatus.ASSIGNED ||
                                   apt.status === TourAppointmentStatus.CONFIRMED) && (
-                                  <DropdownMenu.Item onClick={() => openAction(apt, 'complete')}>
-                                    <CheckCircle className="w-4 h-4 mr-2 text-kumo-success" />
+                                  <DropdownMenu.Item
+                                    icon={CheckCircle}
+                                    onClick={() => openAction(apt, 'complete')}
+                                  >
                                     Hoàn tất ca
                                   </DropdownMenu.Item>
                                 )}
 
                                 <DropdownMenu.Item
+                                  icon={XCircle}
                                   onClick={() => openAction(apt, 'cancel')}
                                   className="text-kumo-danger"
                                 >
-                                  <XCircle className="w-4 h-4 mr-2 text-kumo-danger" />
                                   Hủy lịch hẹn
                                 </DropdownMenu.Item>
                               </DropdownMenu.Content>
@@ -465,15 +471,15 @@ export const TourAppointmentsPage: React.FC = () => {
 
         {total > PAGE_SIZE && (
           <div className="p-4 border-t border-kumo-line flex items-center justify-between">
-            <Text variant="secondary" size="xs">
-              Hiển thị {(currentPage - 1) * PAGE_SIZE + 1} -{' '}
-              {Math.min(currentPage * PAGE_SIZE, total)} trên {total} lịch hẹn
-            </Text>
             <Pagination
               page={currentPage}
-              totalPages={Math.ceil(total / PAGE_SIZE)}
-              onPageChange={setCurrentPage}
-            />
+              setPage={setCurrentPage}
+              perPage={PAGE_SIZE}
+              totalCount={total}
+            >
+              <Pagination.Info />
+              <Pagination.Controls />
+            </Pagination>
           </div>
         )}
       </LayerCard>

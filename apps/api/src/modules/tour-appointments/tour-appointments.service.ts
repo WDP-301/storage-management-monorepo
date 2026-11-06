@@ -95,8 +95,6 @@ export class TourAppointmentsService {
   constructor(
     @InjectRepository(TourAppointment)
     private readonly appointments: Repository<TourAppointment>,
-    @InjectRepository(AppUser)
-    private readonly users: Repository<AppUser>,
     @InjectRepository(UserRoleAssignment)
     private readonly roleAssignments: Repository<UserRoleAssignment>,
     @Optional()

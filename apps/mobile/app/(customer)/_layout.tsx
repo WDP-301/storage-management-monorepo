@@ -64,6 +64,7 @@ export default function CustomerTabsLayout() {
                 <RouterTabs.Screen name="tickets" options={{ title: 'Yêu cầu hỗ trợ' }} />
                 <RouterTabs.Screen name="ticket-detail" options={{ title: 'Chi tiết yêu cầu' }} />
                 <RouterTabs.Screen name="ticket-create" options={{ title: 'Tạo yêu cầu' }} />
+                <RouterTabs.Screen name="tours" options={{ title: 'Lịch hẹn xem kho' }} />
               </RouterTabs>
             </SafeAreaView>
           </BrowseSelectionProvider>
@@ -164,7 +165,12 @@ function toCustomerTab(routeName: string | undefined): CustomerTab {
   if (routeName === 'schedule') return 'browse';
   // Paying a deposit belongs to the hold listed under "Kho của tôi", not to browsing.
   if (routeName === 'payment') return 'storage';
-  if (routeName === 'tickets' || routeName === 'ticket-detail' || routeName === 'ticket-create') {
+  if (
+    routeName === 'tickets' ||
+    routeName === 'ticket-detail' ||
+    routeName === 'ticket-create' ||
+    routeName === 'tours'
+  ) {
     return 'settings';
   }
   return 'browse';

@@ -1,5 +1,7 @@
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { Button, useThemeColor } from 'heroui-native';
-import { ArrowLeft, Check, MapPin, Plus } from 'phosphor-react-native';
+import { ArrowLeft, CalendarCheck, Check, MapPin, Plus } from 'phosphor-react-native';
+import { useRef } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView as RNSafeAreaView } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
@@ -7,6 +9,7 @@ import { formatMoney, formatNumber } from '../../../lib/format-vi';
 import { displayMonthlyPrice, isShelfWarehouse } from '../../../lib/shelf-rental';
 import { WarehouseGallery } from '../../components/WarehousePhotos';
 import type { Warehouse } from '../../types/storage-api';
+import { TourAppointmentSheet } from './TourAppointmentSheet';
 import { WarehouseAmenityList } from './WarehouseAmenityList';
 import { WarehouseSpecs } from './WarehouseCard';
 
@@ -37,6 +40,7 @@ export function WarehouseDetailScreen({
   onClose,
 }: Props) {
   const [accent, muted, onAccent] = useThemeColor(['accent', 'muted', 'accent-foreground']);
+  const tourSheetRef = useRef<BottomSheetModal>(null);
 
   return (
     <Modal
@@ -126,22 +130,54 @@ export function WarehouseDetailScreen({
                   Bạn đang có đơn giữ kho. Hoàn tất hoặc hủy đơn trong Kho của tôi để chọn thêm.
                 </Text>
               ) : null}
-              <Button
-                isDisabled={isDisabled}
-                variant={isSelected ? 'secondary' : 'primary'}
-                onPress={() => onToggle(warehouse)}
-              >
-                {isSelected ? (
-                  <Check color={accent} size={16} weight="bold" />
-                ) : (
-                  <Plus color={isDisabled ? muted : onAccent} size={16} weight="bold" />
-                )}
-                <Button.Label className="font-ui">
-                  {isSelected ? 'Đã chọn — bấm để bỏ chọn' : 'Chọn kho này'}
-                </Button.Label>
+              <View className="flex-row gap-2">
+                <Button
+                  variant="secondary"
+                  onPress={() => tourSheetRef.current?.present()}
+                  className="flex-1"
+                >
+                  <CalendarCheck color={accent} size={16} weight="bold" />
+                  <Button.Label className="font-ui">Xem thực tế</Button.Label>
+                </Button>
+                <Button
+                  isDisabled={isDisabled}
+                  variant={isSelected ? 'secondary' : 'primary'}
+                  onPress={() => onToggle(warehouse)}
+                  className="flex-1"
+                >
+                  {isSelected ? (
+                    <Check color={accent} size={16} weight="bold" />
+                  ) : (
+                    <Plus color={isDisabled ? muted : onAccent} size={16} weight="bold" />
+                  )}
+                  <Button.Label className="font-ui">
+                    {isSelected ? 'Bỏ chọn' : 'Chọn kho này'}
+                  </Button.Label>
+                </Button>
+              </View>
+            </View>
+          ) : (
+            <View className="gap-2 border-t border-border bg-surface px-4 pt-3 pb-2">
+              <Button variant="secondary" onPress={() => tourSheetRef.current?.present()}>
+                <CalendarCheck color={accent} size={16} weight="bold" />
+                <Button.Label className="font-ui">Đặt lịch xem kho thực tế</Button.Label>
               </Button>
             </View>
-          ) : null}
+          )}
+
+          <TourAppointmentSheet
+            sheetRef={tourSheetRef}
+            facility={warehouse?.facility ?? null}
+            storageUnit={
+              warehouse
+                ? {
+                    id: warehouse.id,
+                    name: warehouse.name,
+                    code: warehouse.code,
+                  }
+                : null
+            }
+          />
         </SafeAreaView>
       ) : null}
     </Modal>

@@ -1,6 +1,8 @@
 import type { TourAppointmentStatus } from './domain.enums';
 import type { PaginationMeta } from './index';
 
+export const VIETNAMESE_PHONE_PATTERN = /(84|0[3|5|7|8|9])+([0-9]{8})\b/;
+
 export interface TourAppointmentFacilityInfo {
   id: string;
   code: string;
@@ -92,3 +94,6 @@ export interface ListTourAppointmentsQuery {
   fromDate?: string;
   toDate?: string;
 }
+
+export type CreateContactTourDto = CreateContactTourInput;
+export type TourAppointmentQueryOptions = ListTourAppointmentsQuery;

@@ -86,9 +86,9 @@ export const CancelTourDialog: React.FC<Props> = ({ open, appointment, onClose, 
           <DialogBody>
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-kumo-default mb-1.5">
+                <span className="block text-xs font-medium text-kumo-default mb-1.5">
                   Gợi ý lý do nhanh:
-                </label>
+                </span>
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {QUICK_REASONS.map((reason) => (
                     <button
@@ -102,9 +102,9 @@ export const CancelTourDialog: React.FC<Props> = ({ open, appointment, onClose, 
                   ))}
                 </div>
 
-                <label className="block text-xs font-medium text-kumo-default mb-1.5">
+                <span className="block text-xs font-medium text-kumo-default mb-1.5">
                   Lý do hủy hoặc ghi chú vắng mặt <span className="text-kumo-danger">*</span>
-                </label>
+                </span>
                 <Textarea
                   rows={3}
                   placeholder="Nhập chi tiết lý do hủy..."

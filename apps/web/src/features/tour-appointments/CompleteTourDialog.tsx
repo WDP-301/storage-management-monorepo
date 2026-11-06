@@ -64,16 +64,22 @@ export const CompleteTourDialog: React.FC<Props> = ({ open, appointment, onClose
                 Khách hàng: {appointment.fullName} · {appointment.phone}
               </Text>
             </div>
-            <Button type="button" variant="ghost" aria-label="Đóng" icon={<X />} onClick={onClose} />
+            <Button
+              type="button"
+              variant="ghost"
+              aria-label="Đóng"
+              icon={<X />}
+              onClick={onClose}
+            />
           </DialogHeader>
 
           <DialogBody>
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-kumo-default mb-1.5">
+                <span className="block text-xs font-medium text-kumo-default mb-1.5">
                   Ghi chú kết quả tư vấn & Phản hồi của khách{' '}
                   <span className="text-kumo-danger">*</span>
-                </label>
+                </span>
                 <Textarea
                   rows={4}
                   placeholder="Ví dụ: Khách ưng ý phòng U-102 và độ an ninh. Khách dự kiến ký hợp đồng vào ngày mai..."

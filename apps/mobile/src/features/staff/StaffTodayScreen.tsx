@@ -1,29 +1,59 @@
-import { useMemo, useState } from 'react';
+import type { TourAppointmentRecord } from '@storage/types';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { todayIso } from '../../../lib/rental-schedule';
+import { TourAppointmentsApi } from '../../../lib/tour-appointments-api';
 import type { InspectionKind, StaffInspection } from '../../types/inspection-api';
 import { ChipButton } from '../customer/FilterChips';
 import { InspectionListItem } from './InspectionListItem';
 import { groupBySchedule, SCHEDULE_GROUP_LABEL } from './inspection-display';
+import { StaffTourListItem } from './StaffTourListItem';
 import { useStaffInspections } from './use-staff-inspections';
 
-type Segment = 'handover' | 'return' | 'done';
+type Segment = 'handover' | 'return' | 'tours' | 'done';
 
-const SEGMENT_KIND: Record<Exclude<Segment, 'done'>, InspectionKind> = {
+const SEGMENT_KIND: Record<Exclude<Segment, 'done' | 'tours'>, InspectionKind> = {
   handover: 'PRE_HANDOVER',
   return: 'RETURN',
 };
 
-type Props = { onOpen: (contractId: string) => void };
+type Props = {
+  onOpen: (contractId: string) => void;
+  onOpenTour?: (tourId: string) => void;
+};
 
-/** Today tab: the handovers and returns to carry out, grouped by appointment day. */
-export function StaffTodayScreen({ onOpen }: Props) {
+/** Today tab: the handovers, returns and tour appointments to carry out. */
+export function StaffTodayScreen({ onOpen, onOpenTour }: Props) {
   const [segment, setSegment] = useState<Segment>('handover');
   const { items, isLoading, error, refetch } = useStaffInspections(
     segment === 'done' ? 'done' : 'open',
   );
 
+  const [tours, setTours] = useState<TourAppointmentRecord[]>([]);
+  const [isToursLoading, setIsToursLoading] = useState(false);
+  const [toursError, setToursError] = useState<string | null>(null);
+
+  const fetchTours = useCallback(async () => {
+    setIsToursLoading(true);
+    setToursError(null);
+    try {
+      const res = await TourAppointmentsApi.list({ limit: 50 });
+      setTours(res.appointments);
+    } catch (_err) {
+      setToursError('Không tải được danh sách ca dẫn khách.');
+    } finally {
+      setIsToursLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (segment === 'tours') {
+      void fetchTours();
+    }
+  }, [segment, fetchTours]);
+
   const groups = useMemo(() => {
+    if (segment === 'tours') return [];
     if (segment === 'done') return [{ title: null, items }];
     const ofKind = items.filter((item) => item.type === SEGMENT_KIND[segment]);
     return groupBySchedule(ofKind, todayIso()).map((bucket) => ({
@@ -31,25 +61,37 @@ export function StaffTodayScreen({ onOpen }: Props) {
       items: bucket.items,
     }));
   }, [items, segment]);
+
   const open = (item: StaffInspection) => {
     if (item.contract) onOpen(item.contract.id);
     else Alert.alert('Không mở được', 'Biên bản này chưa gắn với hợp đồng nào.');
   };
-  const isEmpty = groups.every((group) => group.items.length === 0);
+
+  const isEmpty =
+    segment === 'tours' ? tours.length === 0 : groups.every((group) => group.items.length === 0);
+  const activeLoading = segment === 'tours' ? isToursLoading : isLoading;
+  const activeError = segment === 'tours' ? toursError : error;
+
+  const handleRefresh = () => {
+    if (segment === 'tours') void fetchTours();
+    else void refetch();
+  };
 
   return (
     <ScrollView
       contentContainerStyle={{ paddingBottom: 24 }}
-      refreshControl={<RefreshControl refreshing={isLoading && !isEmpty} onRefresh={refetch} />}
+      refreshControl={
+        <RefreshControl refreshing={activeLoading && !isEmpty} onRefresh={handleRefresh} />
+      }
       showsVerticalScrollIndicator={false}
     >
       <View className="px-4 pb-4 pt-5">
         <Text className="text-title-md font-strong tracking-tight text-foreground">Hôm nay</Text>
         <Text className="font-body mt-1 text-body-sm text-muted">
-          Lượt nhận và trả kho cần lập biên bản.
+          Lượt nhận kho, trả kho và các ca dẫn khách tham quan.
         </Text>
 
-        <View className="mt-4 flex-row gap-2">
+        <View className="mt-4 flex-row flex-wrap gap-2">
           <ChipButton
             label="Nhận kho"
             isSelected={segment === 'handover'}
@@ -61,26 +103,39 @@ export function StaffTodayScreen({ onOpen }: Props) {
             onPress={() => setSegment('return')}
           />
           <ChipButton
+            label="Dẫn khách"
+            isSelected={segment === 'tours'}
+            onPress={() => setSegment('tours')}
+          />
+          <ChipButton
             label="Đã xong"
             isSelected={segment === 'done'}
             onPress={() => setSegment('done')}
           />
         </View>
 
-        {error ? (
+        {activeError ? (
           <View className="mt-4 rounded-xl border border-danger/30 bg-danger/5 px-4 py-3">
-            <Text className="font-body text-body-sm text-danger">{error}</Text>
+            <Text className="font-body text-body-sm text-danger">{activeError}</Text>
           </View>
         ) : null}
 
-        {isLoading && isEmpty ? (
+        {activeLoading && isEmpty ? (
           <ActivityIndicator className="mt-12" />
         ) : isEmpty ? (
           <Text className="font-body mt-12 text-center text-body-sm text-muted">
-            {segment === 'done'
-              ? 'Chưa có biên bản nào được chốt.'
-              : 'Không có lượt nào cần xử lý.'}
+            {segment === 'tours'
+              ? 'Không có ca dẫn khách nào được gán.'
+              : segment === 'done'
+                ? 'Chưa có biên bản nào được chốt.'
+                : 'Không có lượt nào cần xử lý.'}
           </Text>
+        ) : segment === 'tours' ? (
+          <View className="mt-5 gap-3">
+            {tours.map((t) => (
+              <StaffTourListItem key={t.id} appointment={t} onPress={() => onOpenTour?.(t.id)} />
+            ))}
+          </View>
         ) : (
           groups.map((group) => (
             <View key={group.title ?? 'all'} className="mt-5 gap-3">

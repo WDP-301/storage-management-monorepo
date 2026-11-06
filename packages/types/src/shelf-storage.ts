@@ -6,6 +6,7 @@ import type {
 } from './domain.enums';
 import type { PaginationMeta } from './index';
 import type { EvidenceFile } from './return-request';
+import type { ShelfDisputeTicketRef } from './shelf-records';
 
 // Staff-managed shelf storage: counter sessions, drop-off / pick-up receipts, pick-up requests.
 // Dates arrive as ISO strings.
@@ -67,6 +68,8 @@ export interface ShelfReceiptView {
   /** A manager's scan-less pick-up on an abandoned return. */
   recovered: boolean;
   void: { at: string | Date; by: ShelfStaffRef | null; reason: string } | null;
+  /** Newest open service ticket the customer filed about this receipt; null = none open. */
+  openDisputeTicket: ShelfDisputeTicketRef | null;
 }
 
 /** An open RETURN with source ABANDONED and goods still on the shelf. */

@@ -86,4 +86,30 @@ describe('list query DTOs', () => {
       'search',
     ]);
   });
+
+  it('accepts the receipt filters and reads disputed as a boolean', async () => {
+    const query = {
+      type: 'PICK_UP',
+      status: 'ACTIVE',
+      from: '2026-11-01',
+      to: '2026-11-07',
+      disputed: 'true',
+    };
+    await expect(failed(ShelfReceiptSearchQueryDto, query)).resolves.toEqual([]);
+    expect(plainToInstance(ShelfReceiptSearchQueryDto, query).disputed).toBe(true);
+    expect(plainToInstance(ShelfReceiptSearchQueryDto, { disputed: 'false' }).disputed).toBe(false);
+  });
+
+  it('rejects an unknown type or status and a malformed or impossible day', async () => {
+    await expect(failed(ShelfReceiptSearchQueryDto, { type: 'X', status: 'Y' })).resolves.toEqual([
+      'type',
+      'status',
+    ]);
+    await expect(
+      failed(ShelfReceiptSearchQueryDto, { from: '2026-13-01', to: '1/2/2026' }),
+    ).resolves.toEqual(['from', 'to']);
+    await expect(failed(ShelfReceiptSearchQueryDto, { from: '2026-02-30' })).resolves.toEqual([
+      'from',
+    ]);
+  });
 });

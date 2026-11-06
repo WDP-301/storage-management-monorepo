@@ -8,15 +8,19 @@ import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
 import {
   type ShelfContractStorageView,
   type ShelfReceiptPage,
+  type ShelfReceiptStatus,
+  type ShelfReceiptType,
   type ShelfReceiptView,
   StorageUnitKind,
   UserRole,
+  type WarehouseShelfStockView,
 } from '@storage/types';
 import { DataSource, type EntityManager } from 'typeorm';
 import { loadPickupRequests } from './pickup-request.read';
 import { findShelfContracts, loadStock, type ShelfContractRow } from './shelf-contract.query';
-import { loadReceipts } from './shelf-receipt.read';
+import { loadReceipts, type ReceiptQuery } from './shelf-receipt.read';
 import { pickupRequestBlock } from './shelf-rules';
+import { loadWarehouseStock } from './warehouse-stock.read';
 
 const STAFF_ROLES: readonly UserRole[] = [
   UserRole.FACILITY_STAFF,
@@ -56,6 +60,11 @@ export interface PageQuery {
   page?: number;
   limit?: number;
   search?: string;
+  type?: ShelfReceiptType;
+  status?: ShelfReceiptStatus;
+  from?: string;
+  to?: string;
+  disputed?: boolean;
 }
 
 @Injectable()
@@ -120,12 +129,31 @@ export class ShelfStorageReadsService {
     query: PageQuery,
   ): Promise<ShelfReceiptPage> {
     const em = this.dataSource.manager;
+    await this.readableWarehouse(em, actor, warehouseId);
+    const { type, status, from, to, disputed, search } = query;
+    return this.page(em, { warehouseId, search, type, status, from, to, disputed }, query);
+  }
+
+  /** Every ACTIVE shelf contract of the warehouse with what is stored on it. */
+  async listWarehouseStock(
+    actor: AuthUser,
+    warehouseId: string,
+  ): Promise<WarehouseShelfStockView[]> {
+    const em = this.dataSource.manager;
+    await this.readableWarehouse(em, actor, warehouseId);
+    return loadWarehouseStock(em, warehouseId);
+  }
+
+  private async readableWarehouse(
+    em: EntityManager,
+    actor: AuthUser,
+    warehouseId: string,
+  ): Promise<void> {
     const warehouse = await em.findOne(StorageUnit, {
       where: { id: warehouseId, kind: StorageUnitKind.SHELF_WAREHOUSE },
     });
     if (!warehouse) notFound('Warehouse', warehouseId);
     await assertWorksAtFacility(em, actor, warehouse.facilityId);
-    return this.page(em, { warehouseId, search: query.search }, query);
   }
 
   private async readableContract(
@@ -146,7 +174,7 @@ export class ShelfStorageReadsService {
 
   private async page(
     em: EntityManager,
-    filter: { contractIds?: string[]; warehouseId?: string; search?: string },
+    filter: Omit<ReceiptQuery, 'ids' | 'page' | 'limit' | 'recentPerContract'>,
     { page = 1, limit = 20 }: PageQuery,
   ): Promise<ShelfReceiptPage> {
     const { receipts, total } = await loadReceipts(em, { ...filter, page, limit });

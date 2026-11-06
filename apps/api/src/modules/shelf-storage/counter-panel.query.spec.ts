@@ -93,6 +93,7 @@ const receiptRow = (id: string, contractId: string) => ({
   photos: [],
   pickupRequestId: null,
   recovered: false,
+  openDisputeTicket: null,
   voidedAt: null,
   voidedById: null,
   voidedByName: null,

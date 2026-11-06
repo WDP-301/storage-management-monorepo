@@ -9,6 +9,7 @@ const receipt = (over: Partial<ShelfReceiptView> = {}): ShelfReceiptView =>
     contractId: 'c-1',
     shelf: { id: 's-1', code: 'K-1', name: 'Kệ 1' },
     recovered: false,
+    openDisputeTicket: null,
     lines: [
       { itemId: 'i-1', name: 'Sách', quantity: 2 },
       { itemId: 'i-2', name: 'Chăn', quantity: 1 },

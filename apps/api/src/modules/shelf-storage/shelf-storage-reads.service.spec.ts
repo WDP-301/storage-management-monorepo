@@ -6,12 +6,14 @@ import { loadPickupRequests } from './pickup-request.read';
 import { findShelfContracts, loadStock } from './shelf-contract.query';
 import { loadReceipts } from './shelf-receipt.read';
 import { ShelfStorageReadsService } from './shelf-storage-reads.service';
+import { loadWarehouseStock } from './warehouse-stock.read';
 
 jest.mock('@modules/access/overdue-invoices.query');
 jest.mock('@modules/access/staff-facility.util');
 jest.mock('./pickup-request.read');
 jest.mock('./shelf-contract.query');
 jest.mock('./shelf-receipt.read');
+jest.mock('./warehouse-stock.read');
 
 const customer = { id: 'cust-1', roles: [UserRole.CUSTOMER] } as AuthUser;
 const staff = { id: 'staff-1', roles: [UserRole.FACILITY_STAFF] } as AuthUser;
@@ -151,12 +153,52 @@ describe('ShelfStorageReadsService', () => {
     it('checks the facility scope and filters by warehouse and search', async () => {
       await service.listWarehouseReceipts(staff, 'w-1', { search: 'An' });
       expect(assertWorksAtFacility).toHaveBeenCalledWith(em, staff, 'f-1');
-      expect(loadReceipts).toHaveBeenCalledWith(em, {
-        warehouseId: 'w-1',
-        search: 'An',
-        page: 1,
-        limit: 20,
+      expect(loadReceipts).toHaveBeenCalledWith(
+        em,
+        expect.objectContaining({ warehouseId: 'w-1', search: 'An', page: 1, limit: 20 }),
+      );
+    });
+
+    it('passes the filters through', async () => {
+      await service.listWarehouseReceipts(staff, 'w-1', {
+        type: 'PICK_UP' as never,
+        status: 'ACTIVE' as never,
+        from: '2026-11-01',
+        to: '2026-11-07',
+        disputed: true,
       });
+      expect(loadReceipts).toHaveBeenCalledWith(
+        em,
+        expect.objectContaining({
+          type: 'PICK_UP',
+          status: 'ACTIVE',
+          from: '2026-11-01',
+          to: '2026-11-07',
+          disputed: true,
+        }),
+      );
+    });
+  });
+
+  describe('listWarehouseStock', () => {
+    it('404s a warehouse that is not a shelf warehouse', async () => {
+      em.findOne.mockResolvedValueOnce(null);
+      await expect(service.listWarehouseStock(staff, 'w-1')).rejects.toMatchObject({ status: 404 });
+      expect(loadWarehouseStock).not.toHaveBeenCalled();
+    });
+
+    it('403s staff of another facility before reading any stock', async () => {
+      jest.mocked(assertWorksAtFacility).mockRejectedValueOnce(new Error('forbidden'));
+      await expect(service.listWarehouseStock(staff, 'w-1')).rejects.toThrow('forbidden');
+      expect(loadWarehouseStock).not.toHaveBeenCalled();
+    });
+
+    it('returns the stock of the warehouse after the facility check', async () => {
+      const rows = [{ contractId: 'c-1' }];
+      jest.mocked(loadWarehouseStock).mockResolvedValueOnce(rows as never);
+      await expect(service.listWarehouseStock(staff, 'w-1')).resolves.toBe(rows);
+      expect(assertWorksAtFacility).toHaveBeenCalledWith(em, staff, 'f-1');
+      expect(loadWarehouseStock).toHaveBeenCalledWith(em, 'w-1');
     });
   });
 });

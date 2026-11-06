@@ -132,6 +132,16 @@ export class ShelfCounterController {
     return this.reads.listWarehouseReceipts(user, id, query);
   }
 
+  @Get('warehouses/:id/stock')
+  @Roles(...STAFF)
+  @ApiOperation({
+    summary: 'Stock of a warehouse: one row per active shelf contract, shelf code ascending',
+    description: 'Empty shelves are included. 404 for a warehouse that is not a shelf warehouse.',
+  })
+  listWarehouseStock(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.reads.listWarehouseStock(user, id);
+  }
+
   @Get('warehouses/:id/abandoned-contracts')
   @Roles(...MANAGERS)
   @ApiOperation({

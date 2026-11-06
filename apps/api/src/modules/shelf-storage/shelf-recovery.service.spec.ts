@@ -23,6 +23,7 @@ const recovered = {
   code: 'PL-1',
   type: 'PICK_UP',
   recovered: true,
+  openDisputeTicket: null,
   shelf: { code: 'K-1' },
   lines: [],
 };

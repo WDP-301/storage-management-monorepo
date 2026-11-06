@@ -1,5 +1,6 @@
 import { AppUser } from '@entities/app-user.entity';
 import { Facility } from '@entities/facility.entity';
+import { ShelfReceipt } from '@entities/shelf-receipt.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { TicketPriority, TicketStatus } from '@storage/types';
 import {
@@ -29,6 +30,9 @@ export class ServiceTicket {
 
   @Column({ type: 'uuid', nullable: true, name: 'storage_unit_id' })
   storageUnitId?: string;
+
+  @Column({ type: 'uuid', nullable: true, name: 'shelf_receipt_id' })
+  shelfReceiptId?: string | null;
 
   @Column({ type: 'uuid', nullable: true, name: 'customer_id' })
   customerId?: string;
@@ -77,6 +81,10 @@ export class ServiceTicket {
   @ManyToOne(() => StorageUnit, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'storage_unit_id' })
   storageUnit?: StorageUnit;
+
+  @ManyToOne(() => ShelfReceipt, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'shelf_receipt_id' })
+  shelfReceipt?: ShelfReceipt | null;
 
   @ManyToOne(() => AppUser, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'customer_id' })

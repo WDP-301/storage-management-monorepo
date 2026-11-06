@@ -30,6 +30,11 @@ const raw = (over: Record<string, unknown> = {}) => ({
   voidedById: null,
   voidedByName: null,
   voidReason: null,
+  disputeId: null,
+  disputeTicketNo: null,
+  disputeStatus: null,
+  disputeSubject: null,
+  disputeCreatedAt: null,
   ...over,
 });
 
@@ -54,6 +59,7 @@ describe('loadReceipts', () => {
         photos: [],
         void: null,
         recovered: false,
+        openDisputeTicket: null,
         shelf: { id: 's-1', code: 'K-1', name: 'Kệ 1' },
         customer: { id: 'u-1', fullName: 'An', phone: '0900' },
         performedBy: { id: 'st-1', fullName: 'Bình' },
@@ -85,12 +91,13 @@ describe('loadReceipts', () => {
     expect(query).toHaveBeenCalledTimes(1);
   });
 
-  it('filters by warehouse and escapes the search term over code, name and phone', async () => {
+  it('filters by warehouse and escapes the search term over code, name, phone and contract no', async () => {
     const { em, query } = setup([raw()]);
     await loadReceipts(em, { warehouseId: 'w-1', search: ' 50%_ ' });
     const [sql, params] = call(query, 'FROM "shelf_receipts" r');
     expect(sql).toContain('r."warehouse_id" = $1');
     expect(sql).toContain('r."code" ILIKE $2 OR cu."full_name" ILIKE $2 OR cu."phone" ILIKE $2');
+    expect(sql).toContain('OR c."contract_no" ILIKE $2)');
     expect(params).toEqual(['w-1', '%50\\%\\_%']);
   });
 
@@ -110,5 +117,72 @@ describe('loadReceipts', () => {
     expect(sql).toContain('PARTITION BY "contract_id" ORDER BY "created_at" DESC');
     expect(sql).toContain('t.rn <= $2');
     expect(params).toEqual([['c-1', 'c-2'], 5]);
+  });
+
+  it('maps the newest open dispute ticket onto the receipt', async () => {
+    const createdAt = new Date('2026-11-07T06:00:00Z');
+    const { em } = setup([
+      raw({
+        disputeId: 't-1',
+        disputeTicketNo: 'ST-1',
+        disputeStatus: 'OPEN',
+        disputeSubject: 'Sai số lượng',
+        disputeCreatedAt: createdAt,
+      }),
+    ]);
+    const [receipt] = (await loadReceipts(em, {})).receipts;
+    expect(receipt.openDisputeTicket).toEqual({
+      id: 't-1',
+      ticketNo: 'ST-1',
+      status: 'OPEN',
+      subject: 'Sai số lượng',
+      createdAt,
+    });
+  });
+
+  it('joins the open dispute only in the row query, picking the newest open ticket', async () => {
+    const { em, query } = setup([raw()], [], 3);
+    await loadReceipts(em, { warehouseId: 'w-1', page: 1, limit: 20 });
+    const [rowSql] = call(query, 'ORDER BY r."created_at" DESC');
+    expect(rowSql).toContain('LEFT JOIN LATERAL');
+    expect(rowSql).toContain(`t."status" IN ('OPEN','ASSIGNED','IN_PROGRESS')`);
+    expect(rowSql).toContain('ORDER BY t."created_at" DESC, t."id" DESC LIMIT 1');
+    const [countSql] = call(query, 'count(*)');
+    expect(countSql).not.toContain('LATERAL');
+  });
+
+  it('filters by type, status and an inclusive Vietnam day range', async () => {
+    const { em, query } = setup([raw()]);
+    await loadReceipts(em, {
+      type: 'PICK_UP' as never,
+      status: 'ACTIVE' as never,
+      from: '2026-11-01',
+      to: '2026-11-07',
+    });
+    const [sql, params] = call(query, 'ORDER BY r."created_at" DESC');
+    expect(sql).toContain('r."type" = $1');
+    expect(sql).toContain('r."status" = $2');
+    expect(sql).toContain('r."created_at" >= $3');
+    expect(sql).toContain('r."created_at" < $4');
+    expect(params).toEqual([
+      'PICK_UP',
+      'ACTIVE',
+      new Date('2026-10-31T17:00:00.000Z'),
+      new Date('2026-11-07T17:00:00.000Z'),
+    ]);
+  });
+
+  it('keeps only disputed receipts with an EXISTS on open tickets', async () => {
+    const { em, query } = setup([raw()]);
+    await loadReceipts(em, { disputed: true });
+    const [sql] = call(query, 'ORDER BY r."created_at" DESC');
+    expect(sql).toMatch(
+      /EXISTS \(SELECT 1 FROM "service_tickets" t WHERE t\."shelf_receipt_id" = r\."id"/,
+    );
+    await loadReceipts(em, { disputed: false });
+    const last = query.mock.calls
+      .filter(([q]) => q.includes('ORDER BY r."created_at" DESC'))
+      .at(-1);
+    expect(last?.[0]).not.toContain('EXISTS');
   });
 });

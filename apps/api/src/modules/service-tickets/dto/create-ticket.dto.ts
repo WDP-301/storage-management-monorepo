@@ -26,6 +26,15 @@ export class CreateTicketDto {
   @IsUUID('all')
   storageUnitId?: string;
 
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      "Own shelf receipt being reported as wrong. The unit comes from the receipt, so storageUnitId must be omitted and facilityId must be the receipt's",
+  })
+  @IsOptional()
+  @IsUUID('all')
+  shelfReceiptId?: string;
+
   @ApiProperty({ format: 'uuid', description: 'ticket_types.id reference' })
   @IsUUID('all')
   typeId: string;

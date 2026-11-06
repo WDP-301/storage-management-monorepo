@@ -1,19 +1,28 @@
+import { addVietnamDays, fromVietnamDate } from '@shared/utils/calendar.util';
 import { escapeLikePattern } from '@shared/utils/like-pattern.util';
-import type {
-  EvidenceFile,
-  ShelfReceiptLineView,
-  ShelfReceiptStatus,
-  ShelfReceiptType,
-  ShelfReceiptView,
+import {
+  type ShelfReceiptLineView,
+  type ShelfReceiptStatus,
+  type ShelfReceiptType,
+  type ShelfReceiptView,
+  TicketStatus,
 } from '@storage/types';
 import type { EntityManager } from 'typeorm';
+import { type RawReceipt, toReceiptView } from './shelf-receipt-row';
 
 export interface ReceiptQuery {
   ids?: string[];
   contractIds?: string[];
   warehouseId?: string;
-  /** Customer name, phone or receipt code contains. */
+  /** Customer name, phone, receipt code or contract number contains. */
   search?: string;
+  type?: ShelfReceiptType;
+  status?: ShelfReceiptStatus;
+  /** Vietnam days YYYY-MM-DD, both inclusive. */
+  from?: string;
+  to?: string;
+  /** Only receipts that have an open dispute ticket. */
+  disputed?: boolean;
   /** Keeps only the newest N receipts of each contract. */
   recentPerContract?: number;
   /** With `limit`: one page, and the total is counted. */
@@ -21,37 +30,9 @@ export interface ReceiptQuery {
   limit?: number;
 }
 
-interface RawReceipt {
-  id: string;
-  code: string;
-  type: ShelfReceiptType;
-  status: ShelfReceiptStatus;
-  contractId: string;
-  contractNo: string;
-  shelfId: string;
-  shelfCode: string;
-  shelfName: string;
-  warehouseId: string;
-  warehouseCode: string;
-  warehouseName: string;
-  facilityId: string;
-  facilityCode: string;
-  facilityName: string;
-  customerId: string;
-  customerName: string | null;
-  customerPhone: string | null;
-  performedById: string | null;
-  performedByName: string | null;
-  createdAt: Date;
-  note: string | null;
-  photos: EvidenceFile[];
-  pickupRequestId: string | null;
-  recovered: boolean;
-  voidedAt: Date | null;
-  voidedById: string | null;
-  voidedByName: string | null;
-  voidReason: string | null;
-}
+const OPEN_STATUSES_SQL = [TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS]
+  .map((status) => `'${status}'`)
+  .join(',');
 
 // Shelf, warehouse and facility come from the receipt's own snapshot columns, so a receipt
 // reads the same after a unit change. Contracts are joined without the soft-delete filter.
@@ -64,8 +45,12 @@ const FROM = `FROM "shelf_receipts" r
   LEFT JOIN "app_users" pb ON pb."id" = r."performed_by"
   LEFT JOIN "app_users" vb ON vb."id" = r."voided_by"`;
 
-const staffRef = (id: string | null, fullName: string | null) =>
-  id ? { id, fullName: fullName ?? '' } : null;
+// The newest open ticket the customer filed about the receipt; served by the partial index on
+// the ticket's receipt column. Only the row query joins it: the count does not need it.
+const DISPUTE_JOIN = `LEFT JOIN LATERAL (
+    SELECT t."id", t."ticket_no", t."status", t."subject", t."created_at" FROM "service_tickets" t
+     WHERE t."shelf_receipt_id" = r."id" AND t."status" IN (${OPEN_STATUSES_SQL})
+     ORDER BY t."created_at" DESC, t."id" DESC LIMIT 1) dt ON true`;
 
 /**
  * Receipts with their lines, newest first. Two queries however many receipts: the receipts, then
@@ -87,9 +72,17 @@ export async function loadReceipts(
   const term = query.search?.trim();
   if (term) {
     add(
-      '(r."code" ILIKE ? OR cu."full_name" ILIKE ? OR cu."phone" ILIKE ?)',
+      '(r."code" ILIKE ? OR cu."full_name" ILIKE ? OR cu."phone" ILIKE ? OR c."contract_no" ILIKE ?)',
       `%${escapeLikePattern(term)}%`,
     );
+  }
+  if (query.type) add('r."type" = ?', query.type);
+  if (query.status) add('r."status" = ?', query.status);
+  if (query.from) add('r."created_at" >= ?', fromVietnamDate(query.from));
+  if (query.to) add('r."created_at" < ?', fromVietnamDate(addVietnamDays(query.to, 1)));
+  if (query.disputed) {
+    where.push(`EXISTS (SELECT 1 FROM "service_tickets" t WHERE t."shelf_receipt_id" = r."id"
+                          AND t."status" IN (${OPEN_STATUSES_SQL}))`);
   }
   if (query.recentPerContract && query.contractIds) {
     // Placeholder numbers are taken from the params already pushed for contractIds.
@@ -127,8 +120,12 @@ export async function loadReceipts(
             r."created_at" AS "createdAt", r."note", r."photos",
             r."pickup_request_id" AS "pickupRequestId", (r."session_id" IS NULL) AS "recovered",
             r."voided_at" AS "voidedAt", r."voided_by" AS "voidedById",
-            vb."full_name" AS "voidedByName", r."void_reason" AS "voidReason"
-       ${FROM} ${whereSql}
+            vb."full_name" AS "voidedByName", r."void_reason" AS "voidReason",
+            dt."id" AS "disputeId", dt."ticket_no" AS "disputeTicketNo", dt."status" AS "disputeStatus",
+            dt."subject" AS "disputeSubject", dt."created_at" AS "disputeCreatedAt"
+       ${FROM}
+       ${DISPUTE_JOIN}
+       ${whereSql}
       ORDER BY r."created_at" DESC, r."id" ${paging}`,
     params,
   );
@@ -144,33 +141,6 @@ export async function loadReceipts(
     lines.set(receiptId, [...(lines.get(receiptId) ?? []), line]);
   }
 
-  const receipts = rows.map(
-    (row): ShelfReceiptView => ({
-      id: row.id,
-      code: row.code,
-      type: row.type,
-      status: row.status,
-      contractId: row.contractId,
-      contractNo: row.contractNo,
-      shelf: { id: row.shelfId, code: row.shelfCode, name: row.shelfName },
-      warehouse: { id: row.warehouseId, code: row.warehouseCode, name: row.warehouseName },
-      facility: { id: row.facilityId, code: row.facilityCode, name: row.facilityName },
-      customer: { id: row.customerId, fullName: row.customerName, phone: row.customerPhone },
-      performedBy: staffRef(row.performedById, row.performedByName),
-      createdAt: row.createdAt,
-      note: row.note,
-      photos: row.photos ?? [],
-      lines: lines.get(row.id) ?? [],
-      pickupRequestId: row.pickupRequestId,
-      recovered: row.recovered,
-      void: row.voidedAt
-        ? {
-            at: row.voidedAt,
-            by: staffRef(row.voidedById, row.voidedByName),
-            reason: row.voidReason ?? '',
-          }
-        : null,
-    }),
-  );
+  const receipts = rows.map((row) => toReceiptView(row, lines.get(row.id) ?? []));
   return { receipts, total };
 }

@@ -30,6 +30,7 @@ const receipt = {
   code: 'PG-1',
   type: 'DROP_OFF',
   recovered: false,
+  openDisputeTicket: null,
   contractId: 'c-1',
   customer: { id: 'cust-1' },
   lines: [],

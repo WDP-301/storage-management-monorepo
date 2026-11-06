@@ -50,3 +50,19 @@ export async function cancelOpenPickupRequests(
     [contractId],
   );
 }
+
+/**
+ * After a pick-up: when it took the last of the contract's goods, nothing is left to hand back, so
+ * requests still open are closed by the system instead of waiting for staff (customers cannot
+ * complete them). `stock` is the locked pre-pick-up stock, `picked` the applied lines.
+ */
+export async function cancelOpenPickupRequestsIfEmptied(
+  em: EntityManager,
+  contractId: string,
+  stock: { quantity: number }[],
+  picked: { quantity: number }[],
+): Promise<void> {
+  const before = stock.reduce((sum, item) => sum + item.quantity, 0);
+  const taken = picked.reduce((sum, line) => sum + line.quantity, 0);
+  if (before - taken <= 0) await cancelOpenPickupRequests(em, contractId);
+}

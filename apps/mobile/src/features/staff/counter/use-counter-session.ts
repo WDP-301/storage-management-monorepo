@@ -3,7 +3,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../../../../lib/api';
 import { ShelfStorageApi } from '../../../../lib/shelf-storage-api';
-import { sessionSecondsLeft } from '../../../../lib/shelf-storage-format';
+import { secondsUntil } from '../../../../lib/shelf-storage-format';
 import { shelfApiError } from '../staff-errors';
 
 type Status = 'idle' | 'opening' | 'open' | 'expired';
@@ -18,8 +18,17 @@ export function useCounterSession(warehouseId: string | undefined) {
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
+  // Deadline on the device clock from the server's ttlSeconds, so a wrong phone clock cannot
+  // expire the session early or keep an expired one open.
+  const [deadline, setDeadline] = useState(0);
   const sessionRef = useRef(session);
   sessionRef.current = session;
+  const accept = useCallback((next: CounterSessionView) => {
+    setSession(next);
+    const at = Date.now();
+    setNow(at);
+    setDeadline(at + next.ttlSeconds * 1000);
+  }, []);
 
   const end = useCallback(() => {
     setSession(null);
@@ -38,7 +47,7 @@ export function useCounterSession(warehouseId: string | undefined) {
       setStatus('opening');
       setError(null);
       try {
-        setSession(await ShelfStorageApi.openSession({ qrPayload, warehouseId }));
+        accept(await ShelfStorageApi.openSession({ qrPayload, warehouseId }));
         setStatus('open');
         return true;
       } catch (cause) {
@@ -47,14 +56,14 @@ export function useCounterSession(warehouseId: string | undefined) {
         return false;
       }
     },
-    [warehouseId],
+    [warehouseId, accept],
   );
 
   const refresh = useCallback(async () => {
     const current = sessionRef.current;
     if (!current) return;
     try {
-      setSession(await ShelfStorageApi.getSession(current.sessionId));
+      accept(await ShelfStorageApi.getSession(current.sessionId));
     } catch (cause) {
       const gone =
         cause instanceof ApiError &&
@@ -64,7 +73,7 @@ export function useCounterSession(warehouseId: string | undefined) {
         setError(shelfApiError(cause, 'Phiên làm việc đã hết hạn. Quét lại mã của khách.'));
       }
     }
-  }, []);
+  }, [accept]);
 
   useFocusEffect(
     useCallback(() => {
@@ -78,7 +87,7 @@ export function useCounterSession(warehouseId: string | undefined) {
     return () => clearInterval(timer);
   }, [status]);
 
-  const secondsLeft = session ? sessionSecondsLeft(String(session.expiresAt), now) : 0;
+  const secondsLeft = session ? secondsUntil(deadline, now) : 0;
   useEffect(() => {
     if (status === 'open' && session && secondsLeft === 0) {
       setStatus('expired');

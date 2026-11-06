@@ -17,6 +17,7 @@ import { validateReceiptShape } from './receipt-input.util';
 import { applyDropOff, applyPickUp } from './receipt-stock.util';
 import { findReplay, insertReceipt, withReceiptCodeRetry } from './receipt-writer.util';
 import { findShelfContracts, loadStock, type ShelfContractRow } from './shelf-contract.query';
+import { cancelOpenPickupRequestsIfEmptied } from './shelf-empty-guard.util';
 import { receiptNotice } from './shelf-notifications';
 import { loadReceipts } from './shelf-receipt.read';
 import { dropOffBlock, pickUpBlock } from './shelf-rules';
@@ -110,6 +111,9 @@ export class ShelfReceiptsService {
             WHERE "id" = $1`,
           [input.pickupRequestId],
         );
+      }
+      if (input.type === ShelfReceiptType.PICK_UP) {
+        await cancelOpenPickupRequestsIfEmptied(em, contract.id, stock, applied);
       }
       const [receipt] = (await loadReceipts(em, { ids: [id] })).receipts;
       await this.notifications.createForUsers(em, [contract.customerId], receiptNotice(receipt));

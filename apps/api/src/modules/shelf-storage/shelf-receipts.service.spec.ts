@@ -226,6 +226,27 @@ describe('ShelfReceiptsService.create', () => {
     expect(sqlCalls('UPDATE "pickup_requests"')).toHaveLength(0);
   });
 
+  it('system-cancels requests still open when a pick-up takes the last goods', async () => {
+    stock = [{ id: uuid(2), name: 'Sách', quantity: 1, updatedAt: new Date() }];
+    await service.create(actor, pickUp);
+    const [sql, params] = sqlCalls('UPDATE "pickup_requests"')[0] as [string, unknown[]];
+    expect(sql).toContain(`"status" = 'CANCELLED'`);
+    expect(params).toEqual(['c-1']);
+  });
+
+  it('completes the given request first; the cancel then only sweeps other open ones', async () => {
+    stock = [{ id: uuid(2), name: 'Sách', quantity: 1, updatedAt: new Date() }];
+    await service.create(actor, { ...pickUp, pickupRequestId: uuid(3) });
+    const statements = sqlCalls('UPDATE "pickup_requests"').map(([sql]) => sql as string);
+    expect(statements[0]).toContain(`'COMPLETED'`);
+    expect(statements[1]).toContain(`'CANCELLED'`);
+  });
+
+  it('never cancels requests on a drop-off', async () => {
+    await service.create(actor, base);
+    expect(sqlCalls('UPDATE "pickup_requests"')).toHaveLength(0);
+  });
+
   it('retries in a fresh transaction when the receipt code collides', async () => {
     failInsertOnce = true;
     await expect(service.create(actor, base)).resolves.toBe(receipt);

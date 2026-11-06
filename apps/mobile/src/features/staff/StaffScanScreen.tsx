@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
+import { newOpenNonce } from '../../../lib/open-nonce';
 import { useSession } from '../../../lib/session';
 import type { ScanWarehouse } from '../../../lib/shelf-storage-api';
 import { FilterPill } from '../../components/FilterPill';
@@ -33,11 +34,12 @@ export function StaffScanScreen() {
         sessionId: session?.sessionId ?? '',
         contractId,
         type,
+        nonce: newOpenNonce(),
         ...(requestId ? { requestId } : {}),
       },
     });
   const openReceipt = (id: string) =>
-    router.push({ pathname: '/(staff)/shelf-receipt', params: { id } });
+    router.push({ pathname: '/(staff)/shelf-receipt', params: { id, nonce: newOpenNonce() } });
 
   const segments: [Segment, string][] = [
     ['COUNTER', 'Quầy'],
@@ -106,6 +108,7 @@ export function StaffScanScreen() {
                 mode: 'RECOVERY',
                 contractId: contract.contractId,
                 type: 'PICK_UP',
+                nonce: newOpenNonce(),
                 customerName: contract.customer.fullName ?? contract.customer.phone ?? '',
               },
             })

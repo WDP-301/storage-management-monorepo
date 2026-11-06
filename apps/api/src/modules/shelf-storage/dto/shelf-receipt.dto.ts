@@ -1,7 +1,7 @@
 import { EvidenceFileDto } from '@modules/inspection/dto/inspection-evidence.dto';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ShelfReceiptType } from '@storage/types';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -104,6 +104,7 @@ export class CreateShelfReceiptDto {
 
 export class VoidShelfReceiptDto {
   @ApiProperty({ minLength: 3, maxLength: 500, example: 'Nhập nhầm số lượng' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MinLength(3)
   @MaxLength(500)

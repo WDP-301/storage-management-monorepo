@@ -137,6 +137,14 @@ describe('ShelfRecoveryService', () => {
       );
     });
 
+    it('closes open pick-up requests when the recovery empties the shelf', async () => {
+      stock = [{ id: itemId, name: 'Sách', quantity: 2, updatedAt: new Date() }];
+      await service.create(manager, input);
+      const [sql, params] = calls('UPDATE "pickup_requests"')[0] as [string, unknown[]];
+      expect(sql).toContain(`"status" = 'CANCELLED'`);
+      expect(params).toEqual(['c-1']);
+    });
+
     it('rejects a bad shape before any transaction', async () => {
       await expect(service.create(manager, { ...input, photos: [] })).rejects.toMatchObject({
         status: 400,

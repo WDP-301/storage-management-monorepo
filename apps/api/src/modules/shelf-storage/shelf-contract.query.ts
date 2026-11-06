@@ -19,7 +19,12 @@ export interface ShelfContractFilter {
   customerId?: string;
   warehouseId?: string;
   statuses?: ContractStatus[];
-  /** Locks the contract rows (`FOR NO KEY UPDATE`) so stock changes serialize per contract. */
+  /**
+   * Locks the contract (`FOR NO KEY UPDATE`) so stock changes serialize per contract. Needs
+   * `contractId`. The lock is its own statement: in READ COMMITTED a statement that waited on a
+   * lock only re-reads the locked row, so a join in the same statement could still show the shelf
+   * the contract had before a concurrent unit change.
+   */
   lock?: boolean;
 }
 
@@ -49,6 +54,13 @@ export async function findShelfContracts(
   em: EntityManager,
   filter: ShelfContractFilter = {},
 ): Promise<ShelfContractRow[]> {
+  if (filter.lock) {
+    if (!filter.contractId) throw new Error('findShelfContracts: lock requires contractId');
+    await em.query(
+      `SELECT 1 FROM "contracts" WHERE "id" = ANY($1::uuid[]) ORDER BY "id" FOR NO KEY UPDATE`,
+      [[filter.contractId]],
+    );
+  }
   const params: unknown[] = [];
   const where = ['c."deleted_at" IS NULL'];
   const add = (sql: string, value: unknown) => {
@@ -76,8 +88,7 @@ export async function findShelfContracts(
        JOIN "storage_units" w ON w."id" = u."parent_id"
        JOIN "facilities" f ON f."id" = w."facility_id"
       WHERE ${where.join(' AND ')}
-      ORDER BY c."effective_at", c."id"
-      ${filter.lock ? 'FOR NO KEY UPDATE OF c' : ''}`,
+      ORDER BY c."effective_at", c."id"`,
     params,
   );
   return rows.map((row) => ({

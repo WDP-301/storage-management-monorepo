@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Button } from 'heroui-native';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { newOpenNonce } from '../../../../lib/open-nonce';
 import {
   newDraft,
   prefillPickUp,
@@ -88,7 +89,10 @@ export function ShelfReceiptFormScreen({ params }: { params: ReceiptFormParams }
           ? await ShelfStorageApi.createReceipt(built.input)
           : await ShelfStorageApi.createRecovery(built.input);
       setSaved(true);
-      router.replace({ pathname: '/(staff)/shelf-receipt', params: { id: receipt.id } });
+      router.replace({
+        pathname: '/(staff)/shelf-receipt',
+        params: { id: receipt.id, nonce: newOpenNonce() },
+      });
     } catch (cause) {
       setError(shelfApiError(cause, 'Không lưu được phiếu. Thử lại.'));
       setSaving(false);
@@ -130,7 +134,7 @@ export function ShelfReceiptFormScreen({ params }: { params: ReceiptFormParams }
             </Text>
             {recovery ? (
               <Text className="rounded-xl bg-warning-bg p-3 font-body text-body-sm text-warning">
-                Thu hồi đồ của khách bỏ kho — khách sẽ được thông báo.
+                Thu hồi đồ của khách bỏ kệ — khách sẽ được thông báo.
               </Text>
             ) : null}
             {type === 'DROP_OFF' ? (

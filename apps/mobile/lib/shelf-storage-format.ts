@@ -26,7 +26,7 @@ export const pickupStatusLabel = (status: PickupRequestStatus): string =>
   PICKUP_STATUS_LABEL[status] ?? status;
 
 /** Badge on a receipt a manager recorded without the customer, on an abandoned shelf. */
-export const recoveredLabel = 'Thu hồi (khách bỏ kho)';
+export const recoveredLabel = 'Thu hồi (khách bỏ kệ)';
 
 const DROP_OFF_BLOCK: Record<DropOffBlockReason, string> = {
   CONTRACT_NOT_STARTED: 'Hợp đồng chưa bắt đầu',
@@ -63,10 +63,9 @@ export function linesSummary(lines: readonly NamedQuantity[], max = 3): string {
 export const totalQuantity = (lines: readonly { quantity: number }[]): number =>
   lines.reduce((sum, line) => sum + line.quantity, 0);
 
-/** Whole seconds until a counter session ends, never negative. */
-export function sessionSecondsLeft(expiresAt: string, nowMs: number): number {
-  const at = Date.parse(expiresAt);
-  return Number.isNaN(at) ? 0 : Math.max(0, Math.ceil((at - nowMs) / 1000));
+/** Whole seconds from `nowMs` to `deadlineMs` (device-clock ms), never negative. */
+export function secondsUntil(deadlineMs: number, nowMs: number): number {
+  return Number.isFinite(deadlineMs) ? Math.max(0, Math.ceil((deadlineMs - nowMs) / 1000)) : 0;
 }
 
 type Details = Record<string, unknown> | undefined;
@@ -149,7 +148,8 @@ export function shelfErrorMessage(
       if (reason === 'ITEM_NOT_IN_CONTRACT') return 'Có món không thuộc kệ của khách.';
       if (reason === 'CLIENT_REQUEST_REUSED')
         return 'Phiếu này đã được lưu cho kệ khác. Tạo phiếu mới.';
-      if (reason === 'NOT_ABANDONED_RETURN') return 'Chỉ thu hồi được kệ có yêu cầu trả bị bỏ kho.';
+      if (reason === 'NOT_ABANDONED_RETURN')
+        return 'Chỉ thu hồi được kệ có yêu cầu trả do khách bỏ kệ.';
       return fallback;
     case 'SHELF_STOCK_INSUFFICIENT': {
       const list = itemList(

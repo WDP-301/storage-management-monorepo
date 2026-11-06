@@ -28,8 +28,9 @@ const STAFF_ROLES: readonly UserRole[] = [
 const isStaff = (actor: AuthUser) => actor.roles.some((role) => STAFF_ROLES.includes(role));
 
 /**
- * A customer reads only their own records (404 for anyone else's, so ids reveal nothing); staff
- * read what belongs to the facilities they work at (403 otherwise).
+ * Anyone reads their own records, staff or not. Otherwise a customer reads nothing of anyone
+ * else's (404, so ids reveal nothing) and staff read what belongs to the facilities they work at
+ * (403 otherwise).
  */
 async function assertCanRead(
   em: EntityManager,
@@ -37,6 +38,7 @@ async function assertCanRead(
   owner: { customerId: string; facilityId: string },
   resource: string,
 ): Promise<void> {
+  if (owner.customerId === actor.id) return;
   if (isStaff(actor)) {
     if (!(await worksAtFacility(em, actor, owner.facilityId))) {
       throw new DomainException(

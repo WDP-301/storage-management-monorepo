@@ -129,6 +129,8 @@ export interface CounterSessionView {
   startedAt: string | Date;
   /** startedAt + 30 minutes. */
   expiresAt: string | Date;
+  /** Whole seconds left when this response was built; clients count down from it, not from their clock. */
+  ttlSeconds: number;
   warehouse: ShelfRef;
   facility: ShelfRef;
   customer: ShelfPersonRef;

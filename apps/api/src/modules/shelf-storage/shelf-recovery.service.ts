@@ -19,6 +19,7 @@ import { validateRecoveryShape } from './receipt-input.util';
 import { applyPickUp } from './receipt-stock.util';
 import { findReplay, insertReceipt, withReceiptCodeRetry } from './receipt-writer.util';
 import { findShelfContracts, loadStock } from './shelf-contract.query';
+import { cancelOpenPickupRequestsIfEmptied } from './shelf-empty-guard.util';
 import { receiptNotice } from './shelf-notifications';
 import { loadReceipts } from './shelf-receipt.read';
 
@@ -96,7 +97,7 @@ export class ShelfRecoveryService {
   /**
    * A PICK_UP without a session: same locks, stock rules and replay safety as at the counter, but
    * only for a manager, only on an ACTIVE contract with an open ABANDONED return, and never
-   * blocked by debt. It does not complete pick-up requests; finalizing the return cancels them.
+   * blocked by debt. It never completes a request, but one still open is cancelled when this empties the shelf.
    */
   async create(actor: AuthUser, input: CreateShelfRecoveryInput): Promise<ShelfReceiptView> {
     const lines = validateRecoveryShape(input, actor.id);
@@ -133,6 +134,7 @@ export class ShelfRecoveryService {
         pickupRequestId: null,
         lines: applied,
       });
+      await cancelOpenPickupRequestsIfEmptied(em, contract.id, stock, applied);
       const [receipt] = (await loadReceipts(em, { ids: [id] })).receipts;
       await this.notifications.createForUsers(em, [contract.customerId], receiptNotice(receipt));
       return receipt;

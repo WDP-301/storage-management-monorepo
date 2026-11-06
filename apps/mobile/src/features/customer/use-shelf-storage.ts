@@ -13,8 +13,11 @@ type Loaded = {
   requests: PickupRequestView[];
 };
 
+/** API messages are English; show Vietnamese text instead, naming only the cases we can tell apart. */
 const message = (cause: unknown, fallback: string) =>
-  cause instanceof ApiError ? cause.message : fallback;
+  cause instanceof ApiError && cause.statusCode === 404
+    ? 'Không tìm thấy kệ này. Có thể hợp đồng đã kết thúc.'
+    : fallback;
 
 /**
  * Stock, receipt history and pick-up requests of one shelf contract. Reloads on focus and whenever

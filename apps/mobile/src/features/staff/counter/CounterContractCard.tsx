@@ -64,7 +64,7 @@ export function CounterContractCard({ contract, onDropOff, onPickUp, onOpenRecei
           className="flex-1"
           variant="secondary"
           isDisabled={!!contract.pickUp}
-          onPress={() => onPickUp()}
+          onPress={() => onPickUp(openRequest?.id)}
         >
           <Button.Label>Trả đồ</Button.Label>
         </Button>

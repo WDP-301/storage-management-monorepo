@@ -13,6 +13,12 @@ describe('item names', () => {
     expect(normalizeItemName('  Thùng   sách \t cũ ')).toBe('Thùng sách cũ');
   });
 
+  it('treats precomposed and decomposed accents as one name', () => {
+    const decomposed = 'Su\u0301ng'; // "u" + combining acute
+    expect(normalizeItemName(decomposed)).toBe('S\u00fang');
+    expect(itemNameKey(decomposed)).toBe(itemNameKey('S\u00fang'));
+  });
+
   it('matches case-insensitively, including Vietnamese capitals', () => {
     expect(itemNameKey(' CHĂN  Bông ')).toBe(itemNameKey('chăn bông'));
     expect(itemNameKey('Đèn')).toBe('đèn');

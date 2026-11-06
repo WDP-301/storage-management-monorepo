@@ -51,6 +51,22 @@ describe('applyDropOff', () => {
     expect(update(query)).toBeUndefined();
   });
 
+  it('merges into the existing item when the database sees the name as taken', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.startsWith('INSERT')) return [];
+      if (sql.startsWith('SELECT')) return [{ id: 'i-9', name: 'Lều' }];
+      return [[], 1];
+    });
+    const applied = await applyDropOff(
+      { query } as never,
+      'c-1',
+      [{ name: 'LỀU', quantity: 2 }],
+      stock,
+    );
+    expect(applied).toEqual([{ itemId: 'i-9', name: 'Lều', quantity: 2 }]);
+    expect(update(query as never)?.[1]).toEqual([['i-9'], [2]]);
+  });
+
   it('merges an id line and a name line that land on the same item', async () => {
     const { em, query } = setup();
     const applied = await applyDropOff(

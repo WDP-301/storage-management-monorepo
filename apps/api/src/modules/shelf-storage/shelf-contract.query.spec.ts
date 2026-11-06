@@ -68,10 +68,23 @@ describe('findShelfContracts', () => {
     expect(sql).toContain('c."status" = ANY($4::text[])');
   });
 
-  it('locks only the contract rows', async () => {
+  it('locks the contract in its own statement before the join', async () => {
     const { em, query } = emWith([]);
     await findShelfContracts(em, { contractId: 'c-1', lock: true });
-    expect((query.mock.calls[0] as unknown as [string])[0]).toContain('FOR NO KEY UPDATE OF c');
+    const calls = query.mock.calls as unknown as [string, unknown[]][];
+    expect(calls).toHaveLength(2);
+    expect(calls[0][0]).toContain('FOR NO KEY UPDATE');
+    expect(calls[0][0]).not.toContain('JOIN');
+    expect(calls[0][1]).toEqual([['c-1']]);
+    expect(calls[1][0]).toContain('JOIN "booking_items"');
+    expect(calls[1][0]).not.toContain('FOR NO KEY UPDATE');
+  });
+
+  it('refuses to lock without a contract id', async () => {
+    const { em } = emWith([]);
+    await expect(findShelfContracts(em, { customerId: 'u-1', lock: true })).rejects.toThrow(
+      /contractId/,
+    );
   });
 });
 

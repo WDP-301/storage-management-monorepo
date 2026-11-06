@@ -69,6 +69,12 @@ describe('ShelfStorageReadsService', () => {
       await expect(service.getReceipt(staff, 'r-1')).rejects.toMatchObject({ status: 404 });
     });
 
+    it('lets staff read their own receipt even at a facility they do not work at', async () => {
+      receipt.customer = { id: staff.id };
+      jest.mocked(worksAtFacility).mockResolvedValue(false);
+      await expect(service.getReceipt(staff, 'r-1')).resolves.toBe(receipt);
+    });
+
     it('answers 403 to staff of another facility, and lets a global manager through', async () => {
       jest.mocked(worksAtFacility).mockResolvedValueOnce(false);
       await expect(service.getReceipt(staff, 'r-1')).rejects.toMatchObject({ status: 403 });

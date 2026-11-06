@@ -31,7 +31,7 @@ test('labels cover every receipt type, request status and block reason', () => {
     'Đã lấy',
     'Đã hủy',
   ]);
-  assert.equal(f.recoveredLabel, 'Thu hồi (khách bỏ kho)');
+  assert.equal(f.recoveredLabel, 'Thu hồi (khách bỏ kệ)');
   for (const reason of ['CONTRACT_NOT_STARTED', 'INVOICE_OVERDUE']) {
     assert.notEqual(f.dropOffBlockLabel(reason), 'Chưa thể nhận đồ');
   }
@@ -61,12 +61,12 @@ test('lines summary shows three lines and counts the rest', () => {
   assert.equal(f.totalQuantity([]), 0);
 });
 
-test('session countdown never goes negative and tolerates a bad date', () => {
+test('countdown never goes negative and tolerates a bad deadline', () => {
   const now = Date.parse('2026-11-07T10:00:00Z');
-  assert.equal(f.sessionSecondsLeft('2026-11-07T10:30:00Z', now), 1800);
-  assert.equal(f.sessionSecondsLeft('2026-11-07T10:00:00.400Z', now), 1);
-  assert.equal(f.sessionSecondsLeft('2026-11-07T09:00:00Z', now), 0);
-  assert.equal(f.sessionSecondsLeft('not a date', now), 0);
+  assert.equal(f.secondsUntil(now + 1_800_000, now), 1800);
+  assert.equal(f.secondsUntil(now + 400, now), 1);
+  assert.equal(f.secondsUntil(now - 60_000, now), 0);
+  assert.equal(f.secondsUntil(Number.NaN, now), 0);
 });
 
 test('every reason in the contract has its own message, not the fallback', () => {

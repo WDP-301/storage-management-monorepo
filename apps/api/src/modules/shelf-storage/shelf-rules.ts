@@ -13,8 +13,12 @@ export const COUNTER_SESSION_MINUTES = 30;
 /** A pick-up request may be made for a time at most this many days ahead. */
 export const PICKUP_REQUEST_MAX_DAYS_AHEAD = 30;
 
-/** Trims and collapses inner whitespace, so "  Thùng   sách " and "Thùng sách" are one name. */
-export const normalizeItemName = (raw: string): string => raw.trim().replace(/\s+/g, ' ');
+/**
+ * Trims, collapses inner whitespace and composes to NFC, so "  Thùng   sách " and "Thùng sách" —
+ * and a precomposed vs decomposed "ú" — are one name.
+ */
+export const normalizeItemName = (raw: string): string =>
+  raw.normalize('NFC').trim().replace(/\s+/g, ' ');
 
 /** The case-insensitive identity of an item name within a contract. */
 export const itemNameKey = (name: string): string =>

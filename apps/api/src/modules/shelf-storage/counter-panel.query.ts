@@ -105,6 +105,7 @@ export async function buildCounterPanel(
     sessionId: session.id,
     startedAt: session.startedAt,
     expiresAt: session.expiresAt,
+    ttlSeconds: Math.max(0, Math.ceil((session.expiresAt.getTime() - now.getTime()) / 1000)),
     warehouse,
     facility,
     customer,

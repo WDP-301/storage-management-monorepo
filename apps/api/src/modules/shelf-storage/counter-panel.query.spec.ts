@@ -105,6 +105,7 @@ describe('buildCounterPanel', () => {
     expect(view).toMatchObject({
       sessionId: 'ses-1',
       expiresAt: session.expiresAt,
+      ttlSeconds: 1200,
       warehouse: { id: 'w-1', code: 'W-1' },
       facility: { id: 'f-1', code: 'F-1' },
       customer: { id: 'u-1', fullName: 'An', phone: '0900' },

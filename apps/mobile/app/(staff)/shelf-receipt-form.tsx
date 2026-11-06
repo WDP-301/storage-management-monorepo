@@ -9,11 +9,12 @@ export default function ShelfReceiptFormRoute() {
     contractId: string;
     requestId?: string;
     customerName?: string;
+    nonce?: string;
   }>();
   return (
     <ShelfReceiptFormScreen
-      // Remount per contract/type so a form never keeps the previous shelf's draft.
-      key={`${params.contractId}:${params.type}:${params.requestId ?? ''}`}
+      // Remount per open (nonce) so a form never keeps a previous visit's draft or request id.
+      key={`${params.contractId}:${params.type}:${params.requestId ?? ''}:${params.nonce ?? ''}`}
       params={{
         recovery: params.mode === 'RECOVERY',
         type: params.type === 'DROP_OFF' ? 'DROP_OFF' : 'PICK_UP',

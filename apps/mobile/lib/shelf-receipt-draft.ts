@@ -26,7 +26,8 @@ export const MAX_ITEM_NAME = 120;
 export const MAX_QUANTITY = 10000;
 
 /** Same normalisation as the API: trim, collapse spaces, case-insensitive (Vietnamese). */
-export const cleanName = (name: string): string => name.trim().replace(/\s+/g, ' ');
+export const cleanName = (name: string): string =>
+  name.normalize('NFC').trim().replace(/\s+/g, ' ');
 export const nameKey = (name: string): string => cleanName(name).toLocaleLowerCase('vi');
 
 export const newDraft = (type: ShelfReceiptType): ReceiptDraft => ({ type, lines: [] });

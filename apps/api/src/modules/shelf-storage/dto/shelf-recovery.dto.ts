@@ -1,6 +1,6 @@
 import { EvidenceFileDto } from '@modules/inspection/dto/inspection-evidence.dto';
 import { ApiProperty } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -62,6 +62,7 @@ export class CreateShelfRecoveryDto {
   photos: EvidenceFileDto[];
 
   @ApiProperty({ maxLength: 1000, example: 'Khách bỏ kệ, đã gọi 3 lần không liên lạc được' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @Matches(/\S/, { message: 'note must not be blank' })
   @MaxLength(1000)

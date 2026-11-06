@@ -86,11 +86,23 @@ export async function applyDropOff(
       topUps.push({ itemId, delta: line.quantity });
     } else {
       name = line.name as string;
+      // The DB identity is lower("name"); where it is wider than itemNameKey the name already
+      // exists, so the conflict is merged as a top-up instead of failing the whole receipt.
       const [created]: { id: string }[] = await em.query(
-        `INSERT INTO "shelf_items" ("contract_id", "name", "quantity") VALUES ($1, $2, $3) RETURNING "id"`,
+        `INSERT INTO "shelf_items" ("contract_id", "name", "quantity") VALUES ($1, $2, $3)
+         ON CONFLICT ("contract_id", lower("name")) DO NOTHING RETURNING "id"`,
         [contractId, name, line.quantity],
       );
-      itemId = created.id;
+      if (created) {
+        itemId = created.id;
+      } else {
+        const [clash]: { id: string; name: string }[] = await em.query(
+          `SELECT "id", "name" FROM "shelf_items" WHERE "contract_id" = $1 AND lower("name") = lower($2)`,
+          [contractId, name],
+        );
+        ({ id: itemId, name } = clash);
+        topUps.push({ itemId, delta: line.quantity });
+      }
       // A later line with the same name must top this item up, not insert a duplicate.
       byKey.set(itemNameKey(name), {
         id: itemId,

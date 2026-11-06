@@ -3,6 +3,7 @@ import { StorageUnit } from '@entities/storage-unit.entity';
 import { findOverdueInvoiceNos } from '@modules/access/overdue-invoices.query';
 import { assertWorksAtFacility } from '@modules/access/staff-facility.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { addVietnamDays, vietnamToday } from '@shared/utils/calendar.util';
 import { ContractStatus, StorageUnitKind } from '@storage/types';
 import { QueryFailedError } from 'typeorm';
 import { loadPickupRequests } from '../shelf-storage/pickup-request.read';
@@ -199,6 +200,24 @@ describe('pickup requests', () => {
         customerService.create('c-1', body({ requestedFor }), customer),
       ).rejects.toMatchObject({
         status: 400,
+        response: { details: { fields: [{ field: 'requestedFor', code: 'outOfRange' }] } },
+      });
+    });
+
+    it('accepts any time on the last allowed Vietnam day and refuses the next midnight', async () => {
+      mockedRequests.mockImplementation(async (_em, q) =>
+        q.open ? [] : ([requestView()] as never),
+      );
+      const lastDay = addVietnamDays(vietnamToday(), 30);
+      const evening = `${lastDay}T20:00:00+07:00`;
+      await expect(
+        customerService.create('c-1', body({ requestedFor: evening }), customer),
+      ).resolves.toBeDefined();
+
+      const nextMidnight = `${addVietnamDays(lastDay, 1)}T00:00:00+07:00`;
+      await expect(
+        customerService.create('c-1', body({ requestedFor: nextMidnight }), customer),
+      ).rejects.toMatchObject({
         response: { details: { fields: [{ field: 'requestedFor', code: 'outOfRange' }] } },
       });
     });

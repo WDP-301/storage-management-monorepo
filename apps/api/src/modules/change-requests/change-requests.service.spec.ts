@@ -347,6 +347,34 @@ describe('ChangeRequestsService', () => {
       await service.decide('req-1', { decision: 'APPROVED' }, manager);
 
       expect(request.status).toBe(ChangeRequestStatus.COMPLETED);
+      const cancelled = txManager.query.mock.calls.filter(([sql]) =>
+        String(sql).includes(`SET "status" = 'CANCELLED'`),
+      );
+      expect(cancelled).toHaveLength(1);
+      expect(cancelled[0][1]).toEqual(['contract-1']);
+    });
+
+    it('approve shelf to shelf leaves open pick-up requests alone', async () => {
+      withTarget(StorageUnitKind.SHELF);
+
+      await service.decide('req-1', { decision: 'APPROVED' }, manager);
+
+      expect(txManager.query.mock.calls.some(([sql]) => String(sql).includes(`'CANCELLED'`))).toBe(
+        false,
+      );
+    });
+
+    it('a refused move (stock remains) cancels nothing', async () => {
+      shelfRows = [{ id: 'item-a', name: 'Sách', quantity: 2 }];
+      withTarget(StorageUnitKind.SELF_STORAGE);
+
+      await expect(
+        service.decide('req-1', { decision: 'APPROVED' }, manager),
+      ).rejects.toBeDefined();
+
+      expect(txManager.query.mock.calls.some(([sql]) => String(sql).includes(`'CANCELLED'`))).toBe(
+        false,
+      );
     });
   });
 

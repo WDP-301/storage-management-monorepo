@@ -49,7 +49,7 @@ describe('VoidShelfReceiptDto', () => {
     await expect(failed(VoidShelfReceiptDto, { reason: 'Nhầm' })).resolves.toEqual([]);
   });
 
-  it.each(['ab', '   ', 'x'.repeat(501)])('rejects %p', async (reason) => {
+  it.each(['ab', '   ', 'a  ', '  ab ', 'x'.repeat(501)])('rejects %p', async (reason) => {
     await expect(failed(VoidShelfReceiptDto, { reason })).resolves.toEqual(['reason']);
   });
 });

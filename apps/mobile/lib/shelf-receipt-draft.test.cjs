@@ -34,6 +34,11 @@ const items = [
   { id: 'i2', name: 'Chăn', quantity: 2 },
 ];
 
+test('cleanName composes accents so typed and pasted names match', () => {
+  assert.equal(d.cleanName('Su\u0301ng'), 'S\u00fang');
+  assert.equal(d.nameKey('Su\u0301ng'), d.nameKey('S\u00fang'));
+});
+
 test('nameKey ignores case and extra spaces like the API', () => {
   assert.equal(d.nameKey('  Hộp   SÁCH '), d.nameKey('hộp sách'));
 });

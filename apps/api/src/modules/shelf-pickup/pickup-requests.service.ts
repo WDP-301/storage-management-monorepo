@@ -9,6 +9,7 @@ import {
   notFound,
 } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
+import { addVietnamDays, fromVietnamDate, vietnamToday } from '@shared/utils/calendar.util';
 import { PickupRequestStatus, type PickupRequestView } from '@storage/types';
 import { DataSource, type EntityManager, QueryFailedError } from 'typeorm';
 import { loadPickupRequests } from '../shelf-storage/pickup-request.read';
@@ -17,8 +18,10 @@ import { PICKUP_REQUEST_MAX_DAYS_AHEAD, pickupRequestBlock } from '../shelf-stor
 import type { CreatePickupRequestDto } from './dto/pickup-request.dto';
 import { notifyFacilityStaff } from './pickup-notifications';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const PAST_GRACE_MS = 5 * 60 * 1000;
+/** The first instant no request may reach: the whole last allowed Vietnam day is open. */
+const lastDayEnd = (now: Date) =>
+  fromVietnamDate(addVietnamDays(vietnamToday(now), PICKUP_REQUEST_MAX_DAYS_AHEAD + 1));
 const CONTRACT_LIST_LIMIT = 20;
 const UNIQUE_VIOLATION = '23505';
 
@@ -74,7 +77,7 @@ export class PickupRequestsService {
     const now = new Date();
     if (
       requestedFor.getTime() < now.getTime() - PAST_GRACE_MS ||
-      requestedFor.getTime() > now.getTime() + PICKUP_REQUEST_MAX_DAYS_AHEAD * DAY_MS
+      requestedFor.getTime() >= lastDayEnd(now).getTime()
     ) {
       throw fieldValidationError(
         'requestedFor',

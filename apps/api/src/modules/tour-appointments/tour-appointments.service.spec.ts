@@ -5,7 +5,13 @@ import { TourAppointment } from '@entities/tour-appointment.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { DomainException } from '@shared/exceptions/domain.exception';
-import { FacilityStatus, TourAppointmentStatus, UserRole, UserStatus } from '@storage/types';
+import {
+  FacilityStatus,
+  StorageUnitStatus,
+  TourAppointmentStatus,
+  UserRole,
+  UserStatus,
+} from '@storage/types';
 import type { Repository } from 'typeorm';
 import { TourAppointmentsService } from './tour-appointments.service';
 
@@ -31,7 +37,7 @@ const buildAppointment = (overrides: Partial<TourAppointment> = {}): TourAppoint
     phone: '0987654321',
     email: 'khach@example.com',
     storageUnitId: null,
-    preferredDate: '2026-10-15',
+    preferredDate: '2026-12-15',
     preferredTimeSlot: '09:00 - 11:00',
     customerNotes: 'Cần thuê kho 10m2',
     status: TourAppointmentStatus.PENDING,
@@ -89,22 +95,6 @@ describe('TourAppointmentsService', () => {
       findOne: jest.fn() as any,
       createQueryBuilder: jest.fn() as any,
     } as any;
-    // Transactional writes route back to the per-entity repo mocks so assertions stay on them.
-    const repoFor = (entity: unknown): any =>
-      entity === Facility
-        ? facilitiesRepo
-        : entity === StorageUnit
-          ? storageUnitsRepo
-          : appointmentsRepo;
-    (appointmentsRepo as any).manager = {
-      transaction: jest.fn((work: (manager: unknown) => unknown) =>
-        work({
-          findOne: (entity: unknown, options: unknown) => repoFor(entity).findOne(options),
-          create: (_entity: unknown, data: unknown) => appointmentsRepo.create(data as any),
-          save: (data: unknown) => appointmentsRepo.save(data as any),
-        }),
-      ),
-    };
 
     facilitiesRepo = {
       findOne: jest.fn() as any,
@@ -122,6 +112,29 @@ describe('TourAppointmentsService', () => {
       find: jest.fn().mockResolvedValue([]) as any,
       findOne: jest.fn() as any,
     } as any;
+
+    // Transactional writes route back to the per-entity repo mocks so assertions stay on them.
+    const repoFor = (entity: unknown): any =>
+      entity === Facility
+        ? facilitiesRepo
+        : entity === StorageUnit
+          ? storageUnitsRepo
+          : entity === AppUser
+            ? usersRepo
+            : entity === UserRoleAssignment
+              ? roleAssignmentsRepo
+              : appointmentsRepo;
+
+    (appointmentsRepo as any).manager = {
+      transaction: jest.fn((work: (manager: unknown) => unknown) =>
+        work({
+          findOne: (entity: unknown, options: unknown) => repoFor(entity).findOne(options),
+          find: (entity: unknown, options: unknown) => repoFor(entity).find(options),
+          create: (_entity: unknown, data: unknown) => appointmentsRepo.create(data as any),
+          save: (data: unknown) => appointmentsRepo.save(data as any),
+        }),
+      ),
+    };
 
     service = new TourAppointmentsService(appointmentsRepo, usersRepo, roleAssignmentsRepo);
   });
@@ -144,6 +157,18 @@ describe('TourAppointmentsService', () => {
         lock: { mode: 'pessimistic_read' },
       });
       expect(appointmentsRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('rejects scheduling a tour for a date in the past', async () => {
+      await expect(
+        service.createContactRequest({
+          facilityId: 'facility-1',
+          fullName: 'Khách',
+          phone: '0987654321',
+          email: 'khach@example.com',
+          preferredDate: '2020-01-01',
+        }),
+      ).rejects.toThrow(DomainException);
     });
 
     it('locks the requested warehouse of the facility, rejecting one that is gone', async () => {
@@ -169,6 +194,26 @@ describe('TourAppointmentsService', () => {
       expect(appointmentsRepo.save).not.toHaveBeenCalled();
     });
 
+    it('rejects scheduling a tour for a unit that is in MAINTENANCE', async () => {
+      facilitiesRepo.findOne.mockResolvedValue({ id: 'facility-1' } as Facility);
+      storageUnitsRepo.findOne.mockResolvedValue({
+        id: 'unit-maint',
+        facilityId: 'facility-1',
+        status: StorageUnitStatus.MAINTENANCE,
+      } as StorageUnit);
+
+      await expect(
+        service.createContactRequest({
+          facilityId: 'facility-1',
+          storageUnitId: 'unit-maint',
+          fullName: 'Khách',
+          phone: '0987654321',
+          email: 'khach@example.com',
+          preferredDate: '2026-12-01',
+        }),
+      ).rejects.toThrow(DomainException);
+    });
+
     it('creates a new tour appointment in PENDING status for guest', async () => {
       facilitiesRepo.findOne.mockResolvedValue({ id: 'facility-1', name: 'Kho 1' } as Facility);
       appointmentsRepo.findOne.mockResolvedValue(buildAppointment({ id: 'apt-created' }));
@@ -178,7 +223,7 @@ describe('TourAppointmentsService', () => {
         fullName: 'Nguyễn Văn Khách',
         phone: '0987654321',
         email: 'khach@example.com',
-        preferredDate: '2026-10-20',
+        preferredDate: '2026-12-20',
         preferredTimeSlot: 'Chiều',
       });
 
@@ -209,7 +254,7 @@ describe('TourAppointmentsService', () => {
           fullName: 'Nguyễn Văn Khách',
           phone: '0987654321',
           email: 'khach@example.com',
-          preferredDate: '2026-10-20',
+          preferredDate: '2026-12-20',
         },
         'customer-123',
       );
@@ -231,9 +276,31 @@ describe('TourAppointmentsService', () => {
           fullName: 'Khách',
           phone: '0987654321',
           email: 'khach@example.com',
-          preferredDate: '2026-10-20',
+          preferredDate: '2026-12-20',
         }),
       ).rejects.toThrow(DomainException);
+    });
+  });
+
+  describe('listAppointments', () => {
+    it('scopes query to customerId when actor is a CUSTOMER', async () => {
+      const customer = buildActor({ id: 'cust-1', roles: [UserRole.CUSTOMER] });
+      const qbMock: any = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+      };
+      appointmentsRepo.createQueryBuilder.mockReturnValue(qbMock);
+
+      await service.listAppointments({}, customer);
+
+      expect(qbMock.andWhere).toHaveBeenCalledWith('apt.customerId = :customerId', {
+        customerId: 'cust-1',
+      });
     });
   });
 
@@ -261,6 +328,33 @@ describe('TourAppointmentsService', () => {
         }),
       );
       expect(res.appointment.status).toBe(TourAppointmentStatus.CONFIRMED);
+    });
+
+    it('allows rescheduling when appointment is already ASSIGNED, retaining ASSIGNED status', async () => {
+      const manager = buildActor({ id: 'mgr-1', roles: [UserRole.FACILITY_MANAGER] });
+      const apt = buildAppointment({
+        id: 'apt-1',
+        facilityId: 'facility-1',
+        status: TourAppointmentStatus.ASSIGNED,
+        assignedTo: 'staff-1',
+      });
+      appointmentsRepo.findOne.mockResolvedValue(apt);
+      roleAssignmentsRepo.find.mockResolvedValue([buildManagerAssignment('mgr-1', 'facility-1')]);
+
+      const res = await service.confirmAppointment(
+        'apt-1',
+        { preferredDate: '2026-12-25', preferredTimeSlot: '14:00 - 15:00' },
+        manager,
+      );
+
+      expect(appointmentsRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: TourAppointmentStatus.ASSIGNED,
+          preferredDate: '2026-12-25',
+          preferredTimeSlot: '14:00 - 15:00',
+        }),
+      );
+      expect(res.appointment.status).toBe(TourAppointmentStatus.ASSIGNED);
     });
 
     it('throws 403 if manager does not manage the facility', async () => {
@@ -306,6 +400,35 @@ describe('TourAppointmentsService', () => {
       expect(res.appointment.status).toBe(TourAppointmentStatus.ASSIGNED);
     });
 
+    it('allows assigning a user with FACILITY_MANAGER role in that facility (self-assignment)', async () => {
+      const manager = buildActor({ id: 'mgr-1', roles: [UserRole.FACILITY_MANAGER] });
+      const apt = buildAppointment({
+        id: 'apt-1',
+        facilityId: 'facility-1',
+        status: TourAppointmentStatus.CONFIRMED,
+      });
+      appointmentsRepo.findOne.mockResolvedValue(apt);
+      roleAssignmentsRepo.find
+        .mockResolvedValueOnce([buildManagerAssignment('mgr-1', 'facility-1')]) // manager check
+        .mockResolvedValueOnce([buildManagerAssignment('mgr-1', 'facility-1')]); // assignee check (is manager)
+
+      usersRepo.findOne.mockResolvedValue({
+        id: 'mgr-1',
+        status: UserStatus.ACTIVE,
+        fullName: 'Quản lý trưởng',
+      } as AppUser);
+
+      const res = await service.assignAppointment('apt-1', { assignedTo: 'mgr-1' }, manager);
+
+      expect(appointmentsRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assignedTo: 'mgr-1',
+          status: TourAppointmentStatus.ASSIGNED,
+        }),
+      );
+      expect(res.appointment.status).toBe(TourAppointmentStatus.ASSIGNED);
+    });
+
     it('reassigns from one staff to another, replacing the loaded assignee relation', async () => {
       const manager = buildActor({ id: 'mgr-1', roles: [UserRole.FACILITY_MANAGER] });
       const apt = buildAppointment({
@@ -343,7 +466,7 @@ describe('TourAppointmentsService', () => {
       appointmentsRepo.findOne.mockResolvedValue(apt);
       roleAssignmentsRepo.find
         .mockResolvedValueOnce([buildManagerAssignment('mgr-1', 'facility-1')])
-        .mockResolvedValueOnce([]); // no staff role at facility-1
+        .mockResolvedValueOnce([]); // no staff or manager role at facility-1
 
       usersRepo.findOne.mockResolvedValue({
         id: 'staff-other',
@@ -380,6 +503,21 @@ describe('TourAppointmentsService', () => {
         }),
       );
       expect(res.appointment.status).toBe(TourAppointmentStatus.COMPLETED);
+    });
+
+    it('rejects completing an appointment that is still PENDING', async () => {
+      const manager = buildActor({ id: 'mgr-1', roles: [UserRole.FACILITY_MANAGER] });
+      const apt = buildAppointment({
+        id: 'apt-1',
+        facilityId: 'facility-1',
+        status: TourAppointmentStatus.PENDING,
+      });
+      appointmentsRepo.findOne.mockResolvedValue(apt);
+      roleAssignmentsRepo.find.mockResolvedValue([buildManagerAssignment('mgr-1', 'facility-1')]);
+
+      await expect(
+        service.completeAppointment('apt-1', { staffResultNotes: 'Done' }, manager),
+      ).rejects.toThrow(DomainException);
     });
 
     it('throws 403 if another staff tries to complete an appointment not assigned to them', async () => {
@@ -419,6 +557,31 @@ describe('TourAppointmentsService', () => {
         expect.objectContaining({
           status: TourAppointmentStatus.CANCELLED,
           cancellationReason: 'Đã đợi 30 phút, gọi điện khách không nghe máy (No-show)',
+        }),
+      );
+      expect(res.appointment.status).toBe(TourAppointmentStatus.CANCELLED);
+    });
+
+    it('allows a customer to cancel their own appointment', async () => {
+      const customer = buildActor({ id: 'cust-1', roles: [UserRole.CUSTOMER] });
+      const apt = buildAppointment({
+        id: 'apt-1',
+        facilityId: 'facility-1',
+        customerId: 'cust-1',
+        status: TourAppointmentStatus.PENDING,
+      });
+      appointmentsRepo.findOne.mockResolvedValue(apt);
+
+      const res = await service.cancelAppointment(
+        'apt-1',
+        { cancellationReason: 'Tôi bận việc gia đình, xin hủy lịch' },
+        customer,
+      );
+
+      expect(appointmentsRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: TourAppointmentStatus.CANCELLED,
+          cancellationReason: 'Tôi bận việc gia đình, xin hủy lịch',
         }),
       );
       expect(res.appointment.status).toBe(TourAppointmentStatus.CANCELLED);

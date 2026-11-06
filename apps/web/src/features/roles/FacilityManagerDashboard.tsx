@@ -1,6 +1,7 @@
 import { Badge, Button, Empty, LayerCard, Text } from '@cloudflare/kumo';
 import {
   Buildings,
+  CalendarCheck,
   CheckCircle,
   Lifebuoy,
   Rows,
@@ -8,7 +9,7 @@ import {
   WarningCircle,
   Wrench,
 } from '@phosphor-icons/react';
-import { UserRole } from '@storage/types';
+import { TourAppointmentStatus, UserRole } from '@storage/types';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -20,6 +21,7 @@ import {
   WarehousesApi,
 } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
+import { TourAppointmentsApi } from '../../lib/tour-appointments-api';
 import type { Warehouse } from '../../types/warehouse';
 import { ShelfManagementDialog } from '../warehouses/ShelfManagementDialog';
 import { WarehouseOverviewMap } from '../warehouses/WarehouseOverviewMap';
@@ -74,6 +76,7 @@ export const FacilityManagerDashboard: React.FC = () => {
 
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [requests, setRequests] = useState<UnitChangeRequestRecord[]>([]);
+  const [pendingTours, setPendingTours] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -109,11 +112,20 @@ export const FacilityManagerDashboard: React.FC = () => {
       }
       if (showSpinner) setIsLoading(true);
       try {
-        const [list, requestsData] = await Promise.all([
+        const [list, requestsData, toursData] = await Promise.all([
           fetchWarehouses(),
           ChangeRequestsApi.list(),
+          TourAppointmentsApi.list({
+            facilityId: facilityId || undefined,
+            status: TourAppointmentStatus.PENDING,
+            limit: 1,
+          }).catch(() => ({
+            appointments: [],
+            meta: { total: 0, page: 1, limit: 1, totalPages: 0 },
+          })),
         ]);
         if (request !== latestRequest.current) return;
+        setPendingTours(toursData.meta?.total || 0);
         // Requests belong to the facility of the warehouse being left.
         const facilityIds = new Set(list.map((w) => w.facility.id));
         setWarehouses(list);
@@ -248,6 +260,13 @@ export const FacilityManagerDashboard: React.FC = () => {
         <div className="flex items-center gap-3">
           <Button
             variant="secondary"
+            icon={<CalendarCheck className="w-4 h-4" />}
+            onClick={() => navigate('/facility-manager/tour-appointments')}
+          >
+            Lịch xem kho {pendingTours > 0 ? `(${pendingTours})` : ''}
+          </Button>
+          <Button
+            variant="secondary"
             icon={<Lifebuoy className="w-4 h-4" />}
             onClick={() => navigate('/facility-manager/tickets')}
           >
@@ -266,7 +285,7 @@ export const FacilityManagerDashboard: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <KpiCard
           label="Kho đang cho thuê"
           value={occupied}
@@ -279,6 +298,21 @@ export const FacilityManagerDashboard: React.FC = () => {
           icon={<CheckCircle className="w-4 h-4 text-kumo-brand" />}
           badge={<Badge variant="primary">Có thể thuê ngay</Badge>}
         />
+        <div
+          className="cursor-pointer"
+          onClick={() => navigate('/facility-manager/tour-appointments?status=PENDING')}
+        >
+          <KpiCard
+            label="Lịch xem kho chờ xử lý"
+            value={pendingTours}
+            icon={<CalendarCheck className="w-4 h-4 text-kumo-warning" />}
+            badge={
+              <Badge variant={pendingTours > 0 ? 'warning' : 'neutral'}>
+                {pendingTours > 0 ? 'Cần liên hệ' : 'Đã xử lý hết'}
+              </Badge>
+            }
+          />
+        </div>
         <KpiCard
           label="Yêu cầu đổi kho chờ duyệt"
           value={pendingRequests}

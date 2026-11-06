@@ -4,6 +4,7 @@ import { StorageUnit } from '@entities/storage-unit.entity';
 import { TourAppointment } from '@entities/tour-appointment.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { AuthModule } from '@modules/auth/auth.module';
+import { NotificationsModule } from '@modules/notifications/notifications.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TourAppointmentsController } from './tour-appointments.controller';
@@ -13,6 +14,7 @@ import { TourAppointmentsService } from './tour-appointments.service';
   imports: [
     TypeOrmModule.forFeature([TourAppointment, Facility, StorageUnit, AppUser, UserRoleAssignment]),
     AuthModule,
+    NotificationsModule,
   ],
   controllers: [TourAppointmentsController],
   providers: [TourAppointmentsService],

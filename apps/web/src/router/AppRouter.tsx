@@ -23,6 +23,7 @@ import { RoleLandingPage } from '../features/roles/RoleLandingPage';
 import { UnassignedRolePage } from '../features/roles/UnassignedRolePage';
 import { SystemSettingsPage } from '../features/settings/SystemSettingsPage';
 import { ManagerTicketsPage } from '../features/tickets/ManagerTicketsPage';
+import { TourAppointmentsPage } from '../features/tour-appointments/TourAppointmentsPage';
 import { WarehouseDetailPage } from '../features/warehouses/WarehouseDetailPage';
 import { WarehouseManagementPage } from '../features/warehouses/WarehouseManagementPage';
 import { AppShell } from '../layouts/AppShell';
@@ -126,6 +127,10 @@ export const AppRouter: React.FC = () => {
             >
               <Route path="/admin/warehouses/:id" element={<WarehouseDetailPage />} />
               <Route path="/contracts" element={<ContractsPage />} />
+              <Route
+                path="/facility-manager/tour-appointments"
+                element={<TourAppointmentsPage />}
+              />
             </Route>
 
             {/* Unassigned role fallback view (accessible to any authenticated user) */}

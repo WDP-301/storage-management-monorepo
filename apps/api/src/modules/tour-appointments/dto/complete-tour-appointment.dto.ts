@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsNotEmpty, IsString } from 'class-validator';
 
 export class CompleteTourAppointmentDto {
@@ -8,6 +9,7 @@ export class CompleteTourAppointmentDto {
     description:
       '(Bắt buộc) Ghi chú kết quả buổi dẫn khách xem phòng (phản hồi của khách, nhu cầu tiếp theo)',
   })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @IsNotEmpty()
   staffResultNotes: string;

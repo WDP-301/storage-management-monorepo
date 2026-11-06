@@ -72,6 +72,8 @@ describe('InspectionLifecycleService.finalize', () => {
   let otherContract: { id: string } | null;
   /** The first-month invoice; paid unless a test says otherwise. */
   let firstRent: { id: string; status: InvoiceStatus; months: number } | null;
+  /** Goods still on the shelf — none unless a test sets them. */
+  let shelfRows: { id: string; name: string; quantity: number }[];
 
   const stubRows = (inspection: Inspection, contract: Contract | null = buildContract()) => {
     em.findOne.mockImplementation(async (entity, { where }) => {
@@ -88,6 +90,7 @@ describe('InspectionLifecycleService.finalize', () => {
   beforeEach(() => {
     otherHold = null;
     otherContract = null;
+    shelfRows = [];
     firstRent = { id: 'inv-1', status: InvoiceStatus.PAID, months: 1 };
     em = {
       // Manager-1 manages facility-1 only.
@@ -104,9 +107,11 @@ describe('InspectionLifecycleService.finalize', () => {
       ),
       create: jest.fn((_entity, data) => ({ ...data })),
       // Invoice voids return no rows; the contract's ledger deposit already exists.
-      query: jest.fn(async (sql: string) =>
-        sql.startsWith('UPDATE invoices') ? [[], 0] : [{ id: 'deposit-1' }],
-      ),
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('"shelf_items"')) return shelfRows;
+        if (sql.includes('"pickup_requests"')) return [[], 0];
+        return sql.startsWith('UPDATE invoices') ? [[], 0] : [{ id: 'deposit-1' }];
+      }),
       transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)),
     };
     notifications = { createForUsers: jest.fn().mockResolvedValue(1) };
@@ -456,6 +461,48 @@ describe('InspectionLifecycleService.finalize', () => {
     await service.finalize('insp-1', actor('staff-1'));
 
     expect(em.findOne).not.toHaveBeenCalledWith(UnitHold, expect.anything());
+  });
+
+  describe('goods left on a shelf', () => {
+    const returnOnActive = () =>
+      stubRows(buildReturn(), buildContract({ status: ContractStatus.ACTIVE }));
+
+    it('refuses a return while stock remains, writing nothing', async () => {
+      shelfRows = [{ id: 'item-a', name: 'Sách', quantity: 3 }];
+      returnOnActive();
+
+      await expect(service.finalize('insp-1', actor('staff-1'))).rejects.toMatchObject({
+        status: HttpStatus.CONFLICT,
+        response: { code: 'SHELF_NOT_EMPTY', details: { reason: 'RETURN', totalQuantity: 3 } },
+      });
+      expect(em.update).not.toHaveBeenCalled();
+      expect(em.save).not.toHaveBeenCalled();
+    });
+
+    it('cancels the open pick-up requests when an empty shelf is returned', async () => {
+      returnOnActive();
+
+      await service.finalize('insp-1', actor('staff-1'));
+
+      expect(em.query).toHaveBeenCalledWith(
+        expect.stringContaining(`UPDATE "pickup_requests" SET "status" = 'CANCELLED'`),
+        ['contract-1'],
+      );
+      expect(em.update).toHaveBeenCalledWith(
+        Contract,
+        { id: 'contract-1' },
+        expect.objectContaining({ status: ContractStatus.ENDED }),
+      );
+    });
+
+    it('never looks at shelf stock on a handover', async () => {
+      stubRows(buildInspection());
+
+      await service.finalize('insp-1', actor('staff-1'));
+
+      const sqls = em.query.mock.calls.map(([sql]) => String(sql));
+      expect(sqls.some((sql) => sql.includes('shelf_items'))).toBe(false);
+    });
   });
 
   it('returns 404 for an unknown inspection', async () => {

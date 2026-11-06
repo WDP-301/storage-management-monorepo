@@ -8,6 +8,10 @@ import { lockUnitClaimedOnlyBy } from '@modules/contracts/unit-claim.util';
 import { queueInvoicePdf } from '@modules/invoices/rent-period-invoice.util';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { QueueService } from '@modules/queue/queue.service';
+import {
+  assertShelfEmpty,
+  cancelOpenPickupRequests,
+} from '@modules/shelf-storage/shelf-empty-guard.util';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
@@ -109,6 +113,11 @@ export class InspectionLifecycleService {
           status: contract.status,
           requiredStatus: transition.contractFrom,
         });
+      }
+      // Goods left on a shelf must be handed back first; pick-up requests die with the contract.
+      if (inspection.type === InspectionType.RETURN) {
+        await assertShelfEmpty(em, contract.id, 'RETURN');
+        await cancelOpenPickupRequests(em, contract.id);
       }
 
       const firstRent =

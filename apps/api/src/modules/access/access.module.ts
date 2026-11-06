@@ -3,31 +3,20 @@ import { Contract } from '@entities/contract.entity';
 import { Invoice } from '@entities/invoice.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { AuthModule } from '@modules/auth/auth.module';
-import { NotificationsModule } from '@modules/notifications/notifications.module';
 import { SettingsModule } from '@modules/settings/settings.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AccessController } from './access.controller';
 import { AccessPassService } from './access-pass.service';
-import { CheckInService } from './check-in.service';
 import { CheckInHistoryService } from './check-in-history.service';
-import { VisitAutoCloseService } from './visit-auto-close.service';
-import { VisitsService } from './visits.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([AccessEvent, Contract, Invoice, UserRoleAssignment]),
     AuthModule,
-    NotificationsModule,
     SettingsModule,
   ],
   controllers: [AccessController],
-  providers: [
-    AccessPassService,
-    CheckInService,
-    CheckInHistoryService,
-    VisitsService,
-    VisitAutoCloseService,
-  ],
+  providers: [AccessPassService, CheckInHistoryService],
 })
 export class AccessModule {}

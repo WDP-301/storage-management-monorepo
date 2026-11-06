@@ -1,79 +1,80 @@
-import { ContractStatus, StorageUnitKind } from '@storage/types';
-import {
-  buildPayload,
-  checkInRefusal,
-  parsePayload,
-  startOfVietnamDay,
-} from './check-in-eligibility';
+import { assertCanIssuePass, buildPayload, parsePayload } from './check-in-eligibility';
 
-const now = new Date('2026-03-01T00:00:00Z');
-const active = { status: ContractStatus.ACTIVE, effectiveAt: new Date('2026-02-01T00:00:00Z') };
-const shelf = { kind: StorageUnitKind.SHELF };
+const NOW = new Date('2026-11-07T05:00:00Z');
+const row = (over: Record<string, unknown> = {}) => ({
+  id: 'c-1',
+  contractNo: 'HD-1',
+  status: 'ACTIVE',
+  customerId: 'u-1',
+  effectiveAt: new Date('2026-01-01T00:00:00Z'),
+  shelfId: 's-1',
+  shelfCode: 'K-1',
+  shelfName: 'Kệ 1',
+  warehouseId: 'w-1',
+  warehouseCode: 'W-1',
+  warehouseName: 'Kho 1',
+  facilityId: 'f-1',
+  facilityCode: 'F-1',
+  facilityName: 'CN 1',
+  returnOpen: false,
+  ...over,
+});
 
-describe('checkInRefusal', () => {
-  it('allows an ACTIVE, started shelf contract', () => {
-    expect(checkInRefusal(active, shelf, now)).toBeNull();
-  });
-
-  it.each([ContractStatus.DRAFT, ContractStatus.ENDED, ContractStatus.CANCELLED])(
-    'refuses a %s contract',
-    (status) => {
-      expect(checkInRefusal({ ...active, status }, shelf, now)).toEqual({
-        reason: 'CONTRACT_NOT_ACTIVE',
-      });
-    },
+const emWith = (contracts: unknown[], overdue: { invoiceNo: string }[] = []) => {
+  const query = jest.fn(async (sql: string, _params?: unknown[]) =>
+    sql.includes('FROM "invoices"') ? overdue : contracts,
   );
+  return { em: { query } as never, query };
+};
 
-  it('refuses until effectiveAt and reports it', () => {
-    const effectiveAt = new Date('2026-04-01T00:00:00Z');
-    expect(checkInRefusal({ ...active, effectiveAt }, shelf, now)).toEqual({
-      reason: 'CONTRACT_NOT_STARTED',
-      effectiveAt,
+describe('assertCanIssuePass', () => {
+  it('passes with a started contract and no debt', async () => {
+    const { em } = emWith([row()]);
+    await expect(assertCanIssuePass(em, 'u-1', NOW)).resolves.toBeUndefined();
+  });
+
+  it('asks only for ACTIVE contracts of the customer', async () => {
+    const { em, query } = emWith([row()]);
+    await assertCanIssuePass(em, 'u-1', NOW);
+    expect(query.mock.calls[0][1]).toEqual(['u-1', ['ACTIVE']]);
+  });
+
+  it('refuses without a shelf contract', async () => {
+    const { em } = emWith([]);
+    await expect(assertCanIssuePass(em, 'u-1', NOW)).rejects.toMatchObject({
+      response: { code: 'CHECK_IN_NOT_ALLOWED', details: { reason: 'NO_SHELF_CONTRACT' } },
     });
   });
 
-  describe('on the start date', () => {
-    // Starts 15:00 on 15/10 Vietnam time; that day opens at 2026-10-14T17:00:00Z.
-    const effectiveAt = new Date('2026-10-15T15:00:00+07:00');
-    const started = { ...active, effectiveAt };
-
-    it('allows entry from 00:00 Vietnam time, before the contract hour', () => {
-      expect(checkInRefusal(started, shelf, new Date('2026-10-15T00:00:00+07:00'))).toBeNull();
-    });
-
-    it('refuses the last second of the previous Vietnam day', () => {
-      expect(checkInRefusal(started, shelf, new Date('2026-10-14T23:59:59+07:00'))).toEqual({
-        reason: 'CONTRACT_NOT_STARTED',
-        effectiveAt,
-      });
-    });
-
-    it('uses the Vietnam day even when the UTC date differs', () => {
-      // 06:00 on 15/10 Vietnam time is still 14/10 in UTC.
-      const early = { ...active, effectiveAt: new Date('2026-10-15T06:00:00+07:00') };
-      expect(checkInRefusal(early, shelf, new Date('2026-10-15T00:00:01+07:00'))).toBeNull();
-      expect(checkInRefusal(early, shelf, new Date('2026-10-14T23:59:59+07:00'))).not.toBeNull();
+  it('refuses until the earliest contract starts and reports it', async () => {
+    const soon = new Date('2026-12-01T00:00:00Z');
+    const { em } = emWith([
+      row({ effectiveAt: new Date('2027-01-01T00:00:00Z') }),
+      row({ id: 'c-2', effectiveAt: soon }),
+    ]);
+    await expect(assertCanIssuePass(em, 'u-1', NOW)).rejects.toMatchObject({
+      response: {
+        code: 'CHECK_IN_NOT_ALLOWED',
+        details: { reason: 'CONTRACT_NOT_STARTED', effectiveAt: soon },
+      },
     });
   });
 
-  it.each([
-    ['2026-10-15T00:00:00+07:00', '2026-10-14T17:00:00.000Z'],
-    ['2026-10-15T23:59:59+07:00', '2026-10-14T17:00:00.000Z'],
-    ['2026-10-14T17:00:00Z', '2026-10-14T17:00:00.000Z'],
-    ['2026-10-14T16:59:59Z', '2026-10-13T17:00:00.000Z'],
-  ])('startOfVietnamDay(%s) is %s', (at, expected) => {
-    expect(startOfVietnamDay(new Date(at)).toISOString()).toBe(expected);
-  });
-
-  it('allows an ACTIVE contract past its endedAt', () => {
-    const ended = { ...active, endedAt: new Date('2026-02-15T00:00:00Z') };
-    expect(checkInRefusal(ended, shelf, now)).toBeNull();
-  });
-
-  it('refuses a self-storage unit', () => {
-    expect(checkInRefusal(active, { kind: StorageUnitKind.SELF_STORAGE }, now)).toEqual({
-      reason: 'NOT_SHELF',
+  it('refuses with the overdue invoice numbers', async () => {
+    const { em } = emWith([row()], [{ invoiceNo: 'INV-9' }]);
+    await expect(assertCanIssuePass(em, 'u-1', NOW)).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'INVOICE_OVERDUE', details: { invoiceNos: ['INV-9'] } },
     });
+  });
+
+  it('skips the debt check when a contract is being returned', async () => {
+    const { em, query } = emWith(
+      [row(), row({ id: 'c-2', returnOpen: true })],
+      [{ invoiceNo: 'INV-9' }],
+    );
+    await expect(assertCanIssuePass(em, 'u-1', NOW)).resolves.toBeUndefined();
+    expect(query.mock.calls.some(([sql]) => sql.includes('FROM "invoices"'))).toBe(false);
   });
 });
 

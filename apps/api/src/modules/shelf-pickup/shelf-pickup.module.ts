@@ -6,6 +6,9 @@ import { AuthModule } from '@modules/auth/auth.module';
 import { NotificationsModule } from '@modules/notifications/notifications.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { PickupRequestsController } from './pickup-requests.controller';
+import { PickupRequestsService } from './pickup-requests.service';
+import { PickupRequestsStaffService } from './pickup-requests-staff.service';
 
 @Module({
   imports: [
@@ -13,7 +16,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
     AuthModule,
     NotificationsModule,
   ],
-  controllers: [],
-  providers: [],
+  controllers: [PickupRequestsController],
+  providers: [PickupRequestsService, PickupRequestsStaffService],
 })
 export class ShelfPickupModule {}

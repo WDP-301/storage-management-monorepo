@@ -56,6 +56,7 @@ const buildRequest = (overrides: Partial<UnitChangeRequest> = {}): UnitChangeReq
       id: 'unit-new',
       code: 'A-02',
       facilityId: FACILITY_ID,
+      kind: StorageUnitKind.SELF_STORAGE,
       monthlyPrice: '950000.00',
     },
     requester: { id: CUSTOMER_ID, fullName: 'Cust', email: 'c@test.dev' },
@@ -103,7 +104,10 @@ describe('ChangeRequestsService', () => {
     findOne: jest.Mock;
     count: jest.Mock;
     findOneByOrFail: jest.Mock;
+    query: jest.Mock;
   };
+  /** Goods on the shelf of the contract — none unless a test sets them. */
+  let shelfRows: { id: string; name: string; quantity: number }[];
   let settings: SettingsService;
   let service: ChangeRequestsService;
 
@@ -131,7 +135,9 @@ describe('ChangeRequestsService', () => {
     };
     storageUnits = { findOne: jest.fn() };
     roleAssignments = { find: jest.fn().mockResolvedValue([activeAssignment()]) };
+    shelfRows = [];
     txManager = {
+      query: jest.fn(async () => shelfRows),
       find: jest.fn().mockResolvedValue([]),
       createQueryBuilder: jest.fn(),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
@@ -299,6 +305,49 @@ describe('ChangeRequestsService', () => {
       { status: StorageUnitStatus.MAINTENANCE },
     );
     expect(result.request.status).toBe(ChangeRequestStatus.COMPLETED);
+  });
+
+  describe('goods left on the shelf', () => {
+    const withTarget = (kind: StorageUnitKind) => {
+      const request = buildRequest();
+      request.newUnit = { ...request.newUnit, kind } as StorageUnit;
+      requests.findOne.mockResolvedValue(request);
+      return request;
+    };
+
+    it('approve to a non-shelf unit is refused while stock remains', async () => {
+      shelfRows = [{ id: 'item-a', name: 'Sách', quantity: 2 }];
+      withTarget(StorageUnitKind.SELF_STORAGE);
+
+      await expect(
+        service.decide('req-1', { decision: 'APPROVED' }, manager),
+      ).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'SHELF_NOT_EMPTY', details: { reason: 'UNIT_CHANGE' } },
+      });
+      expect(txManager.update).not.toHaveBeenCalledWith(
+        BookingItem,
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it('approve shelf to shelf keeps the goods and completes', async () => {
+      shelfRows = [{ id: 'item-a', name: 'Sách', quantity: 2 }];
+      const request = withTarget(StorageUnitKind.SHELF);
+
+      await service.decide('req-1', { decision: 'APPROVED' }, manager);
+
+      expect(request.status).toBe(ChangeRequestStatus.COMPLETED);
+    });
+
+    it('approve to a non-shelf unit completes when the shelf is empty', async () => {
+      const request = withTarget(StorageUnitKind.SELF_STORAGE);
+
+      await service.decide('req-1', { decision: 'APPROVED' }, manager);
+
+      expect(request.status).toBe(ChangeRequestStatus.COMPLETED);
+    });
   });
 
   it('approve snapshots the system-wide deposit level for a unit without its own', async () => {

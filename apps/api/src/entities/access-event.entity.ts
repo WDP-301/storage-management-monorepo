@@ -16,9 +16,11 @@ import {
 
 /**
  * A row is a pass: inserted when the customer's app shows the QR; `usedAt` and the warehouse
- * are set when staff scan it. A used CHECK_IN row is a visit, open until `checkedOutAt` is set;
- * the exit scan's own pass row is stored as CHECK_OUT and linked from `checkOutEventId`. Passes belong to the customer; `contractId` and
- * `storageUnitId` are only set on entries made when passes were still issued per shelf contract.
+ * are set when staff scan it at the counter, and that scan row is the counter session of the
+ * receipts recorded within the next 30 minutes. Used CHECK_IN/CHECK_OUT rows are legacy visits
+ * from before goods were handled by staff; COUNTER_SCAN rows are counter sessions. Passes belong
+ * to the customer; `contractId` and `storageUnitId` are only set on entries made when passes
+ * were still issued per shelf contract.
  */
 @Entity('access_events')
 @Index('IDX_access_events_contract', ['contractId'])

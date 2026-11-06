@@ -10,6 +10,7 @@ import {
   TicketSummaryCard,
 } from '../customer/ticket-detail-parts';
 import { type FinishMode, TicketFinishForm } from './TicketFinishForm';
+import { TicketReceiptLink } from './TicketReceiptLink';
 import type { TicketActionSet } from './ticket-actions';
 
 export type FinishDraft = { mode: FinishMode; note: string; photos: PickedFile[] };
@@ -90,6 +91,8 @@ export function StaffTicketDetailScreen({
                   value={ticket.assignee?.full_name ?? 'Chưa phân công'}
                 />
               </TicketSummaryCard>
+
+              <TicketReceiptLink receipt={ticket.shelf_receipt} ticketId={ticket.id} />
 
               {actions.hint ? (
                 <View className="rounded-xl border border-border bg-surface p-3">

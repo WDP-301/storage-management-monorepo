@@ -2,12 +2,20 @@ import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../../lib/api';
+import {
+  disputeDescription,
+  disputeErrorMessage,
+  disputeFormOptions,
+  disputeSubject,
+  supportTypeId,
+} from '../../lib/receipt-dispute';
 import { TicketsApi } from '../../lib/tickets-api';
 import { type PickedFile, UploadsApi } from '../../lib/uploads-api';
 import {
   type CreateTicketForm,
   CreateTicketScreen,
 } from '../../src/features/customer/CreateTicketScreen';
+import { useReceiptDispute } from '../../src/features/customer/use-receipt-dispute';
 import type { TicketAttachment, TicketFormOptions } from '../../src/types/ticket-api';
 
 const MAX_ATTACHMENTS = 5;
@@ -34,8 +42,44 @@ export default function TicketCreateRoute() {
   const [form, setForm] = useState<CreateTicketForm>(EMPTY_FORM);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const preset = useLocalSearchParams<{ facilityId?: string; storageUnitId?: string }>();
+  const preset = useLocalSearchParams<{
+    facilityId?: string;
+    storageUnitId?: string;
+    shelfReceiptId?: string;
+    nonce?: string;
+  }>();
   const appliedPreset = useRef<string | null>(null);
+  // Reporting a wrong receipt: the receipt comes from the route, and `leftKey` marks the visit whose
+  // dispute mode already ended (submitted, backed out or left) so the lingering tab params cannot revive it.
+  const dispute = useReceiptDispute(preset.shelfReceiptId, preset.nonce);
+  const [leftKey, setLeftKey] = useState<string | null>(null);
+  const disputeReceipt = dispute.key !== leftKey ? dispute.receipt : null;
+  const disputeNotice = dispute.key !== leftKey ? dispute.notice : null;
+  const activeKey = useRef<string | null>(null);
+  activeKey.current = disputeReceipt ? dispute.key : null;
+  const appliedDispute = useRef<string | null>(null);
+  const formOptions =
+    options && disputeReceipt ? disputeFormOptions(options, disputeReceipt) : options;
+
+  const endDispute = useCallback(() => {
+    if (!activeKey.current) return;
+    setLeftKey(activeKey.current);
+    setForm(EMPTY_FORM);
+  }, []);
+  // Leaving the tab ends the report; the next tap on "Báo sai phiếu" brings a new nonce.
+  useFocusEffect(useCallback(() => endDispute, [endDispute]));
+
+  useEffect(() => {
+    if (!options || !disputeReceipt || appliedDispute.current === dispute.key) return;
+    appliedDispute.current = dispute.key;
+    setForm({
+      ...EMPTY_FORM,
+      facilityId: disputeReceipt.facility.id,
+      typeId: supportTypeId(options.types),
+      subject: disputeSubject(disputeReceipt.code),
+      description: disputeDescription(disputeReceipt),
+    });
+  }, [options, disputeReceipt, dispute.key]);
 
   const loadOptions = useCallback(async () => {
     setError(null);
@@ -107,7 +151,12 @@ export default function TicketCreateRoute() {
         {
           typeId: form.typeId,
           facilityId: form.facilityId,
-          ...(form.storageUnitId ? { storageUnitId: form.storageUnitId } : {}),
+          // The server derives the shelf from the receipt and rejects a unit sent alongside it.
+          ...(disputeReceipt
+            ? { shelfReceiptId: disputeReceipt.id }
+            : form.storageUnitId
+              ? { storageUnitId: form.storageUnitId }
+              : {}),
           subject: form.subject,
           description: form.description,
           attachments,
@@ -119,9 +168,16 @@ export default function TicketCreateRoute() {
       uploaded.current.clear();
       appliedPreset.current = null;
       setForm(EMPTY_FORM);
+      endDispute();
       router.replace(`/(customer)/ticket-detail?id=${ticket.id}`);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Không gửi được yêu cầu. Thử lại.');
+      setError(
+        disputeReceipt
+          ? disputeErrorMessage(e)
+          : e instanceof ApiError
+            ? e.message
+            : 'Không gửi được yêu cầu. Thử lại.',
+      );
       // The rental window may have moved — refresh options so a stale facility does not
       // keep offering itself. Keep the typed fields intact either way.
       void loadOptions();
@@ -132,8 +188,9 @@ export default function TicketCreateRoute() {
 
   return (
     <CreateTicketScreen
-      options={options}
-      error={error}
+      options={formOptions}
+      error={error ?? disputeNotice}
+      linkedReceiptCode={disputeReceipt?.code}
       form={form}
       isSubmitting={isSubmitting}
       onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
@@ -143,7 +200,10 @@ export default function TicketCreateRoute() {
       }
       onSubmit={() => void submit()}
       onRetryOptions={() => void loadOptions()}
-      onBack={() => router.navigate('/(customer)/tickets')}
+      onBack={() => {
+        endDispute();
+        router.navigate('/(customer)/tickets');
+      }}
     />
   );
 }

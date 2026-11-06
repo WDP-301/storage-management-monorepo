@@ -4,9 +4,19 @@ import { formatIsoDateTime } from '../../lib/format-vi';
 import { receiptTypeLabel, recoveredLabel } from '../../lib/shelf-storage-format';
 import { StatusPill } from '../features/customer/contract-display';
 import { EvidenceGallery } from './EvidenceGallery';
+import { ReceiptDisputeRow } from './ReceiptDisputeRow';
 
 /** One drop-off / pick-up receipt: what moved, who recorded it, photos, and the void notice. */
-export function ShelfReceiptView({ receipt }: { receipt: ShelfReceipt }) {
+export function ShelfReceiptView({
+  receipt,
+  onReport,
+  onOpenDispute,
+}: {
+  receipt: ShelfReceipt;
+  /** Customer only: reports this receipt as wrong. */
+  onReport?: () => void;
+  onOpenDispute?: (ticketId: string) => void;
+}) {
   const voided = receipt.status === 'VOIDED';
   const dropOff = receipt.type === 'DROP_OFF';
   return (
@@ -48,6 +58,7 @@ export function ShelfReceiptView({ receipt }: { receipt: ShelfReceipt }) {
       ) : null}
 
       <EvidenceGallery files={receipt.photos} />
+      <ReceiptDisputeRow receipt={receipt} onReport={onReport} onOpenDispute={onOpenDispute} />
     </View>
   );
 }

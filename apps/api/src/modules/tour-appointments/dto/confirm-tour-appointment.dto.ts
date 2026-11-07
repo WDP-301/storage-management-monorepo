@@ -1,4 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsDateString, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 
 export class ConfirmTourAppointmentDto {
@@ -9,6 +10,7 @@ export class ConfirmTourAppointmentDto {
       '(Tùy chọn) Ngày hẹn đã thống nhất lại với khách (nếu có thay đổi so với đăng ký ban đầu, định dạng YYYY-MM-DD)',
   })
   @IsOptional()
+  @Transform(({ value }) => (value === '' ? undefined : value))
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'preferredDate must be formatted as YYYY-MM-DD' })
   @IsDateString({ strict: true }, { message: 'preferredDate must be a valid calendar date' })
@@ -21,6 +23,7 @@ export class ConfirmTourAppointmentDto {
     description: '(Tùy chọn) Khung giờ đã chốt lại với khách',
   })
   @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MaxLength(50)
   preferredTimeSlot?: string;
@@ -32,6 +35,7 @@ export class ConfirmTourAppointmentDto {
     description: '(Tùy chọn) Ghi chú xác nhận của Quản lý chi nhánh (Facility Manager)',
   })
   @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   managerNotes?: string;
 }

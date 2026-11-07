@@ -3,6 +3,7 @@ import {
   addVietnamMonths,
   formatVietnamDate,
   fromVietnamDate,
+  isPastVietnamTimeSlot,
   startOfVietnamDay,
   vietnamDate,
   vietnamDayIndex,
@@ -112,6 +113,33 @@ describe('calendar.util', () => {
 
     it('rejects a malformed day', () => {
       expect(() => formatVietnamDate('2027-02-30')).toThrow(RangeError);
+    });
+  });
+
+  describe('isPastVietnamTimeSlot', () => {
+    // 2026-11-07 10:15:00 Vietnam time is 2026-11-07T03:15:00Z
+    const fixedNow = new Date('2026-11-07T03:15:00Z');
+
+    it('returns true when the date itself is before today', () => {
+      expect(isPastVietnamTimeSlot('2026-11-06', '14:00 - 15:00', fixedNow)).toBe(true);
+    });
+
+    it('returns false when the date is in the future regardless of time slot', () => {
+      expect(isPastVietnamTimeSlot('2026-11-08', '08:30 - 09:30', fixedNow)).toBe(false);
+    });
+
+    it('returns true when time slot has already started on today', () => {
+      expect(isPastVietnamTimeSlot('2026-11-07', '08:30 - 09:30', fixedNow)).toBe(true);
+      expect(isPastVietnamTimeSlot('2026-11-07', '10:00 - 11:00', fixedNow)).toBe(true);
+    });
+
+    it('returns false when time slot is in the future on today', () => {
+      expect(isPastVietnamTimeSlot('2026-11-07', '14:00 - 15:00', fixedNow)).toBe(false);
+      expect(isPastVietnamTimeSlot('2026-11-07', '15:30 - 16:30', fixedNow)).toBe(false);
+    });
+
+    it('returns false if no time slot is provided for today', () => {
+      expect(isPastVietnamTimeSlot('2026-11-07', null, fixedNow)).toBe(false);
     });
   });
 });

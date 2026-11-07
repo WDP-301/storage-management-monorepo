@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
   IsDateString,
   IsEmail,
@@ -9,6 +10,9 @@ import {
   Matches,
   MaxLength,
 } from 'class-validator';
+
+const VIETNAMESE_PHONE_PATTERN =
+  /^(?:\+?84|0)(?:32|33|34|35|36|37|38|39|52|55|56|58|59|70|76|77|78|79|81|82|83|84|85|86|87|88|89|90|91|92|93|94|96|97|98|99)\d{7}$/;
 
 export class CreateContactTourDto {
   @ApiProperty({
@@ -24,6 +28,7 @@ export class CreateContactTourDto {
     maxLength: 150,
     description: '(Bắt buộc) Họ và tên của người liên hệ',
   })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @IsNotEmpty()
   @MaxLength(150)
@@ -34,9 +39,12 @@ export class CreateContactTourDto {
     maxLength: 30,
     description: '(Bắt buộc) Số điện thoại liên hệ (di động/Zalo)',
   })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @IsNotEmpty()
-  @MaxLength(30)
+  @Matches(VIETNAMESE_PHONE_PATTERN, {
+    message: 'phone must be a valid Vietnamese mobile phone number',
+  })
   phone: string;
 
   @ApiProperty({
@@ -44,6 +52,7 @@ export class CreateContactTourDto {
     maxLength: 255,
     description: '(Bắt buộc) Địa chỉ email để nhận thông tin xác nhận lịch hẹn',
   })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
   @IsEmail()
   @MaxLength(255)
   email: string;
@@ -66,6 +75,7 @@ export class CreateContactTourDto {
     description: '(Tùy chọn) Khung giờ mong muốn đến xem (ví dụ: Sáng 9h-11h, Chiều 14h-16h)',
   })
   @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MaxLength(50)
   preferredTimeSlot?: string;
@@ -76,6 +86,7 @@ export class CreateContactTourDto {
     description: '(Tùy chọn) Nội dung chi tiết nhu cầu hoặc lời nhắn thêm của khách',
   })
   @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   customerNotes?: string;
 
@@ -87,6 +98,7 @@ export class CreateContactTourDto {
       '(Tùy chọn) Mã phòng kho cụ thể nếu khách xem trên danh sách kho và bấm Đăng ký xem phòng này',
   })
   @IsOptional()
+  @Transform(({ value }) => (value === '' ? undefined : value))
   @IsUUID('all')
   storageUnitId?: string;
 }

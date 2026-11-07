@@ -78,3 +78,32 @@ export function formatVietnamDate(day: string | Date): string {
   const [year, month, date] = iso.split('-');
   return `${date}/${month}/${year}`;
 }
+
+/**
+ * Checks if a time slot on a given Vietnam date has already passed.
+ * Evaluates against the slot's starting time (e.g. "08:30 - 09:30" checks against 08:30).
+ */
+export function isPastVietnamTimeSlot(
+  day: string,
+  timeSlot?: string | null,
+  now: Date = new Date(),
+): boolean {
+  const today = vietnamToday(now);
+  if (day < today) return true;
+  if (day > today || !timeSlot) return false;
+
+  const match = /(\d{1,2}):(\d{2})/.exec(timeSlot);
+  if (!match) return false;
+
+  const slotHour = Number(match[1]);
+  const slotMinute = Number(match[2]);
+
+  const vnNow = new Date(now.getTime() + VN_OFFSET_MS);
+  const nowHour = vnNow.getUTCHours();
+  const nowMinute = vnNow.getUTCMinutes();
+
+  if (nowHour > slotHour || (nowHour === slotHour && nowMinute >= slotMinute)) {
+    return true;
+  }
+  return false;
+}

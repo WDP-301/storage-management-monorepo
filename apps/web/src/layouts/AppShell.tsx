@@ -1,6 +1,7 @@
 import { Badge, Button, Select, Sidebar, Text, useSidebar } from '@cloudflare/kumo';
 import {
   Buildings,
+  CalendarCheck,
   ClipboardText,
   Faders,
   FileText,
@@ -39,17 +40,20 @@ const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { to: '/facility-manager', label: 'Kho của chi nhánh', icon: Warehouse },
     { to: '/facility-manager/tickets', label: 'Vé sự cố', icon: Lifebuoy },
     { to: '/facility-manager/inspections', label: 'Biên bản', icon: ClipboardText },
+    { to: '/facility-manager/tour-appointments', label: 'Lịch xem kho', icon: CalendarCheck },
   ],
   [UserRole.OPERATIONS_MANAGER]: [
     { to: '/admin/facilities', label: 'Quản lý chi nhánh', icon: Storefront },
     { to: '/admin/warehouses', label: 'Quản lý kho', icon: Buildings },
     { to: '/contracts', label: 'Hợp đồng', icon: FileText },
+    { to: '/facility-manager/tour-appointments', label: 'Lịch xem kho', icon: CalendarCheck },
   ],
   [UserRole.FACILITY_MANAGER]: [
     { to: '/facility-manager', label: 'Kho của chi nhánh', icon: Warehouse },
     { to: '/facility-manager/tickets', label: 'Vé sự cố', icon: Lifebuoy },
     // Handover/return records are part of a contract: managers assign staff from its detail.
     { to: '/contracts', label: 'Hợp đồng', icon: FileText },
+    { to: '/facility-manager/tour-appointments', label: 'Lịch xem kho', icon: CalendarCheck },
   ],
   [UserRole.FACILITY_STAFF]: [],
   [UserRole.CUSTOMER]: [],

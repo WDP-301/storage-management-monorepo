@@ -6,6 +6,7 @@ export default function StaffTodayRoute() {
   return (
     <StaffTodayScreen
       onOpen={(contractId) => router.navigate(`/(staff)/staff-contract?id=${contractId}`)}
+      onOpenTour={(tourId) => router.navigate(`/(staff)/staff-tour?id=${tourId}`)}
     />
   );
 }

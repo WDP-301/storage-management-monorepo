@@ -10,6 +10,7 @@ type Props = {
   isLoggingOut: boolean;
   onLogout: () => void;
   onSupport?: () => void;
+  onTours?: () => void;
   rentalUnitCount?: number | null;
   pendingDepositCount?: number | null;
   /** Customer-only: the check-in code, shown right under the identity card. */
@@ -25,6 +26,7 @@ export function SettingsScreen({
   isLoggingOut,
   onLogout,
   onSupport,
+  onTours,
   rentalUnitCount,
   pendingDepositCount,
   accessCard,
@@ -104,6 +106,16 @@ export function SettingsScreen({
           </View>
         ) : null}
         <View className="mx-4 mt-4 rounded-xl border border-border bg-surface px-3">
+          {onTours ? (
+            <>
+              <SettingItem
+                title="Lịch hẹn xem kho"
+                description="Theo dõi lịch tham quan kho mẫu và tư vấn"
+                onPress={onTours}
+              />
+              <View className="h-px bg-separator" />
+            </>
+          ) : null}
           <SettingItem title="Thông báo" description="Booking, thanh toán và nhắc lịch" />
           <View className="h-px bg-separator" />
           <SettingItem title="Bảo mật" description="Mật khẩu và phiên đăng nhập" />

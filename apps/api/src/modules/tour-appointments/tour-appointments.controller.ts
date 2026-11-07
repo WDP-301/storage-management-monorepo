@@ -78,7 +78,7 @@ export class TourAppointmentsController {
 
   @Get()
   @UseGuards(SessionGuard, RolesGuard)
-  @Roles(UserRole.FACILITY_MANAGER, UserRole.FACILITY_STAFF, UserRole.ADMIN)
+  @Roles(UserRole.FACILITY_MANAGER, UserRole.FACILITY_STAFF, UserRole.ADMIN, UserRole.CUSTOMER)
   @ApiOperation({
     summary: 'Danh sách lịch hẹn xem kho',
     description:
@@ -319,7 +319,7 @@ export class TourAppointmentsController {
 
   @Patch(':id/cancel')
   @UseGuards(SessionGuard, RolesGuard)
-  @Roles(UserRole.FACILITY_STAFF, UserRole.FACILITY_MANAGER, UserRole.ADMIN)
+  @Roles(UserRole.FACILITY_STAFF, UserRole.FACILITY_MANAGER, UserRole.ADMIN, UserRole.CUSTOMER)
   @ApiOperation({
     summary: 'Hủy cuộc hẹn hoặc ghi nhận khách không đến (No-show)',
     description:

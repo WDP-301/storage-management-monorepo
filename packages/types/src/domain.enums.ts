@@ -355,6 +355,11 @@ export const NotificationType = {
   PICKUP_REQUEST_READY: 'PICKUP_REQUEST_READY',
   /** To facility staff and managers: a customer asked to collect goods. */
   PICKUP_REQUEST_CREATED: 'PICKUP_REQUEST_CREATED',
+  /** Tour appointments notifications */
+  TOUR_APPOINTMENT_CREATED: 'TOUR_APPOINTMENT_CREATED',
+  TOUR_APPOINTMENT_CONFIRMED: 'TOUR_APPOINTMENT_CONFIRMED',
+  TOUR_APPOINTMENT_ASSIGNED: 'TOUR_APPOINTMENT_ASSIGNED',
+  TOUR_APPOINTMENT_CANCELLED: 'TOUR_APPOINTMENT_CANCELLED',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 

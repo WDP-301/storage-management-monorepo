@@ -28,6 +28,7 @@ export default function SettingsRoute() {
       isLoggingOut={isLoggingOut}
       onLogout={logout}
       onSupport={() => router.navigate('/(customer)/tickets')}
+      onTours={() => router.navigate('/(customer)/tours')}
       accessCard={<ShelfAccessCard contracts={contracts} />}
     />
   );

@@ -5,11 +5,20 @@ import { TourAppointment } from '@entities/tour-appointment.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { activeFacilityIds, isAssignmentActive } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { NotificationsService } from '@modules/notifications/notifications.service';
+import { HttpStatus, Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
-import { FacilityStatus, TourAppointmentStatus, UserRole, UserStatus } from '@storage/types';
+import { isPastVietnamTimeSlot } from '@shared/utils/calendar.util';
+import {
+  FacilityStatus,
+  NotificationType,
+  StorageUnitStatus,
+  TourAppointmentStatus,
+  UserRole,
+  UserStatus,
+} from '@storage/types';
 import { IsNull, Repository } from 'typeorm';
 import type { AssignTourAppointmentDto } from './dto/assign-tour-appointment.dto';
 import type { CancelTourAppointmentDto } from './dto/cancel-tour-appointment.dto';
@@ -86,10 +95,10 @@ export class TourAppointmentsService {
   constructor(
     @InjectRepository(TourAppointment)
     private readonly appointments: Repository<TourAppointment>,
-    @InjectRepository(AppUser)
-    private readonly users: Repository<AppUser>,
     @InjectRepository(UserRoleAssignment)
     private readonly roleAssignments: Repository<UserRoleAssignment>,
+    @Optional()
+    private readonly notificationsService?: NotificationsService,
   ) {}
 
   /**
@@ -100,6 +109,14 @@ export class TourAppointmentsService {
     dto: CreateContactTourDto,
     customerId?: string | null,
   ): Promise<TourAppointmentResponse> {
+    if (isPastVietnamTimeSlot(dto.preferredDate, dto.preferredTimeSlot)) {
+      throw new DomainException(
+        ErrorCode.VALIDATION_FAILED,
+        'preferredDate or preferredTimeSlot cannot be in the past',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     const saved = await this.appointments.manager.transaction(async (manager) => {
       // FOR SHARE on an open facility: closed sites take no new tours.
       const facility = await manager.findOne(Facility, {
@@ -123,9 +140,27 @@ export class TourAppointmentsService {
             HttpStatus.NOT_FOUND,
           );
         }
+        if (unit.status === StorageUnitStatus.RENTED) {
+          throw new DomainException(
+            ErrorCode.VALIDATION_FAILED,
+            'Cannot schedule a tour for an occupied or rented storage unit',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+        if (
+          unit.status === StorageUnitStatus.MAINTENANCE ||
+          unit.status === StorageUnitStatus.INACTIVE ||
+          unit.status === StorageUnitStatus.PENDING_INSPECTION
+        ) {
+          throw new DomainException(
+            ErrorCode.VALIDATION_FAILED,
+            'Cannot schedule a tour for a storage unit that is under maintenance or inactive',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
       }
 
-      return manager.save(
+      const created = await manager.save(
         manager.create(TourAppointment, {
           facilityId: dto.facilityId,
           customerId: customerId ?? null,
@@ -139,6 +174,26 @@ export class TourAppointmentsService {
           status: TourAppointmentStatus.PENDING,
         }),
       );
+
+      if (this.notificationsService) {
+        const assignments = await manager.find(UserRoleAssignment, {
+          where: {
+            facilityId: dto.facilityId,
+            role: UserRole.FACILITY_MANAGER,
+          },
+        });
+        const activeManagerIds = assignments.filter(isAssignmentActive).map((a) => a.userId);
+        if (activeManagerIds.length > 0) {
+          await this.notificationsService.createForUsers(manager, activeManagerIds, {
+            type: NotificationType.TOUR_APPOINTMENT_CREATED,
+            title: 'Lịch xem kho mới',
+            body: `Khách hàng ${dto.fullName.trim()} đã đăng ký xem kho tại ${facility.name} vào ngày ${dto.preferredDate}.`,
+            data: { appointmentId: created.id, facilityId: dto.facilityId },
+          });
+        }
+      }
+
+      return created;
     });
 
     return {
@@ -150,6 +205,7 @@ export class TourAppointmentsService {
    * List tour appointments based on user role and filters.
    * FACILITY_MANAGER: restricted only to their assigned facilities.
    * FACILITY_STAFF: restricted only to appointments assigned to them.
+   * CUSTOMER: restricted only to their own appointments.
    * ADMIN: can view all facilities and appointments.
    */
   async listAppointments(
@@ -200,6 +256,8 @@ export class TourAppointmentsService {
       }
     } else if (actor.roles.includes(UserRole.FACILITY_STAFF)) {
       qb.andWhere('apt.assignedTo = :staffId', { staffId: actor.id });
+    } else if (actor.roles.includes(UserRole.CUSTOMER)) {
+      qb.andWhere('apt.customerId = :customerId', { customerId: actor.id });
     } else {
       throw new DomainException(
         ErrorCode.FORBIDDEN,
@@ -218,6 +276,14 @@ export class TourAppointmentsService {
 
     if (query.toDate) {
       qb.andWhere('apt.preferredDate <= :toDate', { toDate: query.toDate });
+    }
+
+    if (query.search?.trim()) {
+      const q = `%${query.search.trim().toLowerCase()}%`;
+      qb.andWhere(
+        '(LOWER(apt.fullName) LIKE :search OR apt.phone LIKE :search OR LOWER(apt.email) LIKE :search)',
+        { search: q },
+      );
     }
 
     qb.orderBy('apt.preferredDate', 'ASC')
@@ -244,99 +310,163 @@ export class TourAppointmentsService {
 
   /**
    * Facility Manager confirms the appointment details with the customer.
+   * Can be called on PENDING, CONFIRMED, or ASSIGNED appointments (retains ASSIGNED if already assigned).
    */
   async confirmAppointment(
     id: string,
     dto: ConfirmTourAppointmentDto,
     actor: AuthUser,
   ): Promise<TourAppointmentResponse> {
-    const appointment = await this.findAppointmentOrFail(id);
-    await this.assertManagesFacility(actor, appointment.facilityId);
-
-    if (
-      appointment.status !== TourAppointmentStatus.PENDING &&
-      appointment.status !== TourAppointmentStatus.CONFIRMED
-    ) {
+    if (dto.preferredDate && isPastVietnamTimeSlot(dto.preferredDate, dto.preferredTimeSlot)) {
       throw new DomainException(
-        ErrorCode.CONFLICT,
-        `Cannot confirm an appointment while its status is ${appointment.status}`,
-        HttpStatus.CONFLICT,
+        ErrorCode.VALIDATION_FAILED,
+        'preferredDate or preferredTimeSlot cannot be in the past',
+        HttpStatus.BAD_REQUEST,
       );
     }
 
-    if (dto.preferredDate) {
-      appointment.preferredDate = dto.preferredDate;
-    }
-    if (dto.preferredTimeSlot !== undefined) {
-      appointment.preferredTimeSlot = dto.preferredTimeSlot;
-    }
-    if (dto.managerNotes !== undefined) {
-      appointment.managerNotes = dto.managerNotes;
-    }
+    const saved = await this.appointments.manager.transaction(async (manager) => {
+      const appointment = await manager.findOne(TourAppointment, {
+        where: { id },
+        relations: APPOINTMENT_RELATIONS,
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!appointment) {
+        notFound('Tour appointment');
+      }
 
-    appointment.status = TourAppointmentStatus.CONFIRMED;
+      await this.assertManagesFacility(actor, appointment.facilityId);
 
-    await this.appointments.save(appointment);
-    return { appointment: toTourAppointmentRecord(await this.findAppointmentOrFail(id)) };
+      if (
+        appointment.status !== TourAppointmentStatus.PENDING &&
+        appointment.status !== TourAppointmentStatus.CONFIRMED &&
+        appointment.status !== TourAppointmentStatus.ASSIGNED
+      ) {
+        throw new DomainException(
+          ErrorCode.CONFLICT,
+          `Cannot confirm an appointment while its status is ${appointment.status}`,
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      if (dto.preferredDate) {
+        appointment.preferredDate = dto.preferredDate;
+      }
+      if (dto.preferredTimeSlot !== undefined) {
+        appointment.preferredTimeSlot = dto.preferredTimeSlot?.trim() || null;
+      }
+      if (dto.managerNotes !== undefined) {
+        appointment.managerNotes = dto.managerNotes?.trim() || null;
+      }
+
+      // If already ASSIGNED, keep ASSIGNED; otherwise mark CONFIRMED
+      if (appointment.status !== TourAppointmentStatus.ASSIGNED) {
+        appointment.status = TourAppointmentStatus.CONFIRMED;
+      }
+
+      const result = await manager.save(appointment);
+
+      if (this.notificationsService && appointment.customerId) {
+        await this.notificationsService.createForUsers(manager, [appointment.customerId], {
+          type: NotificationType.TOUR_APPOINTMENT_CONFIRMED,
+          title: 'Lịch hẹn xem kho đã được xác nhận',
+          body: `Lịch hẹn xem kho tại ${appointment.facility?.name ?? 'chi nhánh'} vào ngày ${appointment.preferredDate} (${appointment.preferredTimeSlot ?? 'trong ngày'}) đã được xác nhận.`,
+          data: { appointmentId: appointment.id, facilityId: appointment.facilityId },
+        });
+      }
+
+      return result;
+    });
+
+    return { appointment: toTourAppointmentRecord(saved) };
   }
 
   /**
-   * Facility Manager assigns an active FACILITY_STAFF from the facility to host the tour.
+   * Facility Manager assigns an active FACILITY_STAFF or FACILITY_MANAGER from the facility to host the tour.
    */
   async assignAppointment(
     id: string,
     dto: AssignTourAppointmentDto,
     actor: AuthUser,
   ): Promise<TourAppointmentResponse> {
-    const appointment = await this.findAppointmentOrFail(id);
-    await this.assertManagesFacility(actor, appointment.facilityId);
+    const saved = await this.appointments.manager.transaction(async (manager) => {
+      const appointment = await manager.findOne(TourAppointment, {
+        where: { id },
+        relations: APPOINTMENT_RELATIONS,
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!appointment) {
+        notFound('Tour appointment');
+      }
 
-    if (
-      appointment.status === TourAppointmentStatus.COMPLETED ||
-      appointment.status === TourAppointmentStatus.CANCELLED
-    ) {
-      throw new DomainException(
-        ErrorCode.CONFLICT,
-        `Cannot assign staff to an appointment that is ${appointment.status}`,
-        HttpStatus.CONFLICT,
-      );
-    }
+      await this.assertManagesFacility(actor, appointment.facilityId);
 
-    const assignee = await this.users.findOne({
-      where: { id: dto.assignedTo, status: UserStatus.ACTIVE },
+      if (
+        appointment.status === TourAppointmentStatus.COMPLETED ||
+        appointment.status === TourAppointmentStatus.CANCELLED
+      ) {
+        throw new DomainException(
+          ErrorCode.CONFLICT,
+          `Cannot assign staff to an appointment that is ${appointment.status}`,
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      const assignee = await manager.findOne(AppUser, {
+        where: { id: dto.assignedTo, status: UserStatus.ACTIVE },
+      });
+      if (!assignee) {
+        throw new DomainException(
+          ErrorCode.VALIDATION_FAILED,
+          'Staff user does not exist or is inactive',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const assignments = await manager.find(UserRoleAssignment, {
+        where: [
+          {
+            userId: dto.assignedTo,
+            role: UserRole.FACILITY_STAFF,
+            facilityId: appointment.facilityId,
+          },
+          {
+            userId: dto.assignedTo,
+            role: UserRole.FACILITY_MANAGER,
+            facilityId: appointment.facilityId,
+          },
+        ],
+      });
+
+      const isStaffOrManagerActive = assignments.some((a) => isAssignmentActive(a));
+      if (!isStaffOrManagerActive) {
+        throw new DomainException(
+          ErrorCode.VALIDATION_FAILED,
+          'User is not an active facility staff or manager member of this facility',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      appointment.assignedTo = dto.assignedTo;
+      // The loaded `assignee` relation wins over `assignedTo` on save, so it must be swapped too.
+      appointment.assignee = assignee;
+      appointment.status = TourAppointmentStatus.ASSIGNED;
+
+      const result = await manager.save(appointment);
+
+      if (this.notificationsService) {
+        await this.notificationsService.createForUsers(manager, [dto.assignedTo], {
+          type: NotificationType.TOUR_APPOINTMENT_ASSIGNED,
+          title: 'Phân công ca dẫn khách',
+          body: `Bạn đã được phân công dẫn khách ${appointment.fullName} tham quan kho vào ngày ${appointment.preferredDate}.`,
+          data: { appointmentId: appointment.id, facilityId: appointment.facilityId },
+        });
+      }
+
+      return result;
     });
-    if (!assignee) {
-      throw new DomainException(
-        ErrorCode.VALIDATION_FAILED,
-        'Staff user does not exist or is inactive',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
 
-    const staffAssignments = await this.roleAssignments.find({
-      where: {
-        userId: dto.assignedTo,
-        role: UserRole.FACILITY_STAFF,
-        facilityId: appointment.facilityId,
-      },
-    });
-
-    const isStaffActiveInFacility = staffAssignments.some((a) => isAssignmentActive(a));
-    if (!isStaffActiveInFacility) {
-      throw new DomainException(
-        ErrorCode.VALIDATION_FAILED,
-        'User is not an active facility staff member of this facility',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    appointment.assignedTo = dto.assignedTo;
-    // The loaded `assignee` relation wins over `assignedTo` on save, so it must be swapped too.
-    appointment.assignee = assignee;
-    appointment.status = TourAppointmentStatus.ASSIGNED;
-
-    await this.appointments.save(appointment);
-    return { appointment: toTourAppointmentRecord(await this.findAppointmentOrFail(id)) };
+    return { appointment: toTourAppointmentRecord(saved) };
   }
 
   /**
@@ -347,64 +477,117 @@ export class TourAppointmentsService {
     dto: CompleteTourAppointmentDto,
     actor: AuthUser,
   ): Promise<TourAppointmentResponse> {
-    const appointment = await this.findAppointmentOrFail(id);
-    await this.assertCanOperateAppointment(appointment, actor);
+    const saved = await this.appointments.manager.transaction(async (manager) => {
+      const appointment = await manager.findOne(TourAppointment, {
+        where: { id },
+        relations: APPOINTMENT_RELATIONS,
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!appointment) {
+        notFound('Tour appointment');
+      }
 
-    if (appointment.status === TourAppointmentStatus.COMPLETED) {
-      throw new DomainException(
-        ErrorCode.CONFLICT,
-        'Appointment is already completed',
-        HttpStatus.CONFLICT,
-      );
-    }
+      await this.assertCanCompleteAppointment(appointment, actor);
 
-    if (appointment.status === TourAppointmentStatus.CANCELLED) {
-      throw new DomainException(
-        ErrorCode.CONFLICT,
-        'Cannot complete a cancelled appointment',
-        HttpStatus.CONFLICT,
-      );
-    }
+      if (appointment.status === TourAppointmentStatus.COMPLETED) {
+        throw new DomainException(
+          ErrorCode.CONFLICT,
+          'Appointment is already completed',
+          HttpStatus.CONFLICT,
+        );
+      }
 
-    appointment.status = TourAppointmentStatus.COMPLETED;
-    appointment.staffResultNotes = dto.staffResultNotes;
+      if (appointment.status === TourAppointmentStatus.CANCELLED) {
+        throw new DomainException(
+          ErrorCode.CONFLICT,
+          'Cannot complete a cancelled appointment',
+          HttpStatus.CONFLICT,
+        );
+      }
 
-    await this.appointments.save(appointment);
-    return { appointment: toTourAppointmentRecord(await this.findAppointmentOrFail(id)) };
+      if (appointment.status === TourAppointmentStatus.PENDING) {
+        throw new DomainException(
+          ErrorCode.CONFLICT,
+          'Cannot complete an unconfirmed appointment',
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      appointment.status = TourAppointmentStatus.COMPLETED;
+      appointment.staffResultNotes = dto.staffResultNotes.trim();
+
+      return manager.save(appointment);
+    });
+
+    return { appointment: toTourAppointmentRecord(saved) };
   }
 
   /**
-   * Staff (or Manager) cancels the appointment or records a no-show with cancellation reason.
+   * Staff (or Manager, or Customer) cancels the appointment or records a no-show with cancellation reason.
    */
   async cancelAppointment(
     id: string,
     dto: CancelTourAppointmentDto,
     actor: AuthUser,
   ): Promise<TourAppointmentResponse> {
-    const appointment = await this.findAppointmentOrFail(id);
-    await this.assertCanOperateAppointment(appointment, actor);
+    const saved = await this.appointments.manager.transaction(async (manager) => {
+      const appointment = await manager.findOne(TourAppointment, {
+        where: { id },
+        relations: APPOINTMENT_RELATIONS,
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!appointment) {
+        notFound('Tour appointment');
+      }
 
-    if (appointment.status === TourAppointmentStatus.COMPLETED) {
-      throw new DomainException(
-        ErrorCode.CONFLICT,
-        'Cannot cancel an already completed appointment',
-        HttpStatus.CONFLICT,
-      );
-    }
+      await this.assertCanCancelAppointment(appointment, actor);
 
-    if (appointment.status === TourAppointmentStatus.CANCELLED) {
-      throw new DomainException(
-        ErrorCode.CONFLICT,
-        'Appointment is already cancelled',
-        HttpStatus.CONFLICT,
-      );
-    }
+      if (appointment.status === TourAppointmentStatus.COMPLETED) {
+        throw new DomainException(
+          ErrorCode.CONFLICT,
+          'Cannot cancel an already completed appointment',
+          HttpStatus.CONFLICT,
+        );
+      }
 
-    appointment.status = TourAppointmentStatus.CANCELLED;
-    appointment.cancellationReason = dto.cancellationReason;
+      if (appointment.status === TourAppointmentStatus.CANCELLED) {
+        throw new DomainException(
+          ErrorCode.CONFLICT,
+          'Appointment is already cancelled',
+          HttpStatus.CONFLICT,
+        );
+      }
 
-    await this.appointments.save(appointment);
-    return { appointment: toTourAppointmentRecord(await this.findAppointmentOrFail(id)) };
+      appointment.status = TourAppointmentStatus.CANCELLED;
+      appointment.cancellationReason = dto.cancellationReason.trim();
+
+      const result = await manager.save(appointment);
+
+      if (this.notificationsService) {
+        const notifyUserIds: string[] = [];
+        const isActorCustomer =
+          actor.roles.includes(UserRole.CUSTOMER) && actor.id === appointment.customerId;
+        if (isActorCustomer) {
+          if (appointment.assignedTo) {
+            notifyUserIds.push(appointment.assignedTo);
+          }
+        } else if (appointment.customerId) {
+          notifyUserIds.push(appointment.customerId);
+        }
+        if (notifyUserIds.length > 0) {
+          await this.notificationsService.createForUsers(manager, notifyUserIds, {
+            type: NotificationType.TOUR_APPOINTMENT_CANCELLED,
+            title: 'Lịch hẹn xem kho đã bị hủy',
+            body: `Lịch hẹn xem kho ngày ${appointment.preferredDate} đã bị hủy. Lý do: ${dto.cancellationReason.trim()}`,
+            data: { appointmentId: appointment.id, facilityId: appointment.facilityId },
+          });
+        }
+      }
+
+      return result;
+    });
+
+    return { appointment: toTourAppointmentRecord(saved) };
   }
 
   private async findAppointmentOrFail(id: string): Promise<TourAppointment> {
@@ -442,7 +625,7 @@ export class TourAppointmentsService {
     );
   }
 
-  private async assertCanOperateAppointment(
+  private async assertCanCompleteAppointment(
     appointment: TourAppointment,
     actor: AuthUser,
   ): Promise<void> {
@@ -461,7 +644,38 @@ export class TourAppointmentsService {
 
     throw new DomainException(
       ErrorCode.FORBIDDEN,
-      'Only the assigned staff or facility manager can update this appointment result',
+      'Only the assigned staff or facility manager can complete this appointment',
+      HttpStatus.FORBIDDEN,
+    );
+  }
+
+  private async assertCanCancelAppointment(
+    appointment: TourAppointment,
+    actor: AuthUser,
+  ): Promise<void> {
+    if (actor.roles.includes(UserRole.ADMIN)) {
+      return;
+    }
+    if (actor.roles.includes(UserRole.FACILITY_STAFF) && appointment.assignedTo === actor.id) {
+      return;
+    }
+    if (actor.roles.includes(UserRole.FACILITY_MANAGER)) {
+      const managedFacilityIds = await this.loadManagedFacilityIds(actor.id);
+      if (managedFacilityIds.includes(appointment.facilityId)) {
+        return;
+      }
+    }
+    if (
+      actor.roles.includes(UserRole.CUSTOMER) &&
+      appointment.customerId &&
+      appointment.customerId === actor.id
+    ) {
+      return;
+    }
+
+    throw new DomainException(
+      ErrorCode.FORBIDDEN,
+      'You do not have permission to cancel this appointment',
       HttpStatus.FORBIDDEN,
     );
   }

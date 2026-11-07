@@ -97,4 +97,13 @@ export class ListTourAppointmentsQueryDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'toDate must be formatted as YYYY-MM-DD' })
   @IsDateString({ strict: true }, { message: 'toDate must be a valid calendar date' })
   toDate?: string;
+
+  @ApiPropertyOptional({
+    required: false,
+    example: 'Nguyễn Văn',
+    description: '(Tùy chọn) Tìm kiếm theo tên khách hàng, số điện thoại hoặc email',
+  })
+  @IsOptional()
+  @IsString()
+  search?: string;
 }

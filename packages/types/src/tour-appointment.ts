@@ -93,6 +93,7 @@ export interface ListTourAppointmentsQuery {
   assignedTo?: string;
   fromDate?: string;
   toDate?: string;
+  search?: string;
 }
 
 export type CreateContactTourDto = CreateContactTourInput;

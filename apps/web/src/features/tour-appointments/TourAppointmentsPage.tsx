@@ -28,7 +28,7 @@ import {
 } from '@phosphor-icons/react';
 import type { TourAppointmentRecord } from '@storage/types';
 import { TourAppointmentStatus, UserRole } from '@storage/types';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useFacility } from '../../context/FacilityContext';
 import { useAppToast } from '../../lib/toast';
@@ -59,8 +59,18 @@ export const TourAppointmentsPage: React.FC = () => {
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Dialog States
   const [selectedAppointment, setSelectedAppointment] = useState<TourAppointmentRecord | null>(
@@ -72,7 +82,53 @@ export const TourAppointmentsPage: React.FC = () => {
   const [isCompleteOpen, setIsCompleteOpen] = useState(false);
   const [isCancelOpen, setIsCancelOpen] = useState(false);
 
+  const [kpiCounts, setKpiCounts] = useState({ total: 0, pending: 0, ongoing: 0, completed: 0 });
+
   const latestRequest = useRef(0);
+
+  const loadKpiCounts = useCallback(async () => {
+    if (isFacilityManager && !facilityId) {
+      setKpiCounts({ total: 0, pending: 0, ongoing: 0, completed: 0 });
+      return;
+    }
+    try {
+      const [totalRes, pendingRes, confirmedRes, assignedRes, completedRes] = await Promise.all([
+        TourAppointmentsApi.list({ facilityId: facilityId || undefined, limit: 1 }),
+        TourAppointmentsApi.list({
+          facilityId: facilityId || undefined,
+          status: TourAppointmentStatus.PENDING,
+          limit: 1,
+        }),
+        TourAppointmentsApi.list({
+          facilityId: facilityId || undefined,
+          status: TourAppointmentStatus.CONFIRMED,
+          limit: 1,
+        }),
+        TourAppointmentsApi.list({
+          facilityId: facilityId || undefined,
+          status: TourAppointmentStatus.ASSIGNED,
+          limit: 1,
+        }),
+        TourAppointmentsApi.list({
+          facilityId: facilityId || undefined,
+          status: TourAppointmentStatus.COMPLETED,
+          limit: 1,
+        }),
+      ]);
+      setKpiCounts({
+        total: totalRes.meta?.total || 0,
+        pending: pendingRes.meta?.total || 0,
+        ongoing: (confirmedRes.meta?.total || 0) + (assignedRes.meta?.total || 0),
+        completed: completedRes.meta?.total || 0,
+      });
+    } catch {
+      // keep existing
+    }
+  }, [facilityId, isFacilityManager]);
+
+  useEffect(() => {
+    void loadKpiCounts();
+  }, [loadKpiCounts]);
 
   const loadData = useCallback(async () => {
     const requestId = ++latestRequest.current;
@@ -93,6 +149,7 @@ export const TourAppointmentsPage: React.FC = () => {
         status: statusFilter !== 'ALL' ? (statusFilter as TourAppointmentStatus) : undefined,
         fromDate: fromDate || undefined,
         toDate: toDate || undefined,
+        search: debouncedSearch.trim() || undefined,
       });
 
       if (requestId === latestRequest.current) {
@@ -108,38 +165,14 @@ export const TourAppointmentsPage: React.FC = () => {
         setIsLoading(false);
       }
     }
-  }, [currentPage, facilityId, isFacilityManager, statusFilter, fromDate, toDate]);
+  }, [currentPage, debouncedSearch, facilityId, isFacilityManager, statusFilter, fromDate, toDate]);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
 
-  // Client-side search filter over loaded page for fast responsiveness
-  const filteredAppointments = useMemo(() => {
-    if (!search.trim()) return appointments;
-    const q = search.trim().toLowerCase();
-    return appointments.filter(
-      (a) =>
-        a.fullName.toLowerCase().includes(q) ||
-        a.phone.includes(q) ||
-        a.email.toLowerCase().includes(q) ||
-        a.storageUnit?.name?.toLowerCase().includes(q) ||
-        a.storageUnit?.code?.toLowerCase().includes(q),
-    );
-  }, [appointments, search]);
-
-  // Counts for KPI
-  const kpiCounts = useMemo(() => {
-    const pending = appointments.filter((a) => a.status === TourAppointmentStatus.PENDING).length;
-    const ongoing = appointments.filter(
-      (a) =>
-        a.status === TourAppointmentStatus.CONFIRMED || a.status === TourAppointmentStatus.ASSIGNED,
-    ).length;
-    const completed = appointments.filter(
-      (a) => a.status === TourAppointmentStatus.COMPLETED,
-    ).length;
-    return { pending, ongoing, completed, total };
-  }, [appointments, total]);
+  // Server-side filtered appointments
+  const filteredAppointments = appointments;
 
   const openAction = (
     apt: TourAppointmentRecord,
@@ -499,28 +532,40 @@ export const TourAppointmentsPage: React.FC = () => {
         open={isConfirmOpen}
         appointment={selectedAppointment}
         onClose={() => setIsConfirmOpen(false)}
-        onSuccess={() => void loadData()}
+        onSuccess={() => {
+          void loadData();
+          void loadKpiCounts();
+        }}
       />
 
       <AssignStaffTourDialog
         open={isAssignOpen}
         appointment={selectedAppointment}
         onClose={() => setIsAssignOpen(false)}
-        onSuccess={() => void loadData()}
+        onSuccess={() => {
+          void loadData();
+          void loadKpiCounts();
+        }}
       />
 
       <CompleteTourDialog
         open={isCompleteOpen}
         appointment={selectedAppointment}
         onClose={() => setIsCompleteOpen(false)}
-        onSuccess={() => void loadData()}
+        onSuccess={() => {
+          void loadData();
+          void loadKpiCounts();
+        }}
       />
 
       <CancelTourDialog
         open={isCancelOpen}
         appointment={selectedAppointment}
         onClose={() => setIsCancelOpen(false)}
-        onSuccess={() => void loadData()}
+        onSuccess={() => {
+          void loadData();
+          void loadKpiCounts();
+        }}
       />
     </div>
   );

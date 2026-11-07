@@ -7,6 +7,7 @@ import type { AuthUser } from '@modules/auth/types/auth-user';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import {
   FacilityStatus,
+  NotificationType,
   StorageUnitStatus,
   TourAppointmentStatus,
   UserRole,
@@ -85,8 +86,12 @@ describe('TourAppointmentsService', () => {
   let storageUnitsRepo: jest.Mocked<Repository<StorageUnit>>;
   let usersRepo: jest.Mocked<Repository<AppUser>>;
   let roleAssignmentsRepo: jest.Mocked<Repository<UserRoleAssignment>>;
+  let notificationsService: { createForUsers: jest.Mock };
 
   beforeEach(() => {
+    notificationsService = {
+      createForUsers: jest.fn().mockResolvedValue([]),
+    };
     appointmentsRepo = {
       create: jest.fn((entity) => ({ ...entity, id: 'apt-created' })) as any,
       save: jest.fn((entity) =>
@@ -136,7 +141,11 @@ describe('TourAppointmentsService', () => {
       ),
     };
 
-    service = new TourAppointmentsService(appointmentsRepo, roleAssignmentsRepo);
+    service = new TourAppointmentsService(
+      appointmentsRepo,
+      roleAssignmentsRepo,
+      notificationsService as any,
+    );
   });
 
   describe('createContactRequest', () => {
@@ -206,6 +215,26 @@ describe('TourAppointmentsService', () => {
         service.createContactRequest({
           facilityId: 'facility-1',
           storageUnitId: 'unit-maint',
+          fullName: 'Khách',
+          phone: '0987654321',
+          email: 'khach@example.com',
+          preferredDate: '2026-12-01',
+        }),
+      ).rejects.toThrow(DomainException);
+    });
+
+    it('rejects scheduling a tour for a unit that is RENTED', async () => {
+      facilitiesRepo.findOne.mockResolvedValue({ id: 'facility-1' } as Facility);
+      storageUnitsRepo.findOne.mockResolvedValue({
+        id: 'unit-rented',
+        facilityId: 'facility-1',
+        status: StorageUnitStatus.RENTED,
+      } as StorageUnit);
+
+      await expect(
+        service.createContactRequest({
+          facilityId: 'facility-1',
+          storageUnitId: 'unit-rented',
           fullName: 'Khách',
           phone: '0987654321',
           email: 'khach@example.com',
@@ -302,6 +331,27 @@ describe('TourAppointmentsService', () => {
         customerId: 'cust-1',
       });
     });
+
+    it('filters query by search keyword', async () => {
+      const admin = buildActor({ id: 'admin-1', roles: [UserRole.ADMIN] });
+      const qbMock: any = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+      };
+      appointmentsRepo.createQueryBuilder.mockReturnValue(qbMock);
+
+      await service.listAppointments({ search: 'Nguyễn' }, admin);
+
+      expect(qbMock.andWhere).toHaveBeenCalledWith(
+        '(LOWER(apt.fullName) LIKE :search OR apt.phone LIKE :search OR LOWER(apt.email) LIKE :search)',
+        { search: '%nguyễn%' },
+      );
+    });
   });
 
   describe('confirmAppointment', () => {
@@ -355,6 +405,28 @@ describe('TourAppointmentsService', () => {
         }),
       );
       expect(res.appointment.status).toBe(TourAppointmentStatus.ASSIGNED);
+    });
+
+    it('sends notification to customer when appointment is confirmed', async () => {
+      const manager = buildActor({ id: 'mgr-1', roles: [UserRole.FACILITY_MANAGER] });
+      const apt = buildAppointment({
+        id: 'apt-1',
+        facilityId: 'facility-1',
+        customerId: 'cust-1',
+        status: TourAppointmentStatus.PENDING,
+      });
+      appointmentsRepo.findOne.mockResolvedValue(apt);
+      roleAssignmentsRepo.find.mockResolvedValue([buildManagerAssignment('mgr-1', 'facility-1')]);
+
+      await service.confirmAppointment('apt-1', { preferredDate: '2026-12-05' }, manager);
+
+      expect(notificationsService.createForUsers).toHaveBeenCalledWith(
+        expect.anything(),
+        ['cust-1'],
+        expect.objectContaining({
+          type: NotificationType.TOUR_APPOINTMENT_CONFIRMED,
+        }),
+      );
     });
 
     it('throws 403 if manager does not manage the facility', async () => {
@@ -534,6 +606,21 @@ describe('TourAppointmentsService', () => {
         service.completeAppointment('apt-1', { staffResultNotes: 'Done' }, otherStaff),
       ).rejects.toThrow(DomainException);
     });
+
+    it('throws 403 if a customer tries to complete an appointment', async () => {
+      const customer = buildActor({ id: 'cust-1', roles: [UserRole.CUSTOMER] });
+      const apt = buildAppointment({
+        id: 'apt-1',
+        facilityId: 'facility-1',
+        customerId: 'cust-1',
+        status: TourAppointmentStatus.ASSIGNED,
+      });
+      appointmentsRepo.findOne.mockResolvedValue(apt);
+
+      await expect(
+        service.completeAppointment('apt-1', { staffResultNotes: 'Done' }, customer),
+      ).rejects.toThrow(DomainException);
+    });
   });
 
   describe('cancelAppointment', () => {
@@ -585,6 +672,33 @@ describe('TourAppointmentsService', () => {
         }),
       );
       expect(res.appointment.status).toBe(TourAppointmentStatus.CANCELLED);
+      expect(notificationsService.createForUsers).not.toHaveBeenCalled();
+    });
+
+    it('sends notification to assigned staff when customer cancels an assigned appointment', async () => {
+      const customer = buildActor({ id: 'cust-1', roles: [UserRole.CUSTOMER] });
+      const apt = buildAppointment({
+        id: 'apt-1',
+        facilityId: 'facility-1',
+        customerId: 'cust-1',
+        assignedTo: 'staff-1',
+        status: TourAppointmentStatus.ASSIGNED,
+      });
+      appointmentsRepo.findOne.mockResolvedValue(apt);
+
+      await service.cancelAppointment(
+        'apt-1',
+        { cancellationReason: 'Tôi bận việc gia đình, xin hủy lịch' },
+        customer,
+      );
+
+      expect(notificationsService.createForUsers).toHaveBeenCalledWith(
+        expect.anything(),
+        ['staff-1'],
+        expect.objectContaining({
+          type: NotificationType.TOUR_APPOINTMENT_CANCELLED,
+        }),
+      );
     });
 
     it('cannot cancel an already completed appointment', async () => {

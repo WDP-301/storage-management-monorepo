@@ -10,7 +10,7 @@ import { HttpStatus, Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
-import { vietnamToday } from '@shared/utils/calendar.util';
+import { isPastVietnamTimeSlot } from '@shared/utils/calendar.util';
 import {
   FacilityStatus,
   NotificationType,
@@ -109,10 +109,10 @@ export class TourAppointmentsService {
     dto: CreateContactTourDto,
     customerId?: string | null,
   ): Promise<TourAppointmentResponse> {
-    if (dto.preferredDate < vietnamToday()) {
+    if (isPastVietnamTimeSlot(dto.preferredDate, dto.preferredTimeSlot)) {
       throw new DomainException(
         ErrorCode.VALIDATION_FAILED,
-        'preferredDate cannot be in the past',
+        'preferredDate or preferredTimeSlot cannot be in the past',
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -140,9 +140,17 @@ export class TourAppointmentsService {
             HttpStatus.NOT_FOUND,
           );
         }
+        if (unit.status === StorageUnitStatus.RENTED) {
+          throw new DomainException(
+            ErrorCode.VALIDATION_FAILED,
+            'Cannot schedule a tour for an occupied or rented storage unit',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
         if (
           unit.status === StorageUnitStatus.MAINTENANCE ||
-          unit.status === StorageUnitStatus.INACTIVE
+          unit.status === StorageUnitStatus.INACTIVE ||
+          unit.status === StorageUnitStatus.PENDING_INSPECTION
         ) {
           throw new DomainException(
             ErrorCode.VALIDATION_FAILED,
@@ -270,6 +278,14 @@ export class TourAppointmentsService {
       qb.andWhere('apt.preferredDate <= :toDate', { toDate: query.toDate });
     }
 
+    if (query.search?.trim()) {
+      const q = `%${query.search.trim().toLowerCase()}%`;
+      qb.andWhere(
+        '(LOWER(apt.fullName) LIKE :search OR apt.phone LIKE :search OR LOWER(apt.email) LIKE :search)',
+        { search: q },
+      );
+    }
+
     qb.orderBy('apt.preferredDate', 'ASC')
       .addOrderBy('apt.createdAt', 'DESC')
       .skip((page - 1) * limit)
@@ -301,10 +317,10 @@ export class TourAppointmentsService {
     dto: ConfirmTourAppointmentDto,
     actor: AuthUser,
   ): Promise<TourAppointmentResponse> {
-    if (dto.preferredDate && dto.preferredDate < vietnamToday()) {
+    if (dto.preferredDate && isPastVietnamTimeSlot(dto.preferredDate, dto.preferredTimeSlot)) {
       throw new DomainException(
         ErrorCode.VALIDATION_FAILED,
-        'preferredDate cannot be in the past',
+        'preferredDate or preferredTimeSlot cannot be in the past',
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -348,7 +364,18 @@ export class TourAppointmentsService {
         appointment.status = TourAppointmentStatus.CONFIRMED;
       }
 
-      return manager.save(appointment);
+      const result = await manager.save(appointment);
+
+      if (this.notificationsService && appointment.customerId) {
+        await this.notificationsService.createForUsers(manager, [appointment.customerId], {
+          type: NotificationType.TOUR_APPOINTMENT_CONFIRMED,
+          title: 'Lịch hẹn xem kho đã được xác nhận',
+          body: `Lịch hẹn xem kho tại ${appointment.facility?.name ?? 'chi nhánh'} vào ngày ${appointment.preferredDate} (${appointment.preferredTimeSlot ?? 'trong ngày'}) đã được xác nhận.`,
+          data: { appointmentId: appointment.id, facilityId: appointment.facilityId },
+        });
+      }
+
+      return result;
     });
 
     return { appointment: toTourAppointmentRecord(saved) };
@@ -460,7 +487,7 @@ export class TourAppointmentsService {
         notFound('Tour appointment');
       }
 
-      await this.assertCanOperateAppointment(appointment, actor);
+      await this.assertCanCompleteAppointment(appointment, actor);
 
       if (appointment.status === TourAppointmentStatus.COMPLETED) {
         throw new DomainException(
@@ -513,7 +540,7 @@ export class TourAppointmentsService {
         notFound('Tour appointment');
       }
 
-      await this.assertCanOperateAppointment(appointment, actor);
+      await this.assertCanCancelAppointment(appointment, actor);
 
       if (appointment.status === TourAppointmentStatus.COMPLETED) {
         throw new DomainException(
@@ -534,7 +561,30 @@ export class TourAppointmentsService {
       appointment.status = TourAppointmentStatus.CANCELLED;
       appointment.cancellationReason = dto.cancellationReason.trim();
 
-      return manager.save(appointment);
+      const result = await manager.save(appointment);
+
+      if (this.notificationsService) {
+        const notifyUserIds: string[] = [];
+        const isActorCustomer =
+          actor.roles.includes(UserRole.CUSTOMER) && actor.id === appointment.customerId;
+        if (isActorCustomer) {
+          if (appointment.assignedTo) {
+            notifyUserIds.push(appointment.assignedTo);
+          }
+        } else if (appointment.customerId) {
+          notifyUserIds.push(appointment.customerId);
+        }
+        if (notifyUserIds.length > 0) {
+          await this.notificationsService.createForUsers(manager, notifyUserIds, {
+            type: NotificationType.TOUR_APPOINTMENT_CANCELLED,
+            title: 'Lịch hẹn xem kho đã bị hủy',
+            body: `Lịch hẹn xem kho ngày ${appointment.preferredDate} đã bị hủy. Lý do: ${dto.cancellationReason.trim()}`,
+            data: { appointmentId: appointment.id, facilityId: appointment.facilityId },
+          });
+        }
+      }
+
+      return result;
     });
 
     return { appointment: toTourAppointmentRecord(saved) };
@@ -575,7 +625,31 @@ export class TourAppointmentsService {
     );
   }
 
-  private async assertCanOperateAppointment(
+  private async assertCanCompleteAppointment(
+    appointment: TourAppointment,
+    actor: AuthUser,
+  ): Promise<void> {
+    if (actor.roles.includes(UserRole.ADMIN)) {
+      return;
+    }
+    if (actor.roles.includes(UserRole.FACILITY_STAFF) && appointment.assignedTo === actor.id) {
+      return;
+    }
+    if (actor.roles.includes(UserRole.FACILITY_MANAGER)) {
+      const managedFacilityIds = await this.loadManagedFacilityIds(actor.id);
+      if (managedFacilityIds.includes(appointment.facilityId)) {
+        return;
+      }
+    }
+
+    throw new DomainException(
+      ErrorCode.FORBIDDEN,
+      'Only the assigned staff or facility manager can complete this appointment',
+      HttpStatus.FORBIDDEN,
+    );
+  }
+
+  private async assertCanCancelAppointment(
     appointment: TourAppointment,
     actor: AuthUser,
   ): Promise<void> {
@@ -601,7 +675,7 @@ export class TourAppointmentsService {
 
     throw new DomainException(
       ErrorCode.FORBIDDEN,
-      'You do not have permission to update or cancel this appointment',
+      'You do not have permission to cancel this appointment',
       HttpStatus.FORBIDDEN,
     );
   }

@@ -83,6 +83,21 @@ export function TourAppointmentSheet({ sheetRef, facility, storageUnit, onSucces
     [],
   );
 
+  const isSlotPast = useCallback(
+    (slot: string) => {
+      if (preferredDate !== todayIso) return false;
+      const match = /(\d{1,2}):(\d{2})/.exec(slot);
+      if (!match) return false;
+      const [slotHour, slotMinute] = [Number(match[1]), Number(match[2])];
+      const now = new Date();
+      const vnNow = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+      const nowHour = vnNow.getUTCHours();
+      const nowMinute = vnNow.getUTCMinutes();
+      return nowHour > slotHour || (nowHour === slotHour && nowMinute >= slotMinute);
+    },
+    [preferredDate, todayIso],
+  );
+
   const handlePickDate = (iso: string) => {
     setPreferredDate(iso);
     setIsCalendarOpen(false);
@@ -103,6 +118,9 @@ export function TourAppointmentSheet({ sheetRef, facility, storageUnit, onSucces
     }
     if (!preferredDate || preferredDate < todayIso) {
       return 'Ngày hẹn không được ở trong quá khứ.';
+    }
+    if (isSlotPast(preferredTimeSlot)) {
+      return 'Khung giờ này đã trôi qua. Vui lòng chọn khung giờ khác hoặc ngày khác.';
     }
     return null;
   };
@@ -247,20 +265,30 @@ export function TourAppointmentSheet({ sheetRef, facility, storageUnit, onSucces
           <View className="flex-row flex-wrap gap-2 pt-1">
             {TIME_SLOTS.map((slot) => {
               const isSelected = preferredTimeSlot === slot;
+              const isPast = isSlotPast(slot);
               return (
                 <Pressable
                   key={slot}
                   accessibilityRole="button"
-                  accessibilityState={{ selected: isSelected }}
+                  accessibilityState={{ selected: isSelected, disabled: isPast }}
+                  disabled={isPast}
                   onPress={() => setPreferredTimeSlot(slot)}
                   className={`rounded-full border px-3 py-1.5 flex-row items-center gap-1 ${
-                    isSelected ? 'border-accent bg-accent' : 'border-border bg-surface-secondary'
+                    isPast
+                      ? 'border-border/40 bg-surface-secondary/40 opacity-40'
+                      : isSelected
+                        ? 'border-accent bg-accent'
+                        : 'border-border bg-surface-secondary'
                   }`}
                 >
                   {isSelected && <Check color="#fff" size={12} weight="bold" />}
                   <Text
                     className={`font-numeric text-caption ${
-                      isSelected ? 'font-strong text-white' : 'text-foreground'
+                      isPast
+                        ? 'text-muted line-through'
+                        : isSelected
+                          ? 'font-strong text-white'
+                          : 'text-foreground'
                     }`}
                   >
                     {slot}

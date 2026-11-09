@@ -4,6 +4,7 @@ import { type ContractInvoiceRecord, type EvidenceFile, ManualPaymentMethod } fr
 import type React from 'react';
 import { useRef, useState } from 'react';
 import { SignedFileLink, SignedImageThumb } from '../../components/SignedFile';
+import { useImageLightbox } from '../../components/SignedImageLightbox';
 import { UploadsApi } from '../../lib/api';
 import { InvoicesApi } from '../../lib/invoices-api';
 import { vnToday } from '../../lib/vn-day';
@@ -50,6 +51,7 @@ export const InvoicePaymentForm: React.FC<Props> = ({
   const [busy, setBusy] = useState<'upload' | 'submit' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isTransfer = form.method === ManualPaymentMethod.BANK_TRANSFER;
+  const viewer = useImageLightbox(form.evidence);
 
   const upload = async (files: File[]) => {
     const problem = validateProofFiles(form.evidence.length, files);
@@ -163,7 +165,7 @@ export const InvoicePaymentForm: React.FC<Props> = ({
             {form.evidence.map((file) => (
               <li key={file.fileKey} className="space-y-1">
                 {file.mimeType.startsWith('image/') ? (
-                  <SignedImageThumb file={file} />
+                  <SignedImageThumb file={file} onOpen={() => viewer.open(file)} />
                 ) : (
                   <SignedFileLink file={file} />
                 )}
@@ -186,6 +188,7 @@ export const InvoicePaymentForm: React.FC<Props> = ({
             ))}
           </ul>
         )}
+        {viewer.lightbox}
         <input
           ref={fileInput}
           type="file"

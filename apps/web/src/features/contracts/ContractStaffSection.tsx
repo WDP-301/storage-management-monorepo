@@ -53,7 +53,7 @@ export const ContractStaffSection: React.FC<Props> = ({
   return (
     <>
       <section className="space-y-1.5">
-        <span className="text-xs font-semibold text-kumo-default block">Biên bản nhận kho</span>
+        <span className="text-lg font-semibold text-kumo-default block">Biên bản nhận kho</span>
         {contract.handover ? (
           row('Nhận kho', contract.handover)
         ) : (
@@ -62,7 +62,7 @@ export const ContractStaffSection: React.FC<Props> = ({
       </section>
       {contract.return && (
         <section className="space-y-1.5">
-          <span className="text-xs font-semibold text-kumo-default block">Biên bản trả kho</span>
+          <span className="text-lg font-semibold text-kumo-default block">Biên bản trả kho</span>
           {row('Trả kho', contract.return)}
         </section>
       )}

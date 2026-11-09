@@ -3,6 +3,7 @@ import { Trash, UploadSimple, WarningCircle } from '@phosphor-icons/react';
 import type React from 'react';
 import { useRef, useState } from 'react';
 import { SignedFileLink, SignedImageThumb } from '../../components/SignedFile';
+import { useImageLightbox } from '../../components/SignedImageLightbox';
 import { UploadsApi } from '../../lib/api';
 import { SettlementsApi } from '../../lib/settlements-api';
 import type { EvidenceFile, SettlementDetailRecord } from '../../types/settlement';
@@ -32,6 +33,7 @@ export const SettlementRefundForm: React.FC<Props> = ({ record, onCompleted, onS
   const [proof, setProof] = useState(EMPTY_REFUND_PROOF);
   const [busy, setBusy] = useState<'upload' | 'submit' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const viewer = useImageLightbox(proof.evidence);
 
   const upload = async (files: File[]) => {
     const problem = validateProofFiles(proof.evidence.length, files);
@@ -77,7 +79,7 @@ export const SettlementRefundForm: React.FC<Props> = ({ record, onCompleted, onS
           {proof.evidence.map((file) => (
             <li key={file.fileKey} className="space-y-1">
               {file.mimeType.startsWith('image/') ? (
-                <SignedImageThumb file={file} />
+                <SignedImageThumb file={file} onOpen={() => viewer.open(file)} />
               ) : (
                 <SignedFileLink file={file} />
               )}
@@ -99,6 +101,7 @@ export const SettlementRefundForm: React.FC<Props> = ({ record, onCompleted, onS
             </li>
           ))}
         </ul>
+        {viewer.lightbox}
         <input
           ref={fileInput}
           type="file"

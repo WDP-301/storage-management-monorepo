@@ -77,6 +77,8 @@ describe('resolveContractDeposit with create', () => {
     expect(deposit).toMatchObject({ id: 'deposit-1', contractId: 'contract-2' });
     const [sql, params] = manager.query.mock.calls[1];
     expect(sql).toMatch(/c\.status = 'CANCELLED' AND x\.status = 'HELD'/);
+    // A deposit pinned by an open settlement (refund queued) must never be reparented.
+    expect(sql).toMatch(/NOT EXISTS \(SELECT 1 FROM contract_settlements/);
     expect(sql).not.toMatch(/deleted_at/);
     expect(params).toEqual(['contract-2', 'item-1']);
     expect(statements(manager).some((s) => s.startsWith('INSERT'))).toBe(false);

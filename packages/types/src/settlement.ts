@@ -95,6 +95,22 @@ export interface SettlementDamage {
   proposed_fee: number | null;
 }
 
+/** The finalized return the settlement was computed from. */
+export interface SettlementReturnRecord {
+  id: string;
+  requested_at: string | Date;
+  request_source: ReturnRequestSource | null;
+  requested_by_name: string | null;
+  notice_from: string | Date | null;
+  scheduled_day: string | null;
+  returned_on: string | null;
+  finalized_at: string | Date | null;
+  rules: ReturnRules | null;
+  condition_notes: string | null;
+  evidence: EvidenceFile[];
+  damages: SettlementDamage[];
+}
+
 /** Back-office view of one contract's settlement: a preview until approved, then frozen. */
 export interface SettlementDetailRecord {
   contract: {
@@ -109,21 +125,9 @@ export interface SettlementDetailRecord {
     unit: { id: string; code: string; name: string } | null;
     facility: { id: string; code: string; name: string } | null;
   };
-  return: {
-    id: string;
-    requested_at: string | Date;
-    request_source: ReturnRequestSource | null;
-    requested_by_name: string | null;
-    notice_from: string | Date | null;
-    scheduled_day: string | null;
-    returned_on: string | null;
-    finalized_at: string | Date | null;
-    rules: ReturnRules | null;
-    condition_notes: string | null;
-    evidence: EvidenceFile[];
-    damages: SettlementDamage[];
-  };
-  timing: ReturnTimingRecord;
+  /** Null for a contract cancelled before handover — no return ever happened. */
+  return: SettlementReturnRecord | null;
+  timing: ReturnTimingRecord | null;
   status: ContractSettlementStatus;
   deposit: { id: string | null; amount: number; status: DepositStatus } | null;
   lines: SettlementLine[];

@@ -6,7 +6,8 @@ import { formatVnd } from '../warehouses/warehouse-display';
 import { REQUEST_SOURCE_LABEL } from './settlement-display';
 
 function requestSource(record: SettlementDetailRecord): string {
-  const { request_source: source, requested_by_name: by } = record.return;
+  const source = record.return?.request_source ?? null;
+  const by = record.return?.requested_by_name ?? null;
   if (!source) return '—';
   const label = REQUEST_SOURCE_LABEL[source];
   return source !== 'CUSTOMER' && by ? `${label} · ${by}` : label;
@@ -15,13 +16,13 @@ function requestSource(record: SettlementDetailRecord): string {
 /** The facts the settlement rests on: deposit, term, return days, notice and overstay. */
 export const SettlementOverview: React.FC<{ record: SettlementDetailRecord }> = ({ record }) => {
   const { timing } = record;
-  const notice = timing.early
+  const notice = timing?.early
     ? `${timing.notice_days}/${timing.required_notice_days} ngày${
         timing.short_notice ? ' — không đủ' : ''
       }`
     : 'Không trả sớm';
   const overstay =
-    timing.overstay_days > 0
+    timing && timing.overstay_days > 0
       ? `${timing.overstay_days} ngày (từ ${formatVnDay(timing.overstay_from_day)})`
       : 'Không';
   return (
@@ -31,13 +32,25 @@ export const SettlementOverview: React.FC<{ record: SettlementDetailRecord }> = 
           label="Tiền cọc"
           value={record.deposit ? formatVnd(record.deposit.amount) : 'Không xác định được cọc'}
         />
-        <Fact label="Ngày cuối hợp đồng" value={formatVnDay(timing.last_day)} />
-        <Fact label="Ngày hẹn trả" value={formatVnDay(record.return.scheduled_day)} />
-        <Fact label="Ngày chốt trả kho" value={formatVnDay(record.return.returned_on)} />
-        <Fact label="Ngày tính tiền" value={formatVnDay(timing.effective_return_day)} />
-        <Fact label="Báo trước" value={notice} />
-        <Fact label="Quá hạn" value={overstay} />
-        <Fact label="Nguồn yêu cầu" value={requestSource(record)} />
+        {timing ? (
+          <>
+            <Fact label="Ngày cuối hợp đồng" value={formatVnDay(timing.last_day)} />
+            <Fact
+              label="Ngày hẹn trả"
+              value={record.return ? formatVnDay(record.return.scheduled_day) : '—'}
+            />
+            <Fact
+              label="Ngày chốt trả kho"
+              value={record.return ? formatVnDay(record.return.returned_on) : '—'}
+            />
+            <Fact label="Ngày tính tiền" value={formatVnDay(timing.effective_return_day)} />
+            <Fact label="Báo trước" value={notice} />
+            <Fact label="Quá hạn" value={overstay} />
+            <Fact label="Nguồn yêu cầu" value={requestSource(record)} />
+          </>
+        ) : (
+          <Fact label="Hình thức kết thúc" value="Hủy trước bàn giao — không có biên bản trả kho" />
+        )}
       </dl>
       {record.warnings.length > 0 && (
         <ul className="p-3 bg-kumo-warning-tint rounded-lg text-sm text-kumo-default space-y-1">

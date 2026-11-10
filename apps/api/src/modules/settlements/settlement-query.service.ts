@@ -5,7 +5,11 @@ import { SettingsService } from '@modules/settings/settings.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import type { SettlementDecisionsInput, SettlementDetailRecord } from '@storage/types';
+import {
+  ContractStatus,
+  type SettlementDecisionsInput,
+  type SettlementDetailRecord,
+} from '@storage/types';
 import Decimal from 'decimal.js';
 import { DataSource, type EntityManager } from 'typeorm';
 import { computeSettlement, type SettlementComputation } from './settlement-calc';
@@ -65,10 +69,16 @@ export class SettlementQueryService {
   async detail(contractId: string): Promise<SettlementDetailRecord> {
     const em = this.dataSource.manager;
     const contract = await loadEndedContract(em, contractId);
-    const [settlement, input] = await Promise.all([
-      em.findOne(ContractSettlement, { where: { contractId }, relations: SETTLEMENT_RELATIONS }),
-      loadSettlementInput(em, contract, this.settings),
-    ]);
+    const settlement = await em.findOne(ContractSettlement, {
+      where: { contractId },
+      relations: SETTLEMENT_RELATIONS,
+    });
+    // A cancelled contract has no return inspection to load an input from — only its frozen row,
+    // which loadEndedContract already verified exists.
+    if (contract.status === ContractStatus.CANCELLED) {
+      return this.frozen(em, contract, null, settlement as ContractSettlement);
+    }
+    const input = await loadSettlementInput(em, contract, this.settings);
     if (settlement) return this.frozen(em, contract, input, settlement);
     return this.pending(contract, input, {});
   }
@@ -116,7 +126,7 @@ export class SettlementQueryService {
   private async frozen(
     em: EntityManager,
     contract: Contract,
-    input: SettlementInput,
+    input: SettlementInput | null,
     settlement: ContractSettlement,
   ): Promise<SettlementDetailRecord> {
     const totals = {
@@ -145,7 +155,7 @@ export class SettlementQueryService {
         lines: settlement.lines,
         totals,
         customerBankAccount: settlement.customerBankAccount ?? null,
-        effectiveReturnDay: input.timing.effectiveReturnDay,
+        effectiveReturnDay: input?.timing.effectiveReturnDay ?? '',
       }),
       settlement,
       feeInvoice: fee

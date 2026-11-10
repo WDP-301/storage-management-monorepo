@@ -1,4 +1,5 @@
 import { Contract } from '@entities/contract.entity';
+import { ContractSettlement } from '@entities/contract-settlement.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { Invoice } from '@entities/invoice.entity';
 import { Payment } from '@entities/payment.entity';
@@ -166,6 +167,14 @@ export async function loadEndedContract(
       : { relations: { customer: true, bookingItem: { storageUnit: { facility: true } } } }),
   });
   if (!contract) notFound('Contract', contractId);
-  if (contract.status !== ContractStatus.ENDED) throw settlementNotReady(contractId);
-  return contract;
+  if (contract.status === ContractStatus.ENDED) return contract;
+  // A cancelled contract can only carry a settlement the cancellation itself created — reads of
+  // it (detail, refund-complete) must work; computing a fresh settlement never reaches here.
+  if (
+    contract.status === ContractStatus.CANCELLED &&
+    (await em.exists(ContractSettlement, { where: { contractId } }))
+  ) {
+    return contract;
+  }
+  throw settlementNotReady(contractId);
 }

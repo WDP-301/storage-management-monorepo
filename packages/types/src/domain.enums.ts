@@ -360,6 +360,10 @@ export const NotificationType = {
   BOOKING_DEPOSIT_PARTIAL: 'BOOKING_DEPOSIT_PARTIAL',
   /** To facility managers: a contract past term end without a return request may be abandoned. */
   CONTRACT_MAY_BE_ABANDONED: 'CONTRACT_MAY_BE_ABANDONED',
+  /** To facility managers: a DRAFT contract's handover day passed without the customer. */
+  CONTRACT_NO_SHOW: 'CONTRACT_NO_SHOW',
+  /** To the customer: the branch cancelled the contract before handover. */
+  CONTRACT_CANCELLED: 'CONTRACT_CANCELLED',
   /** The branch moved the customer's return appointment. */
   RETURN_RESCHEDULED: 'RETURN_RESCHEDULED',
   RETURN_FINALIZED: 'RETURN_FINALIZED',

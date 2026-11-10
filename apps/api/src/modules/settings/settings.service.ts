@@ -121,6 +121,11 @@ export class SettingsService {
     return this.getNumber('contract.abandoned_after_days');
   }
 
+  /** Days past the contracted start before a manager is nudged about a no-show DRAFT. */
+  async getNoShowAfterDays(): Promise<number> {
+    return this.getNumber('contract.no_show_after_days');
+  }
+
   /** Go-live of the return rules; a missing or unreadable value is an error, never a guess. */
   async getReturnRulesEffectiveAt(): Promise<Date> {
     const value = await this.get(RETURN_RULES_EFFECTIVE_AT);

@@ -31,6 +31,8 @@ const KNOWN_TYPES: Record<NotificationType, NotificationDisplay> = {
   BOOKING_DEPOSIT_PARTIAL: { label: 'Cọc chưa đủ', icon: 'invoice', tone: 'warning' },
   HANDOVER_ASSIGNED: { label: 'Bàn giao được gán', icon: 'ticket', tone: 'accent' },
   CONTRACT_MAY_BE_ABANDONED: { label: 'Kho có thể bỏ hoang', icon: 'overdue', tone: 'danger' },
+  CONTRACT_NO_SHOW: { label: 'Khách không đến nhận kho', icon: 'overdue', tone: 'warning' },
+  CONTRACT_CANCELLED: { label: 'Hợp đồng bị hủy', icon: 'overdue', tone: 'danger' },
   RETURN_RESCHEDULED: { label: 'Lịch trả kho', icon: 'return', tone: 'warning' },
   RETURN_FINALIZED: { label: 'Trả kho', icon: 'return', tone: 'accent' },
   SETTLEMENT_APPROVED: { label: 'Quyết toán', icon: 'settlement', tone: 'accent' },

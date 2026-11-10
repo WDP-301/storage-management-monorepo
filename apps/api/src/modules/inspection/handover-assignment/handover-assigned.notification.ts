@@ -19,8 +19,8 @@ export function handoverAssignedNotification(input: {
 }): NotificationPayload {
   return {
     type: NotificationType.HANDOVER_ASSIGNED,
-    title: 'New unit handover assigned',
-    body: `You will hand over ${input.unitCodes.join(', ')} to the customer at ${VIETNAM_TIME.format(input.firstHandoverAt)}.`,
+    title: 'Được giao việc bàn giao kho',
+    body: `Bạn sẽ bàn giao ${input.unitCodes.join(', ')} cho khách lúc ${VIETNAM_TIME.format(input.firstHandoverAt)}.`,
     data: {
       bookingId: input.bookingId,
       facilityId: input.facilityId,

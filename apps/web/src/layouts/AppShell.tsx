@@ -2,6 +2,7 @@ import { Badge, Button, Select, Sidebar, Text, useSidebar } from '@cloudflare/ku
 import {
   Buildings,
   CalendarCheck,
+  CalendarDots,
   ClipboardText,
   Faders,
   FileText,
@@ -43,6 +44,7 @@ const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { to: '/facility-manager/tickets', label: 'Vé sự cố', icon: Lifebuoy },
     { to: '/facility-manager/inspections', label: 'Biên bản', icon: ClipboardText },
     { to: '/facility-manager/tour-appointments', label: 'Lịch xem kho', icon: CalendarCheck },
+    { to: '/facility-manager/shifts', label: 'Ca làm việc', icon: CalendarDots },
   ],
   [UserRole.OPERATIONS_MANAGER]: [
     { to: '/admin/facilities', label: 'Quản lý chi nhánh', icon: Storefront },
@@ -50,6 +52,7 @@ const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { to: '/admin/sepay-transfers', label: 'Đối soát chuyển khoản', icon: Money },
     { to: '/contracts', label: 'Hợp đồng', icon: FileText },
     { to: '/facility-manager/tour-appointments', label: 'Lịch xem kho', icon: CalendarCheck },
+    { to: '/facility-manager/shifts', label: 'Ca làm việc', icon: CalendarDots },
   ],
   [UserRole.FACILITY_MANAGER]: [
     { to: '/facility-manager', label: 'Kho của chi nhánh', icon: Warehouse },
@@ -57,6 +60,7 @@ const ROLE_NAV: Record<UserRole, NavItem[]> = {
     // Handover/return records are part of a contract: managers assign staff from its detail.
     { to: '/contracts', label: 'Hợp đồng', icon: FileText },
     { to: '/facility-manager/tour-appointments', label: 'Lịch xem kho', icon: CalendarCheck },
+    { to: '/facility-manager/shifts', label: 'Ca làm việc', icon: CalendarDots },
   ],
   [UserRole.FACILITY_STAFF]: [],
   [UserRole.CUSTOMER]: [],

@@ -86,6 +86,7 @@ describe('ContractDetailDialog', () => {
   ] as const)('%s on a %s contract can use %j', (role, status, expected) => {
     mockRole(role);
     renderDialog(contractRecord({ status }));
+    fireEvent.click(screen.getByRole('tab', { name: 'File hợp đồng' }));
     expect(visibleActions()).toEqual(expected);
   });
 

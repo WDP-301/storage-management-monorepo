@@ -163,8 +163,13 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
           />
         )}
         {/* Hidden, not unmounted, while a record is open: the tab and any half-filled form
-            are still there when the user steps back. `contents` keeps the dialog's column layout. */}
-        <div className={inspection ? 'hidden' : 'contents'}>
+            are still there when the user steps back. `contents` keeps the dialog's column layout.
+            `inert`/`aria-hidden` mirror the visual hiding for assistive tech (and jsdom). */}
+        <div
+          className={inspection ? 'hidden' : 'contents'}
+          aria-hidden={inspection ? true : undefined}
+          inert={inspection ? true : undefined}
+        >
           <DialogHeader className="flex-col items-stretch gap-3 pb-2">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2.5">

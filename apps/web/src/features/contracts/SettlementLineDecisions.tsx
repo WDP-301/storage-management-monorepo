@@ -1,6 +1,6 @@
 import { Badge, Input } from '@cloudflare/kumo';
 import type React from 'react';
-import { SignedFileLink, SignedImageThumb } from '../../components/SignedFile';
+import { SignedFileGallery } from '../../components/SignedImageLightbox';
 import type { SettlementDetailRecord, WaivableLineType } from '../../types/settlement';
 import { formatVnd } from '../warehouses/warehouse-display';
 import {
@@ -61,17 +61,7 @@ export const SettlementLineDecisions: React.FC<Props> = ({ record, form, onChang
                 {damage.severity === 'MAJOR' ? 'Nghiêm trọng' : 'Nhẹ'}
               </Badge>
             </div>
-            {damage.evidence.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {damage.evidence.map((file) =>
-                  file.mimeType.startsWith('image/') ? (
-                    <SignedImageThumb key={file.fileKey} file={file} />
-                  ) : (
-                    <SignedFileLink key={file.fileKey} file={file} />
-                  ),
-                )}
-              </div>
-            )}
+            {damage.evidence.length > 0 && <SignedFileGallery files={damage.evidence} />}
             <p className="text-xs text-kumo-subtle">
               {damage.proposed_fee == null
                 ? 'Chưa có phí đề xuất — nhập số tiền hoặc chọn Miễn.'

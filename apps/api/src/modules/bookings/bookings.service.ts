@@ -9,7 +9,9 @@ import { UnitHold } from '@entities/unit-hold.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { persistContract } from '@modules/contracts/initial-contract.util';
 import { HandoverAssignmentService } from '@modules/inspection/handover-assignment/handover-assignment.service';
+import { NotificationsService } from '@modules/notifications/notifications.service';
 import { generatePaymentNo } from '@modules/payments/payment-no.util';
+import { markSepayOutcome } from '@modules/payments/sepay-transfers.util';
 import { PAYMENT_EVENTS, PaymentReceivedEvent } from '@modules/payments/types/payment';
 import { buildPaymentQrUrl, paymentQrConfigured } from '@modules/payments/vietqr.util';
 import { SettingsService } from '@modules/settings/settings.service';
@@ -37,6 +39,7 @@ import {
 import Decimal from 'decimal.js';
 import { DataSource, DeepPartial, In, LessThan, MoreThan, Not, Repository } from 'typeorm';
 import { extractBookingNos, generateBookingNo } from './booking-no.util';
+import { depositPartialNotification } from './deposit-notifications';
 import { BookingResponseDto, CreateBookingDto } from './dto/booking.dto';
 import { findUnrentable, lockShelfParents } from './rentable-units.util';
 
@@ -71,6 +74,7 @@ export class BookingsService implements OnApplicationBootstrap {
     private readonly dataSource: DataSource,
     private readonly configService: ConfigService,
     private readonly settings: SettingsService,
+    private readonly notifications: NotificationsService,
     private readonly handoverAssignment: HandoverAssignmentService,
   ) {}
 
@@ -701,6 +705,7 @@ export class BookingsService implements OnApplicationBootstrap {
       this.logger.log(
         `Payment sepayId=${event.sepayId} has no booking number in content="${event.content}", skipping`,
       );
+      await markSepayOutcome(this.dataSource.manager, String(event.sepayId), 'UNMATCHED');
       return;
     }
 
@@ -712,6 +717,7 @@ export class BookingsService implements OnApplicationBootstrap {
       this.logger.log(
         `No booking found for candidates=[${candidates.join(', ')}] (sepayId=${event.sepayId})`,
       );
+      await markSepayOutcome(this.dataSource.manager, String(event.sepayId), 'UNMATCHED');
       return;
     }
 
@@ -720,6 +726,7 @@ export class BookingsService implements OnApplicationBootstrap {
       this.logger.warn(
         `Payment sepayId=${event.sepayId} matches multiple bookings [${bookings.map((b) => b.bookingNo).join(', ')}], skipping`,
       );
+      await markSepayOutcome(this.dataSource.manager, String(event.sepayId), 'AMBIGUOUS');
       return;
     }
 
@@ -729,9 +736,73 @@ export class BookingsService implements OnApplicationBootstrap {
       this.logger.warn(
         `Booking ${booking.bookingNo} status=${booking.status}, not awaiting deposit, skipping`,
       );
+      // Money arrived naming a booking that wants no deposit — a person has to look at it.
+      await markSepayOutcome(this.dataSource.manager, String(event.sepayId), 'NEEDS_REVIEW', {
+        bookingId: booking.id,
+      });
       return;
     }
 
+    const { outcome, contractNos, reviewReason } = await this.applyDepositTransfer(booking, event);
+
+    if (outcome === 'confirmed') {
+      this.logger.log(
+        `Booking ${booking.bookingNo} confirmed via payment sepayId=${event.sepayId} amount=${event.amount} contracts=[${contractNos.join(', ')}]`,
+      );
+      await markSepayOutcome(this.dataSource.manager, String(event.sepayId), 'DEPOSIT_CONFIRMED', {
+        bookingId: booking.id,
+      });
+      return;
+    }
+    if (outcome === 'already-recorded') {
+      this.logger.log(`Payment sepayId=${event.sepayId} already recorded, skipping`);
+      return;
+    }
+    if (outcome === 'partial') {
+      await markSepayOutcome(this.dataSource.manager, String(event.sepayId), 'DEPOSIT_PARTIAL', {
+        bookingId: booking.id,
+      });
+      return;
+    }
+    await markSepayOutcome(
+      this.dataSource.manager,
+      String(event.sepayId),
+      outcome === 'late' ? 'LATE' : 'NEEDS_REVIEW',
+      { bookingId: booking.id },
+    );
+    if (outcome === 'late') {
+      this.logger.warn(
+        `Payment sepayId=${event.sepayId} for booking ${booking.bookingNo} arrived after holds expired — manual reconciliation needed`,
+      );
+    } else if (outcome === 'needs-review') {
+      this.logger.warn(
+        `Payment sepayId=${event.sepayId} for booking ${booking.bookingNo} could not confirm: ${reviewReason} — manual reconciliation needed`,
+      );
+    } else {
+      this.logger.warn(`Booking ${booking.bookingNo} status changed concurrently, skipping`);
+    }
+  }
+
+  /**
+   * Records one bank transfer against a booking awaiting its deposit and, when the deposit is
+   * covered, confirms the booking and creates the DRAFT contracts. Shared by the webhook
+   * listener and the manual reconciliation endpoint (a transfer assigned by hand replays the
+   * same path). Returns what happened; the caller decides how to log or mark it.
+   */
+  async applyDepositTransfer(
+    booking: Booking,
+    event: PaymentReceivedEvent,
+  ): Promise<{
+    outcome:
+      | 'confirmed'
+      | 'partial'
+      | 'late'
+      | 'status-changed'
+      | 'already-recorded'
+      | 'needs-review';
+    contractNos: string[];
+    reviewReason: string;
+  }> {
     const paymentRepo = this.dataSource.getRepository(Payment);
     const providerRef = String(event.sepayId);
 
@@ -739,7 +810,7 @@ export class BookingsService implements OnApplicationBootstrap {
     // real guard if two deliveries race past this check.
     if (await paymentRepo.exists({ where: { providerRef } })) {
       this.logger.log(`Payment sepayId=${event.sepayId} already recorded, skipping`);
-      return;
+      return { outcome: 'already-recorded', contractNos: [], reviewReason: '' };
     }
 
     const paidAmount = new Decimal(event.amount);
@@ -768,6 +839,7 @@ export class BookingsService implements OnApplicationBootstrap {
       | 'already-recorded'
       | 'needs-review';
     let reviewReason = '';
+    let partialRemaining: Decimal | null = null;
     const contractNos: string[] = [];
     try {
       outcome = await this.dataSource.transaction(async (em) => {
@@ -797,6 +869,7 @@ export class BookingsService implements OnApplicationBootstrap {
         await em.save(Payment, payment);
 
         if (paidAmount.plus(priorPaid).lt(depositRequired)) {
+          partialRemaining = depositRequired.minus(paidAmount.plus(priorPaid));
           return 'partial' as const;
         }
 
@@ -872,40 +945,24 @@ export class BookingsService implements OnApplicationBootstrap {
       }
     }
 
-    if (outcome === 'confirmed') {
-      this.logger.log(
-        `Booking ${booking.bookingNo} confirmed via payment sepayId=${event.sepayId} amount=${event.amount} contracts=[${contractNos.join(', ')}]`,
-      );
-      return;
-    }
-    if (outcome === 'already-recorded') {
-      this.logger.log(`Payment sepayId=${event.sepayId} already recorded, skipping`);
-      return;
-    }
     if (outcome === 'partial') {
       this.logger.warn(
         `Payment sepayId=${event.sepayId} amount=${event.amount} < deposit ${booking.depositTotal} for booking ${booking.bookingNo} — recorded, awaiting the remainder`,
       );
-      return;
-    }
-
-    // 'late' rolled the tx back (payment included) and 'status-changed' never wrote it —
-    // the transfer still reached the bank, so keep the receipt either way.
-    try {
-      await paymentRepo.save(payment);
-    } catch (err) {
-      if (!isUniqueViolation(err)) throw err;
-    }
-    if (outcome === 'late') {
-      this.logger.warn(
-        `Payment sepayId=${event.sepayId} for booking ${booking.bookingNo} arrived after holds expired — manual reconciliation needed`,
+      await this.notifications.createForUsers(
+        this.dataSource.manager,
+        [booking.customerId],
+        depositPartialNotification(booking, event.amount, partialRemaining?.toNumber() ?? 0),
       );
-    } else if (outcome === 'needs-review') {
-      this.logger.warn(
-        `Payment sepayId=${event.sepayId} for booking ${booking.bookingNo} could not confirm: ${reviewReason} — manual reconciliation needed`,
-      );
-    } else {
-      this.logger.warn(`Booking ${booking.bookingNo} status changed concurrently, skipping`);
+    } else if (outcome !== 'confirmed' && outcome !== 'already-recorded') {
+      // 'late' rolled the tx back (payment included) and 'status-changed' never wrote it —
+      // the transfer still reached the bank, so keep the receipt either way.
+      try {
+        await paymentRepo.save(payment);
+      } catch (err) {
+        if (!isUniqueViolation(err)) throw err;
+      }
     }
+    return { outcome, contractNos, reviewReason };
   }
 }

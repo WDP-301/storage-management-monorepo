@@ -95,7 +95,11 @@ describe('BookingsService.handlePaymentReceived', () => {
     transaction: jest.Mock;
   };
   let paymentRepo: { exists: jest.Mock; sum: jest.Mock; save: jest.Mock };
-  let dataSource: { transaction: jest.Mock; getRepository: jest.Mock };
+  let dataSource: {
+    manager: { query: jest.Mock };
+    transaction: jest.Mock;
+    getRepository: jest.Mock;
+  };
   let service: BookingsService;
   let warnSpy: jest.SpyInstance;
   let logSpy: jest.SpyInstance;
@@ -125,6 +129,7 @@ describe('BookingsService.handlePaymentReceived', () => {
     };
     dataSource = {
       transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)),
+      manager: em,
       getRepository: jest.fn(() => paymentRepo),
     };
     service = new BookingsService(
@@ -133,6 +138,7 @@ describe('BookingsService.handlePaymentReceived', () => {
       dataSource as never,
       { get: jest.fn() } as never,
       {} as never,
+      { createForUsers: jest.fn() } as never,
       handoverAssignment as never,
     );
     warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
@@ -439,6 +445,7 @@ describe('BookingsService.cancel', () => {
   let em: {
     findOne: jest.Mock;
     update: jest.Mock;
+    query: jest.Mock;
     getRepository: jest.Mock;
   };
   let unitHoldQb: {
@@ -449,7 +456,11 @@ describe('BookingsService.cancel', () => {
     execute: jest.Mock;
   };
   let paymentRepo: { sum: jest.Mock };
-  let dataSource: { transaction: jest.Mock; getRepository: jest.Mock };
+  let dataSource: {
+    manager: { query: jest.Mock };
+    transaction: jest.Mock;
+    getRepository: jest.Mock;
+  };
   let service: BookingsService;
   let warnSpy: jest.SpyInstance;
 
@@ -468,12 +479,14 @@ describe('BookingsService.cancel', () => {
     em = {
       findOne: jest.fn(),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
+      query: jest.fn(async () => [[], 0]),
       getRepository: jest.fn((entity: unknown) =>
         entity === Payment ? paymentRepo : { createQueryBuilder: () => unitHoldQb },
       ),
     };
     dataSource = {
       transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)),
+      manager: em,
       getRepository: jest.fn(() => paymentRepo),
     };
     service = new BookingsService(
@@ -482,6 +495,7 @@ describe('BookingsService.cancel', () => {
       dataSource as never,
       { get: jest.fn() } as never,
       {} as never,
+      { createForUsers: jest.fn() } as never,
       { assignSafely: jest.fn() } as never,
     );
     warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
@@ -647,6 +661,7 @@ describe('BookingsService.create — shelf rules', () => {
       dataSource as never,
       { get: jest.fn() } as never,
       settings as never,
+      { createForUsers: jest.fn() } as never,
       { assignSafely: jest.fn() } as never,
     );
   });

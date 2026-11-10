@@ -23,6 +23,7 @@ const PHOTO: ContractDocument = {
 const renderDialog = (contract: ContractRecord) => {
   const onChanged = vi.fn();
   render(<ContractDetailDialog contract={contract} onClose={vi.fn()} onChanged={onChanged} />);
+  fireEvent.click(screen.getByRole('tab', { name: 'File hợp đồng' }));
   return { onChanged };
 };
 const pick = (...files: File[]) =>

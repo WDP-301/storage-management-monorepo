@@ -4,6 +4,7 @@ export const INVOICE_KIND_LABEL: Record<InvoiceKind, string> = {
   INITIAL: 'Tiền thuê',
   RENEWAL: 'Gia hạn',
   SETTLEMENT: 'Quyết toán',
+  DEPOSIT_TOPUP: 'Thu bù cọc',
 };
 
 export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
@@ -39,8 +40,8 @@ export function invoiceStatusBadge(invoice: ContractInvoiceRecord): {
 
 /** "Kỳ 2 · Gia hạn" — what the invoice bills. */
 export const invoicePeriodLabel = (invoice: ContractInvoiceRecord): string =>
-  invoice.kind === 'SETTLEMENT'
-    ? INVOICE_KIND_LABEL.SETTLEMENT
+  invoice.kind === 'SETTLEMENT' || invoice.kind === 'DEPOSIT_TOPUP'
+    ? INVOICE_KIND_LABEL[invoice.kind]
     : `Kỳ ${invoice.period_no} · ${INVOICE_KIND_LABEL[invoice.kind]}`;
 
 /**

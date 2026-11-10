@@ -7,7 +7,7 @@ import {
   DialogFooter,
   DialogHeader,
 } from '../../components/dialog-layout';
-import { SignedFileLink, SignedImageThumb } from '../../components/SignedFile';
+import { SignedFileGallery } from '../../components/SignedImageLightbox';
 import { useAuth } from '../../context/AuthContext';
 import { hasAllowedRole } from '../../lib/roles';
 import { ShelfStorageApi } from '../../lib/shelf-storage-api';
@@ -104,15 +104,7 @@ export const ShelfReceiptDetailDialog: React.FC<Props> = ({ receiptId, onClose, 
                   <span className="text-xs font-semibold text-kumo-default block">
                     Ảnh ({shown.photos.length})
                   </span>
-                  <div className="flex flex-wrap gap-2">
-                    {shown.photos.map((photo) =>
-                      photo.mimeType?.startsWith('image/') ? (
-                        <SignedImageThumb key={photo.fileKey} file={photo} />
-                      ) : (
-                        <SignedFileLink key={photo.fileKey} file={photo} />
-                      ),
-                    )}
-                  </div>
+                  <SignedFileGallery files={shown.photos} />
                 </section>
               )}
               {shown.void && (

@@ -2,8 +2,11 @@ import { Badge, Button, Empty, LayerCard, Text } from '@cloudflare/kumo';
 import {
   Buildings,
   CalendarCheck,
+  CalendarX,
   CheckCircle,
   Lifebuoy,
+  Money,
+  Receipt,
   Rows,
   Stack,
   WarningCircle,
@@ -11,9 +14,10 @@ import {
 } from '@phosphor-icons/react';
 import { TourAppointmentStatus, UserRole } from '@storage/types';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useFacility } from '../../context/FacilityContext';
+import { AnalyticsApi, type FacilityKpis } from '../../lib/analytics-api';
 import {
   type ApiError,
   ChangeRequestsApi,
@@ -32,7 +36,7 @@ import { ManagedWarehousesTable } from './manager/ManagedWarehousesTable';
 
 const KpiCard: React.FC<{
   label: string;
-  value: number;
+  value: number | string;
   icon: React.ReactNode;
   badge: React.ReactNode;
 }> = ({ label, value, icon, badge }) => (
@@ -77,6 +81,7 @@ export const FacilityManagerDashboard: React.FC = () => {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [requests, setRequests] = useState<UnitChangeRequestRecord[]>([]);
   const [pendingTours, setPendingTours] = useState(0);
+  const [kpis, setKpis] = useState<FacilityKpis | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -107,12 +112,13 @@ export const FacilityManagerDashboard: React.FC = () => {
       if (waitingForFacility) {
         setWarehouses([]);
         setRequests([]);
+        setKpis(null);
         setIsLoading(false);
         return;
       }
       if (showSpinner) setIsLoading(true);
       try {
-        const [list, requestsData, toursData] = await Promise.all([
+        const [list, requestsData, toursData, kpisData] = await Promise.all([
           fetchWarehouses(),
           ChangeRequestsApi.list(),
           TourAppointmentsApi.list({
@@ -123,9 +129,11 @@ export const FacilityManagerDashboard: React.FC = () => {
             appointments: [],
             meta: { total: 0, page: 1, limit: 1, totalPages: 0 },
           })),
+          AnalyticsApi.facilityKpis(facilityId || undefined).catch(() => null),
         ]);
         if (request !== latestRequest.current) return;
         setPendingTours(toursData.meta?.total || 0);
+        setKpis(kpisData);
         // Requests belong to the facility of the warehouse being left.
         const facilityIds = new Set(list.map((w) => w.facility.id));
         setWarehouses(list);
@@ -298,10 +306,7 @@ export const FacilityManagerDashboard: React.FC = () => {
           icon={<CheckCircle className="w-4 h-4 text-kumo-brand" />}
           badge={<Badge variant="primary">Có thể thuê ngay</Badge>}
         />
-        <div
-          className="cursor-pointer"
-          onClick={() => navigate('/facility-manager/tour-appointments?status=PENDING')}
-        >
+        <Link className="cursor-pointer" to="/facility-manager/tour-appointments?status=PENDING">
           <KpiCard
             label="Lịch xem kho chờ xử lý"
             value={pendingTours}
@@ -312,7 +317,7 @@ export const FacilityManagerDashboard: React.FC = () => {
               </Badge>
             }
           />
-        </div>
+        </Link>
         <KpiCard
           label="Yêu cầu đổi kho chờ duyệt"
           value={pendingRequests}
@@ -326,6 +331,35 @@ export const FacilityManagerDashboard: React.FC = () => {
           badge={<Badge variant="neutral">Kho bảo dưỡng</Badge>}
         />
       </div>
+
+      {kpis && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <KpiCard
+            label={`Doanh thu tháng ${kpis.revenue.month}`}
+            value={`${kpis.revenue.received.toLocaleString('vi-VN')}₫`}
+            icon={<Money className="w-4 h-4 text-kumo-success" />}
+            badge={<Badge variant="success">Đã thu trên hóa đơn</Badge>}
+          />
+          <KpiCard
+            label="Hóa đơn quá hạn"
+            value={kpis.receivables.overdue_invoice_count}
+            icon={<Receipt className="w-4 h-4 text-kumo-warning" />}
+            badge={
+              <Badge variant={kpis.receivables.overdue_invoice_count > 0 ? 'warning' : 'neutral'}>
+                {kpis.receivables.overdue_invoice_count > 0
+                  ? `Còn thiếu ${kpis.receivables.overdue_due.toLocaleString('vi-VN')}₫`
+                  : 'Không có nợ'}
+              </Badge>
+            }
+          />
+          <KpiCard
+            label="Hợp đồng hết hạn trong 30 ngày"
+            value={kpis.contracts.expiring_within_30_days}
+            icon={<CalendarX className="w-4 h-4 text-kumo-brand" />}
+            badge={<Badge variant="neutral">{kpis.contracts.active} hợp đồng đang hiệu lực</Badge>}
+          />
+        </div>
+      )}
 
       <ChangeRequestsTable requests={requests} busyId={busyId} onDecide={handleDecision} />
 

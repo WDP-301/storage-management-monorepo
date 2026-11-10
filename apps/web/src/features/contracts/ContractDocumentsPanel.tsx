@@ -3,6 +3,7 @@ import { Trash, UploadSimple } from '@phosphor-icons/react';
 import type React from 'react';
 import { useRef, useState } from 'react';
 import { SignedFileLink, SignedImageThumb } from '../../components/SignedFile';
+import { useImageLightbox } from '../../components/SignedImageLightbox';
 import { UploadsApi } from '../../lib/api';
 import type { ContractDocument } from '../../types/contract';
 import {
@@ -34,6 +35,8 @@ export const ContractDocumentsPanel: React.FC<Props> = ({
 }) => {
   const fileInput = useRef<HTMLInputElement>(null);
   const [removing, setRemoving] = useState<string | null>(null);
+  // Photographed pages open in a viewer that steps through every image of the contract.
+  const viewer = useImageLightbox(documents);
   const full = documents.length >= MAX_CONTRACT_DOCUMENTS;
   const lastLocked = keepOne && documents.length <= 1;
 
@@ -55,7 +58,7 @@ export const ContractDocumentsPanel: React.FC<Props> = ({
 
   return (
     <section className="space-y-2">
-      <span className="text-xs font-semibold text-kumo-default block">
+      <span className="text-lg font-semibold text-kumo-default block">
         File hợp đồng ({documents.length})
       </span>
       {documents.length === 0 && <p className="text-sm text-kumo-subtle">Chưa có file hợp đồng.</p>}
@@ -63,7 +66,7 @@ export const ContractDocumentsPanel: React.FC<Props> = ({
         {documents.map((doc) => (
           <li key={doc.fileKey} className="space-y-1">
             {doc.mimeType.startsWith('image/') ? (
-              <SignedImageThumb file={doc} />
+              <SignedImageThumb file={doc} onOpen={() => viewer.open(doc)} />
             ) : (
               <SignedFileLink file={doc} />
             )}
@@ -82,6 +85,8 @@ export const ContractDocumentsPanel: React.FC<Props> = ({
           </li>
         ))}
       </ul>
+
+      {viewer.lightbox}
 
       {canEdit && lastLocked && documents.length > 0 && (
         <p className="text-xs text-kumo-subtle">

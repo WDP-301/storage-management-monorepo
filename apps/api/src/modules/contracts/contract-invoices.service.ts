@@ -35,6 +35,7 @@ import {
   toContractInvoiceRecord,
   toInvoicePaymentRecord,
 } from './contract-invoice.records';
+import { creditDepositTopUp, topUpBookingId } from './deposit-topup';
 import { PAYABLE_INVOICE_STATUSES, sumInvoicePayments } from './first-rent.util';
 import { invoicePaidNotification } from './invoice-notifications';
 
@@ -140,17 +141,26 @@ export class ContractInvoicesService {
         ...(transferRef ? { transferRef } : {}),
         ...(evidence.length > 0 ? { evidence } : {}),
       };
+      const topUpBooking = await topUpBookingId(em, locked);
       await em.save(Payment, {
         paymentNo: generatePaymentNo(),
         invoiceId: locked.id,
+        bookingId: topUpBooking ?? undefined,
         customerId: locked.customerId,
-        type: locked.kind === InvoiceKind.SETTLEMENT ? PaymentType.FEE : PaymentType.RENT,
+        type:
+          locked.kind === InvoiceKind.SETTLEMENT
+            ? PaymentType.FEE
+            : topUpBooking
+              ? PaymentType.DEPOSIT
+              : PaymentType.RENT,
         method: dto.method,
         status: PaymentStatus.SUCCEEDED,
         amount: dto.amount,
         paidAt,
         metadata,
       });
+      // A top-up payment is extra deposit held even if the invoice is only part-paid.
+      await creditDepositTopUp(em, topUpBooking, dto.amount);
 
       const status = paid.plus(dto.amount).gte(locked.total)
         ? InvoiceStatus.PAID

@@ -1,5 +1,5 @@
 import type React from 'react';
-import { SignedFileLink, SignedImageThumb } from '../../components/SignedFile';
+import { SignedFileGallery } from '../../components/SignedImageLightbox';
 import type { SettlementDetailRecord } from '../../types/settlement';
 import { formatDateTime } from '../inspections/inspection-display';
 import { formatVnd } from '../warehouses/warehouse-display';
@@ -88,15 +88,7 @@ export const SettlementApprovalInfo: React.FC<{ record: SettlementDetailRecord }
           <span className="text-xs font-semibold text-kumo-default block">
             Chứng từ chuyển khoản ({record.evidence.length})
           </span>
-          <div className="flex flex-wrap gap-2">
-            {record.evidence.map((file) =>
-              file.mimeType.startsWith('image/') ? (
-                <SignedImageThumb key={file.fileKey} file={file} />
-              ) : (
-                <SignedFileLink key={file.fileKey} file={file} />
-              ),
-            )}
-          </div>
+          <SignedFileGallery files={record.evidence} />
         </section>
       )}
     </div>

@@ -116,6 +116,11 @@ export class SettingsService {
     return this.getNumber('billing.overdue_penalty_percent');
   }
 
+  /** Days past term end before a manager is nudged about a possibly abandoned unit. */
+  async getAbandonedAfterDays(): Promise<number> {
+    return this.getNumber('contract.abandoned_after_days');
+  }
+
   /** Go-live of the return rules; a missing or unreadable value is an error, never a guess. */
   async getReturnRulesEffectiveAt(): Promise<Date> {
     const value = await this.get(RETURN_RULES_EFFECTIVE_AT);

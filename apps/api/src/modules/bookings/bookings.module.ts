@@ -10,6 +10,7 @@ import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
 import { AuthModule } from '@modules/auth/auth.module';
 import { InspectionModule } from '@modules/inspection/inspection.module';
+import { NotificationsModule } from '@modules/notifications/notifications.module';
 import { SettingsModule } from '@modules/settings/settings.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -34,6 +35,7 @@ import { BookingsService } from './bookings.service';
     ]),
     AuthModule,
     InspectionModule,
+    NotificationsModule,
     SettingsModule,
   ],
   controllers: [BookingsController],

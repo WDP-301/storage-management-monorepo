@@ -86,6 +86,7 @@ describe('ContractDetailDialog', () => {
   ] as const)('%s on a %s contract can use %j', (role, status, expected) => {
     mockRole(role);
     renderDialog(contractRecord({ status }));
+    fireEvent.click(screen.getByRole('tab', { name: 'File hợp đồng' }));
     expect(visibleActions()).toEqual(expected);
   });
 
@@ -162,8 +163,7 @@ describe('ContractDetailDialog', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('opens the handover record in place of the contract and comes back', async () => {
-    mockRole(UserRole.FACILITY_MANAGER);
+  const handoverRecord = () =>
     vi.spyOn(InspectionsApi, 'get').mockResolvedValue({
       id: 'i-1',
       type: 'PRE_HANDOVER',
@@ -179,13 +179,40 @@ describe('ContractDetailDialog', () => {
       damages: [],
       contract: null,
     } as never);
+
+  it('opens the handover record inside the contract dialog and steps back to the same tab', async () => {
+    mockRole(UserRole.FACILITY_MANAGER);
+    handoverRecord();
     renderDialog(contractRecord());
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Nhận / trả kho' }));
     fireEvent.click(screen.getByRole('button', { name: 'Xem biên bản nhận kho' }));
     expect(await screen.findByRole('dialog', { name: /Biên bản nhận kho/ })).toBeTruthy();
     expect(screen.queryByRole('dialog', { name: 'Hợp đồng CT-41BF439C' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Hợp đồng CT-41BF439C/ }));
     expect(screen.getByRole('dialog', { name: 'Hợp đồng CT-41BF439C' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Nhận / trả kho' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+  });
+
+  it('steps back on Escape and closes everything from the record close button', async () => {
+    mockRole(UserRole.FACILITY_MANAGER);
+    handoverRecord();
+    const { onClose } = renderDialog(contractRecord());
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Nhận / trả kho' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xem biên bản nhận kho' }));
+    const record = await screen.findByRole('dialog', { name: /Biên bản nhận kho/ });
+    fireEvent.keyDown(record, { key: 'Escape' });
+    expect(await screen.findByRole('dialog', { name: 'Hợp đồng CT-41BF439C' })).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Xem biên bản nhận kho' }));
+    await screen.findByRole('dialog', { name: /Biên bản nhận kho/ });
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+    expect(onClose).toHaveBeenCalled();
   });
 
   it('switches to the edit form and back', () => {

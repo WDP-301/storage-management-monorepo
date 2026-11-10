@@ -182,7 +182,9 @@ export class TourAppointmentsService {
             role: UserRole.FACILITY_MANAGER,
           },
         });
-        const activeManagerIds = assignments.filter(isAssignmentActive).map((a) => a.userId);
+        const activeManagerIds = assignments
+          .filter((a) => isAssignmentActive(a))
+          .map((a) => a.userId);
         if (activeManagerIds.length > 0) {
           await this.notificationsService.createForUsers(manager, activeManagerIds, {
             type: NotificationType.TOUR_APPOINTMENT_CREATED,

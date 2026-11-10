@@ -39,7 +39,7 @@ const OVERSTAY = settlementLine({ type: 'OVERSTAY', description: 'Quá hạn tr�
 describe('settlement form', () => {
   it('pre-fills a proposed fee as an explicit charge and leaves an unpriced damage undecided', () => {
     const record = settlementRecord();
-    record.return.damages.push({
+    record.return?.damages.push({
       index: 1,
       description: 'Trầy sàn',
       severity: 'MINOR',

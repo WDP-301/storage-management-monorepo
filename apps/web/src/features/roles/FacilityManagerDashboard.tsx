@@ -4,6 +4,7 @@ import {
   CalendarCheck,
   CalendarX,
   CheckCircle,
+  HandCoins,
   Lifebuoy,
   Money,
   Receipt,
@@ -333,7 +334,7 @@ export const FacilityManagerDashboard: React.FC = () => {
       </div>
 
       {kpis && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard
             label={`Doanh thu tháng ${kpis.revenue.month}`}
             value={`${kpis.revenue.received.toLocaleString('vi-VN')}₫`}
@@ -349,6 +350,18 @@ export const FacilityManagerDashboard: React.FC = () => {
                 {kpis.receivables.overdue_invoice_count > 0
                   ? `Còn thiếu ${kpis.receivables.overdue_due.toLocaleString('vi-VN')}₫`
                   : 'Không có nợ'}
+              </Badge>
+            }
+          />
+          <KpiCard
+            label="Hoàn cọc đang treo"
+            value={kpis.refunds.pending_count}
+            icon={<HandCoins className="w-4 h-4 text-kumo-warning" />}
+            badge={
+              <Badge variant={kpis.refunds.pending_count > 0 ? 'warning' : 'neutral'}>
+                {kpis.refunds.pending_count > 0
+                  ? `Phải trả ${kpis.refunds.pending_amount.toLocaleString('vi-VN')}₫`
+                  : 'Không nợ khách'}
               </Badge>
             }
           />

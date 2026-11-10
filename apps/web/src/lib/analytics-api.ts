@@ -14,6 +14,7 @@ export interface FacilityKpis {
   };
   revenue: { month: string; received: number };
   receivables: { overdue_invoice_count: number; overdue_due: number };
+  refunds: { pending_count: number; pending_amount: number };
   contracts: { active: number; expiring_within_30_days: number };
 }
 

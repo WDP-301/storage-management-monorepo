@@ -74,7 +74,7 @@ export function parseAmount(text: string): number | null {
  */
 export function initSettlementForm(record: SettlementDetailRecord): SettlementFormState {
   const damages: Record<number, DamageChoice> = {};
-  for (const damage of record.return.damages) {
+  for (const damage of record.return?.damages ?? []) {
     damages[damage.index] =
       damage.proposed_fee == null
         ? { mode: null, amount: '' }
@@ -105,7 +105,7 @@ export function buildDecisions(
   record: SettlementDetailRecord,
 ): SettlementDecisionsInput {
   const damageDecisions: NonNullable<SettlementDecisionsInput['damageDecisions']> = [];
-  for (const { index } of record.return.damages) {
+  for (const { index } of record.return?.damages ?? []) {
     const choice = form.damages[index];
     if (choice?.mode === 'waive') damageDecisions.push({ index, waived: true });
     const amount = choice?.mode === 'charge' ? parseAmount(choice.amount) : null;
@@ -141,7 +141,7 @@ export function approvalProblems(
 ): string[] {
   const problems: string[] = [];
   if (!record.totals) problems.push('Không xác định được tiền cọc đã nộp — chưa thể duyệt.');
-  for (const { index } of record.return.damages) {
+  for (const { index } of record.return?.damages ?? []) {
     const choice = form.damages[index];
     const label = `Hư hỏng ${index + 1}`;
     if (!choice?.mode) problems.push(`${label}: nhập số tiền hoặc chọn Miễn.`);

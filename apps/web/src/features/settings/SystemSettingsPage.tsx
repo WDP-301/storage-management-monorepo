@@ -106,6 +106,13 @@ const SETTINGS_METADATA: Record<string, SettingMetadata> = {
     unit: 'ngày',
     group: 'contract',
   },
+  'contract.no_show_after_days': {
+    label: 'Ngưỡng ngày nhắc khách không đến nhận kho',
+    description:
+      'Số ngày sau ngày bắt đầu hợp đồng mà khách vẫn chưa đến bàn giao (hợp đồng còn ở trạng thái nháp) thì hệ thống nhắc quản lý chi nhánh liên hệ và hủy hợp đồng để giải phóng kho.',
+    unit: 'ngày',
+    group: 'contract',
+  },
   'contract.return_notice_days': {
     label: 'Số ngày báo trước khi trả kho sớm',
     description:

@@ -48,7 +48,7 @@ export const SettlementLineDecisions: React.FC<Props> = ({ record, form, onChang
 
   return (
     <div className="space-y-3">
-      {record.return.damages.map((damage) => {
+      {(record.return?.damages ?? []).map((damage) => {
         const choice = form.damages[damage.index] ?? { mode: null, amount: '' };
         const name = `damage-${damage.index}`;
         return (

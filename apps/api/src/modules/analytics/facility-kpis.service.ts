@@ -27,14 +27,15 @@ export class FacilityKpisService {
   async getKpis(facilityId: string | undefined, actor: AuthUser): Promise<FacilityKpisResponse> {
     const scope = await this.resolveScope(facilityId, actor);
 
-    const [units, revenue, receivables, contracts] = await Promise.all([
+    const [units, revenue, receivables, refunds, contracts] = await Promise.all([
       this.unitCounts(scope),
       this.revenueThisMonth(scope),
       this.overdueReceivables(scope),
+      this.pendingRefunds(scope),
       this.contractCounts(scope),
     ]);
 
-    return { scope: { facility_ids: scope }, units, revenue, receivables, contracts };
+    return { scope: { facility_ids: scope }, units, revenue, receivables, refunds, contracts };
   }
 
   /**
@@ -144,6 +145,25 @@ export class FacilityKpisService {
     return {
       overdue_invoice_count: row?.overdue_invoice_count ?? 0,
       overdue_due: Number(row?.overdue_due ?? 0),
+    };
+  }
+
+  /** Refunds approved but not yet completed: how many, and the money still owed to customers. */
+  private async pendingRefunds(scope: string[]): Promise<FacilityKpisResponse['refunds']> {
+    const [row] = (await this.dataSource.query(
+      `SELECT count(*)::int AS pending_count,
+              coalesce(sum(s.refund_amount), 0)::numeric(14,2) AS pending_amount
+         FROM contract_settlements s
+         JOIN contracts c ON c.id = s.contract_id AND c.deleted_at IS NULL
+         JOIN booking_items bi ON bi.id = c.booking_item_id
+         JOIN storage_units su ON su.id = bi.storage_unit_id
+        WHERE s.status = 'AWAITING_REFUND' AND s.refund_amount > 0
+          AND su.facility_id = ANY($1::uuid[])`,
+      [scope],
+    )) as Array<{ pending_count: number; pending_amount: string }>;
+    return {
+      pending_count: row?.pending_count ?? 0,
+      pending_amount: Number(row?.pending_amount ?? 0),
     };
   }
 

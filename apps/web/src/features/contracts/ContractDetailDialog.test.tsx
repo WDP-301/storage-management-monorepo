@@ -90,6 +90,18 @@ describe('ContractDetailDialog', () => {
     expect(visibleActions()).toEqual(expected);
   });
 
+  it('shows the settlement tab on a cancelled contract only when a refund is queued', () => {
+    mockRole(UserRole.ADMIN);
+    renderDialog(contractRecord({ status: 'CANCELLED', settlement_status: 'AWAITING_REFUND' }));
+    expect(screen.getByRole('tab', { name: 'Quyết toán cọc' })).toBeTruthy();
+  });
+
+  it('hides the settlement tab on a cancelled contract without a settlement', () => {
+    mockRole(UserRole.ADMIN);
+    renderDialog(contractRecord({ status: 'CANCELLED' }));
+    expect(screen.queryByRole('tab', { name: 'Quyết toán cọc' })).toBeNull();
+  });
+
   it('cancels a draft after confirmation', async () => {
     mockRole(UserRole.FACILITY_MANAGER);
     const cancel = vi.spyOn(ContractsApi, 'cancel').mockResolvedValue();

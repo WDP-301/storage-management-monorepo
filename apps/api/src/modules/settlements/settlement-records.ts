@@ -62,7 +62,8 @@ export const depositMissingWarning = (): SettlementWarning => ({
 
 export interface SettlementDetailParts {
   contract: Contract;
-  input: SettlementInput;
+  /** Null only for a contract cancelled before handover: nothing was returned, so there is no input. */
+  input: SettlementInput | null;
   status: ContractSettlementStatus;
   deposit: { id: string | null; amount: number; status: DepositStatus } | null;
   lines: SettlementLine[];
@@ -81,7 +82,7 @@ export interface SettlementDetailParts {
 
 export function toSettlementDetailRecord(parts: SettlementDetailParts): SettlementDetailRecord {
   const { contract, input, settlement } = parts;
-  const { inspection } = input;
+  const inspection = input?.inspection ?? null;
   const unit = contract.bookingItem?.storageUnit;
   const snapshot = contract.customerSnapshot ?? {};
   const pick = (key: string, fallback?: string | null) =>
@@ -97,7 +98,7 @@ export function toSettlementDetailRecord(parts: SettlementDetailParts): Settleme
       effective_at: contract.effectiveAt,
       months: contract.months,
       monthly_price: Number(contract.monthlyPriceSnapshot),
-      term_end_at: input.timing.termEndAt,
+      term_end_at: input?.timing.termEndAt ?? contract.endedAt ?? contract.effectiveAt,
       customer: {
         id: contract.customerId,
         full_name: customerName(contract),
@@ -109,27 +110,30 @@ export function toSettlementDetailRecord(parts: SettlementDetailParts): Settleme
         ? { id: unit.facility.id, code: unit.facility.code, name: unit.facility.name }
         : null,
     },
-    return: {
-      id: inspection.id,
-      requested_at: inspection.createdAt,
-      request_source: inspection.requestSource ?? null,
-      requested_by_name: inspection.requester?.fullName ?? null,
-      notice_from: inspection.noticeFrom ?? null,
-      scheduled_day: inspection.scheduledAt ? vietnamDate(inspection.scheduledAt) : null,
-      returned_on: input.returnedOn,
-      finalized_at: inspection.finalizedAt ?? null,
-      rules: input.rules,
-      condition_notes: inspection.conditionNotes ?? null,
-      evidence: inspection.evidence ?? [],
-      damages: input.damages.map((d) => ({
-        index: d.index,
-        description: d.description,
-        severity: d.severity as NonNullable<typeof d.severity>,
-        evidence: d.evidence,
-        proposed_fee: d.proposedFee,
-      })),
-    },
-    timing: toReturnTimingRecord(input.timing),
+    return:
+      inspection && input
+        ? {
+            id: inspection.id,
+            requested_at: inspection.createdAt,
+            request_source: inspection.requestSource ?? null,
+            requested_by_name: inspection.requester?.fullName ?? null,
+            notice_from: inspection.noticeFrom ?? null,
+            scheduled_day: inspection.scheduledAt ? vietnamDate(inspection.scheduledAt) : null,
+            returned_on: input.returnedOn,
+            finalized_at: inspection.finalizedAt ?? null,
+            rules: input.rules,
+            condition_notes: inspection.conditionNotes ?? null,
+            evidence: inspection.evidence ?? [],
+            damages: input.damages.map((d) => ({
+              index: d.index,
+              description: d.description,
+              severity: d.severity as NonNullable<typeof d.severity>,
+              evidence: d.evidence,
+              proposed_fee: d.proposedFee,
+            })),
+          }
+        : null,
+    timing: input ? toReturnTimingRecord(input.timing) : null,
     status: parts.status,
     deposit: parts.deposit,
     lines: parts.lines,
@@ -137,7 +141,7 @@ export function toSettlementDetailRecord(parts: SettlementDetailParts): Settleme
     warnings: parts.warnings,
     customer_bank_account: settlement
       ? (settlement.customerBankAccount ?? null)
-      : input.customerBankAccount,
+      : (input?.customerBankAccount ?? null),
     bank_account: bankAccount,
     bank_override: settlement?.bankOverrideReason
       ? {

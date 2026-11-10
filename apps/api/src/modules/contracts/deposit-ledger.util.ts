@@ -34,12 +34,17 @@ async function recordContractDeposit(
   const existing = await lockOwn();
   if (existing || contract.status === ContractStatus.CANCELLED) return existing;
 
+  // The left-over deposit may move only when it is free: a cancelled contract whose money is
+  // already queued in an open settlement keeps its row — reparenting it would refund the same
+  // row twice (the old settlement and the new contract's ledger).
   const [moved]: [LedgerDeposit[], number] = await em.query(
     `UPDATE deposits d SET contract_id = $1, updated_at = now()
       WHERE d.id = (
         SELECT x.id FROM deposits x JOIN contracts c ON c.id = x.contract_id
          WHERE c.booking_item_id = $2 AND c.id <> $1
            AND c.status = '${ContractStatus.CANCELLED}' AND x.status = '${DepositStatus.HELD}'
+           AND NOT EXISTS (SELECT 1 FROM contract_settlements s
+                            WHERE s.deposit_id = x.id AND s.status <> 'COMPLETED')
          ORDER BY x.created_at DESC, x.id DESC LIMIT 1
            FOR UPDATE OF x)
       RETURNING ${DEPOSIT_COLUMNS}`,

@@ -59,6 +59,32 @@ export function settlementApprovedNotification(
   };
 }
 
+/**
+ * Tells the customer the branch cancelled their contract before handover — no return, no
+ * deductions — and whether the money already taken is queued for a manual refund.
+ */
+export function contractCancelledNotification(
+  contract: NotifiedContract,
+  settlementId: string | null,
+  refundAmount: number,
+): NotificationPayload {
+  const outcome =
+    refundAmount > 0
+      ? `Số tiền đã đóng ${formatVndCurrency(refundAmount)} đang chờ hoàn lại — nhân viên sẽ liên hệ để xác nhận tài khoản nhận.`
+      : 'Hợp đồng chưa phát sinh khoản thanh toán nào cần hoàn.';
+  return {
+    type: NotificationType.CONTRACT_CANCELLED,
+    title: 'Hợp đồng đã được hủy',
+    body: `Hợp đồng ${contract.contractNo} đã được hủy trước ngày bàn giao. ${outcome}`,
+    data: {
+      contractId: contract.id,
+      contractNo: contract.contractNo,
+      settlementId,
+      refundAmount,
+    },
+  };
+}
+
 export function refundCompletedNotification(
   contract: NotifiedContract,
   settlementId: string,

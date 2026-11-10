@@ -26,6 +26,7 @@ import { ContractsService } from './contracts.service';
 import { FirstRentService } from './first-rent.service';
 import { FirstRentPaymentListener } from './first-rent-payment.listener';
 import { ManagedReturnService } from './managed-return.service';
+import { NoShowSuggestionService } from './no-show-suggestion.service';
 import { ReturnPreviewService } from './return-preview.service';
 import { TermEndReminderService } from './term-end-reminder.service';
 
@@ -61,6 +62,7 @@ import { TermEndReminderService } from './term-end-reminder.service';
     FirstRentPaymentListener,
     TermEndReminderService,
     AbandonedSuggestionService,
+    NoShowSuggestionService,
   ],
   exports: [ContractsService],
 })

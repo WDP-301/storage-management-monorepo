@@ -54,9 +54,11 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
     setEditing(false);
     setInspection(null);
     setError(null);
-    // A pending settlement is why an ENDED contract gets opened, so it opens on that tab.
+    // A pending settlement is why an ENDED contract gets opened; a CANCELLED contract opens on
+    // it too when money is queued for a refund, so it opens on that tab.
     setTab(
-      contract?.status === 'ENDED' && contract.settlement_status === 'PENDING'
+      (contract?.status === 'ENDED' && contract.settlement_status === 'PENDING') ||
+        (contract?.status === 'CANCELLED' && contract.settlement_status === 'AWAITING_REFUND')
         ? 'settlement'
         : 'info',
     );
@@ -112,8 +114,16 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
     );
   }
 
-  const showSettlement = canManage && contract.status === 'ENDED';
-  const settlementFirst = showSettlement && contract.settlement_status === 'PENDING';
+  // A CANCELLED contract shows its settlement only when one exists — a no-show with money
+  // taken leaves a refund queued; an unpaid cancellation has nothing to settle.
+  const showSettlement =
+    canManage &&
+    (contract.status === 'ENDED' ||
+      (contract.status === 'CANCELLED' && contract.settlement_status != null));
+  const settlementFirst =
+    showSettlement &&
+    (contract.settlement_status === 'PENDING' ||
+      (contract.status === 'CANCELLED' && contract.settlement_status === 'AWAITING_REFUND'));
   const navKeys: SectionKey[] = ['info', 'handover', 'documents'];
   if (canCancel) navKeys.push('invoices');
   if (showSettlement) navKeys.splice(settlementFirst ? 1 : navKeys.length, 0, 'settlement');

@@ -23,6 +23,7 @@ import { FacilityManagerDashboard } from '../features/roles/FacilityManagerDashb
 import { RoleLandingPage } from '../features/roles/RoleLandingPage';
 import { UnassignedRolePage } from '../features/roles/UnassignedRolePage';
 import { SystemSettingsPage } from '../features/settings/SystemSettingsPage';
+import { StaffShiftsPage } from '../features/shifts/StaffShiftsPage';
 import { ManagerTicketsPage } from '../features/tickets/ManagerTicketsPage';
 import { TourAppointmentsPage } from '../features/tour-appointments/TourAppointmentsPage';
 import { WarehouseDetailPage } from '../features/warehouses/WarehouseDetailPage';
@@ -133,6 +134,7 @@ export const AppRouter: React.FC = () => {
                 path="/facility-manager/tour-appointments"
                 element={<TourAppointmentsPage />}
               />
+              <Route path="/facility-manager/shifts" element={<StaffShiftsPage />} />
             </Route>
 
             {/* Unassigned role fallback view (accessible to any authenticated user) */}

@@ -14,7 +14,7 @@ interface Props {
  */
 export const ContractAmenitiesSection: React.FC<Props> = ({ amenities, unitKind }) => (
   <section className="space-y-2">
-    <span className="text-xs font-semibold text-kumo-default block">Tiện ích kèm theo</span>
+    <span className="text-lg font-semibold text-kumo-default block">Tiện ích kèm theo</span>
     {amenities === null ? (
       <p className="text-sm text-kumo-subtle">
         Chưa ghi nhận — hệ thống không có danh sách tiện ích tại thời điểm bắt đầu thuê.

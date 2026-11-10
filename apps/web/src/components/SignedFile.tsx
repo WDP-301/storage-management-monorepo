@@ -75,8 +75,14 @@ export const SignedFileLink: React.FC<{ file: FileRef }> = ({ file }) => {
   );
 };
 
-/** Image thumbnail from the private bucket; falls back to the file name if it cannot load. */
-export const SignedImageThumb: React.FC<{ file: FileRef }> = ({ file }) => {
+/**
+ * Image thumbnail from the private bucket; falls back to the file name if it cannot load.
+ * Opens the file in a new tab unless `onOpen` is given (e.g. to show it in a lightbox).
+ */
+export const SignedImageThumb: React.FC<{ file: FileRef; onOpen?: () => void }> = ({
+  file,
+  onOpen,
+}) => {
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -97,7 +103,7 @@ export const SignedImageThumb: React.FC<{ file: FileRef }> = ({ file }) => {
     <button
       type="button"
       title={file.name}
-      onClick={() => void openFile(file)}
+      onClick={() => (onOpen ? onOpen() : void openFile(file))}
       className="w-24 h-24 rounded-lg overflow-hidden border border-kumo-line bg-kumo-control cursor-pointer flex items-center justify-center"
     >
       {src && !failed ? (

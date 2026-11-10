@@ -59,7 +59,7 @@ export const ContractSettlementSection: React.FC<Props> = ({
   return (
     <section className="space-y-3 pt-3 border-t border-kumo-line">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-kumo-default">Quyết toán cọc</span>
+        <span className="text-lg font-semibold text-kumo-default">Quyết toán cọc</span>
         {status && <Badge variant={status.variant}>{status.label}</Badge>}
       </div>
 

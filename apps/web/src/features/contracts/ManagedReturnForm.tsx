@@ -87,7 +87,7 @@ export const ManagedReturnForm: React.FC<Props> = ({ contract, canRequest, onCha
 
   return (
     <form className="p-3 rounded-lg ring ring-kumo-line space-y-3" onSubmit={submit} noValidate>
-      <span className="text-xs font-semibold text-kumo-default block">
+      <span className="text-lg font-semibold text-kumo-default block">
         Yêu cầu trả kho thay khách
       </span>
       <div className="grid sm:grid-cols-2 gap-3">

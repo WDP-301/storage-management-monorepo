@@ -3,7 +3,7 @@ import { CaretDown, CaretRight, WarningCircle } from '@phosphor-icons/react';
 import type { ContractInvoiceRecord } from '@storage/types';
 import type React from 'react';
 import { useEffect, useState } from 'react';
-import { SignedFileLink, SignedImageThumb } from '../../components/SignedFile';
+import { SignedFileGallery } from '../../components/SignedImageLightbox';
 import { InvoicesApi } from '../../lib/invoices-api';
 import { formatDateTime, formatDay } from '../inspections/inspection-display';
 import { formatVnd } from '../warehouses/warehouse-display';
@@ -66,7 +66,7 @@ export const ContractInvoicesSection: React.FC<Props> = ({
 
   return (
     <section className="space-y-3 pt-3 border-t border-kumo-line">
-      <span className="text-xs font-semibold text-kumo-default block">Hóa đơn</span>
+      <span className="text-lg font-semibold text-kumo-default block">Hóa đơn</span>
 
       {error && (
         <div
@@ -173,17 +173,7 @@ function PaymentList({ invoice }: { invoice: ContractInvoiceRecord }) {
             )}
           </div>
           {payment.note && <p className="text-xs text-kumo-subtle">{payment.note}</p>}
-          {payment.evidence.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {payment.evidence.map((file) =>
-                file.mimeType.startsWith('image/') ? (
-                  <SignedImageThumb key={file.fileKey} file={file} />
-                ) : (
-                  <SignedFileLink key={file.fileKey} file={file} />
-                ),
-              )}
-            </div>
-          )}
+          {payment.evidence.length > 0 && <SignedFileGallery files={payment.evidence} />}
         </li>
       ))}
     </ul>

@@ -11,7 +11,7 @@ import {
 } from '@phosphor-icons/react';
 import { TourAppointmentStatus, UserRole } from '@storage/types';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useFacility } from '../../context/FacilityContext';
 import {
@@ -298,10 +298,7 @@ export const FacilityManagerDashboard: React.FC = () => {
           icon={<CheckCircle className="w-4 h-4 text-kumo-brand" />}
           badge={<Badge variant="primary">Có thể thuê ngay</Badge>}
         />
-        <div
-          className="cursor-pointer"
-          onClick={() => navigate('/facility-manager/tour-appointments?status=PENDING')}
-        >
+        <Link className="cursor-pointer" to="/facility-manager/tour-appointments?status=PENDING">
           <KpiCard
             label="Lịch xem kho chờ xử lý"
             value={pendingTours}
@@ -312,7 +309,7 @@ export const FacilityManagerDashboard: React.FC = () => {
               </Badge>
             }
           />
-        </div>
+        </Link>
         <KpiCard
           label="Yêu cầu đổi kho chờ duyệt"
           value={pendingRequests}

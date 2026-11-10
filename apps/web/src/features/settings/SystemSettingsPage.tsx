@@ -99,12 +99,12 @@ const SETTINGS_METADATA: Record<string, SettingMetadata> = {
     unit: 'km',
     group: 'booking',
   },
-  'booking.waitlist_offer_expiry_hours': {
-    label: 'Thời hạn giữ kho cho danh sách chờ',
+  'contract.abandoned_after_days': {
+    label: 'Ngưỡng ngày gợi ý kho bị bỏ hoang',
     description:
-      'Thời gian cho phép khách hàng trong danh sách chờ xác nhận đề xuất giữ kho trước khi chuyển sang khách tiếp theo.',
-    unit: 'giờ',
-    group: 'booking',
+      'Số ngày sau khi hết hạn hợp đồng mà khách vẫn chưa yêu cầu trả kho thì hệ thống gợi ý quản lý chi nhánh mở thu hồi kho hộ (ABANDONED).',
+    unit: 'ngày',
+    group: 'contract',
   },
   'contract.return_notice_days': {
     label: 'Số ngày báo trước khi trả kho sớm',

@@ -98,6 +98,7 @@ describe('ChangeRequestsService', () => {
   let roleAssignments: { find: jest.Mock };
   let txManager: {
     find: jest.Mock;
+    create: jest.Mock;
     createQueryBuilder: jest.Mock;
     update: jest.Mock;
     save: jest.Mock;
@@ -139,6 +140,7 @@ describe('ChangeRequestsService', () => {
     txManager = {
       query: jest.fn(async () => shelfRows),
       find: jest.fn().mockResolvedValue([]),
+      create: jest.fn((_entity: unknown, data: unknown) => data),
       createQueryBuilder: jest.fn(),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       save: jest.fn(async (v) => v),
@@ -169,6 +171,7 @@ describe('ChangeRequestsService', () => {
       roleAssignments as never,
       { transaction: jest.fn(async (fn: (m: unknown) => unknown) => fn(txManager)) } as never,
       settings,
+      { createForUsers: jest.fn() } as never,
     );
   });
 

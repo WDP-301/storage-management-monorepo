@@ -50,7 +50,6 @@ const WIPE_STEPS: { table: string; sql: string }[] = [
   { table: 'contracts', sql: 'DELETE FROM "contracts"' },
   { table: 'unit_holds', sql: 'DELETE FROM "unit_holds"' },
   { table: 'booking_items', sql: 'DELETE FROM "booking_items"' },
-  { table: 'waitlist_entries', sql: 'DELETE FROM "waitlist_entries"' },
   { table: 'bookings', sql: 'DELETE FROM "bookings"' },
   { table: 'idempotency_keys', sql: 'DELETE FROM "idempotency_keys"' },
   { table: 'notifications', sql: 'DELETE FROM "notifications"' },

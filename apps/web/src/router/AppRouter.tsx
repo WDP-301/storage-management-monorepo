@@ -18,6 +18,7 @@ import { AuthPage } from '../features/auth/AuthPage';
 import { ContractsPage } from '../features/contracts/ContractsPage';
 import { FacilityManagementPage } from '../features/facilities/FacilityManagementPage';
 import { ManagerInspectionsPage } from '../features/inspections/ManagerInspectionsPage';
+import { SepayReconciliationPage } from '../features/payments/SepayReconciliationPage';
 import { FacilityManagerDashboard } from '../features/roles/FacilityManagerDashboard';
 import { RoleLandingPage } from '../features/roles/RoleLandingPage';
 import { UnassignedRolePage } from '../features/roles/UnassignedRolePage';
@@ -104,6 +105,7 @@ export const AppRouter: React.FC = () => {
             >
               <Route path="/admin/facilities" element={<FacilityManagementPage />} />
               <Route path="/admin/warehouses" element={<WarehouseManagementPage />} />
+              <Route path="/admin/sepay-transfers" element={<SepayReconciliationPage />} />
             </Route>
 
             <Route

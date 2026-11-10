@@ -13,6 +13,7 @@ import { NotificationsModule } from '@modules/notifications/notifications.module
 import { SettingsModule } from '@modules/settings/settings.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AbandonedSuggestionService } from './abandoned-suggestion.service';
 import { ContractCancelService } from './contract-cancel.service';
 import { ContractDocumentsService } from './contract-documents.service';
 import { ContractInvoicesController } from './contract-invoices.controller';
@@ -59,6 +60,7 @@ import { TermEndReminderService } from './term-end-reminder.service';
     FirstRentService,
     FirstRentPaymentListener,
     TermEndReminderService,
+    AbandonedSuggestionService,
   ],
   exports: [ContractsService],
 })

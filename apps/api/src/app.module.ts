@@ -9,6 +9,7 @@ import { validateEnv } from './config/env.validation';
 import { AccessModule } from './modules/access/access.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AmenitiesModule } from './modules/amenities/amenities.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BanksModule } from './modules/banks/banks.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
@@ -72,6 +73,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
     AdminModule,
     FacilitiesModule,
     AmenitiesModule,
+    AnalyticsModule,
     BookingsModule,
     ChangeRequestsModule,
     ContractsModule,

@@ -3,6 +3,7 @@ import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { AuthModule } from '@modules/auth/auth.module';
+import { NotificationsModule } from '@modules/notifications/notifications.module';
 import { SettingsModule } from '@modules/settings/settings.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -13,6 +14,7 @@ import { ChangeRequestsService } from './change-requests.service';
   imports: [
     TypeOrmModule.forFeature([UnitChangeRequest, Contract, StorageUnit, UserRoleAssignment]),
     AuthModule,
+    NotificationsModule,
     SettingsModule,
   ],
   controllers: [ChangeRequestsController],

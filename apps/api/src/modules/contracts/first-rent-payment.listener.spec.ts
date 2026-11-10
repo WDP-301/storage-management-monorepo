@@ -60,6 +60,7 @@ describe('FirstRentPaymentListener', () => {
       })),
     };
     const dataSource = {
+      manager: em,
       transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)),
       getRepository: jest.fn(() => ({
         find: jest.fn(async ({ where }) =>

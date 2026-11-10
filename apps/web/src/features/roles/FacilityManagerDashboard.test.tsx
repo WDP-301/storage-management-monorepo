@@ -277,25 +277,36 @@ describe('FacilityManagerDashboard', () => {
   it('keeps only change requests leaving the selected facility', async () => {
     mockAuth(UserRole.FACILITY_MANAGER);
     vi.spyOn(WarehousesApi, 'listMine').mockResolvedValue([wh({})]);
-    const request = (id: string, facility_id: string) => ({
+    const request = (id: string, facility_id: string, dest_facility_id?: string) => ({
       id,
       status: 'REQUESTED' as const,
       reason: `lý do ${id}`,
       rent_difference: 0,
+      deposit_difference: 0,
       decision_note: null,
       facility_id,
+      move_at: '2026-11-20T12:00:00.000Z',
+      transition_start_at: null,
+      transition_end_at: null,
+      topup_invoice_id: null,
       created_at: '2026-10-01T00:00:00.000Z',
       requester: { id: 'c', full_name: `Khách ${id}`, email: 'c@x.vn' },
-      old_unit: { id: 'u1', code: 'A-1' },
-      new_unit: { id: 'u2', code: 'B-1' },
+      old_unit: { id: 'u1', code: 'A-1', facility_id },
+      new_unit: { id: 'u2', code: 'B-1', facility_id: dest_facility_id ?? facility_id },
     });
     vi.spyOn(ChangeRequestsApi, 'list').mockResolvedValue({
-      requests: [request('mine', 'fac-1'), request('other', 'fac-2')],
+      requests: [
+        request('mine', 'fac-1'),
+        request('other', 'fac-2'),
+        request('incoming', 'fac-2', 'fac-1'),
+      ],
       meta: { page: 1, limit: 50, total: 2, totalPages: 1 },
     });
     renderPage();
     await waitFor(() => expect(screen.getByText('Khách mine')).toBeTruthy());
     expect(screen.queryByText('Khách other')).toBeNull();
+    // A request entering this facility as the destination is also visible here.
+    expect(screen.getByText('Khách incoming')).toBeTruthy();
   });
 
   it('refetches and shows a Vietnamese message when toggling maintenance fails', async () => {

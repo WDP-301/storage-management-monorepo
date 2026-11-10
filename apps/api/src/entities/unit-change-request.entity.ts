@@ -47,6 +47,14 @@ export class UnitChangeRequest {
   @Column({ type: 'timestamptz', nullable: true, name: 'transition_end_at' })
   transitionEndAt?: Date;
 
+  /** The agreed move day — proposed by the customer, confirmed or adjusted by the approver. */
+  @Column({ type: 'timestamptz', nullable: true, name: 'move_at' })
+  moveAt?: Date;
+
+  /** DEPOSIT_TOPUP invoice issued on approval; voided if the request is cancelled unpaid. */
+  @Column({ type: 'uuid', nullable: true, name: 'topup_invoice_id' })
+  topupInvoiceId?: string;
+
   @Column({ type: 'decimal', precision: 14, scale: 2, default: 0, name: 'rent_difference' })
   rentDifference: number;
 

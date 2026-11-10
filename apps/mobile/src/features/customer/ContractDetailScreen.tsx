@@ -3,6 +3,7 @@ import { Button } from 'heroui-native';
 import { MapPin } from 'phosphor-react-native';
 import { useRef } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import { openChangeRequest } from '../../../lib/change-requests-api';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import type { ApiContract } from '../../types/contract-api';
 import { ContractInvoicesSection } from './ContractInvoicesSection';
@@ -21,7 +22,10 @@ import { ReturnRequestSheet } from './ReturnRequestSheet';
 import { SettlementSection } from './SettlementSection';
 import { ShelfStorageSection } from './shelf-storage-section';
 import { TermEndNotice } from './TermEndNotice';
+import { UnitChangeRequestSheet } from './UnitChangeRequestSheet';
+import { UnitChangeStatusCard } from './UnitChangeStatusCard';
 import { type ContractInvoicesState, useContractInvoices } from './use-contract-invoices';
+import { useUnitChangeRequests } from './use-unit-change-requests';
 
 const MUTED = 'hsl(215 16% 47%)';
 
@@ -108,10 +112,20 @@ function ContractDetail({
   onChanged: () => void;
 }) {
   const returnSheet = useRef<BottomSheetModal>(null);
+  const changeSheet = useRef<BottomSheetModal>(null);
   const state = storageState(contract, now);
   const isActive = contract.status === 'ACTIVE';
   const pending = openReturn(contract);
   const canRequestReturn = isActive && !pending;
+  const changeRequests = useUnitChangeRequests(isActive);
+  const openChange =
+    openChangeRequest(changeRequests.requests.filter((r) => r.contract_id === contract.id)) ?? null;
+  // A pending return already blocks a change request server-side; hide the entry point too.
+  const canRequestChange = isActive && !pending && !openChange;
+  const changed = () => {
+    changeRequests.reload();
+    onChanged();
+  };
   const showReturnSection = isActive || contract.status === 'ENDED' || contract.return !== null;
   // Matches the server: a deposit-paid (DRAFT) or ended contract still allows facility tickets.
   const canFileTicket = isActive || contract.status === 'DRAFT' || contract.status === 'ENDED';
@@ -168,6 +182,12 @@ function ContractDetail({
         />
       ) : null}
 
+      {openChange ? <UnitChangeStatusCard request={openChange} onChanged={changed} /> : null}
+      {canRequestChange ? (
+        <Button variant="secondary" onPress={() => changeSheet.current?.present()}>
+          <Button.Label className="font-ui">Yêu cầu đổi kho</Button.Label>
+        </Button>
+      ) : null}
       {canRequestReturn ? (
         <Button variant="secondary" onPress={() => returnSheet.current?.present()}>
           <Button.Label className="font-ui">Yêu cầu trả kho</Button.Label>
@@ -181,6 +201,9 @@ function ContractDetail({
 
       {isActive ? (
         <ReturnRequestSheet sheetRef={returnSheet} contract={contract} onSubmitted={onChanged} />
+      ) : null}
+      {isActive ? (
+        <UnitChangeRequestSheet sheetRef={changeSheet} contract={contract} onSubmitted={changed} />
       ) : null}
     </View>
   );

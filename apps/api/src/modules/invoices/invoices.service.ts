@@ -102,8 +102,20 @@ export class InvoicesService {
     now: Date,
   ): Promise<Invoice | null> {
     return this.dataSource.transaction(async (em) => {
-      const [current]: { status: ContractStatus }[] = await em.query(
-        'SELECT status FROM contracts WHERE id = $1 AND deleted_at IS NULL FOR SHARE',
+      // The scan row may be minutes stale — price and unit are re-read under the share lock
+      // so a unit change committed meanwhile bills the NEW unit at the NEW price.
+      const [current]: {
+        status: ContractStatus;
+        monthly_price_snapshot: string;
+        storage_unit_id: string | null;
+        unit_code: string | null;
+      }[] = await em.query(
+        `SELECT c.status, c.monthly_price_snapshot, bi.storage_unit_id, su.code AS unit_code
+         FROM contracts c
+         LEFT JOIN booking_items bi ON bi.id = c.booking_item_id
+         LEFT JOIN storage_units su ON su.id = bi.storage_unit_id
+         WHERE c.id = $1 AND c.deleted_at IS NULL
+         FOR SHARE OF c`,
         [contract.id],
       );
       if (current?.status !== ContractStatus.ACTIVE) {
@@ -112,8 +124,9 @@ export class InvoicesService {
         );
         return null;
       }
-      const unit = contract.bookingItem
-        ? { id: contract.bookingItem.storageUnitId, code: contract.bookingItem.storageUnit?.code }
+      contract.monthlyPriceSnapshot = Number(current.monthly_price_snapshot);
+      const unit = current.storage_unit_id
+        ? { id: current.storage_unit_id, code: current.unit_code }
         : null;
       const saved = await issueRentPeriodInvoice(
         em,

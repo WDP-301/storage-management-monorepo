@@ -201,12 +201,17 @@ export interface UnitChangeRequestRecord {
   status: ChangeRequestStatus;
   reason: string;
   rent_difference: string | number;
+  deposit_difference: string | number;
   decision_note: string | null;
   facility_id: string | null;
+  move_at: string | null;
+  transition_start_at: string | null;
+  transition_end_at: string | null;
+  topup_invoice_id: string | null;
   created_at: string;
   requester: { id: string; full_name: string; email: string } | null;
-  old_unit: { id: string; code: string } | null;
-  new_unit: { id: string; code: string } | null;
+  old_unit: { id: string; code: string; facility_id?: string } | null;
+  new_unit: { id: string; code: string; facility_id?: string } | null;
 }
 
 export type { ServiceTicketRecord };
@@ -530,10 +535,35 @@ export const ChangeRequestsApi = {
     return res.data.data;
   },
 
-  decide: async (id: string, decision: 'APPROVED' | 'REJECTED', decisionNote?: string) => {
+  decide: async (
+    id: string,
+    decision: 'APPROVED' | 'REJECTED',
+    options?: { decisionNote?: string; moveAt?: string },
+  ) => {
     const res = await apiClient.patch<ApiResponse<{ request: UnitChangeRequestRecord }>>(
       `/unit-change-requests/${id}/decide`,
-      { decision, decisionNote },
+      { decision, decisionNote: options?.decisionNote, moveAt: options?.moveAt },
+    );
+    return res.data.data;
+  },
+
+  start: async (id: string) => {
+    const res = await apiClient.post<ApiResponse<{ request: UnitChangeRequestRecord }>>(
+      `/unit-change-requests/${id}/start`,
+    );
+    return res.data.data;
+  },
+
+  complete: async (id: string) => {
+    const res = await apiClient.post<ApiResponse<{ request: UnitChangeRequestRecord }>>(
+      `/unit-change-requests/${id}/complete`,
+    );
+    return res.data.data;
+  },
+
+  cancel: async (id: string) => {
+    const res = await apiClient.post<ApiResponse<{ request: UnitChangeRequestRecord }>>(
+      `/unit-change-requests/${id}/cancel`,
     );
     return res.data.data;
   },

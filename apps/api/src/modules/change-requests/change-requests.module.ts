@@ -9,6 +9,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ChangeRequestsController } from './change-requests.controller';
 import { ChangeRequestsService } from './change-requests.service';
+import { MoveDaySweepService } from './move-day-sweep.service';
 
 @Module({
   imports: [
@@ -18,6 +19,6 @@ import { ChangeRequestsService } from './change-requests.service';
     SettingsModule,
   ],
   controllers: [ChangeRequestsController],
-  providers: [ChangeRequestsService],
+  providers: [ChangeRequestsService, MoveDaySweepService],
 })
 export class ChangeRequestsModule {}

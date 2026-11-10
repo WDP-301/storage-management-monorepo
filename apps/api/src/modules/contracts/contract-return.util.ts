@@ -1,18 +1,20 @@
 import type { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
+import { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import type { SettingsService } from '@modules/settings/settings.service';
 import { HttpStatus } from '@nestjs/common';
 import { DomainException, fieldValidationError } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { addVietnamDays, vietnamDate, vietnamToday } from '@shared/utils/calendar.util';
 import {
+  ChangeRequestStatus,
   ContractStatus,
   InspectionType,
   type RefundBankAccount,
   type ReturnRequestSource,
   type ReturnRules,
 } from '@storage/types';
-import { type EntityManager, IsNull } from 'typeorm';
+import { type EntityManager, In, IsNull } from 'typeorm';
 
 /** How far ahead a return can be booked, in days. */
 export const RETURN_MAX_DAYS_AHEAD = 365;
@@ -20,11 +22,20 @@ export const RETURN_MAX_DAYS_AHEAD = 365;
 export const RETURN_MESSAGES = {
   notActive: 'Chỉ hợp đồng đang thuê mới yêu cầu trả kho được',
   alreadyOpen: 'Hợp đồng đã có yêu cầu trả kho đang mở',
+  changeInProgress: 'Hợp đồng đang có yêu cầu đổi kho — huỷ hoặc hoàn tất đổi kho trước khi trả',
   finalized: 'Biên trả đã chốt — không sửa được',
   locked: 'Chi nhánh đã bắt đầu kiểm tra kho — không huỷ được yêu cầu trả kho',
   notFound: 'Không tìm thấy yêu cầu trả kho đang mở',
   dayOutOfRange: `Chọn ngày trả trong khoảng từ hôm nay đến ${RETURN_MAX_DAYS_AHEAD} ngày tới`,
 } as const;
+
+/** A unit change in any of these statuses still owns the contract's right to keep moving. */
+export const OPEN_CHANGE_STATUSES: readonly ChangeRequestStatus[] = [
+  ChangeRequestStatus.REQUESTED,
+  ChangeRequestStatus.PROPOSED,
+  ChangeRequestStatus.APPROVED,
+  ChangeRequestStatus.TRANSITIONING,
+];
 
 export function returnConflict(
   message: string,
@@ -90,6 +101,19 @@ export async function openReturnInspection(
     throw returnConflict(RETURN_MESSAGES.alreadyOpen, {
       contractId: contract.id,
       inspectionId: open.id,
+    });
+  }
+  // A move in flight owns the contract's destination — a return now would strand its held
+  // unit and any billed deposit top-up. The caller's contract lock serializes this check
+  // against decide/complete, which take the same lock.
+  const openChange = await em.findOne(UnitChangeRequest, {
+    where: { contractId: contract.id, status: In([...OPEN_CHANGE_STATUSES]) },
+  });
+  if (openChange) {
+    throw returnConflict(RETURN_MESSAGES.changeInProgress, {
+      contractId: contract.id,
+      requestId: openChange.id,
+      requestStatus: openChange.status,
     });
   }
   return em.save(

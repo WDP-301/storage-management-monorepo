@@ -19,7 +19,7 @@ export function useImageLightbox(files: FileRef[]) {
   const images = useMemo(() => files.filter(isImageFile), [files]);
   const [index, setIndex] = useState<number | null>(null);
   const open = (file: FileRef) => {
-    const at = images.findIndex((img) => img === file);
+    const at = images.indexOf(file);
     setIndex(at >= 0 ? at : null);
   };
   const lightbox = (

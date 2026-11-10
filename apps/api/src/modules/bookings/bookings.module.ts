@@ -9,6 +9,7 @@ import { Payment } from '@entities/payment.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
 import { AuthModule } from '@modules/auth/auth.module';
+import { InspectionModule } from '@modules/inspection/inspection.module';
 import { SettingsModule } from '@modules/settings/settings.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -32,6 +33,7 @@ import { BookingsService } from './bookings.service';
       AppUser,
     ]),
     AuthModule,
+    InspectionModule,
     SettingsModule,
   ],
   controllers: [BookingsController],

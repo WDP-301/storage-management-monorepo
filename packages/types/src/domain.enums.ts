@@ -346,6 +346,8 @@ export const NotificationType = {
   SHIFT_ASSIGNED: 'SHIFT_ASSIGNED',
   SHIFT_UPDATED: 'SHIFT_UPDATED',
   SHIFT_CANCELLED: 'SHIFT_CANCELLED',
+  /** A confirmed booking's unit handover was given to this staff member. */
+  HANDOVER_ASSIGNED: 'HANDOVER_ASSIGNED',
   /** Staff recorded goods the customer handed over onto their shelf. */
   SHELF_DROP_OFF: 'SHELF_DROP_OFF',
   /** Staff handed goods back to the customer (or recovered them from an abandoned shelf). */

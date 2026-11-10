@@ -4,6 +4,7 @@ import { Contract } from '@entities/contract.entity';
 import { Deposit } from '@entities/deposit.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { Invoice } from '@entities/invoice.entity';
+import { StaffShift } from '@entities/staff-shift.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { AuthModule } from '@modules/auth/auth.module';
@@ -11,6 +12,7 @@ import { NotificationsModule } from '@modules/notifications/notifications.module
 import { SettingsModule } from '@modules/settings/settings.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { HandoverAssignmentService } from './handover-assignment/handover-assignment.service';
 import { InspectionController } from './inspection.controller';
 import { InspectionService } from './inspection.service';
 import { InspectionLifecycleService } from './inspection-lifecycle.service';
@@ -25,6 +27,7 @@ import { InspectionLifecycleService } from './inspection-lifecycle.service';
       StorageUnit,
       AppUser,
       UserRoleAssignment,
+      StaffShift,
       Invoice,
       Deposit,
     ]),
@@ -33,7 +36,7 @@ import { InspectionLifecycleService } from './inspection-lifecycle.service';
     SettingsModule,
   ],
   controllers: [InspectionController],
-  providers: [InspectionService, InspectionLifecycleService],
-  exports: [InspectionService],
+  providers: [InspectionService, InspectionLifecycleService, HandoverAssignmentService],
+  exports: [InspectionService, HandoverAssignmentService],
 })
 export class InspectionModule {}

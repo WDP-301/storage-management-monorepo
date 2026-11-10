@@ -8,6 +8,7 @@ import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { persistContract } from '@modules/contracts/initial-contract.util';
+import { HandoverAssignmentService } from '@modules/inspection/handover-assignment/handover-assignment.service';
 import { generatePaymentNo } from '@modules/payments/payment-no.util';
 import { PAYMENT_EVENTS, PaymentReceivedEvent } from '@modules/payments/types/payment';
 import { buildPaymentQrUrl, paymentQrConfigured } from '@modules/payments/vietqr.util';
@@ -70,6 +71,7 @@ export class BookingsService implements OnApplicationBootstrap {
     private readonly dataSource: DataSource,
     private readonly configService: ConfigService,
     private readonly settings: SettingsService,
+    private readonly handoverAssignment: HandoverAssignmentService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -849,6 +851,7 @@ export class BookingsService implements OnApplicationBootstrap {
               { bookingId: booking.id, expected: items.length, moved: booked.affected },
             );
           }
+          await this.handoverAssignment.assignSafely(em, booking.id);
         }
 
         return 'confirmed' as const;

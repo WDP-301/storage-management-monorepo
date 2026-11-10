@@ -99,9 +99,11 @@ describe('BookingsService.handlePaymentReceived', () => {
   let service: BookingsService;
   let warnSpy: jest.SpyInstance;
   let logSpy: jest.SpyInstance;
+  let handoverAssignment: { assignSafely: jest.Mock };
 
   beforeEach(() => {
     bookingRepo = { find: jest.fn() };
+    handoverAssignment = { assignSafely: jest.fn() };
     paymentRepo = {
       exists: jest.fn().mockResolvedValue(false),
       sum: jest.fn().mockResolvedValue(null),
@@ -131,6 +133,7 @@ describe('BookingsService.handlePaymentReceived', () => {
       dataSource as never,
       { get: jest.fn() } as never,
       {} as never,
+      handoverAssignment as never,
     );
     warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
     logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation();
@@ -216,6 +219,8 @@ describe('BookingsService.handlePaymentReceived', () => {
       { id: In(['unit-1', 'unit-2']), status: StorageUnitStatus.HELD },
       { status: StorageUnitStatus.BOOKED },
     );
+    // The new handovers go to staff on shift, inside the same transaction.
+    expect(handoverAssignment.assignSafely).toHaveBeenCalledWith(em, 'booking-1');
     expect(logSpy).toHaveBeenCalledWith(expect.stringMatching(/contracts=\[CT-.+, CT-.+\]/));
   });
 
@@ -477,6 +482,7 @@ describe('BookingsService.cancel', () => {
       dataSource as never,
       { get: jest.fn() } as never,
       {} as never,
+      { assignSafely: jest.fn() } as never,
     );
     warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
   });
@@ -641,6 +647,7 @@ describe('BookingsService.create — shelf rules', () => {
       dataSource as never,
       { get: jest.fn() } as never,
       settings as never,
+      { assignSafely: jest.fn() } as never,
     );
   });
 

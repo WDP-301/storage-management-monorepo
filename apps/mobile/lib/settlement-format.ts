@@ -73,7 +73,9 @@ export function isInvoiceDue(invoice: Pick<ApiInvoice, 'status' | 'amountDue'>):
 }
 
 export function invoiceTitle(invoice: Pick<ApiInvoice, 'kind' | 'periodNo'>): string {
-  return invoice.kind === 'SETTLEMENT' ? 'Phí quyết toán cọc' : `Tiền thuê kỳ ${invoice.periodNo}`;
+  if (invoice.kind === 'SETTLEMENT') return 'Phí quyết toán cọc';
+  if (invoice.kind === 'DEPOSIT_TOPUP') return 'Bù tiền cọc';
+  return `Tiền thuê kỳ ${invoice.periodNo}`;
 }
 
 type Badge = { label: string; tone: 'accent' | 'success' };

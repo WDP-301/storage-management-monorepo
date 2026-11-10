@@ -135,15 +135,16 @@ export const FacilityManagerDashboard: React.FC = () => {
         if (request !== latestRequest.current) return;
         setPendingTours(toursData.meta?.total || 0);
         setKpis(kpisData);
-        // Requests belong to the facility of the warehouse being left.
+        // Requests may touch the facility on either side — the old unit's or the held target's.
         const facilityIds = new Set(list.map((w) => w.facility.id));
         setWarehouses(list);
         setRequests(
-          requestsData.requests.filter((r) =>
-            facilityId
-              ? r.facility_id === facilityId
-              : isAdmin || (r.facility_id !== null && facilityIds.has(r.facility_id)),
-          ),
+          requestsData.requests.filter((r) => {
+            const ids = [r.facility_id, r.new_unit?.facility_id].filter(Boolean);
+            return facilityId
+              ? ids.includes(facilityId)
+              : isAdmin || ids.some((id) => facilityIds.has(id as string));
+          }),
         );
         setError(null);
       } catch (err) {
@@ -181,18 +182,43 @@ export const FacilityManagerDashboard: React.FC = () => {
     }
   };
 
-  const handleDecision = async (requestId: string, decision: 'APPROVED' | 'REJECTED') => {
+  const handleDecision = async (
+    requestId: string,
+    decision: 'APPROVED' | 'REJECTED',
+    options?: { moveAt?: string; decisionNote?: string },
+  ) => {
     setBusyId(requestId);
     try {
-      const { request } = await ChangeRequestsApi.decide(requestId, decision);
+      const { request } = await ChangeRequestsApi.decide(requestId, decision, options);
       setRequests((prev) => prev.map((r) => (r.id === requestId ? request : r)));
       toast.info(
         'Xử lý yêu cầu',
-        decision === 'APPROVED' ? 'Đã phê duyệt yêu cầu đổi kho.' : 'Đã từ chối yêu cầu đổi kho.',
+        decision === 'APPROVED'
+          ? 'Đã duyệt — kho đích được giữ chỗ đến ngày chuyển.'
+          : 'Đã từ chối yêu cầu đổi kho.',
       );
       if (decision === 'APPROVED') await load(false);
     } catch (err) {
       toast.error('Không xử lý được yêu cầu', describeActionError(err));
+      await load(false);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleChangeAction = async (
+    requestId: string,
+    action: 'start' | 'complete' | 'cancel',
+    done: string,
+  ) => {
+    setBusyId(requestId);
+    try {
+      const { request } = await ChangeRequestsApi[action](requestId);
+      setRequests((prev) => prev.map((r) => (r.id === requestId ? request : r)));
+      toast.info('Cập nhật đổi kho', done);
+      if (action !== 'start') await load(false);
+    } catch (err) {
+      toast.error('Không cập nhật được', describeActionError(err));
       await load(false);
     } finally {
       setBusyId(null);
@@ -374,7 +400,18 @@ export const FacilityManagerDashboard: React.FC = () => {
         </div>
       )}
 
-      <ChangeRequestsTable requests={requests} busyId={busyId} onDecide={handleDecision} />
+      <ChangeRequestsTable
+        requests={requests}
+        busyId={busyId}
+        onDecide={handleDecision}
+        onStart={(id) => void handleChangeAction(id, 'start', 'Đã bắt đầu chuyển kho.')}
+        onComplete={(id) =>
+          void handleChangeAction(id, 'complete', 'Đã hoàn tất — hợp đồng chuyển sang kho mới.')
+        }
+        onCancel={(id) =>
+          void handleChangeAction(id, 'cancel', 'Đã thu hồi — kho giữ chỗ được giải phóng.')
+        }
+      />
 
       <ManagedWarehousesTable
         warehouses={filtered}

@@ -392,6 +392,13 @@ export const NotificationType = {
   TOUR_APPOINTMENT_CONFIRMED: 'TOUR_APPOINTMENT_CONFIRMED',
   TOUR_APPOINTMENT_ASSIGNED: 'TOUR_APPOINTMENT_ASSIGNED',
   TOUR_APPOINTMENT_CANCELLED: 'TOUR_APPOINTMENT_CANCELLED',
+  /** To the customer: their unit-change request was approved, rejected, completed or cancelled. */
+  UNIT_CHANGE_APPROVED: 'UNIT_CHANGE_APPROVED',
+  UNIT_CHANGE_REJECTED: 'UNIT_CHANGE_REJECTED',
+  UNIT_CHANGE_COMPLETED: 'UNIT_CHANGE_COMPLETED',
+  UNIT_CHANGE_CANCELLED: 'UNIT_CHANGE_CANCELLED',
+  /** To managers of the unit being left: the approved move happens today (or is overdue). */
+  UNIT_CHANGE_MOVE_TODAY: 'UNIT_CHANGE_MOVE_TODAY',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 

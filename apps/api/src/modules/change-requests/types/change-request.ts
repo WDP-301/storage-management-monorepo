@@ -24,13 +24,17 @@ export interface ChangeRequestRecord {
   rent_difference: number;
   deposit_difference: number;
   decision_note: string | null;
+  move_at: string | Date | null;
+  transition_start_at: string | Date | null;
+  transition_end_at: string | Date | null;
+  topup_invoice_id: string | null;
   history: unknown[];
   created_at: string | Date;
   updated_at: string | Date;
   facility_id: string | null;
   requester: ChangeRequestUserInfo | null;
   old_unit: (ChangeRequestUnitInfo & { facility_id?: string }) | null;
-  new_unit: ChangeRequestUnitInfo | null;
+  new_unit: (ChangeRequestUnitInfo & { facility_id?: string }) | null;
 }
 
 export function toChangeRequestRecord(request: UnitChangeRequest): ChangeRequestRecord {
@@ -46,6 +50,10 @@ export function toChangeRequestRecord(request: UnitChangeRequest): ChangeRequest
     rent_difference: request.rentDifference,
     deposit_difference: request.depositDifference,
     decision_note: request.decisionNote ?? null,
+    move_at: request.moveAt ?? null,
+    transition_start_at: request.transitionStartAt ?? null,
+    transition_end_at: request.transitionEndAt ?? null,
+    topup_invoice_id: request.topupInvoiceId ?? null,
     history: request.history ?? [],
     created_at: request.createdAt,
     updated_at: request.updatedAt,
@@ -64,7 +72,13 @@ export function toChangeRequestRecord(request: UnitChangeRequest): ChangeRequest
           facility_id: request.oldUnit.facilityId,
         }
       : null,
-    new_unit: request.newUnit ? { id: request.newUnit.id, code: request.newUnit.code } : null,
+    new_unit: request.newUnit
+      ? {
+          id: request.newUnit.id,
+          code: request.newUnit.code,
+          facility_id: request.newUnit.facilityId,
+        }
+      : null,
   };
 }
 
@@ -74,5 +88,25 @@ export interface ChangeRequestResponse {
 
 export interface ChangeRequestListResponse {
   requests: ChangeRequestRecord[];
+  meta: PaginationMeta;
+}
+
+/** A unit the contract may move to, with the price/deposit delta it would carry. */
+export interface ChangeRequestOption {
+  unit: {
+    id: string;
+    code: string;
+    name: string;
+    facility_id: string;
+    facility_name: string;
+    monthly_price: number;
+    area_m2: number | null;
+  };
+  rent_difference: number;
+  deposit_difference: number;
+}
+
+export interface ChangeRequestOptionsResponse {
+  options: ChangeRequestOption[];
   meta: PaginationMeta;
 }

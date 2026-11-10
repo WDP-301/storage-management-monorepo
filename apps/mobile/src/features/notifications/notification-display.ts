@@ -22,7 +22,9 @@ export type NotificationDisplay = {
   tone: NotificationTone;
 };
 
-const KNOWN_TYPES: Record<NotificationType, NotificationDisplay> = {
+// Partial on purpose: a type this build does not know yet (newer server enum) falls through
+// to FALLBACK_DISPLAY instead of breaking typecheck.
+const KNOWN_TYPES: Partial<Record<NotificationType, NotificationDisplay>> = {
   TICKET_CREATED: { label: 'Yêu cầu hỗ trợ', icon: 'ticket', tone: 'accent' },
   TICKET_UPDATED: { label: 'Yêu cầu hỗ trợ', icon: 'ticket', tone: 'accent' },
   TICKET_ASSIGNED: { label: 'Được phân công', icon: 'ticket', tone: 'warning' },
@@ -52,6 +54,11 @@ const KNOWN_TYPES: Record<NotificationType, NotificationDisplay> = {
   TOUR_APPOINTMENT_CONFIRMED: { label: 'Xác nhận xem kho', icon: 'ticket', tone: 'success' },
   TOUR_APPOINTMENT_ASSIGNED: { label: 'Ca dẫn khách', icon: 'ticket', tone: 'warning' },
   TOUR_APPOINTMENT_CANCELLED: { label: 'Hủy lịch xem kho', icon: 'overdue', tone: 'danger' },
+  UNIT_CHANGE_APPROVED: { label: 'Đổi kho được duyệt', icon: 'return', tone: 'success' },
+  UNIT_CHANGE_REJECTED: { label: 'Đổi kho bị từ chối', icon: 'overdue', tone: 'danger' },
+  UNIT_CHANGE_COMPLETED: { label: 'Đã đổi kho', icon: 'return', tone: 'success' },
+  UNIT_CHANGE_CANCELLED: { label: 'Đổi kho bị huỷ', icon: 'overdue', tone: 'warning' },
+  UNIT_CHANGE_MOVE_TODAY: { label: 'Hôm nay chuyển kho', icon: 'return', tone: 'warning' },
 };
 
 const FALLBACK_DISPLAY: NotificationDisplay = {

@@ -3,6 +3,7 @@ import { Payment } from '@entities/payment.entity';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { extractInvoiceNos } from '@modules/payments/invoice-no.util';
 import { generatePaymentNo } from '@modules/payments/payment-no.util';
+import { markSepayOutcome } from '@modules/payments/sepay-transfers.util';
 import {
   lockTransferRef,
   normalizedRefSql,
@@ -18,9 +19,11 @@ import {
   PaymentMethod,
   PaymentStatus,
   PaymentType,
+  SepayTransferOutcome,
 } from '@storage/types';
 import Decimal from 'decimal.js';
 import { DataSource, type EntityManager, In } from 'typeorm';
+import { creditDepositTopUp, topUpBookingId } from './deposit-topup';
 import { PAYABLE_INVOICE_STATUSES, sumInvoicePayments } from './first-rent.util';
 import { invoicePaidNotification } from './invoice-notifications';
 
@@ -120,6 +123,9 @@ export class FirstRentPaymentListener {
       this.logger.warn(
         `Payment sepayId=${event.sepayId} matches ${invoices.length} invoices for [${candidates.join(', ')}], skipping`,
       );
+      if (invoices.length > 1) {
+        await markSepayOutcome(this.dataSource.manager, String(event.sepayId), 'AMBIGUOUS');
+      }
       return;
     }
     const providerRef = String(event.sepayId);
@@ -141,11 +147,18 @@ export class FirstRentPaymentListener {
         const review = [payable ? null : `invoice ${invoice.status}`, handRecorded?.review]
           .filter(Boolean)
           .join('; ');
+        const topUpBooking = await topUpBookingId(em, invoice);
         await em.save(Payment, {
           paymentNo: generatePaymentNo(),
           invoiceId: invoice.id,
+          bookingId: topUpBooking ?? undefined,
           customerId: invoice.customerId,
-          type: invoice.kind === InvoiceKind.SETTLEMENT ? PaymentType.FEE : PaymentType.RENT,
+          type:
+            invoice.kind === InvoiceKind.SETTLEMENT
+              ? PaymentType.FEE
+              : topUpBooking
+                ? PaymentType.DEPOSIT
+                : PaymentType.RENT,
           method: PaymentMethod.BANK_TRANSFER,
           status: PaymentStatus.SUCCEEDED,
           amount: event.amount,
@@ -158,6 +171,9 @@ export class FirstRentPaymentListener {
           },
         });
         if (!payable) return 'needs-review';
+
+        // A top-up payment is extra deposit held even if the invoice is only part-paid.
+        await creditDepositTopUp(em, topUpBooking, event.amount);
 
         const paid = await sumInvoicePayments(em, invoice.id);
         const status = paid.gte(invoice.total) ? InvoiceStatus.PAID : InvoiceStatus.PARTIALLY_PAID;
@@ -176,6 +192,21 @@ export class FirstRentPaymentListener {
       this.logger.log(
         `Payment sepayId=${event.sepayId} amount=${event.amount} for ${invoices[0].invoiceNo}: ${outcome}`,
       );
+      const transferOutcome =
+        outcome === InvoiceStatus.PAID
+          ? SepayTransferOutcome.INVOICE_PAID
+          : outcome === InvoiceStatus.PARTIALLY_PAID
+            ? SepayTransferOutcome.INVOICE_PARTIAL
+            : outcome === 'recorded-by-hand'
+              ? SepayTransferOutcome.RESOLVED
+              : outcome === 'needs-review'
+                ? SepayTransferOutcome.NEEDS_REVIEW
+                : null;
+      if (transferOutcome) {
+        await markSepayOutcome(this.dataSource.manager, providerRef, transferOutcome, {
+          invoiceId: invoices[0].id,
+        });
+      }
     } catch (err) {
       // The partial unique index on provider_ref caught a concurrent duplicate delivery.
       if (!isUniqueViolation(err)) throw err;

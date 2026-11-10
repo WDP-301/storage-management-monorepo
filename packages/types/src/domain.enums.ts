@@ -105,6 +105,8 @@ export type RentalPeriodKind = (typeof RentalPeriodKind)[keyof typeof RentalPeri
 export const InvoiceKind = {
   ...RentalPeriodKind,
   SETTLEMENT: 'SETTLEMENT',
+  /** Extra deposit billed after a completed unit change raised the required deposit. */
+  DEPOSIT_TOPUP: 'DEPOSIT_TOPUP',
 } as const;
 export type InvoiceKind = (typeof InvoiceKind)[keyof typeof InvoiceKind];
 
@@ -118,15 +120,6 @@ export const ChangeRequestStatus = {
   CANCELLED: 'CANCELLED',
 } as const;
 export type ChangeRequestStatus = (typeof ChangeRequestStatus)[keyof typeof ChangeRequestStatus];
-
-export const WaitlistStatus = {
-  WAITING: 'WAITING',
-  OFFERED: 'OFFERED',
-  ACCEPTED: 'ACCEPTED',
-  EXPIRED: 'EXPIRED',
-  CANCELLED: 'CANCELLED',
-} as const;
-export type WaitlistStatus = (typeof WaitlistStatus)[keyof typeof WaitlistStatus];
 
 export const InvoiceStatus = {
   DRAFT: 'DRAFT',
@@ -181,6 +174,35 @@ export const DepositStatus = {
   FORFEITED: 'FORFEITED',
 } as const;
 export type DepositStatus = (typeof DepositStatus)[keyof typeof DepositStatus];
+
+/**
+ * What became of an inbound SePay transfer. RECEIVED means delivered but matched by no listener;
+ * the *_PENDING-ish states (RECEIVED, UNMATCHED, AMBIGUOUS, LATE, NEEDS_REVIEW) are the
+ * reconciliation queue. RESOLVED is only ever set by a human.
+ */
+export const SepayTransferOutcome = {
+  RECEIVED: 'RECEIVED',
+  IGNORED: 'IGNORED',
+  DEPOSIT_CONFIRMED: 'DEPOSIT_CONFIRMED',
+  DEPOSIT_PARTIAL: 'DEPOSIT_PARTIAL',
+  INVOICE_PAID: 'INVOICE_PAID',
+  INVOICE_PARTIAL: 'INVOICE_PARTIAL',
+  UNMATCHED: 'UNMATCHED',
+  AMBIGUOUS: 'AMBIGUOUS',
+  LATE: 'LATE',
+  NEEDS_REVIEW: 'NEEDS_REVIEW',
+  RESOLVED: 'RESOLVED',
+} as const;
+export type SepayTransferOutcome = (typeof SepayTransferOutcome)[keyof typeof SepayTransferOutcome];
+
+/** Outcomes that surface in the reconciliation queue — money in the bank, no settled meaning yet. */
+export const SEPAY_ATTENTION_OUTCOMES: readonly SepayTransferOutcome[] = [
+  SepayTransferOutcome.RECEIVED,
+  SepayTransferOutcome.UNMATCHED,
+  SepayTransferOutcome.AMBIGUOUS,
+  SepayTransferOutcome.LATE,
+  SepayTransferOutcome.NEEDS_REVIEW,
+];
 
 export const RefundStatus = {
   PENDING: 'PENDING',
@@ -334,6 +356,10 @@ export const NotificationType = {
   TICKET_ASSIGNED: 'TICKET_ASSIGNED',
   INVOICE_ISSUED: 'INVOICE_ISSUED',
   INVOICE_PAID: 'INVOICE_PAID',
+  /** A bank transfer counted toward a booking deposit but did not cover it in full. */
+  BOOKING_DEPOSIT_PARTIAL: 'BOOKING_DEPOSIT_PARTIAL',
+  /** To facility managers: a contract past term end without a return request may be abandoned. */
+  CONTRACT_MAY_BE_ABANDONED: 'CONTRACT_MAY_BE_ABANDONED',
   /** The branch moved the customer's return appointment. */
   RETURN_RESCHEDULED: 'RETURN_RESCHEDULED',
   RETURN_FINALIZED: 'RETURN_FINALIZED',

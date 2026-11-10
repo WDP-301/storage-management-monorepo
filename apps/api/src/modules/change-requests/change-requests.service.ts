@@ -2,12 +2,16 @@ import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
 import { Facility } from '@entities/facility.entity';
 import { Inspection } from '@entities/inspection.entity';
+import { Invoice } from '@entities/invoice.entity';
+import { InvoiceItem } from '@entities/invoice-item.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { activeFacilityIds } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { findUnrentable, lockShelfParents } from '@modules/bookings/rentable-units.util';
+import { NotificationsService } from '@modules/notifications/notifications.service';
+import { generateInvoiceNo } from '@modules/payments/invoice-no.util';
 import { SettingsService } from '@modules/settings/settings.service';
 import {
   assertShelfEmpty,
@@ -17,11 +21,16 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
+import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import {
   ChangeRequestStatus,
   ContractStatus,
   FacilityStatus,
   InspectionType,
+  InvoiceItemType,
+  InvoiceKind,
+  InvoiceStatus,
+  NotificationType,
   StorageUnitKind,
   StorageUnitStatus,
   UserRole,
@@ -36,6 +45,8 @@ import type { ChangeRequestListResponse, ChangeRequestResponse } from './types/c
 import { toChangeRequestRecord } from './types/change-request';
 
 const DEFAULT_PAGE_SIZE = 20;
+/** Days the customer gets to pay a deposit top-up invoice. */
+const TOP_UP_DUE_DAYS = 7;
 /** Statuses where the request still awaits a decision — only one may exist per contract. */
 const OPEN_STATUSES: readonly ChangeRequestStatus[] = [
   ChangeRequestStatus.REQUESTED,
@@ -63,6 +74,7 @@ export class ChangeRequestsService {
     private readonly roleAssignments: Repository<UserRoleAssignment>,
     private readonly dataSource: DataSource,
     private readonly settings: SettingsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -163,9 +175,8 @@ export class ChangeRequestsService {
       throw this.fieldError('newUnitId', 'notAvailable', 'New unit is not available');
     }
 
-    // One open request per contract at a time.
-    // ponytail: check-then-insert — concurrent POSTs can both open a request;
-    // upgrade path = partial unique index on contract_id over OPEN_STATUSES.
+    // One open request per contract at a time — enforced by UQ_open_change_request, the
+    // partial unique index over the open statuses; the count below is only the friendly error.
     const openCount = await this.requests
       .createQueryBuilder('r')
       .where('r.contract_id = :contractId', { contractId: contract.id })
@@ -184,19 +195,32 @@ export class ChangeRequestsService {
     const rentDifference = newPrice - Number(contract.bookingItem.monthlyPriceSnapshot);
     const depositDifference = newDeposit - Number(contract.bookingItem.depositSnapshot);
 
-    const saved = await this.requests.save(
-      this.requests.create({
-        contractId: contract.id,
-        oldUnitId: oldUnit.id,
-        newUnitId: newUnit.id,
-        requestedBy: actor.id,
-        reason: dto.reason.trim(),
-        status: ChangeRequestStatus.REQUESTED,
-        rentDifference,
-        depositDifference,
-        history: [this.historyEntry('REQUESTED', null, ChangeRequestStatus.REQUESTED, actor.id)],
-      }),
-    );
+    let saved: UnitChangeRequest;
+    try {
+      saved = await this.requests.save(
+        this.requests.create({
+          contractId: contract.id,
+          oldUnitId: oldUnit.id,
+          newUnitId: newUnit.id,
+          requestedBy: actor.id,
+          reason: dto.reason.trim(),
+          status: ChangeRequestStatus.REQUESTED,
+          rentDifference,
+          depositDifference,
+          history: [this.historyEntry('REQUESTED', null, ChangeRequestStatus.REQUESTED, actor.id)],
+        }),
+      );
+    } catch (err) {
+      // Lost the race against the partial unique index UQ_open_change_request.
+      if (isUniqueViolation(err)) {
+        throw new DomainException(
+          ErrorCode.CONFLICT,
+          'An open change request already exists for this contract',
+          HttpStatus.CONFLICT,
+        );
+      }
+      throw err;
+    }
 
     return { request: toChangeRequestRecord(await this.findOrFail(saved.id)) };
   }
@@ -338,6 +362,8 @@ export class ChangeRequestsService {
         { id: request.oldUnitId },
         { status: StorageUnitStatus.MAINTENANCE },
       );
+      const item = await manager.findOne(BookingItem, { where: { id: contract.bookingItemId } });
+      const depositTopUp = newDeposit - Number(item?.depositSnapshot ?? 0);
       await manager.update(
         BookingItem,
         { id: contract.bookingItemId },
@@ -348,6 +374,53 @@ export class ChangeRequestsService {
         },
       );
       await manager.update(Contract, { id: contract.id }, { monthlyPriceSnapshot: newPrice });
+
+      // Moving up-market raises the required deposit: bill the difference on a top-up invoice
+      // the customer settles through the usual invoice channels (bank transfer or at the counter).
+      // Extra paid money lands in the held deposit; a cheaper unit keeps the surplus for the
+      // end-of-contract settlement instead of refunding mid-term.
+      if (depositTopUp > 0) {
+        const invoice = await manager.save(
+          Invoice,
+          manager.create(Invoice, {
+            invoiceNo: generateInvoiceNo(),
+            customerId: contract.customerId,
+            contractId: contract.id,
+            periodNo: 0,
+            kind: InvoiceKind.DEPOSIT_TOPUP,
+            months: 0,
+            monthlyPriceSnapshot: newPrice,
+            status: InvoiceStatus.ISSUED,
+            currency: 'VND',
+            subtotal: depositTopUp,
+            taxAmount: 0,
+            total: depositTopUp,
+            issuedAt: new Date(),
+            dueAt: new Date(Date.now() + TOP_UP_DUE_DAYS * 24 * 60 * 60 * 1000),
+            billingInfo: {},
+          }),
+        );
+        await manager.save(
+          InvoiceItem,
+          manager.create(InvoiceItem, {
+            invoiceId: invoice.id,
+            storageUnitId: request.newUnitId,
+            itemType: InvoiceItemType.DEPOSIT,
+            description: `Thu bù tiền cọc do đổi sang kho ${target.code} (HĐ: ${contract.contractNo})`,
+            quantity: 1,
+            unitAmount: depositTopUp,
+            amount: depositTopUp,
+          }),
+        );
+        await this.notifications.createForUsers(manager, [contract.customerId], {
+          type: NotificationType.INVOICE_ISSUED,
+          title: 'Hóa đơn thu bù tiền cọc',
+          body:
+            `Yêu cầu đổi sang kho ${target.code} đã được duyệt. Tiền cọc tăng thêm ` +
+            `${depositTopUp.toLocaleString('vi-VN')} VND — vui lòng thanh toán hóa đơn ${invoice.invoiceNo}.`,
+          data: { invoiceId: invoice.id, invoiceNo: invoice.invoiceNo, contractId: contract.id },
+        });
+      }
 
       request.status = ChangeRequestStatus.COMPLETED;
       request.approvedBy = actor.id;

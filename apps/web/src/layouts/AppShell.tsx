@@ -7,6 +7,7 @@ import {
   FileText,
   Lifebuoy,
   ListChecks,
+  Money,
   Package,
   SignOut,
   Storefront,
@@ -34,6 +35,7 @@ const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { to: '/admin/users', label: 'Quản lý người dùng', icon: Users },
     { to: '/admin/facilities', label: 'Quản lý chi nhánh', icon: Storefront },
     { to: '/admin/warehouses', label: 'Quản lý kho', icon: Buildings },
+    { to: '/admin/sepay-transfers', label: 'Đối soát chuyển khoản', icon: Money },
     { to: '/admin/amenities', label: 'Tiện ích kho', icon: ListChecks },
     { to: '/admin/settings', label: 'Cấu hình tham số', icon: Faders },
     { to: '/contracts', label: 'Hợp đồng', icon: FileText },
@@ -45,6 +47,7 @@ const ROLE_NAV: Record<UserRole, NavItem[]> = {
   [UserRole.OPERATIONS_MANAGER]: [
     { to: '/admin/facilities', label: 'Quản lý chi nhánh', icon: Storefront },
     { to: '/admin/warehouses', label: 'Quản lý kho', icon: Buildings },
+    { to: '/admin/sepay-transfers', label: 'Đối soát chuyển khoản', icon: Money },
     { to: '/contracts', label: 'Hợp đồng', icon: FileText },
     { to: '/facility-manager/tour-appointments', label: 'Lịch xem kho', icon: CalendarCheck },
   ],

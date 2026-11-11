@@ -170,11 +170,11 @@ test('deposit is price times effective deposit months', () => {
   );
 });
 
-test('booking items use the hidden unit id', () => {
-  const items = q.buildBookingItems([{ id: 'u1' }, { id: 'u2' }], '2026-11-01', 6);
+test('booking items use the hidden unit id and the chosen receiving instant', () => {
+  const items = q.buildBookingItems([{ id: 'u1' }, { id: 'u2' }], '2026-11-01T02:00:00.000Z', 6);
   assert.deepEqual(items, [
-    { storageUnitId: 'u1', requestedStartAt: '2026-11-01T12:00:00.000Z', rentalMonths: 6 },
-    { storageUnitId: 'u2', requestedStartAt: '2026-11-01T12:00:00.000Z', rentalMonths: 6 },
+    { storageUnitId: 'u1', requestedStartAt: '2026-11-01T02:00:00.000Z', rentalMonths: 6 },
+    { storageUnitId: 'u2', requestedStartAt: '2026-11-01T02:00:00.000Z', rentalMonths: 6 },
   ]);
 });
 

@@ -1,12 +1,11 @@
 import type { ReactNode } from 'react';
 import { Text, View } from 'react-native';
-import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
+import { formatIsoDate, formatIsoDateTime, formatMoney } from '../../../lib/format-vi';
 import { returnSourceNote } from '../../../lib/settlement-format';
 import type { ApiContract, ApiInspection } from '../../types/contract-api';
 import {
   contractEndIso,
   contractKindLabel,
-  contractStartIso,
   contractStatusLabel,
   contractStatusTone,
   dayOf,
@@ -55,7 +54,7 @@ export function ContractSection({
     >
       <InfoRow isNumeric label="Số hợp đồng" value={contract.contractNo} />
       <InfoRow label="Loại hợp đồng" value={contractKindLabel(contract.kind)} />
-      <InfoRow isNumeric label="Ngày hiệu lực" value={formatIsoDate(contractStartIso(contract))} />
+      <InfoRow isNumeric label="Ngày hiệu lực" value={formatIsoDateTime(contract.effectiveAt)} />
       <InfoRow isNumeric label="Ngày kết thúc" value={formatIsoDate(contractEndIso(contract))} />
       <InfoRow label="Kỳ hạn" value={`${contract.months} tháng`} />
       <InfoRow isNumeric label="Tiền thuê" value={`${formatMoney(contract.monthlyPrice)}/tháng`} />

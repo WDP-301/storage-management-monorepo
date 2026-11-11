@@ -2,6 +2,7 @@ import { StaffShift } from '@entities/staff-shift.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { AuthModule } from '@modules/auth/auth.module';
 import { FacilitiesModule } from '@modules/facilities/facilities.module';
+import { InspectionModule } from '@modules/inspection/inspection.module';
 import { NotificationsModule } from '@modules/notifications/notifications.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -18,6 +19,7 @@ import { StaffShiftsService } from './staff-shifts.service';
     TypeOrmModule.forFeature([StaffShift, UserRoleAssignment]),
     AuthModule,
     FacilitiesModule,
+    InspectionModule,
     NotificationsModule,
   ],
   controllers: [StaffShiftsController, MyStaffShiftsController],

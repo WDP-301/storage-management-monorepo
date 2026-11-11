@@ -10,6 +10,7 @@ const buildRow = (overrides: Partial<ShiftTemplate> = {}): ShiftTemplate =>
     id: 'morning',
     code: 'MORNING',
     name: 'Ca sáng',
+    type: 'OFFICE',
     startTime: '06:00:00',
     endTime: '12:00:00',
     isActive: true,
@@ -80,7 +81,13 @@ describe('ShiftTemplatesService', () => {
   });
 
   describe('create', () => {
-    const dto = { code: 'AFTERNOON', name: 'Ca chiều', startTime: '12:00', endTime: '18:00' };
+    const dto = {
+      code: 'AFTERNOON',
+      name: 'Ca chiều',
+      type: 'OFFICE' as const,
+      startTime: '12:00',
+      endTime: '18:00',
+    };
 
     it('saves an active template under the write lock', async () => {
       const result = await service.create(dto);
@@ -143,6 +150,12 @@ describe('ShiftTemplatesService', () => {
       await service.update('morning', { endTime: '11:00' });
 
       expect(repo.save).toHaveBeenCalled();
+    });
+
+    it('changes the type', async () => {
+      await service.update('morning', { type: 'WAREHOUSE' });
+
+      expect(repo.save).toHaveBeenCalledWith(expect.objectContaining({ type: 'WAREHOUSE' }));
     });
 
     it('refuses re-activating a template that overlaps an active one', async () => {

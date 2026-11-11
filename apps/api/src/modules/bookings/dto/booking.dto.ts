@@ -55,6 +55,34 @@ export function IsValidBookingStartDate(validationOptions?: ValidationOptions) {
   };
 }
 
+/** An ISO 8601 instant with a time-of-day AND an explicit offset (`Z` or `±hh:mm`). */
+const INSTANT_WITH_OFFSET_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/;
+
+/**
+ * Requires a full date + time with an explicit offset. A bare `YYYY-MM-DD` (or a local
+ * `YYYY-MM-DDTHH:mm` with no offset) is refused: the receiving time must be an unambiguous
+ * instant so the OFFICE work-shift window check is deterministic.
+ */
+export function IsBookingStartInstant(validationOptions?: ValidationOptions) {
+  return (object: object, propertyName: string) => {
+    registerDecorator({
+      name: 'isBookingStartInstant',
+      target: object.constructor,
+      propertyName,
+      options: validationOptions,
+      validator: {
+        validate(value: unknown) {
+          return typeof value === 'string' && INSTANT_WITH_OFFSET_PATTERN.test(value);
+        },
+        defaultMessage(args: ValidationArguments) {
+          return `${args.property} phải gồm ngày và giờ nhận kho, kèm offset (ví dụ 2026-11-09T09:00:00+07:00)`;
+        },
+      },
+    });
+  };
+}
+
 /**
  * Validates that no duplicate storage units exist in the same booking request.
  */
@@ -90,11 +118,12 @@ export class CreateBookingItemDto {
   storageUnitId: string;
 
   @ApiProperty({
-    example: '2026-10-01T00:00:00.000Z',
+    example: '2026-10-01T09:00:00+07:00',
     description:
-      'Requested rental start date for this unit (from today; max lead time is the booking.lead_days setting)',
+      'Warehouse receiving time (date + time, with an explicit offset) for this unit. Must fall inside an OFFICE work shift and be from today onwards; max lead time is the booking.lead_days setting.',
   })
   @IsDateString()
+  @IsBookingStartInstant()
   @IsValidBookingStartDate()
   requestedStartAt: string;
 

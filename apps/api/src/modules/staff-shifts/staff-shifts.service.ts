@@ -4,6 +4,7 @@ import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { activeFacilityIds } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { FacilitiesService } from '@modules/facilities/facilities.service';
+import { HandoverAssignmentService } from '@modules/inspection/handover-assignment/handover-assignment.service';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -63,6 +64,7 @@ export class StaffShiftsService {
     private readonly roleAssignments: Repository<UserRoleAssignment>,
     private readonly facilities: FacilitiesService,
     private readonly notifications: NotificationsService,
+    private readonly handoverAssignment: HandoverAssignmentService,
   ) {}
 
   async list(query: ListStaffShiftsQueryDto, actor: AuthUser): Promise<StaffShiftListResponse> {
@@ -125,6 +127,7 @@ export class StaffShiftsService {
 
       const saved = await this.saveShifts(em, [shift]);
       await this.notifications.createForUsers(em, [shift.staffId], shiftUpdatedNotification(shift));
+      await this.assignPendingHandovers(em, [shift]);
       return { staff_shift: (await this.loadRecords(em, [saved[0].id]))[0] };
     });
   }
@@ -188,7 +191,20 @@ export class StaffShiftsService {
         shiftsAssignedNotification(staffShifts),
       );
     }
+    await this.assignPendingHandovers(em, saved);
     return saved;
+  }
+
+  /**
+   * Once shifts exist, a handover that was left for a manager (no one on shift at confirmation)
+   * can be taken: re-runs the round robin for the window the shifts cover. Never throws, so it
+   * cannot undo the shift creation.
+   */
+  private async assignPendingHandovers(em: EntityManager, shifts: StaffShift[]): Promise<void> {
+    if (shifts.length === 0) return;
+    const from = new Date(Math.min(...shifts.map((shift) => shift.startAt.getTime())));
+    const to = new Date(Math.max(...shifts.map((shift) => shift.endAt.getTime())));
+    await this.handoverAssignment.assignPendingForFacility(em, shifts[0].facilityId, from, to);
   }
 
   /** ADMIN and OPERATIONS_MANAGER schedule anywhere; a FACILITY_MANAGER only where they manage. */

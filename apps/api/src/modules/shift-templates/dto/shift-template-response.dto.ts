@@ -15,6 +15,9 @@ export class ShiftTemplateRecordDto implements ShiftTemplateRecord {
   @ApiProperty({ example: 'Ca sáng' })
   name: string;
 
+  @ApiProperty({ enum: ['OFFICE', 'WAREHOUSE'], example: 'OFFICE' })
+  type: 'OFFICE' | 'WAREHOUSE';
+
   @ApiProperty({ example: '06:00' })
   start_time: string;
 

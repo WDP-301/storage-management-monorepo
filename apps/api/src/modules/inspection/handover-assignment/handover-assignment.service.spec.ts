@@ -11,7 +11,9 @@ const handover = (id: string, facilityId: string, unitCode: string, scheduledAt 
   ({
     id,
     scheduledAt,
-    contract: { bookingItem: { storageUnit: { facilityId, code: unitCode } } },
+    contract: {
+      bookingItem: { bookingId: 'booking-1', storageUnit: { facilityId, code: unitCode } },
+    },
   }) as unknown as Inspection;
 
 const staffRole = (id: string, fullName: string) => ({
@@ -129,6 +131,34 @@ describe('HandoverAssignmentService', () => {
     expect(em.query).toHaveBeenCalledWith(expect.any(String), ['handover_rotation:hcm']);
     expect(em.query).toHaveBeenCalledWith(expect.any(String), ['handover_rotation:hn']);
     expect(em.update).toHaveBeenCalledTimes(2);
+  });
+
+  it('re-assigns a facility handover that was left pending (e.g. a shift added later)', async () => {
+    handovers = [handover('i-1', 'hcm', 'A-01')];
+
+    const visited = await service.assignPendingForFacility(
+      em as never,
+      'hcm',
+      new Date('2026-11-01T00:00:00Z'),
+      new Date('2026-11-02T00:00:00Z'),
+    );
+
+    expect(visited).toBe(1);
+    expect(em.update).toHaveBeenCalledWith(Inspection, expect.anything(), { inspectedBy: 'an' });
+  });
+
+  it('does nothing when no handover is pending in the window', async () => {
+    handovers = [];
+
+    const visited = await service.assignPendingForFacility(
+      em as never,
+      'hcm',
+      new Date('2026-11-01T00:00:00Z'),
+      new Date('2026-11-02T00:00:00Z'),
+    );
+
+    expect(visited).toBe(0);
+    expect(em.update).not.toHaveBeenCalled();
   });
 
   it('never throws, so the deposit confirmation is not undone', async () => {

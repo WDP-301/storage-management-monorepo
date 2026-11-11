@@ -1,10 +1,12 @@
 import type { ShiftTemplate } from '@entities/shift-template.entity';
+import type { ShiftTemplateType } from '@storage/types';
 
 /** The `shift_templates` row exposed with its raw column names; times as HH:mm. */
 export interface ShiftTemplateRecord {
   id: string;
   code: string;
   name: string;
+  type: ShiftTemplateType;
   start_time: string;
   end_time: string;
   is_active: boolean;
@@ -28,6 +30,7 @@ export function toShiftTemplateRecord(row: ShiftTemplate): ShiftTemplateRecord {
     id: row.id,
     code: row.code,
     name: row.name,
+    type: row.type,
     start_time: toHourMinute(row.startTime),
     end_time: toHourMinute(row.endTime),
     is_active: row.isActive,

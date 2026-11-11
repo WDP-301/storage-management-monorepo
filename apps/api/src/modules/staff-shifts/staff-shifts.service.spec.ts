@@ -55,6 +55,7 @@ describe('StaffShiftsService', () => {
   let roleAssignments: { find: jest.Mock };
   let facilities: { findStaff: jest.Mock };
   let notifications: { createForUsers: jest.Mock };
+  let handoverAssignment: { assignPendingForFacility: jest.Mock };
   let service: StaffShiftsService;
 
   beforeEach(() => {
@@ -104,6 +105,7 @@ describe('StaffShiftsService', () => {
       ]),
     };
     notifications = { createForUsers: jest.fn().mockResolvedValue(1) };
+    handoverAssignment = { assignPendingForFacility: jest.fn().mockResolvedValue(0) };
     const dataSource = { transaction: jest.fn((work: (e: unknown) => unknown) => work(em)) };
     service = new StaffShiftsService(
       dataSource as never,
@@ -111,6 +113,7 @@ describe('StaffShiftsService', () => {
       roleAssignments as never,
       facilities as never,
       notifications as never,
+      handoverAssignment as never,
     );
   });
 
@@ -160,6 +163,17 @@ describe('StaffShiftsService', () => {
         em,
         ['an'],
         expect.objectContaining({ type: NotificationType.SHIFT_ASSIGNED }),
+      );
+    });
+
+    it('re-runs round robin for the window the new shifts cover', async () => {
+      await service.create(dto, MANAGER);
+
+      expect(handoverAssignment.assignPendingForFacility).toHaveBeenCalledWith(
+        em,
+        'hcm',
+        new Date(shiftPeriod('2099-01-10', MORNING).startAt),
+        new Date(shiftPeriod('2099-01-11', MORNING).endAt),
       );
     });
 
@@ -226,6 +240,12 @@ describe('StaffShiftsService', () => {
         em,
         ['an'],
         expect.objectContaining({ type: NotificationType.SHIFT_UPDATED }),
+      );
+      expect(handoverAssignment.assignPendingForFacility).toHaveBeenCalledWith(
+        em,
+        'hcm',
+        shiftPeriod('2099-01-12', MORNING).startAt,
+        shiftPeriod('2099-01-12', MORNING).endAt,
       );
     });
 

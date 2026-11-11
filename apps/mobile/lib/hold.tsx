@@ -23,6 +23,8 @@ import { buildBookingItems, warehouseDeposit } from './warehouse-query';
 export type RentalSchedule = {
   startDate: string;
   durationMonths: number;
+  /** The receiving instant picked inside an OFFICE window (ISO 8601 with offset). */
+  requestedStartAt: string;
 };
 
 type HoldContextValue = {
@@ -137,7 +139,7 @@ export function HoldProvider({ children }: { children: ReactNode }) {
       if (!selectedWarehouses?.length || !selectionKey.current || submitting.current) return null;
       const items: BookingItemInput[] = buildBookingItems(
         selectedWarehouses,
-        schedule.startDate,
+        schedule.requestedStartAt,
         schedule.durationMonths,
       );
       submitting.current = true;

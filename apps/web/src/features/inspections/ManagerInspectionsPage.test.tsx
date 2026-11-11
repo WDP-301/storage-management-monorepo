@@ -6,7 +6,7 @@ import * as AuthContextModule from '../../context/AuthContext';
 import * as FacilityContextModule from '../../context/FacilityContext';
 import { ContractsApi, FacilitiesApi, InspectionsApi, UploadsApi } from '../../lib/api';
 import { addDays, formatVnDay, vnNoonIso, vnToday } from '../../lib/vn-day';
-import { pickSelectOption } from '../../test-utils/pick-select-option';
+import { pickComboboxOption } from '../../test-utils/pick-combobox-option';
 import type { InspectionRecord } from '../../types/inspection';
 import { finalizeConsequence, inspectionMetrics, matchesSearch } from './inspection-display';
 import { ManagerInspectionsPage } from './ManagerInspectionsPage';
@@ -185,7 +185,7 @@ describe('ManagerInspectionsPage', () => {
       (screen.getByRole('button', { name: 'Chốt biên bản' }) as HTMLButtonElement).disabled,
     ).toBe(true);
 
-    await pickSelectOption(select, 'Võ Kỹ Thuật · 0909');
+    await pickComboboxOption(select, 'Võ Kỹ', /Võ Kỹ Thuật/);
     fireEvent.click(screen.getByRole('button', { name: 'Giao nhân viên' }));
 
     await waitFor(() => expect(assign).toHaveBeenCalledWith('insp-A-101', 'staff-2'));

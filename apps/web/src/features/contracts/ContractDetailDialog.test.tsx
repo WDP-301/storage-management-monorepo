@@ -86,20 +86,22 @@ describe('ContractDetailDialog', () => {
   ] as const)('%s on a %s contract can use %j', (role, status, expected) => {
     mockRole(role);
     renderDialog(contractRecord({ status }));
-    fireEvent.click(screen.getByRole('tab', { name: 'File hợp đồng' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Vận hành' }));
     expect(visibleActions()).toEqual(expected);
   });
 
-  it('shows the settlement tab on a cancelled contract only when a refund is queued', () => {
+  it('shows the settlement section on a cancelled contract only when a refund is queued', () => {
     mockRole(UserRole.ADMIN);
     renderDialog(contractRecord({ status: 'CANCELLED', settlement_status: 'AWAITING_REFUND' }));
-    expect(screen.getByRole('tab', { name: 'Quyết toán cọc' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Vận hành' }));
+    expect(screen.getByText('Quyết toán cọc')).toBeTruthy();
   });
 
-  it('hides the settlement tab on a cancelled contract without a settlement', () => {
+  it('hides the settlement section on a cancelled contract without a settlement', () => {
     mockRole(UserRole.ADMIN);
     renderDialog(contractRecord({ status: 'CANCELLED' }));
-    expect(screen.queryByRole('tab', { name: 'Quyết toán cọc' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Vận hành' }));
+    expect(screen.queryByText('Quyết toán cọc')).toBeNull();
   });
 
   it('cancels a draft after confirmation', async () => {
@@ -197,14 +199,14 @@ describe('ContractDetailDialog', () => {
     handoverRecord();
     renderDialog(contractRecord());
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Nhận / trả kho' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Vận hành' }));
     fireEvent.click(screen.getByRole('button', { name: 'Xem biên bản nhận kho' }));
     expect(await screen.findByRole('dialog', { name: /Biên bản nhận kho/ })).toBeTruthy();
     expect(screen.queryByRole('dialog', { name: 'Hợp đồng CT-41BF439C' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: /Hợp đồng CT-41BF439C/ }));
     expect(screen.getByRole('dialog', { name: 'Hợp đồng CT-41BF439C' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Nhận / trả kho' }).getAttribute('aria-selected')).toBe(
+    expect(screen.getByRole('tab', { name: 'Vận hành' }).getAttribute('aria-selected')).toBe(
       'true',
     );
   });
@@ -214,7 +216,7 @@ describe('ContractDetailDialog', () => {
     handoverRecord();
     const { onClose } = renderDialog(contractRecord());
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Nhận / trả kho' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Vận hành' }));
     fireEvent.click(screen.getByRole('button', { name: 'Xem biên bản nhận kho' }));
     const record = await screen.findByRole('dialog', { name: /Biên bản nhận kho/ });
     fireEvent.keyDown(record, { key: 'Escape' });

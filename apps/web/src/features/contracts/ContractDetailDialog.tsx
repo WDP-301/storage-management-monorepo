@@ -55,11 +55,11 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
     setInspection(null);
     setError(null);
     // A pending settlement is why an ENDED contract gets opened; a CANCELLED contract opens on
-    // it too when money is queued for a refund, so it opens on that tab.
+    // it too when money is queued for a refund, so it opens on the tab holding it.
     setTab(
       (contract?.status === 'ENDED' && contract.settlement_status === 'PENDING') ||
         (contract?.status === 'CANCELLED' && contract.settlement_status === 'AWAITING_REFUND')
-        ? 'settlement'
+        ? 'ops'
         : 'info',
     );
   }, [contractId]);
@@ -120,27 +120,18 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
     canManage &&
     (contract.status === 'ENDED' ||
       (contract.status === 'CANCELLED' && contract.settlement_status != null));
-  const settlementFirst =
-    showSettlement &&
-    (contract.settlement_status === 'PENDING' ||
-      (contract.status === 'CANCELLED' && contract.settlement_status === 'AWAITING_REFUND'));
-  const navKeys: SectionKey[] = ['info', 'handover', 'documents'];
-  if (canCancel) navKeys.push('invoices');
-  if (showSettlement) navKeys.splice(settlementFirst ? 1 : navKeys.length, 0, 'settlement');
-  // The remembered tab may not exist for this contract or role (e.g. no settlement tab).
+  const navKeys: SectionKey[] = ['info', 'ops'];
   const activeTab: SectionKey = navKeys.includes(tab) ? tab : 'info';
   const settlement = showSettlement && (
-    <TabPanel id="settlement" active={activeTab}>
-      <ContractSettlementSection
-        key={`settlement-${contract.id}`}
-        contractId={contract.id}
-        refreshKey={settlementRefresh}
-        onChanged={() => {
-          setInvoiceRefresh((n) => n + 1);
-          onChanged();
-        }}
-      />
-    </TabPanel>
+    <ContractSettlementSection
+      key={`settlement-${contract.id}`}
+      contractId={contract.id}
+      refreshKey={settlementRefresh}
+      onChanged={() => {
+        setInvoiceRefresh((n) => n + 1);
+        onChanged();
+      }}
+    />
   );
 
   const hasActions =
@@ -221,9 +212,7 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
               <ContractInfoPanel contract={contract} />
             </TabPanel>
 
-            {settlement}
-
-            <TabPanel id="handover" active={activeTab} className="space-y-5">
+            <TabPanel id="ops" active={activeTab} className="space-y-6">
               <ContractStaffSection
                 contract={contract}
                 canAssign={canCancel}
@@ -236,9 +225,6 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
                 canRequest={canCancel}
                 onChanged={onChanged}
               />
-            </TabPanel>
-
-            <TabPanel id="documents" active={activeTab}>
               <ContractDocumentsPanel
                 documents={contract.documents}
                 canEdit={canEditDocuments}
@@ -247,10 +233,7 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
                 onSave={saveDocuments}
                 onInvalid={setError}
               />
-            </TabPanel>
-
-            {canCancel && (
-              <TabPanel id="invoices" active={activeTab}>
+              {canCancel && (
                 <ContractInvoicesSection
                   key={`invoices-${contract.id}`}
                   contractId={contract.id}
@@ -260,8 +243,9 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
                     onChanged();
                   }}
                 />
-              </TabPanel>
-            )}
+              )}
+              {settlement}
+            </TabPanel>
 
             {error && (
               <div
@@ -341,14 +325,11 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
   );
 };
 
-type SectionKey = 'info' | 'handover' | 'documents' | 'invoices' | 'settlement';
+type SectionKey = 'info' | 'ops';
 
 const SECTION_LABEL: Record<SectionKey, string> = {
   info: 'Thông tin',
-  handover: 'Nhận / trả kho',
-  documents: 'File hợp đồng',
-  invoices: 'Hóa đơn',
-  settlement: 'Quyết toán cọc',
+  ops: 'Vận hành',
 };
 
 const tabId = (key: SectionKey) => `contract-tab-${key}`;

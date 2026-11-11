@@ -1,7 +1,7 @@
 import {
   Badge,
   Button,
-  Checkbox,
+  Combobox,
   Dialog,
   Input,
   LayerCard,
@@ -20,6 +20,7 @@ import {
 } from '@phosphor-icons/react';
 import type { StaffShiftStatus } from '@storage/types';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { DateField } from '../../components/DateField';
 import {
   DIALOG_SHELL,
   DialogBody,
@@ -38,23 +39,15 @@ import { useAppToast } from '../../lib/toast';
 import { addDays, formatVnDay, vnToday } from '../../lib/vn-day';
 import type { FacilityStaffMember } from '../../types/inspection';
 
-const STATUS_LABEL: Record<StaffShiftStatus, string> = {
-  SCHEDULED: 'Đã xếp',
-  CHECKED_IN: 'Đang làm',
-  COMPLETED: 'Xong ca',
-  ABSENT: 'Vắng',
-  CANCELLED: 'Đã hủy',
-};
-
-const STATUS_VARIANT: Record<
+const STATUS_DISPLAY: Record<
   StaffShiftStatus,
-  'info' | 'warning' | 'success' | 'error' | 'neutral'
+  { label: string; variant: 'info' | 'warning' | 'success' | 'error' | 'neutral' }
 > = {
-  SCHEDULED: 'info',
-  CHECKED_IN: 'warning',
-  COMPLETED: 'success',
-  ABSENT: 'error',
-  CANCELLED: 'neutral',
+  SCHEDULED: { label: 'Đã xếp', variant: 'info' },
+  CHECKED_IN: { label: 'Đang làm', variant: 'warning' },
+  COMPLETED: { label: 'Xong ca', variant: 'success' },
+  ABSENT: { label: 'Vắng', variant: 'error' },
+  CANCELLED: { label: 'Đã hủy', variant: 'neutral' },
 };
 
 const DAY_NAME = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
@@ -80,6 +73,8 @@ const eachDay = (from: string, to: string): string[] => {
 
 const timeOf = (at: string): string => VN_TIME.format(new Date(at));
 
+type StaffOption = { value: string; label: string; phone: string | null };
+
 const errMsg = (e: unknown, fallback: string): string => {
   const err = e as { response?: { data?: { message?: string | string[] } } };
   const msg = err?.response?.data?.message;
@@ -91,7 +86,8 @@ export const StaffShiftsPage: React.FC = () => {
   const { selectedFacility } = useFacility();
   const facilityId = selectedFacility?.id ?? '';
 
-  const [weekStart, setWeekStart] = useState(() => mondayOf(vnToday()));
+  const [viewDate, setViewDate] = useState(() => vnToday());
+  const weekStart = mondayOf(viewDate);
   const [shifts, setShifts] = useState<StaffShiftRecord[]>([]);
   const [templates, setTemplates] = useState<ShiftTemplateRecord[]>([]);
   const [staff, setStaff] = useState<FacilityStaffMember[]>([]);
@@ -105,6 +101,7 @@ export const StaffShiftsPage: React.FC = () => {
     to: '',
     note: '',
   });
+  const [staffQuery, setStaffQuery] = useState('');
   const [autoOpen, setAutoOpen] = useState(false);
   const [autoHeadcount, setAutoHeadcount] = useState<Record<string, number>>({});
   const [preview, setPreview] = useState<AutoScheduleResult | null>(null);
@@ -113,6 +110,19 @@ export const StaffShiftsPage: React.FC = () => {
   const [busy, setBusy] = useState<'schedule' | 'auto' | 'save' | 'cancel' | null>(null);
 
   const weekDays = useMemo(() => eachDay(weekStart, addDays(weekStart, 6)), [weekStart]);
+
+  const { contains: staffMatches } = Combobox.useFilter({ locale: 'vi' });
+  const selectedStaff = useMemo(
+    () => staff.filter((m) => scheduleForm.staffIds.includes(m.id)),
+    [staff, scheduleForm.staffIds],
+  );
+  const staffOptions = useMemo(
+    () =>
+      staff
+        .filter((m) => !scheduleForm.staffIds.includes(m.id))
+        .map((m) => ({ value: m.id, label: m.fullName, phone: m.phone })),
+    [staff, scheduleForm.staffIds],
+  );
 
   const load = useCallback(async () => {
     if (!facilityId) return;
@@ -139,6 +149,7 @@ export const StaffShiftsPage: React.FC = () => {
 
   const openSchedule = () => {
     setScheduleForm({ templateId: '', staffIds: [], from: weekStart, to: weekStart, note: '' });
+    setStaffQuery('');
     setScheduleOpen(true);
   };
 
@@ -193,7 +204,7 @@ export const StaffShiftsPage: React.FC = () => {
   const runAuto = async (dryRun: boolean) => {
     const requirements = Object.entries(autoHeadcount)
       .filter(([, n]) => n > 0)
-      .map(([shiftTemplateId, headcount]) => ({ shiftTemplateId, headcount }));
+      .map(([shiftTemplateId, staffPerShift]) => ({ shiftTemplateId, staffPerShift }));
     if (requirements.length === 0) {
       toast.error('Chưa nhập số lượng', 'Nhập số nhân viên cần cho ít nhất một ca.');
       return;
@@ -280,15 +291,15 @@ export const StaffShiftsPage: React.FC = () => {
       </div>
 
       <LayerCard>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-kumo-line">
-          <div className="flex items-center gap-1">
+        <div className="flex flex-col gap-3 px-4 py-3 border-b border-kumo-line sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="ghost"
               size="sm"
               shape="square"
               icon={<CaretLeft />}
               aria-label="Tuần trước"
-              onClick={() => setWeekStart(addDays(weekStart, -7))}
+              onClick={() => setViewDate(addDays(viewDate, -7))}
             />
             <Button
               variant="ghost"
@@ -296,11 +307,17 @@ export const StaffShiftsPage: React.FC = () => {
               shape="square"
               icon={<CaretRight />}
               aria-label="Tuần sau"
-              onClick={() => setWeekStart(addDays(weekStart, 7))}
+              onClick={() => setViewDate(addDays(viewDate, 7))}
             />
-            <Button variant="ghost" size="sm" onClick={() => setWeekStart(mondayOf(vnToday()))}>
+            <Button variant="ghost" size="sm" onClick={() => setViewDate(vnToday())}>
               Tuần này
             </Button>
+            <DateField
+              className="w-40"
+              aria-label="Chọn ngày để xem tuần"
+              value={viewDate}
+              onChange={(v) => v && setViewDate(v)}
+            />
           </div>
           <Text size="sm" color="secondary">
             {formatVnDay(weekDays[0])} — {formatVnDay(weekDays[6])}
@@ -320,7 +337,7 @@ export const StaffShiftsPage: React.FC = () => {
                   {weekDays.map((d) => (
                     <th
                       key={d}
-                      className={`text-left px-2 py-2.5 font-medium ${
+                      className={`text-center px-2 py-2.5 font-medium ${
                         d === vnToday() ? 'text-kumo-brand' : 'text-kumo-secondary'
                       }`}
                     >
@@ -345,7 +362,7 @@ export const StaffShiftsPage: React.FC = () => {
                       );
                       return (
                         <td key={d} className="px-2 py-2 align-top">
-                          <div className="flex flex-col gap-1">
+                          <div className="flex flex-col items-center gap-1">
                             {cell.map((s) => (
                               <button
                                 key={s.id}
@@ -354,7 +371,7 @@ export const StaffShiftsPage: React.FC = () => {
                                 className="text-left"
                               >
                                 <Badge
-                                  variant={STATUS_VARIANT[s.status]}
+                                  variant={STATUS_DISPLAY[s.status].variant}
                                   className="max-w-full truncate"
                                 >
                                   {s.staff_name ?? '—'}
@@ -381,9 +398,9 @@ export const StaffShiftsPage: React.FC = () => {
         )}
 
         <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-t border-kumo-line">
-          {Object.entries(STATUS_LABEL).map(([status, label]) => (
+          {Object.entries(STATUS_DISPLAY).map(([status, display]) => (
             <span key={status} className="flex items-center gap-1.5">
-              <Badge variant={STATUS_VARIANT[status as StaffShiftStatus]}>{label}</Badge>
+              <Badge variant={display.variant}>{display.label}</Badge>
             </span>
           ))}
         </div>
@@ -417,6 +434,7 @@ export const StaffShiftsPage: React.FC = () => {
                 Ca làm việc
               </label>
               <Select
+                className="w-full"
                 aria-label="Ca làm việc"
                 value={scheduleForm.templateId}
                 onValueChange={(v) =>
@@ -434,33 +452,143 @@ export const StaffShiftsPage: React.FC = () => {
               />
             </div>
 
-            <Checkbox.Group
-              legend="Nhân viên"
-              description={`${scheduleForm.staffIds.length}/${staff.length} đã chọn`}
-              value={scheduleForm.staffIds}
-              onValueChange={(v) => setScheduleForm((p) => ({ ...p, staffIds: v }))}
+            <Combobox
+              label="Nhân viên"
+              description="Gõ tên hoặc số điện thoại, chọn để thêm vào danh sách xếp ca."
+              items={staffOptions}
+              value={null}
+              inputValue={staffQuery}
+              autoHighlight
+              filter={(opt: StaffOption, query: string) =>
+                staffMatches(opt.label, query) ||
+                (opt.phone ? staffMatches(opt.phone, query) : false)
+              }
+              onInputValueChange={(v: string, details: { isItemPress?: boolean }) => {
+                if (!details.isItemPress) setStaffQuery(v);
+              }}
+              onValueChange={(opt: StaffOption | null) => {
+                if (!opt) return;
+                setScheduleForm((p) =>
+                  p.staffIds.includes(opt.value)
+                    ? p
+                    : { ...p, staffIds: [...p.staffIds, opt.value] },
+                );
+                setStaffQuery('');
+              }}
             >
-              {staff.map((m) => (
-                <Checkbox.Item key={m.id} value={m.id} label={m.fullName} />
-              ))}
-            </Checkbox.Group>
+              <Combobox.TriggerInput
+                placeholder="Tìm tên hoặc số điện thoại…"
+                clearLabel="Xóa"
+                showOptionsLabel="Xem danh sách nhân viên"
+              />
+              <Combobox.Content>
+                <Combobox.Empty>
+                  {staff.length === 0
+                    ? 'Chưa có nhân viên nào trong chi nhánh.'
+                    : staffOptions.length === 0
+                      ? 'Đã chọn hết nhân viên.'
+                      : 'Không tìm thấy nhân viên.'}
+                </Combobox.Empty>
+                <Combobox.List>
+                  {(opt: StaffOption) => (
+                    <Combobox.Item key={opt.value} value={opt}>
+                      <span className="min-w-0">
+                        <span className="block truncate">{opt.label}</span>
+                        {opt.phone && (
+                          <span className="block truncate text-xs text-kumo-secondary">
+                            {opt.phone}
+                          </span>
+                        )}
+                      </span>
+                    </Combobox.Item>
+                  )}
+                </Combobox.List>
+              </Combobox.Content>
+            </Combobox>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-kumo-default">
+                  Đã chọn ({scheduleForm.staffIds.length})
+                </span>
+                <div className="flex items-center gap-1">
+                  {staffOptions.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        setScheduleForm((p) => ({
+                          ...p,
+                          staffIds: staff.map((m) => m.id),
+                        }))
+                      }
+                    >
+                      Chọn tất cả
+                    </Button>
+                  )}
+                  {scheduleForm.staffIds.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setScheduleForm((p) => ({ ...p, staffIds: [] }))}
+                    >
+                      Bỏ chọn hết
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {selectedStaff.length === 0 ? (
+                <div className="rounded-lg px-3 py-3 text-center text-xs text-kumo-secondary ring ring-kumo-line">
+                  Chưa chọn nhân viên nào — tìm theo tên hoặc số điện thoại ở ô trên.
+                </div>
+              ) : (
+                <ul className="max-h-44 overflow-y-auto rounded-lg ring ring-kumo-line divide-y divide-kumo-line">
+                  {selectedStaff.map((m) => (
+                    <li key={m.id} className="flex items-center gap-2 px-3 py-2">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm text-kumo-default">
+                          {m.fullName}
+                        </span>
+                        {m.phone && (
+                          <span className="block truncate text-xs text-kumo-secondary">
+                            {m.phone}
+                          </span>
+                        )}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        shape="square"
+                        icon={<X weight="bold" />}
+                        aria-label={`Bỏ chọn ${m.fullName}`}
+                        onClick={() =>
+                          setScheduleForm((p) => ({
+                            ...p,
+                            staffIds: p.staffIds.filter((id) => id !== m.id),
+                          }))
+                        }
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <Input
+              <DateField
                 label="Từ ngày"
-                type="date"
                 value={scheduleForm.from}
-                onChange={(e) => setScheduleForm((p) => ({ ...p, from: e.target.value }))}
+                onChange={(v) => setScheduleForm((p) => ({ ...p, from: v }))}
               />
-              <Input
+              <DateField
                 label="Đến ngày"
-                type="date"
                 value={scheduleForm.to}
-                onChange={(e) => setScheduleForm((p) => ({ ...p, to: e.target.value }))}
+                onChange={(v) => setScheduleForm((p) => ({ ...p, to: v }))}
               />
             </div>
 
             <Textarea
+              className="w-full"
               placeholder="Ghi chú cho các ca này (tùy chọn)"
               value={scheduleForm.note}
               onChange={(e) => setScheduleForm((p) => ({ ...p, note: e.target.value }))}
@@ -521,11 +649,12 @@ export const StaffShiftsPage: React.FC = () => {
                   type="number"
                   inputMode="numeric"
                   min={0}
+                  step={1}
                   value={String(autoHeadcount[t.id] ?? 0)}
                   onChange={(e) =>
                     setAutoHeadcount((p) => ({
                       ...p,
-                      [t.id]: Math.max(0, Number(e.target.value) || 0),
+                      [t.id]: Math.max(0, Math.floor(Number(e.target.value) || 0)),
                     }))
                   }
                 />
@@ -636,8 +765,8 @@ export const StaffShiftsPage: React.FC = () => {
                     <span className="font-semibold text-sm text-kumo-default">
                       {detail.staff_name}
                     </span>
-                    <Badge variant={STATUS_VARIANT[detail.status]}>
-                      {STATUS_LABEL[detail.status]}
+                    <Badge variant={STATUS_DISPLAY[detail.status].variant}>
+                      {STATUS_DISPLAY[detail.status].label}
                     </Badge>
                   </div>
                   <div className="text-kumo-secondary">

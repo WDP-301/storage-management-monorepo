@@ -104,7 +104,7 @@ export const StaffShiftsApi = {
     facilityId: string;
     from: string;
     to: string;
-    requirements: { shiftTemplateId: string; headcount: number }[];
+    requirements: { shiftTemplateId: string; staffPerShift: number }[];
     dryRun: boolean;
   }): Promise<AutoScheduleResult> => {
     const res = await apiClient.post<ApiEnvelope<AutoScheduleResult>>(

@@ -9,12 +9,9 @@ const require = createRequire(import.meta.url);
 // pnpm can materialize hoisted deps as real directories, which leaves
 // node_modules/react as a second physical copy next to the one react-dom
 // resolves through .pnpm. Pin `react` to react-dom's instance so hooks work.
+const reactDomDir = path.dirname(fs.realpathSync(require.resolve('react-dom/package.json')));
 const reactDir = path.dirname(
-  fs.realpathSync(
-    require.resolve('react/package.json', {
-      paths: [path.dirname(fs.realpathSync(require.resolve('react-dom/package.json')))],
-    }),
-  ),
+  fs.realpathSync(require.resolve('react/package.json', { paths: [reactDomDir] })),
 );
 
 // https://vite.dev/config/

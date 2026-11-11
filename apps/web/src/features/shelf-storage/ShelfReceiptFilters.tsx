@@ -1,7 +1,8 @@
-import { Input, InputGroup, Select } from '@cloudflare/kumo';
+import { InputGroup, Select } from '@cloudflare/kumo';
 import { MagnifyingGlass } from '@phosphor-icons/react';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { DateField } from '../../components/DateField';
 import { RECEIPT_TYPE_LABEL, type ReceiptFilterState } from './shelf-records-display';
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -46,19 +47,17 @@ export const ShelfReceiptFilters: React.FC<Props> = ({ value, onChange }) => {
             renderValue={(v) => TYPE_OPTIONS.find((o) => o.value === v)?.label ?? String(v)}
           />
         </div>
-        <Input
+        <DateField
           label="Từ ngày"
-          type="date"
           max={value.to || undefined}
           value={value.from}
-          onChange={(e) => set({ from: e.target.value })}
+          onChange={(v) => set({ from: v })}
         />
-        <Input
+        <DateField
           label="Đến ngày"
-          type="date"
           min={value.from || undefined}
           value={value.to}
-          onChange={(e) => set({ to: e.target.value })}
+          onChange={(v) => set({ to: v })}
         />
         <div className="w-full sm:w-72 sm:ml-auto">
           <InputGroup size="base">

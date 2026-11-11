@@ -27,6 +27,7 @@ import {
 } from '@phosphor-icons/react';
 import { UserRole, UserStatus } from '@storage/types';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { DateField } from '../../components/DateField';
 import {
   DIALOG_SHELL,
   DialogBody,
@@ -923,39 +924,18 @@ export const UserManagementPage: React.FC = () => {
 
                   {/* Optional startsAt and endsAt dates */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label
-                        htmlFor="input-starts-at"
-                        className="block text-xs font-medium text-kumo-default"
-                      >
-                        Ngày bắt đầu hiệu lực (Tùy chọn)
-                      </label>
-                      <input
-                        id="input-starts-at"
-                        type="date"
-                        aria-label="Ngày bắt đầu hiệu lực"
-                        value={newStartsAt}
-                        onChange={(e) => setNewStartsAt(e.target.value)}
-                        className="w-full h-9 px-3 rounded-md border border-kumo-line bg-kumo-base text-xs text-kumo-default focus:outline-none focus:ring-1 focus:ring-kumo-focus"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label
-                        htmlFor="input-ends-at"
-                        className="block text-xs font-medium text-kumo-default"
-                      >
-                        Ngày kết thúc hiệu lực (Tùy chọn)
-                      </label>
-                      <input
-                        id="input-ends-at"
-                        type="date"
-                        aria-label="Ngày kết thúc hiệu lực"
-                        value={newEndsAt}
-                        onChange={(e) => setNewEndsAt(e.target.value)}
-                        className="w-full h-9 px-3 rounded-md border border-kumo-line bg-kumo-base text-xs text-kumo-default focus:outline-none focus:ring-1 focus:ring-kumo-focus"
-                      />
-                    </div>
+                    <DateField
+                      id="input-starts-at"
+                      label="Ngày bắt đầu hiệu lực (Tùy chọn)"
+                      value={newStartsAt}
+                      onChange={setNewStartsAt}
+                    />
+                    <DateField
+                      id="input-ends-at"
+                      label="Ngày kết thúc hiệu lực (Tùy chọn)"
+                      value={newEndsAt}
+                      onChange={setNewEndsAt}
+                    />
                   </div>
 
                   <div className="flex justify-end pt-2">

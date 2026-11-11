@@ -16,7 +16,7 @@ import { loadPickupRequests } from '../shelf-storage/pickup-request.read';
 import { findShelfContracts, loadStock } from '../shelf-storage/shelf-contract.query';
 import { PICKUP_REQUEST_MAX_DAYS_AHEAD, pickupRequestBlock } from '../shelf-storage/shelf-rules';
 import type { CreatePickupRequestDto } from './dto/pickup-request.dto';
-import { notifyFacilityStaff } from './pickup-notifications';
+import { notifyFacilityStaff, notifyRequestCancelled } from './pickup-notifications';
 
 const PAST_GRACE_MS = 5 * 60 * 1000;
 /** The first instant no request may reach: the whole last allowed Vietnam day is open. */
@@ -189,7 +189,10 @@ export class PickupRequestsService {
     return this.dataSource.transaction(async (em) => {
       const [view] = await loadPickupRequests(em, { ids: [id], order: 'newest' });
       if (!view || view.customer.id !== actor.id) notFound('Pick-up request', id);
-      await findShelfContracts(em, { contractId: view.contractId, lock: true });
+      const [contract] = await findShelfContracts(em, {
+        contractId: view.contractId,
+        lock: true,
+      });
       const status = await lockRequestStatus(em, id);
       if (status !== PickupRequestStatus.PENDING && status !== PickupRequestStatus.READY) {
         throw notAllowed('NOT_OPEN', 'This request is no longer open', { status });
@@ -204,6 +207,9 @@ export class PickupRequestsService {
         },
       );
       const [updated] = await loadPickupRequests(em, { ids: [id], order: 'newest' });
+      if (contract) {
+        await notifyRequestCancelled(em, this.notifications, updated, contract.facility.id);
+      }
       return updated;
     });
   }

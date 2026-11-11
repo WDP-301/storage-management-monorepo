@@ -37,6 +37,7 @@ const WIPE_STEPS: { table: string; sql: string }[] = [
   { table: 'shelf_receipt_lines', sql: 'DELETE FROM "shelf_receipt_lines"' },
   { table: 'shelf_receipts', sql: 'DELETE FROM "shelf_receipts"' },
   { table: 'pickup_requests', sql: 'DELETE FROM "pickup_requests"' },
+  { table: 'drop_off_requests', sql: 'DELETE FROM "drop_off_requests"' },
   { table: 'shelf_items', sql: 'DELETE FROM "shelf_items"' },
   { table: 'access_events', sql: 'DELETE FROM "access_events"' },
   { table: 'handover_assets', sql: 'DELETE FROM "handover_assets"' },

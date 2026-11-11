@@ -78,6 +78,9 @@ export class ShelfReceiptsService {
       }
 
       if (input.pickupRequestId) await this.lockOpenRequest(em, input.pickupRequestId, contract);
+      if (input.dropOffRequestId) {
+        await this.lockOpenDropOffRequest(em, input.dropOffRequestId, contract);
+      }
       const stock =
         (await loadStock(em, [contract.id], { lock: true, includeEmpty: true })).get(contract.id) ??
         [];
@@ -103,6 +106,7 @@ export class ShelfReceiptsService {
         note: input.note?.trim() || null,
         photos: input.photos ?? [],
         pickupRequestId: input.pickupRequestId ?? null,
+        dropOffRequestId: input.dropOffRequestId ?? null,
         lines: applied,
       });
       if (input.pickupRequestId) {
@@ -110,6 +114,13 @@ export class ShelfReceiptsService {
           `UPDATE "pickup_requests" SET "status" = 'COMPLETED', "completed_at" = now(), "updated_at" = now()
             WHERE "id" = $1`,
           [input.pickupRequestId],
+        );
+      }
+      if (input.dropOffRequestId) {
+        await em.query(
+          `UPDATE "drop_off_requests" SET "status" = 'COMPLETED', "completed_at" = now(), "updated_at" = now()
+            WHERE "id" = $1`,
+          [input.dropOffRequestId],
         );
       }
       if (input.type === ShelfReceiptType.PICK_UP) {
@@ -139,6 +150,28 @@ export class ShelfReceiptsService {
       throw notAllowed(
         'PICKUP_REQUEST_MISMATCH',
         'Yêu cầu lấy đồ không còn mở hoặc không thuộc hợp đồng này',
+      );
+    }
+  }
+
+  /** Locks the drop-off request being completed; it must be this contract's, still open. */
+  private async lockOpenDropOffRequest(
+    em: EntityManager,
+    requestId: string,
+    contract: ShelfContractRow,
+  ): Promise<void> {
+    const [request]: { contractId: string; status: string }[] = await em.query(
+      `SELECT "contract_id" AS "contractId", "status" FROM "drop_off_requests" WHERE "id" = $1 FOR UPDATE`,
+      [requestId],
+    );
+    if (
+      !request ||
+      request.contractId !== contract.id ||
+      (request.status !== 'PENDING' && request.status !== 'CONFIRMED')
+    ) {
+      throw notAllowed(
+        'DROP_OFF_REQUEST_MISMATCH',
+        'Yêu cầu gửi đồ không còn mở hoặc không thuộc hợp đồng này',
       );
     }
   }

@@ -9,6 +9,7 @@ import {
 } from '@storage/types';
 import type { EntityManager } from 'typeorm';
 import type { CounterSession } from './counter-session.util';
+import { loadDropOffRequests } from './drop-off-request.read';
 import { loadPickupRequests } from './pickup-request.read';
 import { findShelfContracts, loadStock } from './shelf-contract.query';
 import { loadReceipts } from './shelf-receipt.read';
@@ -30,7 +31,7 @@ interface PlaceRow {
 
 /**
  * What the counter shows for a live session: the customer and every ACTIVE shelf contract they
- * hold in the session's warehouse, with fresh stock, the open pick-up request, recent receipts
+ * hold in the session's warehouse, with fresh stock, the open pick-up and drop-off requests, recent receipts
  * and why a drop-off or pick-up would be refused right now. One query per kind of data, however
  * many contracts there are.
  */
@@ -57,10 +58,13 @@ export async function buildCounterPanel(
     statuses: [ContractStatus.ACTIVE],
   });
   const ids = contracts.map((contract) => contract.id);
-  const [stock, requests, recent, overdueInvoiceNos] = await Promise.all([
+  const [stock, requests, dropOffs, recent, overdueInvoiceNos] = await Promise.all([
     loadStock(em, ids),
     ids.length > 0
       ? loadPickupRequests(em, { contractIds: ids, open: true, order: 'requestedFor' })
+      : [],
+    ids.length > 0
+      ? loadDropOffRequests(em, { contractIds: ids, open: true, order: 'requestedFor' })
       : [],
     ids.length > 0
       ? loadReceipts(em, { contractIds: ids, recentPerContract: RECENT_RECEIPTS })
@@ -82,6 +86,7 @@ export async function buildCounterPanel(
       pickUp: pickUpBlock(total, overdue, contract.returnOpen),
       items,
       openRequest: requests.find((request) => request.contractId === contract.id) ?? null,
+      openDropOffRequest: dropOffs.find((request) => request.contractId === contract.id) ?? null,
       recentReceipts: recent.receipts.filter((receipt) => receipt.contractId === contract.id),
     };
   });

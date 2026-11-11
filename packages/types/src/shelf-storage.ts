@@ -1,5 +1,6 @@
 import type {
   ContractStatus,
+  DropOffRequestStatus,
   PickupRequestStatus,
   ShelfReceiptStatus,
   ShelfReceiptType,
@@ -39,6 +40,10 @@ export type PickupRequestBlockReason =
   | 'OPEN_REQUEST_EXISTS'
   | 'NO_STOCK'
   | 'INVOICE_OVERDUE';
+export type DropOffRequestBlockReason =
+  | 'CONTRACT_NOT_ACTIVE'
+  | 'OPEN_REQUEST_EXISTS'
+  | 'INVOICE_OVERDUE';
 
 export interface ShelfReceiptLineView {
   itemId: string;
@@ -65,6 +70,7 @@ export interface ShelfReceiptView {
   photos: EvidenceFile[];
   lines: ShelfReceiptLineView[];
   pickupRequestId: string | null;
+  dropOffRequestId: string | null;
   /** A manager's scan-less pick-up on an abandoned return. */
   recovered: boolean;
   void: { at: string | Date; by: ShelfStaffRef | null; reason: string } | null;
@@ -110,6 +116,33 @@ export interface PickupRequestView {
   completedReceiptId: string | null;
 }
 
+export interface DropOffRequestLineView {
+  /** Null = an item the shelf does not hold yet; the receipt creates it by name. */
+  itemId: string | null;
+  name: string;
+  quantity: number;
+}
+
+export interface DropOffRequestView {
+  id: string;
+  status: DropOffRequestStatus;
+  contractId: string;
+  contractNo: string;
+  shelf: ShelfRef;
+  warehouse: ShelfRef;
+  customer: ShelfPersonRef;
+  requestedFor: string | Date;
+  note: string | null;
+  lines: DropOffRequestLineView[];
+  createdAt: string | Date;
+  confirmedAt: string | Date | null;
+  confirmedBy: ShelfStaffRef | null;
+  cancelledAt: string | Date | null;
+  cancelledBy: 'CUSTOMER' | 'SYSTEM' | null;
+  completedAt: string | Date | null;
+  completedReceiptId: string | null;
+}
+
 export interface CounterContractView {
   contractId: string;
   contractNo: string;
@@ -123,6 +156,7 @@ export interface CounterContractView {
   /** Quantity > 0 only, name ascending. */
   items: ShelfItemView[];
   openRequest: PickupRequestView | null;
+  openDropOffRequest: DropOffRequestView | null;
   /** Newest 5 of this contract. */
   recentReceipts: ShelfReceiptView[];
 }
@@ -152,6 +186,9 @@ export interface ShelfContractStorageView {
   openRequest: PickupRequestView | null;
   /** Null = the customer may create a request now. */
   pickupRequestBlock: PickupRequestBlockReason | null;
+  openDropOffRequest: DropOffRequestView | null;
+  /** Null = the customer may create a drop-off request now. */
+  dropOffRequestBlock: DropOffRequestBlockReason | null;
 }
 
 export interface ShelfReceiptPage {
@@ -184,6 +221,8 @@ export interface CreateShelfReceiptInput {
   note?: string;
   /** PICK_UP only; must be the contract's open request. */
   pickupRequestId?: string;
+  /** DROP_OFF only; must be the contract's open drop-off request. */
+  dropOffRequestId?: string;
 }
 
 export interface PickupRequestLineInput {
@@ -210,6 +249,19 @@ export interface VoidShelfReceiptInput {
 
 export interface CreatePickupRequestInput {
   lines: PickupRequestLineInput[];
+  requestedFor: string;
+  note?: string;
+}
+
+/** Exactly one of `itemId` (an item already on the shelf) or `name` (a new item). */
+export interface DropOffRequestLineInput {
+  itemId?: string;
+  name?: string;
+  quantity: number;
+}
+
+export interface CreateDropOffRequestInput {
+  lines: DropOffRequestLineInput[];
   requestedFor: string;
   note?: string;
 }

@@ -28,6 +28,7 @@ import { QueueModule } from './modules/queue/queue.module';
 import { ServiceTicketsModule } from './modules/service-tickets/service-tickets.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { SettlementsModule } from './modules/settlements/settlements.module';
+import { ShelfDropOffModule } from './modules/shelf-dropoff/shelf-dropoff.module';
 import { ShelfPickupModule } from './modules/shelf-pickup/shelf-pickup.module';
 import { ShelfStorageModule } from './modules/shelf-storage/shelf-storage.module';
 import { ShiftTemplatesModule } from './modules/shift-templates/shift-templates.module';
@@ -70,6 +71,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
     AccessModule,
     ShelfStorageModule,
     ShelfPickupModule,
+    ShelfDropOffModule,
     AdminModule,
     FacilitiesModule,
     AmenitiesModule,

@@ -25,7 +25,7 @@ const lineError = (index: number, message: string) =>
  * Checks each line's shape and rejects repeats. A drop-off line names exactly one of an existing
  * item or a (possibly new) name; a pick-up line can only take an existing item.
  */
-function normalizeLines(
+export function normalizeLines(
   lines: CreateShelfReceiptInput['lines'],
   type: ShelfReceiptType,
 ): NormalizedLine[] {
@@ -77,7 +77,10 @@ function assertPhotos(photos: EvidenceFile[], actorId: string, required: boolean
 
 /** Shape rules of a counter receipt; throws VALIDATION_FAILED (400) and returns the lines. */
 export function validateReceiptShape(
-  input: Pick<CreateShelfReceiptInput, 'type' | 'lines' | 'photos' | 'pickupRequestId'>,
+  input: Pick<
+    CreateShelfReceiptInput,
+    'type' | 'lines' | 'photos' | 'pickupRequestId' | 'dropOffRequestId'
+  >,
   actorId: string,
 ): NormalizedLine[] {
   const lines = normalizeLines(input.lines, input.type);
@@ -87,6 +90,13 @@ export function validateReceiptShape(
       'pickupRequestId',
       'notAllowed',
       'Chỉ phiếu lấy đồ mới gắn được yêu cầu lấy đồ',
+    );
+  }
+  if (input.type === ShelfReceiptType.PICK_UP && input.dropOffRequestId) {
+    throw fieldValidationError(
+      'dropOffRequestId',
+      'notAllowed',
+      'Chỉ phiếu gửi đồ mới gắn được yêu cầu gửi đồ',
     );
   }
   return lines;

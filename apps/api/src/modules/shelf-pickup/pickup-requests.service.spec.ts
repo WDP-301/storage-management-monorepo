@@ -252,6 +252,21 @@ describe('pickup requests', () => {
         { id: 'req-1' },
         expect.objectContaining({ status: 'CANCELLED', cancelledBy: 'cust-1' }),
       );
+      expect(em.query).toHaveBeenCalledWith(expect.stringContaining('user_role_assignments'), [
+        'fac-1',
+      ]);
+      expect(notifications.createForUsers).toHaveBeenCalledWith(
+        em,
+        ['staff-9'],
+        expect.objectContaining({ type: 'PICKUP_REQUEST_CANCELLED' }),
+      );
+    });
+
+    it('cancels without a notice when the contract is gone', async () => {
+      mockedContracts.mockResolvedValue([]);
+      await customerService.cancel('req-1', customer);
+      expect(em.update).toHaveBeenCalled();
+      expect(notifications.createForUsers).not.toHaveBeenCalled();
     });
 
     it('refuses a completed request', async () => {
@@ -260,6 +275,7 @@ describe('pickup requests', () => {
         response: { details: { reason: 'NOT_OPEN', status: 'COMPLETED' } },
       });
       expect(em.update).not.toHaveBeenCalled();
+      expect(notifications.createForUsers).not.toHaveBeenCalled();
     });
 
     it('answers 404 for another customer’s request', async () => {

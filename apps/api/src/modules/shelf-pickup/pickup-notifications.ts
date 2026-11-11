@@ -1,18 +1,8 @@
 import type { NotificationsService } from '@modules/notifications/notifications.service';
 import { NotificationType, type PickupRequestView } from '@storage/types';
 import type { EntityManager } from 'typeorm';
-import { linesSummary } from '../shelf-storage/shelf-rules';
-
-const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
-
-/** `09:30 10/11` in Vietnam time, without Intl so the output is fixed across runtimes. */
-function timeVi(at: Date): string {
-  const vn = new Date(at.getTime() + VN_OFFSET_MS);
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${pad(vn.getUTCHours())}:${pad(vn.getUTCMinutes())} ${pad(vn.getUTCDate())}/${pad(
-    vn.getUTCMonth() + 1,
-  )}`;
-}
+import { findFacilityStaffIds } from '../shelf-storage/facility-staff.query';
+import { linesSummary, timeVi } from '../shelf-storage/shelf-rules';
 
 /**
  * Tells the active staff and managers of the shelf warehouse's facility about a new request.
@@ -25,24 +15,14 @@ export async function notifyFacilityStaff(
   request: PickupRequestView,
   facilityId: string,
 ): Promise<void> {
-  const recipients: { userId: string }[] = await em.query(
-    `SELECT DISTINCT "user_id" AS "userId" FROM "user_role_assignments"
-      WHERE "role" IN ('FACILITY_STAFF', 'FACILITY_MANAGER') AND "facility_id" = $1
-        AND "starts_at" <= now() AND ("ends_at" IS NULL OR "ends_at" > now())`,
-    [facilityId],
-  );
-  await notifications.createForUsers(
-    em,
-    recipients.map((row) => row.userId),
-    {
-      type: NotificationType.PICKUP_REQUEST_CREATED,
-      title: 'Yêu cầu lấy đồ mới',
-      body: `${request.customer.fullName ?? 'Khách'} muốn lấy ${linesSummary(request.lines)} ở kệ ${
-        request.shelf.code
-      } lúc ${timeVi(new Date(request.requestedFor))}`,
-      data: { pickupRequestId: request.id, warehouseId: request.warehouse.id, facilityId },
-    },
-  );
+  await notifications.createForUsers(em, await findFacilityStaffIds(em, facilityId), {
+    type: NotificationType.PICKUP_REQUEST_CREATED,
+    title: 'Yêu cầu lấy đồ mới',
+    body: `${request.customer.fullName ?? 'Khách'} muốn lấy ${linesSummary(request.lines)} ở kệ ${
+      request.shelf.code
+    } lúc ${timeVi(new Date(request.requestedFor))}`,
+    data: { pickupRequestId: request.id, warehouseId: request.warehouse.id, facilityId },
+  });
 }
 
 /** Tells the customer the goods are prepared. */
@@ -56,5 +36,22 @@ export async function notifyRequestReady(
     title: 'Đồ đã sẵn sàng',
     body: `Đồ bạn yêu cầu lấy ở kệ ${request.shelf.code} đã được chuẩn bị. Đưa mã gửi / lấy đồ cho nhân viên khi tới.`,
     data: { contractId: request.contractId, pickupRequestId: request.id },
+  });
+}
+
+/** Tells the facility's staff and managers the customer no longer needs the goods prepared. */
+export async function notifyRequestCancelled(
+  em: EntityManager,
+  notifications: NotificationsService,
+  request: PickupRequestView,
+  facilityId: string,
+): Promise<void> {
+  await notifications.createForUsers(em, await findFacilityStaffIds(em, facilityId), {
+    type: NotificationType.PICKUP_REQUEST_CANCELLED,
+    title: 'Khách hủy yêu cầu lấy đồ',
+    body: `${request.customer.fullName ?? 'Khách'} đã hủy yêu cầu lấy ${linesSummary(
+      request.lines,
+    )} ở kệ ${request.shelf.code} (hẹn ${timeVi(new Date(request.requestedFor))})`,
+    data: { pickupRequestId: request.id, warehouseId: request.warehouse.id, facilityId },
   });
 }

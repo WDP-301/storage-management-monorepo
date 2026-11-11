@@ -132,6 +132,7 @@ export class ShelfRecoveryService {
         note: input.note.trim(),
         photos: input.photos,
         pickupRequestId: null,
+        dropOffRequestId: null,
         lines: applied,
       });
       await cancelOpenPickupRequestsIfEmptied(em, contract.id, stock, applied);

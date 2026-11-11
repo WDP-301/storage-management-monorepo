@@ -17,6 +17,7 @@ export const receiptFixture = (over: Partial<ShelfReceiptView> = {}): ShelfRecei
   photos: [],
   lines: [{ itemId: 'i1', name: 'Thùng sách', quantity: 3 }],
   pickupRequestId: null,
+  dropOffRequestId: null,
   recovered: false,
   void: null,
   openDisputeTicket: null,

@@ -1,11 +1,13 @@
 import {
   dropOffBlock,
+  dropOffRequestBlock,
   itemNameKey,
   linesSummary,
   normalizeItemName,
   pickUpBlock,
   pickupRequestBlock,
   receiptCode,
+  timeVi,
 } from './shelf-rules';
 
 describe('item names', () => {
@@ -119,5 +121,33 @@ describe('linesSummary', () => {
     expect(linesSummary(lines.slice(0, 2))).toBe('Sách ×2, Chăn ×1');
     expect(linesSummary(lines, 5)).toContain('Bàn ×1');
     expect(linesSummary([])).toBe('');
+  });
+});
+
+describe('dropOffRequestBlock', () => {
+  const base = { status: 'ACTIVE' as const, hasOpenRequest: false, overdue: false };
+
+  it('allows an active contract without an open request or debt', () => {
+    expect(dropOffRequestBlock(base)).toBeNull();
+  });
+
+  it('applies the refusals in order', () => {
+    expect(
+      dropOffRequestBlock({ ...base, status: 'ENDED', hasOpenRequest: true, overdue: true }),
+    ).toBe('CONTRACT_NOT_ACTIVE');
+    expect(dropOffRequestBlock({ ...base, hasOpenRequest: true, overdue: true })).toBe(
+      'OPEN_REQUEST_EXISTS',
+    );
+    expect(dropOffRequestBlock({ ...base, overdue: true })).toBe('INVOICE_OVERDUE');
+  });
+});
+
+describe('timeVi', () => {
+  it('formats Vietnam time as HH:mm dd/MM', () => {
+    expect(timeVi(new Date('2026-11-10T02:30:00Z'))).toBe('09:30 10/11');
+  });
+
+  it('rolls over to the next Vietnam day and month', () => {
+    expect(timeVi(new Date('2026-11-30T17:05:00Z'))).toBe('00:05 01/12');
   });
 });

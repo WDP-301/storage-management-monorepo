@@ -104,6 +104,7 @@ describe('insertReceipt', () => {
       note: 'ghi chú',
       photos: [{ fileKey: 'uploads/m-1-a', name: 'a', mimeType: 'image/jpeg' }],
       pickupRequestId: null,
+      dropOffRequestId: null,
       lines: [{ itemId: 'i-1', name: 'Sách', quantity: 2 }],
     });
     expect(id).toBe('r-1');
@@ -121,6 +122,7 @@ describe('insertReceipt', () => {
       'm-1',
       'ghi chú',
       JSON.stringify([{ fileKey: 'uploads/m-1-a', name: 'a', mimeType: 'image/jpeg' }]),
+      null,
       null,
     ]);
     expect(query.mock.calls[1][1]).toEqual(['r-1', ['i-1'], ['Sách'], [2]]);

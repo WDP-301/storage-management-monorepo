@@ -3,6 +3,7 @@ import { startOfVietnamDay, vietnamToday } from '@shared/utils/calendar.util';
 import {
   ContractStatus,
   type DropOffBlockReason,
+  type DropOffRequestBlockReason,
   type PickUpBlockReason,
   type PickupRequestBlockReason,
   type ShelfReceiptType,
@@ -12,6 +13,8 @@ import {
 export const COUNTER_SESSION_MINUTES = 30;
 /** A pick-up request may be made for a time at most this many days ahead. */
 export const PICKUP_REQUEST_MAX_DAYS_AHEAD = 30;
+/** A drop-off request may be made for a time at most this many days ahead. */
+export const DROP_OFF_REQUEST_MAX_DAYS_AHEAD = 30;
 
 /**
  * Trims, collapses inner whitespace and composes to NFC, so "  Thùng   sách " and "Thùng sách" —
@@ -75,6 +78,17 @@ export function pickupRequestBlock(input: {
   return input.overdue && !input.returnOpen ? 'INVOICE_OVERDUE' : null;
 }
 
+/** Why the customer cannot announce a drop-off now, or null. A return in progress does not matter. */
+export function dropOffRequestBlock(input: {
+  status: ContractStatus;
+  hasOpenRequest: boolean;
+  overdue: boolean;
+}): DropOffRequestBlockReason | null {
+  if (input.status !== ContractStatus.ACTIVE) return 'CONTRACT_NOT_ACTIVE';
+  if (input.hasOpenRequest) return 'OPEN_REQUEST_EXISTS';
+  return input.overdue ? 'INVOICE_OVERDUE' : null;
+}
+
 /** "Sách ×2, Chăn ×1 và 3 món khác" for notification bodies. */
 export function linesSummary(
   lines: readonly { name: string; quantity: number }[],
@@ -83,4 +97,15 @@ export function linesSummary(
   const shown = lines.slice(0, max).map((line) => `${line.name} ×${line.quantity}`);
   const rest = lines.length - shown.length;
   return rest > 0 ? `${shown.join(', ')} và ${rest} món khác` : shown.join(', ');
+}
+
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+/** `09:30 10/11` in Vietnam time, without Intl so the output is fixed across runtimes. */
+export function timeVi(at: Date): string {
+  const vn = new Date(at.getTime() + VN_OFFSET_MS);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${pad(vn.getUTCHours())}:${pad(vn.getUTCMinutes())} ${pad(vn.getUTCDate())}/${pad(
+    vn.getUTCMonth() + 1,
+  )}`;
 }

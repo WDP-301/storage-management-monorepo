@@ -59,6 +59,7 @@ export enum ErrorCode {
   /** A pick-up or a void would take more of an item than the shelf holds. */
   SHELF_STOCK_INSUFFICIENT = 'SHELF_STOCK_INSUFFICIENT',
   PICKUP_REQUEST_NOT_ALLOWED = 'PICKUP_REQUEST_NOT_ALLOWED',
+  DROP_OFF_REQUEST_NOT_ALLOWED = 'DROP_OFF_REQUEST_NOT_ALLOWED',
   /** Goods are still on the shelf, so the return cannot be finalized or the unit changed. */
   SHELF_NOT_EMPTY = 'SHELF_NOT_EMPTY',
 }

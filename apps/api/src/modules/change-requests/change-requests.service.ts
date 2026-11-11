@@ -15,6 +15,7 @@ import { generateInvoiceNo } from '@modules/payments/invoice-no.util';
 import { SettingsService } from '@modules/settings/settings.service';
 import {
   assertShelfEmpty,
+  cancelOpenDropOffRequests,
   cancelOpenPickupRequests,
 } from '@modules/shelf-storage/shelf-empty-guard.util';
 import { HttpStatus, Injectable } from '@nestjs/common';
@@ -441,6 +442,7 @@ export class ChangeRequestsService {
       if (request.newUnit!.kind !== StorageUnitKind.SHELF) {
         await assertShelfEmpty(manager, contract.id, 'UNIT_CHANGE');
         await cancelOpenPickupRequests(manager, contract.id);
+        await cancelOpenDropOffRequests(manager, contract.id);
       }
 
       // Shared facility lock first (same order as warehouse writes): a concurrent deactivation
@@ -706,6 +708,7 @@ export class ChangeRequestsService {
       if (request.newUnit!.kind !== StorageUnitKind.SHELF) {
         await assertShelfEmpty(manager, contract.id, 'UNIT_CHANGE');
         await cancelOpenPickupRequests(manager, contract.id);
+        await cancelOpenDropOffRequests(manager, contract.id);
       }
 
       const targetFacility = await manager.findOne(Facility, {

@@ -32,6 +32,7 @@ export interface RawReceipt {
   note: string | null;
   photos: EvidenceFile[];
   pickupRequestId: string | null;
+  dropOffRequestId: string | null;
   recovered: boolean;
   voidedAt: Date | null;
   voidedById: string | null;
@@ -66,6 +67,7 @@ export function toReceiptView(row: RawReceipt, lines: ShelfReceiptLineView[]): S
     photos: row.photos ?? [],
     lines,
     pickupRequestId: row.pickupRequestId,
+    dropOffRequestId: row.dropOffRequestId,
     recovered: row.recovered,
     void: row.voidedAt
       ? {

@@ -43,6 +43,7 @@ describe('ShelfReceiptsService.create', () => {
   let overdue: string[];
   let replayRow: unknown[];
   let requestRow: unknown[];
+  let dropOffRow: unknown[];
   let failInsertOnce: boolean;
   let em: { query: jest.Mock };
   let notifications: { createForUsers: jest.Mock };
@@ -70,11 +71,13 @@ describe('ShelfReceiptsService.create', () => {
     overdue = [];
     replayRow = [];
     requestRow = [{ contractId: 'c-1', status: 'READY' }];
+    dropOffRow = [{ contractId: 'c-1', status: 'CONFIRMED' }];
     failInsertOnce = false;
     em = {
       query: jest.fn(async (sql: string) => {
         if (sql.includes('"client_request_id" = $1')) return replayRow;
         if (sql.includes('FROM "pickup_requests"')) return requestRow;
+        if (sql.includes('FROM "drop_off_requests"')) return dropOffRow;
         if (sql.includes('INTO "shelf_receipts"')) {
           if (failInsertOnce) {
             failInsertOnce = false;
@@ -257,6 +260,66 @@ describe('ShelfReceiptsService.create', () => {
   it('rejects a malformed drop-off before opening a transaction', async () => {
     await expect(service.create(actor, { ...base, photos: [] })).rejects.toMatchObject({
       status: 400,
+    });
+    expect(transaction).not.toHaveBeenCalled();
+  });
+  it.each(['PENDING', 'CONFIRMED'])(
+    'locks a %s drop-off request, links it and marks it completed',
+    async (status) => {
+      dropOffRow = [{ contractId: 'c-1', status }];
+      await expect(service.create(actor, { ...base, dropOffRequestId: uuid(4) })).resolves.toBe(
+        receipt,
+      );
+
+      const [lockSql, lockParams] = sqlCalls('SELECT "contract_id" AS "contractId"')[0] as [
+        string,
+        unknown[],
+      ];
+      expect(lockSql).toContain('FROM "drop_off_requests"');
+      expect(lockSql).toContain('FOR UPDATE');
+      expect(lockParams).toEqual([uuid(4)]);
+      const [, insertParams] = sqlCalls('INSERT INTO "shelf_receipts"')[0] as [string, unknown[]];
+      expect(insertParams[12]).toBeNull();
+      expect(insertParams[13]).toBe(uuid(4));
+      const [sql, params] = sqlCalls('UPDATE "drop_off_requests"')[0] as [string, unknown[]];
+      expect(sql).toContain(`"status" = 'COMPLETED'`);
+      expect(sql).toContain('"completed_at" = now()');
+      expect(params).toEqual([uuid(4)]);
+    },
+  );
+
+  it.each([
+    ['another contract', [{ contractId: 'c-9', status: 'PENDING' }]],
+    ['an unknown request', []],
+    ['a completed request', [{ contractId: 'c-1', status: 'COMPLETED' }]],
+    ['a cancelled request', [{ contractId: 'c-1', status: 'CANCELLED' }]],
+  ])('refuses %s as a drop-off request mismatch', async (_label, row) => {
+    dropOffRow = row;
+    await expect(
+      service.create(actor, { ...base, dropOffRequestId: uuid(4) }),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        code: 'SHELF_RECEIPT_NOT_ALLOWED',
+        details: { reason: 'DROP_OFF_REQUEST_MISMATCH' },
+      },
+    });
+    expect(wrote()).toBe(false);
+  });
+
+  it('leaves drop-off requests alone when none is given', async () => {
+    await service.create(actor, base);
+    expect(em.query.mock.calls.some(([sql]) => sql.includes('drop_off_requests'))).toBe(false);
+    const [, insertParams] = sqlCalls('INSERT INTO "shelf_receipts"')[0] as [string, unknown[]];
+    expect(insertParams[13]).toBeNull();
+  });
+
+  it('rejects a drop-off request id on a pick-up before opening a transaction', async () => {
+    await expect(
+      service.create(actor, { ...pickUp, dropOffRequestId: uuid(4) }),
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { details: { fields: [{ field: 'dropOffRequestId', code: 'notAllowed' }] } },
     });
     expect(transaction).not.toHaveBeenCalled();
   });

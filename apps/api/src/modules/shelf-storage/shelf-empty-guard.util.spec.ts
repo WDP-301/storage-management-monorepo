@@ -1,4 +1,8 @@
-import { assertShelfEmpty, cancelOpenPickupRequests } from './shelf-empty-guard.util';
+import {
+  assertShelfEmpty,
+  cancelOpenDropOffRequests,
+  cancelOpenPickupRequests,
+} from './shelf-empty-guard.util';
 
 const emReturning = (rows: unknown[]) => ({ query: jest.fn().mockResolvedValue(rows) });
 
@@ -53,6 +57,21 @@ describe('cancelOpenPickupRequests', () => {
     await cancelOpenPickupRequests(em as never, 'c-1');
     const [sql, params] = em.query.mock.calls[0];
     expect(sql).toContain(`"status" IN ('PENDING', 'READY')`);
+    expect(sql).not.toContain('cancelled_by');
+    expect(params).toEqual(['c-1']);
+  });
+});
+
+describe('cancelOpenDropOffRequests', () => {
+  it('closes PENDING and CONFIRMED requests of the contract without a canceller', async () => {
+    const em = emReturning([]);
+    await cancelOpenDropOffRequests(em as never, 'c-1');
+    expect(em.query).toHaveBeenCalledTimes(1);
+    const [sql, params] = em.query.mock.calls[0];
+    expect(sql).toContain('UPDATE "drop_off_requests"');
+    expect(sql).toContain(`"status" = 'CANCELLED'`);
+    expect(sql).toContain(`"status" IN ('PENDING', 'CONFIRMED')`);
+    expect(sql).toContain('"contract_id" = $1');
     expect(sql).not.toContain('cancelled_by');
     expect(params).toEqual(['c-1']);
   });

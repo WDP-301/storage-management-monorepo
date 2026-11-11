@@ -44,15 +44,24 @@ interface World {
   stock: unknown[];
   overdue: { invoiceNo: string }[];
   receipts: unknown[];
+  dropOffs: unknown[];
 }
 const run = async (world: Partial<World>) => {
-  const w: World = { contracts: [], stock: [], overdue: [], receipts: [], ...world };
+  const w: World = {
+    contracts: [],
+    stock: [],
+    overdue: [],
+    receipts: [],
+    dropOffs: [],
+    ...world,
+  };
   const query = jest.fn(async (sql: string) => {
     if (sql.includes('CROSS JOIN')) return [place];
     if (sql.includes('FROM "invoices"')) return w.overdue;
     if (sql.includes('FROM "contracts" c')) return w.contracts;
     if (sql.includes('FROM "shelf_items"')) return w.stock;
     if (sql.includes('FROM "pickup_requests"')) return [];
+    if (sql.includes('FROM "drop_off_requests"')) return w.dropOffs;
     if (sql.includes('FROM "shelf_receipt_lines"')) return [];
     if (sql.includes('FROM "shelf_receipts" r')) return w.receipts;
     return [];
@@ -66,6 +75,32 @@ const item = (contractId: string, name: string, quantity: number) => ({
   name,
   quantity,
   updatedAt: NOW,
+});
+const dropOffRow = (id: string, contractId: string) => ({
+  id,
+  status: 'CONFIRMED',
+  contractId,
+  contractNo: `HD-${contractId}`,
+  shelfId: 's',
+  shelfCode: 'K',
+  shelfName: 'K',
+  warehouseId: 'w-1',
+  warehouseCode: 'W-1',
+  warehouseName: 'Kho',
+  customerId: 'u-1',
+  customerName: 'An',
+  customerPhone: null,
+  requestedFor: NOW,
+  note: null,
+  lines: [{ itemId: null, name: 'Sách', quantity: 2 }],
+  createdAt: NOW,
+  confirmedAt: NOW,
+  confirmedById: 'st-1',
+  confirmedByName: 'Bình',
+  cancelledAt: null,
+  cancelledById: null,
+  completedAt: null,
+  completedReceiptId: null,
 });
 const receiptRow = (id: string, contractId: string) => ({
   id,
@@ -163,5 +198,27 @@ describe('buildCounterPanel', () => {
     const { view, query } = await run({});
     expect(view.contracts).toEqual([]);
     expect(query.mock.calls.some(([sql]) => sql.includes('"pickup_requests"'))).toBe(false);
+    expect(query.mock.calls.some(([sql]) => sql.includes('"drop_off_requests"'))).toBe(false);
+  });
+  it('attaches each contract its open drop-off request, if any', async () => {
+    const { view, query } = await run({
+      contracts: [contract('c1'), contract('c2')],
+      dropOffs: [dropOffRow('d1', 'c2')],
+    });
+    const [sql, params] = query.mock.calls.find(([s]) =>
+      s.includes('FROM "drop_off_requests"'),
+    ) as unknown as [string, unknown[]];
+    expect(sql).toContain(`r."status" IN ('PENDING','CONFIRMED')`);
+    expect(sql).toContain('r."requested_for" ASC');
+    expect(params).toEqual([['c1', 'c2']]);
+    expect(view.contracts[0].openDropOffRequest).toBeNull();
+    expect(view.contracts[1].openDropOffRequest).toMatchObject({
+      id: 'd1',
+      status: 'CONFIRMED',
+      contractId: 'c2',
+      confirmedBy: { id: 'st-1', fullName: 'Bình' },
+      cancelledBy: null,
+      lines: [{ itemId: null, name: 'Sách', quantity: 2 }],
+    });
   });
 });

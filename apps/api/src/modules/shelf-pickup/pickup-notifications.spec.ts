@@ -1,5 +1,9 @@
 import type { PickupRequestView } from '@storage/types';
-import { notifyFacilityStaff, notifyRequestReady } from './pickup-notifications';
+import {
+  notifyFacilityStaff,
+  notifyRequestCancelled,
+  notifyRequestReady,
+} from './pickup-notifications';
 
 const view = {
   id: 'req-1',
@@ -44,6 +48,22 @@ describe('pickup notifications', () => {
       title: 'Đồ đã sẵn sàng',
       body: expect.stringContaining('kệ K-01'),
       data: { contractId: 'c-1', pickupRequestId: 'req-1' },
+    });
+  });
+  it('tells the facility staff and managers the customer cancelled', async () => {
+    const em = { query: jest.fn().mockResolvedValue([{ userId: 'u1' }]) };
+    const notifications = { createForUsers: jest.fn() };
+
+    await notifyRequestCancelled(em as never, notifications as never, view, 'fac-1');
+
+    expect(em.query).toHaveBeenCalledWith(expect.stringContaining('user_role_assignments'), [
+      'fac-1',
+    ]);
+    expect(notifications.createForUsers).toHaveBeenCalledWith(em, ['u1'], {
+      type: 'PICKUP_REQUEST_CANCELLED',
+      title: 'Khách hủy yêu cầu lấy đồ',
+      body: 'An đã hủy yêu cầu lấy Sách ×2 ở kệ K-01 (hẹn 09:30 10/11)',
+      data: { pickupRequestId: 'req-1', warehouseId: 'w-1', facilityId: 'fac-1' },
     });
   });
 });

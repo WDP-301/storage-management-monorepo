@@ -35,6 +35,7 @@ export const ContractDocumentsPanel: React.FC<Props> = ({
 }) => {
   const fileInput = useRef<HTMLInputElement>(null);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
   // Photographed pages open in a viewer that steps through every image of the contract.
   const viewer = useImageLightbox(documents);
   const full = documents.length >= MAX_CONTRACT_DOCUMENTS;
@@ -123,20 +124,37 @@ export const ContractDocumentsPanel: React.FC<Props> = ({
               if (files.length > 0) add(files);
             }}
           />
-          <Button
-            size="sm"
-            variant="secondary"
-            icon={<UploadSimple className="w-3.5 h-3.5" />}
-            loading={busy}
+          <button
+            type="button"
+            aria-label="Tải file lên"
             disabled={busy || full}
             title={full ? `Đã đủ ${MAX_CONTRACT_DOCUMENTS} file` : undefined}
             onClick={() => fileInput.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragging(false);
+              add(Array.from(e.dataTransfer.files));
+            }}
+            className={`w-full flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed px-4 py-5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
+              dragging
+                ? 'border-kumo-brand bg-kumo-control'
+                : 'border-kumo-line bg-kumo-control/60 hover:bg-kumo-control'
+            }`}
           >
-            Tải file lên
-          </Button>
-          <p className="text-xs text-kumo-subtle">
-            Ảnh chụp từng trang hoặc PDF, tối đa {MAX_CONTRACT_DOCUMENTS} file, mỗi file ≤ 15 MB.
-          </p>
+            <UploadSimple className="w-5 h-5 text-kumo-brand" />
+            <span className="text-sm font-medium text-kumo-default">
+              {busy ? 'Đang tải lên…' : 'Tải file lên'}
+              {!busy && <span className="font-normal text-kumo-subtle"> hoặc kéo thả vào đây</span>}
+            </span>
+            <span className="text-xs text-kumo-subtle">
+              Ảnh chụp từng trang hoặc PDF, tối đa {MAX_CONTRACT_DOCUMENTS} file, mỗi file ≤ 15 MB.
+            </span>
+          </button>
         </>
       )}
     </section>

@@ -1,6 +1,7 @@
-import { Button, Input } from '@cloudflare/kumo';
+import { Button } from '@cloudflare/kumo';
 import type React from 'react';
 import { useEffect, useState } from 'react';
+import { DateField } from '../../components/DateField';
 import { InspectionsApi } from '../../lib/api';
 import { addDays, vnDay, vnNoonIso, vnToday } from '../../lib/vn-day';
 import type { InspectionRecord } from '../../types/inspection';
@@ -51,14 +52,13 @@ export const ReturnRescheduleForm: React.FC<Props> = ({ inspection, disabled, on
     <section className="space-y-2">
       <div className="flex flex-col sm:flex-row sm:items-end gap-2">
         <div className="sm:w-56">
-          <Input
+          <DateField
             label="Ngày hẹn trả kho"
-            type="date"
             min={today}
             max={lastDay}
             value={day}
             disabled={busy || disabled}
-            onChange={(e) => setDay(e.target.value)}
+            onChange={setDay}
           />
         </div>
         <Button

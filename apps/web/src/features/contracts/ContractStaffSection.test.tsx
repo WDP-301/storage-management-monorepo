@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FacilitiesApi, InspectionsApi } from '../../lib/api';
 import { contractRecord } from '../../test-utils/contract-fixtures';
-import { pickSelectOption } from '../../test-utils/pick-select-option';
+import { pickComboboxOption } from '../../test-utils/pick-combobox-option';
 import type { ContractInspectionSummary, ContractRecord } from '../../types/contract';
 import { ContractStaffSection } from './ContractStaffSection';
 
@@ -51,7 +51,7 @@ describe('ContractStaffSection', () => {
     const button = screen.getByRole('button', { name: 'Giao nhân viên' }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
 
-    await pickSelectOption(select, 'Võ Kỹ Thuật');
+    await pickComboboxOption(select, 'Võ Kỹ', 'Võ Kỹ Thuật');
     fireEvent.click(button);
     await waitFor(() => expect(assign).toHaveBeenCalledWith('i-1', 's-2'));
     expect(onChanged).toHaveBeenCalled();
@@ -68,7 +68,9 @@ describe('ContractStaffSection', () => {
         return: step({ id: 'r-1', type: 'RETURN', inspector_name: 'Võ Kỹ Thuật' }),
       }),
     );
-    expect(screen.getByText(/Đã chốt 15\/10\/2026/)).toBeTruthy();
+    expect(screen.getByText('Đã chốt')).toBeTruthy();
+    // Both the finalized handover and the scheduled return share this date.
+    expect(screen.getAllByText('15/10/2026').length).toBe(2);
     // A finished handover cannot be reassigned; the open return can.
     expect(screen.queryByLabelText('Chọn nhân viên nhận kho')).toBeNull();
     expect(screen.getByLabelText('Chọn nhân viên trả kho')).toBeTruthy();
@@ -80,8 +82,9 @@ describe('ContractStaffSection', () => {
       new Error('Staff user is not assigned to this facility'),
     );
     const { onChanged } = renderSection(contractRecord({ handover: step() }));
-    await pickSelectOption(
+    await pickComboboxOption(
       screen.getByRole('combobox', { name: 'Chọn nhân viên nhận kho' }),
+      'Võ Kỹ',
       'Võ Kỹ Thuật',
     );
     fireEvent.click(screen.getByRole('button', { name: 'Giao nhân viên' }));
@@ -111,7 +114,8 @@ describe('ContractStaffSection', () => {
     renderSection(contractRecord({ handover: step() }));
     expect(screen.getByText('Biên bản nhận kho')).toBeTruthy();
     expect(screen.queryByText('Biên bản trả kho')).toBeNull();
-    expect(screen.getByText('Hẹn nhận kho 15/10/2026')).toBeTruthy();
+    expect(screen.getByText('Hẹn nhận kho')).toBeTruthy();
+    expect(screen.getByText('15/10/2026')).toBeTruthy();
   });
 
   it('gives the return record its own section once it exists', () => {
@@ -124,7 +128,8 @@ describe('ContractStaffSection', () => {
     );
     const sections = screen.getAllByText(/^Biên bản (nhận|trả) kho$/).map((el) => el.textContent);
     expect(sections).toEqual(['Biên bản nhận kho', 'Biên bản trả kho']);
-    expect(screen.getByText('Hẹn trả kho 14/04/2027')).toBeTruthy();
+    expect(screen.getByText('Hẹn trả kho')).toBeTruthy();
+    expect(screen.getByText('14/04/2027')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Xem biên bản trả kho' })).toBeTruthy();
   });
 });

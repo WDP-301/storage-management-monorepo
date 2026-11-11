@@ -2,6 +2,7 @@ import { Button, Dialog, Input, Text } from '@cloudflare/kumo';
 import { WarningCircle } from '@phosphor-icons/react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
+import { DateField } from '../../components/DateField';
 import {
   DIALOG_FORM,
   DIALOG_SHELL,
@@ -87,12 +88,11 @@ export const ContractEditDialog: React.FC<Props> = ({ contract, onClose, onSaved
 
           <DialogBody className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <Input
+              <DateField
                 label="Ngày hiệu lực"
-                type="date"
                 value={form.effectiveAt}
                 disabled={sealed}
-                onChange={(e) => set('effectiveAt', e.target.value)}
+                onChange={(v) => set('effectiveAt', v)}
               />
               <Input
                 label="Thời hạn (tháng)"
@@ -111,11 +111,10 @@ export const ContractEditDialog: React.FC<Props> = ({ contract, onClose, onSaved
                 disabled={sealed}
                 onChange={(e) => set('monthlyPrice', e.target.value)}
               />
-              <Input
+              <DateField
                 label="Ngày kết thúc"
-                type="date"
                 value={form.endedAt}
-                onChange={(e) => set('endedAt', e.target.value)}
+                onChange={(v) => set('endedAt', v)}
               />
             </div>
 

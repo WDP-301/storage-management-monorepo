@@ -1,5 +1,5 @@
-import { Button } from '@cloudflare/kumo';
-import { ClipboardText } from '@phosphor-icons/react';
+import { Badge, Button } from '@cloudflare/kumo';
+import { CalendarBlank, ClipboardText, User } from '@phosphor-icons/react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { StaffSelect } from '../../components/StaffSelect';
@@ -100,14 +100,23 @@ const StepRow: React.FC<{
   return (
     <div className="p-3 bg-kumo-control rounded-lg space-y-2 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <span className="text-kumo-subtle">
-            {done
-              ? `Đã chốt ${formatDay(inspection.finalized_at)}`
-              : `Hẹn ${label.toLowerCase()} ${formatDay(inspection.scheduled_at)}`}
-          </span>
-          <div className={inspection.inspector_name ? 'text-kumo-default' : 'text-kumo-warning'}>
-            {inspection.inspector_name ?? 'Chưa giao nhân viên'}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <CalendarBlank className="w-4 h-4 text-kumo-subtle" />
+            <span className="text-sm text-kumo-subtle">
+              {done ? 'Đã chốt' : `Hẹn ${label.toLowerCase()}`}
+            </span>
+            <span className="text-sm font-semibold text-kumo-default">
+              {formatDay(done ? inspection.finalized_at : inspection.scheduled_at)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <User
+              className={`w-4 h-4 ${inspection.inspector_name ? 'text-kumo-subtle' : 'text-kumo-warning'}`}
+            />
+            <Badge variant={inspection.inspector_name ? 'info' : 'warning'}>
+              {inspection.inspector_name ?? 'Chưa giao nhân viên'}
+            </Badge>
           </div>
         </div>
         <Button

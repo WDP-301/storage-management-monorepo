@@ -37,6 +37,12 @@ import type {
 
 const APPOINTMENT_RELATIONS = ['facility', 'customer', 'storageUnit', 'assignee'];
 
+/** Roles that can see and operate on appointments of every facility, not only ones they manage. */
+const GLOBAL_APPOINTMENT_ROLES: UserRole[] = [UserRole.ADMIN, UserRole.OPERATIONS_MANAGER];
+
+const isGlobalAppointmentActor = (actor: AuthUser): boolean =>
+  actor.roles.some((r) => GLOBAL_APPOINTMENT_ROLES.includes(r));
+
 export function toTourAppointmentRecord(apt: TourAppointment): TourAppointmentRecord {
   return {
     id: apt.id,
@@ -224,7 +230,7 @@ export class TourAppointmentsService {
       .leftJoinAndSelect('apt.storageUnit', 'storageUnit')
       .leftJoinAndSelect('apt.assignee', 'assignee');
 
-    if (actor.roles.includes(UserRole.ADMIN)) {
+    if (isGlobalAppointmentActor(actor)) {
       if (query.facilityId) {
         qb.andWhere('apt.facilityId = :facilityId', { facilityId: query.facilityId });
       }
@@ -604,7 +610,7 @@ export class TourAppointmentsService {
   }
 
   private async assertCanAccess(appointment: TourAppointment, actor: AuthUser): Promise<void> {
-    if (actor.roles.includes(UserRole.ADMIN)) {
+    if (isGlobalAppointmentActor(actor)) {
       return;
     }
     if (actor.roles.includes(UserRole.FACILITY_STAFF) && appointment.assignedTo === actor.id) {
@@ -631,7 +637,7 @@ export class TourAppointmentsService {
     appointment: TourAppointment,
     actor: AuthUser,
   ): Promise<void> {
-    if (actor.roles.includes(UserRole.ADMIN)) {
+    if (isGlobalAppointmentActor(actor)) {
       return;
     }
     if (actor.roles.includes(UserRole.FACILITY_STAFF) && appointment.assignedTo === actor.id) {
@@ -655,7 +661,7 @@ export class TourAppointmentsService {
     appointment: TourAppointment,
     actor: AuthUser,
   ): Promise<void> {
-    if (actor.roles.includes(UserRole.ADMIN)) {
+    if (isGlobalAppointmentActor(actor)) {
       return;
     }
     if (actor.roles.includes(UserRole.FACILITY_STAFF) && appointment.assignedTo === actor.id) {
@@ -683,7 +689,7 @@ export class TourAppointmentsService {
   }
 
   private async assertManagesFacility(actor: AuthUser, facilityId: string): Promise<void> {
-    if (actor.roles.includes(UserRole.ADMIN)) {
+    if (isGlobalAppointmentActor(actor)) {
       return;
     }
     const managedFacilityIds = await this.loadManagedFacilityIds(actor.id);

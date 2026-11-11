@@ -2,6 +2,7 @@ import { Button, Input } from '@cloudflare/kumo';
 import { SignOut, WarningCircle } from '@phosphor-icons/react';
 import type React from 'react';
 import { useState } from 'react';
+import { DateField } from '../../components/DateField';
 import { ContractsApi } from '../../lib/api';
 import { addDays, vnNoonIso, vnToday } from '../../lib/vn-day';
 import type { ContractRecord } from '../../types/contract';
@@ -91,14 +92,13 @@ export const ManagedReturnForm: React.FC<Props> = ({ contract, canRequest, onCha
         Yêu cầu trả kho thay khách
       </span>
       <div className="grid sm:grid-cols-2 gap-3">
-        <Input
+        <DateField
           label="Ngày hẹn trả"
-          type="date"
           min={today}
           max={lastDay}
           value={day}
           disabled={busy}
-          onChange={(e) => setDay(e.target.value)}
+          onChange={setDay}
         />
         <fieldset className="grid gap-1 text-sm text-kumo-default">
           <legend className="text-xs font-medium mb-1">Nguồn yêu cầu</legend>

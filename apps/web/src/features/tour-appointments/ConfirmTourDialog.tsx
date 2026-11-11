@@ -2,6 +2,7 @@ import { Button, Dialog, Input, Text, Textarea } from '@cloudflare/kumo';
 import { X } from '@phosphor-icons/react';
 import type { TourAppointmentRecord } from '@storage/types';
 import React, { useEffect, useState } from 'react';
+import { DateField } from '../../components/DateField';
 import {
   DIALOG_FORM,
   DIALOG_SHELL,
@@ -108,17 +109,12 @@ export const ConfirmTourDialog: React.FC<Props> = ({ open, appointment, onClose,
                 )}
               </div>
 
-              <div>
-                <span className="block text-xs font-medium text-kumo-default mb-1.5">
-                  Ngày hẹn chính thức <span className="text-kumo-danger">*</span>
-                </span>
-                <Input
-                  type="date"
-                  value={preferredDate}
-                  onChange={(e) => setPreferredDate(e.target.value)}
-                  required
-                />
-              </div>
+              <DateField
+                label="Ngày hẹn chính thức"
+                required
+                value={preferredDate}
+                onChange={setPreferredDate}
+              />
 
               <div>
                 <span className="block text-xs font-medium text-kumo-default mb-1.5">

@@ -3,6 +3,7 @@ import { Trash, UploadSimple, WarningCircle } from '@phosphor-icons/react';
 import { type ContractInvoiceRecord, type EvidenceFile, ManualPaymentMethod } from '@storage/types';
 import type React from 'react';
 import { useRef, useState } from 'react';
+import { DateField } from '../../components/DateField';
 import { SignedFileLink, SignedImageThumb } from '../../components/SignedFile';
 import { useImageLightbox } from '../../components/SignedImageLightbox';
 import { UploadsApi } from '../../lib/api';
@@ -128,13 +129,12 @@ export const InvoicePaymentForm: React.FC<Props> = ({
           disabled={busy !== null}
           onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
         />
-        <Input
+        <DateField
           label="Ngày nhận tiền"
-          type="date"
           max={today}
           value={form.paidOn}
           disabled={busy !== null}
-          onChange={(e) => setForm((prev) => ({ ...prev, paidOn: e.target.value }))}
+          onChange={(v) => setForm((prev) => ({ ...prev, paidOn: v }))}
         />
         {isTransfer && (
           <Input

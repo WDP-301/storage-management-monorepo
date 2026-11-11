@@ -1,6 +1,7 @@
 import { Badge, Button, Dialog, Empty, Input, LayerCard, Table, Text } from '@cloudflare/kumo';
 import { X } from '@phosphor-icons/react';
 import React from 'react';
+import { DateField } from '../../../components/DateField';
 import {
   DIALOG_FORM,
   DIALOG_SHELL,
@@ -268,13 +269,7 @@ export const ChangeRequestsTable: React.FC<Props> = ({
                     : ''}
                 </Text>
               ) : null}
-              <Input
-                label="Ngày chuyển đồ"
-                type="date"
-                required
-                value={moveDay}
-                onChange={(e) => setMoveDay(e.target.value)}
-              />
+              <DateField label="Ngày chuyển đồ" required value={moveDay} onChange={setMoveDay} />
               <Input
                 label="Ghi chú (không bắt buộc)"
                 value={note}

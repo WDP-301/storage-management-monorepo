@@ -29,6 +29,7 @@ import {
 import type { TourAppointmentRecord } from '@storage/types';
 import { TourAppointmentStatus, UserRole } from '@storage/types';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { DateField } from '../../components/DateField';
 import { useAuth } from '../../context/AuthContext';
 import { useFacility } from '../../context/FacilityContext';
 import { useAppToast } from '../../lib/toast';
@@ -287,12 +288,11 @@ export const TourAppointmentsPage: React.FC = () => {
           </div>
 
           <div>
-            <Input
-              type="date"
+            <DateField
               aria-label="Từ ngày"
               value={fromDate}
-              onChange={(e) => {
-                setFromDate(e.target.value);
+              onChange={(v) => {
+                setFromDate(v);
                 setCurrentPage(1);
               }}
               placeholder="Từ ngày"
@@ -300,12 +300,11 @@ export const TourAppointmentsPage: React.FC = () => {
           </div>
 
           <div>
-            <Input
-              type="date"
+            <DateField
               aria-label="Đến ngày"
               value={toDate}
-              onChange={(e) => {
-                setToDate(e.target.value);
+              onChange={(v) => {
+                setToDate(v);
                 setCurrentPage(1);
               }}
               placeholder="Đến ngày"

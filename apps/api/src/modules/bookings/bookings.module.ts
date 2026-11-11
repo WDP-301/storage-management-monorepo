@@ -6,6 +6,7 @@ import { IdempotencyKey } from '@entities/idempotency-key.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { Invoice } from '@entities/invoice.entity';
 import { Payment } from '@entities/payment.entity';
+import { ShiftTemplate } from '@entities/shift-template.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
 import { AuthModule } from '@modules/auth/auth.module';
@@ -32,6 +33,7 @@ import { BookingsService } from './bookings.service';
       Contract,
       Inspection,
       AppUser,
+      ShiftTemplate,
     ]),
     AuthModule,
     InspectionModule,

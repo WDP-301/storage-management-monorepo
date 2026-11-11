@@ -54,6 +54,7 @@ export class ShiftTemplatesService {
     return this.withWriteLock(async (repo) => {
       const template = (await repo.findOne({ where: { id } })) ?? notFound('Shift template', id);
       if (dto.name !== undefined) template.name = dto.name;
+      if (dto.type !== undefined) template.type = dto.type;
       if (dto.startTime !== undefined) template.startTime = dto.startTime;
       if (dto.endTime !== undefined) template.endTime = dto.endTime;
       if (dto.isActive !== undefined) template.isActive = dto.isActive;

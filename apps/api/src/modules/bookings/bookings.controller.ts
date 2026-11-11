@@ -12,6 +12,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   Res,
   UseGuards,
 } from '@nestjs/common';
@@ -25,6 +26,7 @@ import {
   CreateBookingDto,
   CreateBookingResponseDto,
 } from './dto/booking.dto';
+import { ReceivingSlotQueryDto, ReceivingSlotsResponseDto } from './dto/receiving-slot.dto';
 
 @ApiTags('Bookings')
 @Controller('bookings')
@@ -90,6 +92,18 @@ export class BookingsController {
   @ApiResponse({ status: 200, type: [BookingResponseDto] })
   getMyBookings(@CurrentUser() user: AuthUser) {
     return this.bookingsService.findByCustomer(user.id);
+  }
+
+  @Get('receiving-slots')
+  @ApiOperation({
+    summary: 'System work-shift windows a warehouse may be received in, per Vietnam day',
+    description:
+      'Only the future part of each day is served. Used to constrain the receiving time offered on checkout.',
+  })
+  @ApiResponse({ status: 200, type: ReceivingSlotsResponseDto })
+  @ApiResponse({ status: 400, description: 'Invalid range', type: ApiErrorResponseDto })
+  listReceivingSlots(@Query() query: ReceivingSlotQueryDto) {
+    return this.bookingsService.listReceivingSlots(query.from, query.to);
   }
 
   @Get(':id')

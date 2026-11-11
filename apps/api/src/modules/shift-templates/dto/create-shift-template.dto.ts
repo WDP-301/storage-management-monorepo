@@ -1,5 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { ShiftTemplateType } from '@storage/types';
+import {
+  IsBoolean,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+} from 'class-validator';
 
 /** 24-hour wall-clock time, HH:mm. */
 export const HOUR_MINUTE_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -19,6 +28,14 @@ export class CreateShiftTemplateDto {
   @IsNotEmpty()
   @MaxLength(100)
   name: string;
+
+  @ApiProperty({
+    enum: Object.values(ShiftTemplateType),
+    example: 'OFFICE',
+    description: 'OFFICE = administrative hours, WAREHOUSE = storage duty shift',
+  })
+  @IsIn(Object.values(ShiftTemplateType))
+  type: ShiftTemplateType;
 
   @ApiProperty({ example: '06:00', description: 'HH:mm, local time' })
   @Matches(HOUR_MINUTE_PATTERN, { message: 'startTime must be HH:mm' })

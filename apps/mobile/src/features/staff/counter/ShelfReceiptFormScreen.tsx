@@ -7,6 +7,7 @@ import { ActivityIndicator, Alert, ScrollView, Switch, Text, TextInput, View } f
 import { newOpenNonce } from '../../../../lib/open-nonce';
 import {
   newDraft,
+  prefillDropOff,
   prefillPickUp,
   type ReceiptDraft,
   toReceiptInput,
@@ -53,7 +54,11 @@ export function ShelfReceiptFormScreen({ params }: { params: ReceiptFormParams }
   useEffect(() => {
     if (!source || draft) return;
     setDraft(
-      type === 'DROP_OFF' ? newDraft('DROP_OFF') : prefillPickUp(source.items, source.requestLines),
+      type === 'DROP_OFF'
+        ? source.dropOffLines.length > 0
+          ? prefillDropOff(source.dropOffLines)
+          : newDraft('DROP_OFF')
+        : prefillPickUp(source.items, source.requestLines),
     );
   }, [source, draft, type]);
 
@@ -75,7 +80,11 @@ export function ShelfReceiptFormScreen({ params }: { params: ReceiptFormParams }
           contractId: params.contractId,
           photos,
           note,
-          ...(complete && requestId ? { pickupRequestId: requestId } : {}),
+          ...(complete && requestId
+            ? type === 'DROP_OFF'
+              ? { dropOffRequestId: requestId }
+              : { pickupRequestId: requestId }
+            : {}),
         });
     if ('error' in built) {
       setError(built.error);
@@ -185,7 +194,7 @@ export function ShelfReceiptFormScreen({ params }: { params: ReceiptFormParams }
             {requestId && !recovery ? (
               <View className="flex-row items-center justify-between gap-3">
                 <Text className="flex-1 font-ui text-body-sm text-foreground">
-                  Hoàn tất yêu cầu lấy đồ
+                  {type === 'DROP_OFF' ? 'Hoàn tất yêu cầu gửi đồ' : 'Hoàn tất yêu cầu lấy đồ'}
                 </Text>
                 <Switch value={complete} onValueChange={setComplete} />
               </View>

@@ -9,11 +9,12 @@ import { AbandonedShelvesList } from './counter/AbandonedShelvesList';
 import { CounterCustomerPanel } from './counter/CounterCustomerPanel';
 import { CounterScanner } from './counter/CounterScanner';
 import { useCounterSession } from './counter/use-counter-session';
+import { WarehouseDropOffRequests } from './counter/WarehouseDropOffRequests';
 import { WarehousePickupRequests } from './counter/WarehousePickupRequests';
 import { WarehouseReceiptsList } from './counter/WarehouseReceiptsList';
 import { ScanWarehousePicker } from './ScanWarehousePicker';
 
-type Segment = 'COUNTER' | 'REQUESTS' | 'RECEIPTS' | 'RECOVERY';
+type Segment = 'COUNTER' | 'REQUESTS' | 'DROP_OFF_REQUESTS' | 'RECEIPTS' | 'RECOVERY';
 
 const MANAGER_ROLES = ['FACILITY_MANAGER', 'OPERATIONS_MANAGER', 'ADMIN'];
 
@@ -43,6 +44,7 @@ export function StaffScanScreen() {
 
   const segments: [Segment, string][] = [
     ['COUNTER', 'Quầy'],
+    ['DROP_OFF_REQUESTS', 'Yêu cầu gửi đồ'],
     ['REQUESTS', 'Yêu cầu lấy đồ'],
     ['RECEIPTS', 'Phiếu'],
     ...(isManager ? ([['RECOVERY', 'Thu hồi']] as [Segment, string][]) : []),
@@ -76,7 +78,7 @@ export function StaffScanScreen() {
           <CounterCustomerPanel
             session={session}
             secondsLeft={counter.secondsLeft}
-            onDropOff={(contractId) => openForm(contractId, 'DROP_OFF')}
+            onDropOff={(contractId, requestId) => openForm(contractId, 'DROP_OFF', requestId)}
             onPickUp={(contractId, requestId) => openForm(contractId, 'PICK_UP', requestId)}
             onOpenReceipt={openReceipt}
             onNextCustomer={counter.end}
@@ -94,6 +96,8 @@ export function StaffScanScreen() {
             />
           </View>
         )
+      ) : segment === 'DROP_OFF_REQUESTS' ? (
+        <WarehouseDropOffRequests warehouseId={warehouse.id} />
       ) : segment === 'REQUESTS' ? (
         <WarehousePickupRequests warehouseId={warehouse.id} />
       ) : segment === 'RECEIPTS' ? (

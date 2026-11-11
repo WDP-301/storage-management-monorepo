@@ -1,4 +1,4 @@
-import type { PickupRequestLineView, ShelfItemView } from '@storage/types';
+import type { DropOffRequestLineView, PickupRequestLineView, ShelfItemView } from '@storage/types';
 import { useCallback, useEffect, useState } from 'react';
 import { ShelfStorageApi } from '../../../../lib/shelf-storage-api';
 import { shelfApiError } from '../staff-errors';
@@ -7,6 +7,8 @@ export type FormSource = {
   items: ShelfItemView[];
   /** The customer's open request lines to prefill a pick-up from. */
   requestLines: PickupRequestLineView[];
+  /** The customer's open drop-off request lines to prefill a drop-off from. */
+  dropOffLines: DropOffRequestLineView[];
   shelfCode: string;
   contractNo: string;
   customerName: string;
@@ -35,6 +37,7 @@ export function useReceiptFormSource(params: {
         setSource({
           items: storage.items,
           requestLines: [],
+          dropOffLines: [],
           shelfCode: storage.shelf.code,
           contractNo: storage.contractNo,
           customerName: customerName ?? '',
@@ -49,6 +52,10 @@ export function useReceiptFormSource(params: {
         items: contract.items,
         requestLines:
           requestId && contract.openRequest?.id === requestId ? contract.openRequest.lines : [],
+        dropOffLines:
+          requestId && contract.openDropOffRequest?.id === requestId
+            ? contract.openDropOffRequest.lines
+            : [],
         shelfCode: contract.shelf.code,
         contractNo: contract.contractNo,
         customerName: session.customer.fullName ?? session.customer.phone ?? '',

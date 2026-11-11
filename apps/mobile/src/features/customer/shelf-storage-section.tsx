@@ -2,16 +2,22 @@ import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { Button } from 'heroui-native';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
-import { pickupRequestBlockLabel } from '../../../lib/shelf-storage-format';
+import {
+  dropOffRequestBlockLabel,
+  pickupRequestBlockLabel,
+} from '../../../lib/shelf-storage-format';
 import type { ApiContract } from '../../types/contract-api';
 import { SectionCard } from './contract-sections';
+import { DropOffRequestCard } from './DropOffRequestCard';
+import { DropOffRequestForm } from './DropOffRequestForm';
 import { PickupRequestCard } from './PickupRequestCard';
 import { PickupRequestSheet } from './PickupRequestSheet';
+import { RequestFormSheet } from './RequestFormSheet';
 import { ShelfReceiptHistory } from './ShelfReceiptHistory';
 import { ShelfStockList } from './ShelfStockList';
 import { useShelfStorage } from './use-shelf-storage';
 
-/** "Đồ đang gửi" on a shelf contract: stock, pick-up requests and receipt history. */
+/** "Đồ đang gửi" on a shelf contract: stock, drop-off and pick-up requests, receipt history. */
 export function ShelfStorageSection({ contract }: { contract: ApiContract }) {
   if (
     contract.unit?.kind !== 'SHELF' ||
@@ -28,11 +34,17 @@ function ShelfStorageBody({ contract }: { contract: ApiContract }) {
     contract,
   );
   const sheetRef = useRef<BottomSheetModal>(null);
+  const dropOffSheetRef = useRef<BottomSheetModal>(null);
   const [pastOpen, setPastOpen] = useState(false);
+  const [pastDropOffOpen, setPastDropOffOpen] = useState(false);
 
   const storage = data?.storage;
   const past = data?.requests.filter((request) => request.id !== storage?.openRequest?.id) ?? [];
   const block = storage?.pickupRequestBlock ?? null;
+  const openDropOff = storage?.openDropOffRequest ?? null;
+  const pastDropOffs =
+    data?.dropOffRequests.filter((request) => request.id !== openDropOff?.id) ?? [];
+  const dropOffBlock = storage?.dropOffRequestBlock ?? null;
   const canRequest = contract.status === 'ACTIVE';
 
   return (
@@ -53,6 +65,47 @@ function ShelfStorageBody({ contract }: { contract: ApiContract }) {
       {data && storage ? (
         <>
           <ShelfStockList items={storage.items} />
+
+          {openDropOff ? (
+            <View className="gap-2">
+              <Text className="font-strong text-body-sm text-foreground">Yêu cầu gửi đồ</Text>
+              <DropOffRequestCard request={openDropOff} onCancelled={reload} />
+            </View>
+          ) : null}
+
+          {canRequest ? (
+            <View className="gap-1.5">
+              <Button
+                isDisabled={dropOffBlock !== null}
+                variant="secondary"
+                onPress={() => dropOffSheetRef.current?.present()}
+              >
+                <Button.Label>Yêu cầu gửi đồ</Button.Label>
+              </Button>
+              {dropOffBlock ? (
+                <Text className="font-body text-caption text-muted">
+                  {dropOffRequestBlockLabel(dropOffBlock)}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          {pastDropOffs.length > 0 ? (
+            <View className="gap-2">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: pastDropOffOpen }}
+                onPress={() => setPastDropOffOpen((open) => !open)}
+              >
+                <Text className="font-strong text-body-sm text-accent">
+                  Yêu cầu gửi đồ trước đây ({pastDropOffs.length}) {pastDropOffOpen ? '▴' : '▾'}
+                </Text>
+              </Pressable>
+              {pastDropOffOpen
+                ? pastDropOffs.map((r) => <DropOffRequestCard key={r.id} request={r} />)
+                : null}
+            </View>
+          ) : null}
 
           {storage.openRequest ? (
             <View className="gap-2">
@@ -86,7 +139,7 @@ function ShelfStorageBody({ contract }: { contract: ApiContract }) {
                 onPress={() => setPastOpen((open) => !open)}
               >
                 <Text className="font-strong text-body-sm text-accent">
-                  Yêu cầu trước đây ({past.length}) {pastOpen ? '▴' : '▾'}
+                  Yêu cầu lấy đồ trước đây ({past.length}) {pastOpen ? '▴' : '▾'}
                 </Text>
               </Pressable>
               {pastOpen ? past.map((r) => <PickupRequestCard key={r.id} request={r} />) : null}
@@ -105,6 +158,11 @@ function ShelfStorageBody({ contract }: { contract: ApiContract }) {
             items={storage.items}
             onSubmitted={reload}
           />
+          <RequestFormSheet sheetRef={dropOffSheetRef} onSubmitted={reload}>
+            {(done) => (
+              <DropOffRequestForm contractId={contract.id} items={storage.items} onDone={done} />
+            )}
+          </RequestFormSheet>
         </>
       ) : null}
     </SectionCard>

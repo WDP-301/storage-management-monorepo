@@ -136,6 +136,31 @@ describe('validateReceiptShape', () => {
       ),
     ).toMatchObject({ field: 'pickupRequestId', code: 'notAllowed' });
   });
+
+  it('rejects a drop-off request id on a pick-up', () => {
+    expect(
+      codeOf(() =>
+        validateReceiptShape(
+          { type: 'PICK_UP', dropOffRequestId: id1, lines: [{ itemId: id2, quantity: 1 }] },
+          'staff-1',
+        ),
+      ),
+    ).toMatchObject({ field: 'dropOffRequestId', code: 'notAllowed' });
+  });
+
+  it('accepts a drop-off request id on a drop-off', () => {
+    expect(
+      validateReceiptShape(
+        {
+          type: 'DROP_OFF',
+          photos: mine(),
+          dropOffRequestId: id1,
+          lines: [{ name: 'A', quantity: 1 }],
+        },
+        'staff-1',
+      ),
+    ).toEqual([{ name: 'A', quantity: 1 }]);
+  });
 });
 
 describe('validateRecoveryShape', () => {

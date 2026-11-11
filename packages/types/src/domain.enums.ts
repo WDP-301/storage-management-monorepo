@@ -281,6 +281,15 @@ export const PickupRequestStatus = {
 } as const;
 export type PickupRequestStatus = (typeof PickupRequestStatus)[keyof typeof PickupRequestStatus];
 
+/** PENDING → CONFIRMED → COMPLETED (a drop-off receipt); PENDING or CONFIRMED → CANCELLED. */
+export const DropOffRequestStatus = {
+  PENDING: 'PENDING',
+  CONFIRMED: 'CONFIRMED',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type DropOffRequestStatus = (typeof DropOffRequestStatus)[keyof typeof DropOffRequestStatus];
+
 export const InspectionType = {
   PRE_HANDOVER: 'PRE_HANDOVER',
   RETURN: 'RETURN',
@@ -387,6 +396,14 @@ export const NotificationType = {
   PICKUP_REQUEST_READY: 'PICKUP_REQUEST_READY',
   /** To facility staff and managers: a customer asked to collect goods. */
   PICKUP_REQUEST_CREATED: 'PICKUP_REQUEST_CREATED',
+  /** To facility staff and managers: the customer cancelled a pick-up request. */
+  PICKUP_REQUEST_CANCELLED: 'PICKUP_REQUEST_CANCELLED',
+  /** To facility staff and managers: a customer plans to bring goods to their shelf. */
+  DROP_OFF_REQUEST_CREATED: 'DROP_OFF_REQUEST_CREATED',
+  /** To the customer: the branch confirmed it is ready to receive the goods. */
+  DROP_OFF_REQUEST_CONFIRMED: 'DROP_OFF_REQUEST_CONFIRMED',
+  /** To facility staff and managers: the customer cancelled a drop-off request. */
+  DROP_OFF_REQUEST_CANCELLED: 'DROP_OFF_REQUEST_CANCELLED',
   /** Tour appointments notifications */
   TOUR_APPOINTMENT_CREATED: 'TOUR_APPOINTMENT_CREATED',
   TOUR_APPOINTMENT_CONFIRMED: 'TOUR_APPOINTMENT_CONFIRMED',

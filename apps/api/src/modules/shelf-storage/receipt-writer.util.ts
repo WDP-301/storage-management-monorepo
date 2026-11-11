@@ -67,6 +67,7 @@ export interface NewReceipt {
   note: string | null;
   photos: EvidenceFile[];
   pickupRequestId: string | null;
+  dropOffRequestId: string | null;
   lines: AppliedLine[];
 }
 
@@ -76,8 +77,9 @@ export async function insertReceipt(em: EntityManager, input: NewReceipt): Promi
   const [row]: { id: string }[] = await em.query(
     `INSERT INTO "shelf_receipts"
        ("code", "type", "contract_id", "customer_id", "storage_unit_id", "warehouse_id", "facility_id",
-        "session_id", "client_request_id", "performed_by", "note", "photos", "pickup_request_id")
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13)
+        "session_id", "client_request_id", "performed_by", "note", "photos", "pickup_request_id",
+        "drop_off_request_id")
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14)
      RETURNING "id"`,
     [
       receiptCode(input.type, new Date()),
@@ -93,6 +95,7 @@ export async function insertReceipt(em: EntityManager, input: NewReceipt): Promi
       input.note,
       JSON.stringify(input.photos),
       input.pickupRequestId,
+      input.dropOffRequestId,
     ],
   );
   await em.query(

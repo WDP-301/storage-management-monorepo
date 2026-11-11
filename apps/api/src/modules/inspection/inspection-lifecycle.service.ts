@@ -10,6 +10,7 @@ import { NotificationsService } from '@modules/notifications/notifications.servi
 import { QueueService } from '@modules/queue/queue.service';
 import {
   assertShelfEmpty,
+  cancelOpenDropOffRequests,
   cancelOpenPickupRequests,
 } from '@modules/shelf-storage/shelf-empty-guard.util';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
@@ -114,10 +115,11 @@ export class InspectionLifecycleService {
           requiredStatus: transition.contractFrom,
         });
       }
-      // Goods left on a shelf must be handed back first; pick-up requests die with the contract.
+      // Goods left on a shelf must be handed back first; open requests die with the contract.
       if (inspection.type === InspectionType.RETURN) {
         await assertShelfEmpty(em, contract.id, 'RETURN');
         await cancelOpenPickupRequests(em, contract.id);
+        await cancelOpenDropOffRequests(em, contract.id);
       }
 
       const firstRent =

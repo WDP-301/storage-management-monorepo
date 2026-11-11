@@ -2,6 +2,7 @@ import { findOverdueInvoiceNos } from '@modules/access/overdue-invoices.query';
 import { assertWorksAtFacility, worksAtFacility } from '@modules/access/staff-facility.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { UserRole } from '@storage/types';
+import { loadDropOffRequests } from './drop-off-request.read';
 import { loadPickupRequests } from './pickup-request.read';
 import { findShelfContracts, loadStock } from './shelf-contract.query';
 import { loadReceipts } from './shelf-receipt.read';
@@ -10,6 +11,7 @@ import { loadWarehouseStock } from './warehouse-stock.read';
 
 jest.mock('@modules/access/overdue-invoices.query');
 jest.mock('@modules/access/staff-facility.util');
+jest.mock('./drop-off-request.read');
 jest.mock('./pickup-request.read');
 jest.mock('./shelf-contract.query');
 jest.mock('./shelf-receipt.read');
@@ -45,6 +47,7 @@ describe('ShelfStorageReadsService', () => {
       .mockImplementation(async () => (contract ? [contract as never] : []));
     jest.mocked(loadStock).mockImplementation(async () => new Map([['c-1', items as never]]));
     jest.mocked(loadPickupRequests).mockResolvedValue([]);
+    jest.mocked(loadDropOffRequests).mockResolvedValue([]);
     jest.mocked(findOverdueInvoiceNos).mockResolvedValue([]);
     jest.mocked(worksAtFacility).mockResolvedValue(true);
     jest.mocked(assertWorksAtFacility).mockResolvedValue(undefined);
@@ -92,6 +95,8 @@ describe('ShelfStorageReadsService', () => {
         items,
         openRequest: null,
         pickupRequestBlock: null,
+        openDropOffRequest: null,
+        dropOffRequestBlock: null,
       });
     });
 

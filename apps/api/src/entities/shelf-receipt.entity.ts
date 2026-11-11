@@ -1,6 +1,7 @@
 import { AccessEvent } from '@entities/access-event.entity';
 import { AppUser } from '@entities/app-user.entity';
 import { Contract } from '@entities/contract.entity';
+import { DropOffRequest } from '@entities/drop-off-request.entity';
 import { Facility } from '@entities/facility.entity';
 import { PickupRequest } from '@entities/pickup-request.entity';
 import { ShelfReceiptLine } from '@entities/shelf-receipt-line.entity';
@@ -31,6 +32,7 @@ import {
 @Index('IDX_shelf_receipts_contract_created', { synchronize: false })
 @Index('IDX_shelf_receipts_warehouse_created', { synchronize: false })
 @Index('UQ_shelf_receipts_pickup_request', { synchronize: false })
+@Index('UQ_shelf_receipts_drop_off_request', { synchronize: false })
 export class ShelfReceipt {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -78,6 +80,9 @@ export class ShelfReceipt {
   @Column({ type: 'uuid', nullable: true, name: 'pickup_request_id' })
   pickupRequestId: string | null;
 
+  @Column({ type: 'uuid', nullable: true, name: 'drop_off_request_id' })
+  dropOffRequestId: string | null;
+
   @Column({ type: 'timestamptz', nullable: true, name: 'voided_at' })
   voidedAt: Date | null;
 
@@ -121,6 +126,10 @@ export class ShelfReceipt {
   @ManyToOne(() => PickupRequest, { nullable: true, onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'pickup_request_id' })
   pickupRequest: PickupRequest | null;
+
+  @ManyToOne(() => DropOffRequest, { nullable: true, onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'drop_off_request_id' })
+  dropOffRequest: DropOffRequest | null;
 
   @ManyToOne(() => AppUser, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'voided_by' })

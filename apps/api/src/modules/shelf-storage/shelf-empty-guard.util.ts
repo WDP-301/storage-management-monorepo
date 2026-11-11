@@ -51,6 +51,18 @@ export async function cancelOpenPickupRequests(
   );
 }
 
+/** Closes open drop-off requests on behalf of the system once the shelf is returned or left. */
+export async function cancelOpenDropOffRequests(
+  em: EntityManager,
+  contractId: string,
+): Promise<void> {
+  await em.query(
+    `UPDATE "drop_off_requests" SET "status" = 'CANCELLED', "cancelled_at" = now(), "updated_at" = now()
+      WHERE "contract_id" = $1 AND "status" IN ('PENDING', 'CONFIRMED')`,
+    [contractId],
+  );
+}
+
 /**
  * After a pick-up: when it took the last of the contract's goods, nothing is left to hand back, so
  * requests still open are closed by the system instead of waiting for staff (customers cannot

@@ -100,6 +100,14 @@ export class CreateShelfReceiptDto {
   @IsOptional()
   @IsUUID('all')
   pickupRequestId?: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description: 'DROP_OFF only: the contract open drop-off request it completes',
+  })
+  @IsOptional()
+  @IsUUID('all')
+  dropOffRequestId?: string;
 }
 
 export class VoidShelfReceiptDto {

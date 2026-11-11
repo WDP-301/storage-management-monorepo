@@ -16,10 +16,11 @@ import {
   type WarehouseShelfStockView,
 } from '@storage/types';
 import { DataSource, type EntityManager } from 'typeorm';
+import { loadDropOffRequests } from './drop-off-request.read';
 import { loadPickupRequests } from './pickup-request.read';
 import { findShelfContracts, loadStock, type ShelfContractRow } from './shelf-contract.query';
 import { loadReceipts, type ReceiptQuery } from './shelf-receipt.read';
-import { pickupRequestBlock } from './shelf-rules';
+import { dropOffRequestBlock, pickupRequestBlock } from './shelf-rules';
 import { loadWarehouseStock } from './warehouse-stock.read';
 
 const STAFF_ROLES: readonly UserRole[] = [
@@ -88,13 +89,15 @@ export class ShelfStorageReadsService {
   async getContract(actor: AuthUser, contractId: string): Promise<ShelfContractStorageView> {
     const em = this.dataSource.manager;
     const contract = await this.readableContract(em, actor, contractId);
-    const [stock, requests, invoiceNos] = await Promise.all([
+    const [stock, requests, dropOffs, invoiceNos] = await Promise.all([
       loadStock(em, [contract.id]),
       loadPickupRequests(em, { contractIds: [contract.id], open: true, order: 'requestedFor' }),
+      loadDropOffRequests(em, { contractIds: [contract.id], open: true, order: 'requestedFor' }),
       findOverdueInvoiceNos(em, contract.customerId, new Date()),
     ]);
     const items = stock.get(contract.id) ?? [];
     const openRequest = requests[0] ?? null;
+    const openDropOffRequest = dropOffs[0] ?? null;
     return {
       contractId: contract.id,
       contractNo: contract.contractNo,
@@ -109,6 +112,12 @@ export class ShelfStorageReadsService {
         hasOpenRequest: openRequest !== null,
         overdue: invoiceNos.length > 0,
         returnOpen: contract.returnOpen,
+      }),
+      openDropOffRequest,
+      dropOffRequestBlock: dropOffRequestBlock({
+        status: contract.status,
+        hasOpenRequest: openDropOffRequest !== null,
+        overdue: invoiceNos.length > 0,
       }),
     };
   }

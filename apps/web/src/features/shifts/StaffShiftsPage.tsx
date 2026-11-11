@@ -38,23 +38,15 @@ import { useAppToast } from '../../lib/toast';
 import { addDays, formatVnDay, vnToday } from '../../lib/vn-day';
 import type { FacilityStaffMember } from '../../types/inspection';
 
-const STATUS_LABEL: Record<StaffShiftStatus, string> = {
-  SCHEDULED: 'Đã xếp',
-  CHECKED_IN: 'Đang làm',
-  COMPLETED: 'Xong ca',
-  ABSENT: 'Vắng',
-  CANCELLED: 'Đã hủy',
-};
-
-const STATUS_VARIANT: Record<
+const STATUS_DISPLAY: Record<
   StaffShiftStatus,
-  'info' | 'warning' | 'success' | 'error' | 'neutral'
+  { label: string; variant: 'info' | 'warning' | 'success' | 'error' | 'neutral' }
 > = {
-  SCHEDULED: 'info',
-  CHECKED_IN: 'warning',
-  COMPLETED: 'success',
-  ABSENT: 'error',
-  CANCELLED: 'neutral',
+  SCHEDULED: { label: 'Đã xếp', variant: 'info' },
+  CHECKED_IN: { label: 'Đang làm', variant: 'warning' },
+  COMPLETED: { label: 'Xong ca', variant: 'success' },
+  ABSENT: { label: 'Vắng', variant: 'error' },
+  CANCELLED: { label: 'Đã hủy', variant: 'neutral' },
 };
 
 const DAY_NAME = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
@@ -91,7 +83,8 @@ export const StaffShiftsPage: React.FC = () => {
   const { selectedFacility } = useFacility();
   const facilityId = selectedFacility?.id ?? '';
 
-  const [weekStart, setWeekStart] = useState(() => mondayOf(vnToday()));
+  const [viewDate, setViewDate] = useState(() => vnToday());
+  const weekStart = mondayOf(viewDate);
   const [shifts, setShifts] = useState<StaffShiftRecord[]>([]);
   const [templates, setTemplates] = useState<ShiftTemplateRecord[]>([]);
   const [staff, setStaff] = useState<FacilityStaffMember[]>([]);
@@ -280,15 +273,15 @@ export const StaffShiftsPage: React.FC = () => {
       </div>
 
       <LayerCard>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-kumo-line">
-          <div className="flex items-center gap-1">
+        <div className="flex flex-col gap-3 px-4 py-3 border-b border-kumo-line sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="ghost"
               size="sm"
               shape="square"
               icon={<CaretLeft />}
               aria-label="Tuần trước"
-              onClick={() => setWeekStart(addDays(weekStart, -7))}
+              onClick={() => setViewDate(addDays(viewDate, -7))}
             />
             <Button
               variant="ghost"
@@ -296,11 +289,18 @@ export const StaffShiftsPage: React.FC = () => {
               shape="square"
               icon={<CaretRight />}
               aria-label="Tuần sau"
-              onClick={() => setWeekStart(addDays(weekStart, 7))}
+              onClick={() => setViewDate(addDays(viewDate, 7))}
             />
-            <Button variant="ghost" size="sm" onClick={() => setWeekStart(mondayOf(vnToday()))}>
+            <Button variant="ghost" size="sm" onClick={() => setViewDate(vnToday())}>
               Tuần này
             </Button>
+            <Input
+              className="w-40"
+              aria-label="Chọn ngày để xem tuần"
+              type="date"
+              value={viewDate}
+              onChange={(e) => e.target.value && setViewDate(e.target.value)}
+            />
           </div>
           <Text size="sm" color="secondary">
             {formatVnDay(weekDays[0])} — {formatVnDay(weekDays[6])}
@@ -320,7 +320,7 @@ export const StaffShiftsPage: React.FC = () => {
                   {weekDays.map((d) => (
                     <th
                       key={d}
-                      className={`text-left px-2 py-2.5 font-medium ${
+                      className={`text-center px-2 py-2.5 font-medium ${
                         d === vnToday() ? 'text-kumo-brand' : 'text-kumo-secondary'
                       }`}
                     >
@@ -345,7 +345,7 @@ export const StaffShiftsPage: React.FC = () => {
                       );
                       return (
                         <td key={d} className="px-2 py-2 align-top">
-                          <div className="flex flex-col gap-1">
+                          <div className="flex flex-col items-center gap-1">
                             {cell.map((s) => (
                               <button
                                 key={s.id}
@@ -354,7 +354,7 @@ export const StaffShiftsPage: React.FC = () => {
                                 className="text-left"
                               >
                                 <Badge
-                                  variant={STATUS_VARIANT[s.status]}
+                                  variant={STATUS_DISPLAY[s.status].variant}
                                   className="max-w-full truncate"
                                 >
                                   {s.staff_name ?? '—'}
@@ -381,9 +381,9 @@ export const StaffShiftsPage: React.FC = () => {
         )}
 
         <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-t border-kumo-line">
-          {Object.entries(STATUS_LABEL).map(([status, label]) => (
+          {Object.entries(STATUS_DISPLAY).map(([status, display]) => (
             <span key={status} className="flex items-center gap-1.5">
-              <Badge variant={STATUS_VARIANT[status as StaffShiftStatus]}>{label}</Badge>
+              <Badge variant={display.variant}>{display.label}</Badge>
             </span>
           ))}
         </div>
@@ -636,8 +636,8 @@ export const StaffShiftsPage: React.FC = () => {
                     <span className="font-semibold text-sm text-kumo-default">
                       {detail.staff_name}
                     </span>
-                    <Badge variant={STATUS_VARIANT[detail.status]}>
-                      {STATUS_LABEL[detail.status]}
+                    <Badge variant={STATUS_DISPLAY[detail.status].variant}>
+                      {STATUS_DISPLAY[detail.status].label}
                     </Badge>
                   </div>
                   <div className="text-kumo-secondary">

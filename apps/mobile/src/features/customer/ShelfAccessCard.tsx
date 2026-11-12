@@ -1,7 +1,9 @@
+import * as Clipboard from 'expo-clipboard';
 import { useFocusEffect } from 'expo-router';
-import { Button } from 'heroui-native';
+import { Button, useThemeColor } from 'heroui-native';
+import { Copy } from 'phosphor-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { AccessApi, type AccessPass } from '../../../lib/access-api';
 import { ApiError } from '../../../lib/api';
@@ -97,6 +99,7 @@ export function ShelfAccessCard({ contracts }: { contracts: ApiContract[] }) {
           <View className="rounded-xl bg-white p-3">
             <QRCode value={pass.qrPayload} size={210} />
           </View>
+          <PassCode value={pass.qrPayload} />
           <Text className="font-ui text-body-sm text-foreground">
             Mã tự đổi sau {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
           </Text>
@@ -112,6 +115,40 @@ export function ShelfAccessCard({ contracts }: { contracts: ApiContract[] }) {
           <Button.Label>{busy ? 'Đang tạo mã…' : error ? 'Thử lại' : 'Đổi mã'}</Button.Label>
         </Button>
       ) : null}
+    </View>
+  );
+}
+
+/** The code as text, for counters that type it into the manual field instead of scanning. */
+function PassCode({ value }: { value: string }) {
+  const [mutedColor] = useThemeColor(['muted']);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  return (
+    <View className="w-full flex-row items-center gap-2 rounded-xl bg-surface-secondary px-3 py-2">
+      <Text selectable className="flex-1 font-numeric text-caption text-foreground">
+        {value}
+      </Text>
+      <Pressable
+        accessibilityLabel="Sao chép mã gửi / lấy đồ"
+        accessibilityRole="button"
+        hitSlop={8}
+        style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+        onPress={() => {
+          void Clipboard.setStringAsync(value);
+          setCopied(true);
+        }}
+      >
+        <View className="flex-row items-center gap-1 rounded-full bg-surface px-2.5 py-1.5">
+          <Copy color={mutedColor} size={13} weight="bold" />
+          <Text className="font-ui text-caption text-subtle">{copied ? 'Đã chép' : 'Chép'}</Text>
+        </View>
+      </Pressable>
     </View>
   );
 }

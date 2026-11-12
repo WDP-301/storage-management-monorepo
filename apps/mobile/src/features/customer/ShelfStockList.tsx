@@ -5,7 +5,7 @@ import { totalQuantity } from '../../../lib/shelf-storage-format';
 /** What is on the shelf right now, as counted by the counter staff. */
 export function ShelfStockList({ items }: { items: ShelfItemView[] }) {
   if (items.length === 0) {
-    return <Text className="font-body text-body-sm text-muted">Kệ chưa có đồ gửi.</Text>;
+    return <Text className="font-body text-body-sm text-muted">Kệ trống</Text>;
   }
   return (
     <View className="gap-1.5">
@@ -15,10 +15,12 @@ export function ShelfStockList({ items }: { items: ShelfItemView[] }) {
           <Text className="font-strong text-body-md text-foreground">×{item.quantity}</Text>
         </View>
       ))}
-      <View className="mt-1 flex-row items-center justify-between border-t border-border pt-2">
-        <Text className="font-body text-body-sm text-muted">Tổng số món</Text>
-        <Text className="font-strong text-body-md text-foreground">{totalQuantity(items)}</Text>
-      </View>
+      {items.length > 1 ? (
+        <View className="mt-1 flex-row items-center justify-between border-t border-border pt-2">
+          <Text className="font-body text-body-sm text-muted">Tổng</Text>
+          <Text className="font-strong text-body-md text-foreground">{totalQuantity(items)}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }

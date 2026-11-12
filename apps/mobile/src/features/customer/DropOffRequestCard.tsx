@@ -72,9 +72,7 @@ export function DropOffRequestCard({
         <Text className="font-body text-body-sm text-muted">Ghi chú: {request.note}</Text>
       ) : null}
       {request.status === 'CONFIRMED' ? (
-        <Text className="font-body text-caption text-muted">
-          Kho đã sẵn sàng nhận đồ. Đưa mã gửi / lấy đồ cho nhân viên khi tới.
-        </Text>
+        <Text className="font-body text-caption text-muted">Tới quầy, đưa mã gửi / lấy đồ.</Text>
       ) : null}
       {error ? <Text className="font-body text-body-sm text-danger">{error}</Text> : null}
       {onCancelled ? (

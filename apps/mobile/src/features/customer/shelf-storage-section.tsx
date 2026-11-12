@@ -36,16 +36,28 @@ function ShelfStorageBody({ contract }: { contract: ApiContract }) {
   const sheetRef = useRef<BottomSheetModal>(null);
   const dropOffSheetRef = useRef<BottomSheetModal>(null);
   const [pastOpen, setPastOpen] = useState(false);
-  const [pastDropOffOpen, setPastDropOffOpen] = useState(false);
 
   const storage = data?.storage;
-  const past = data?.requests.filter((request) => request.id !== storage?.openRequest?.id) ?? [];
+  // Finished requests already show as receipts below, so only cancelled ones are listed.
+  const past = data?.requests.filter((request) => request.status === 'CANCELLED') ?? [];
   const block = storage?.pickupRequestBlock ?? null;
   const openDropOff = storage?.openDropOffRequest ?? null;
   const pastDropOffs =
-    data?.dropOffRequests.filter((request) => request.id !== openDropOff?.id) ?? [];
+    data?.dropOffRequests.filter((request) => request.status === 'CANCELLED') ?? [];
   const dropOffBlock = storage?.dropOffRequestBlock ?? null;
   const canRequest = contract.status === 'ACTIVE';
+  const pastCount = past.length + pastDropOffs.length;
+  // An open request is already on screen and an empty shelf is obvious; only other reasons need words.
+  const blockNote = [
+    dropOffBlock && dropOffBlock !== 'OPEN_REQUEST_EXISTS'
+      ? dropOffRequestBlockLabel(dropOffBlock)
+      : null,
+    block && block !== 'OPEN_REQUEST_EXISTS' && block !== 'NO_STOCK'
+      ? pickupRequestBlockLabel(block)
+      : null,
+  ]
+    .filter((note, i, all) => note && all.indexOf(note) === i)
+    .join(' · ');
 
   return (
     <SectionCard
@@ -66,72 +78,38 @@ function ShelfStorageBody({ contract }: { contract: ApiContract }) {
         <>
           <ShelfStockList items={storage.items} />
 
-          {openDropOff ? (
-            <View className="gap-2">
-              <Text className="font-strong text-body-sm text-foreground">Yêu cầu gửi đồ</Text>
-              <DropOffRequestCard request={openDropOff} onCancelled={reload} />
-            </View>
-          ) : null}
-
-          {canRequest ? (
-            <View className="gap-1.5">
-              <Button
-                isDisabled={dropOffBlock !== null}
-                variant="secondary"
-                onPress={() => dropOffSheetRef.current?.present()}
-              >
-                <Button.Label>Yêu cầu gửi đồ</Button.Label>
-              </Button>
-              {dropOffBlock ? (
-                <Text className="font-body text-caption text-muted">
-                  {dropOffRequestBlockLabel(dropOffBlock)}
-                </Text>
-              ) : null}
-            </View>
-          ) : null}
-
-          {pastDropOffs.length > 0 ? (
-            <View className="gap-2">
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ expanded: pastDropOffOpen }}
-                onPress={() => setPastDropOffOpen((open) => !open)}
-              >
-                <Text className="font-strong text-body-sm text-accent">
-                  Yêu cầu gửi đồ trước đây ({pastDropOffs.length}) {pastDropOffOpen ? '▴' : '▾'}
-                </Text>
-              </Pressable>
-              {pastDropOffOpen
-                ? pastDropOffs.map((r) => <DropOffRequestCard key={r.id} request={r} />)
-                : null}
-            </View>
-          ) : null}
-
+          {openDropOff ? <DropOffRequestCard request={openDropOff} onCancelled={reload} /> : null}
           {storage.openRequest ? (
-            <View className="gap-2">
-              <Text className="font-strong text-body-sm text-foreground">Yêu cầu lấy đồ</Text>
-              <PickupRequestCard request={storage.openRequest} onCancelled={reload} />
-            </View>
+            <PickupRequestCard request={storage.openRequest} onCancelled={reload} />
           ) : null}
 
           {canRequest ? (
             <View className="gap-1.5">
-              <Button
-                isDisabled={block !== null}
-                variant="secondary"
-                onPress={() => sheetRef.current?.present()}
-              >
-                <Button.Label>Yêu cầu lấy đồ</Button.Label>
-              </Button>
-              {block ? (
-                <Text className="font-body text-caption text-muted">
-                  {pickupRequestBlockLabel(block)}
-                </Text>
+              <View className="flex-row gap-2">
+                <Button
+                  className="flex-1"
+                  isDisabled={dropOffBlock !== null}
+                  variant="secondary"
+                  onPress={() => dropOffSheetRef.current?.present()}
+                >
+                  <Button.Label>Hẹn gửi đồ</Button.Label>
+                </Button>
+                <Button
+                  className="flex-1"
+                  isDisabled={block !== null}
+                  variant="secondary"
+                  onPress={() => sheetRef.current?.present()}
+                >
+                  <Button.Label>Hẹn lấy đồ</Button.Label>
+                </Button>
+              </View>
+              {blockNote ? (
+                <Text className="font-body text-caption text-muted">{blockNote}</Text>
               ) : null}
             </View>
           ) : null}
 
-          {past.length > 0 ? (
+          {pastCount > 0 ? (
             <View className="gap-2">
               <Pressable
                 accessibilityRole="button"
@@ -139,10 +117,19 @@ function ShelfStorageBody({ contract }: { contract: ApiContract }) {
                 onPress={() => setPastOpen((open) => !open)}
               >
                 <Text className="font-strong text-body-sm text-accent">
-                  Yêu cầu lấy đồ trước đây ({past.length}) {pastOpen ? '▴' : '▾'}
+                  Yêu cầu đã hủy ({pastCount}) {pastOpen ? '▴' : '▾'}
                 </Text>
               </Pressable>
-              {pastOpen ? past.map((r) => <PickupRequestCard key={r.id} request={r} />) : null}
+              {pastOpen ? (
+                <>
+                  {pastDropOffs.map((r) => (
+                    <DropOffRequestCard key={r.id} request={r} />
+                  ))}
+                  {past.map((r) => (
+                    <PickupRequestCard key={r.id} request={r} />
+                  ))}
+                </>
+              ) : null}
             </View>
           ) : null}
 

@@ -15,6 +15,7 @@ import { ErrorCode } from '@shared/models/api-response';
 import { fromVietnamDate, vietnamDate } from '@shared/utils/calendar.util';
 import {
   ContractStatus,
+  type CustomerBankAccountSource,
   type DamageSeverity,
   type EvidenceFile,
   InspectionType,
@@ -25,6 +26,7 @@ import {
 } from '@storage/types';
 import { type EntityManager, In, IsNull, Not } from 'typeorm';
 import { returnTiming } from './return-timing';
+import { loadCustomerRefundAccount } from './settlement-bank-account.util';
 import type { CalcDamage, SettlementCalcInput } from './settlement-calc';
 
 export interface SettlementDamageInput extends CalcDamage {
@@ -38,6 +40,7 @@ export interface SettlementInput extends SettlementCalcInput {
   rules: ReturnRules;
   depositRecord: LedgerDeposit | ResolvedDeposit | null;
   customerBankAccount: RefundBankAccount | null;
+  customerBankAccountSource: CustomerBankAccountSource | null;
   damages: SettlementDamageInput[];
 }
 
@@ -121,6 +124,8 @@ export async function loadSettlementInput(
     goLiveAt,
   });
 
+  const customerAccount = await loadCustomerRefundAccount(em, inspection, contract.customerId);
+
   return {
     inspection,
     returnedOn,
@@ -130,7 +135,8 @@ export async function loadSettlementInput(
     deposit: depositRecord
       ? { amount: depositRecord.heldAmount, paymentId: depositRecord.paymentId }
       : null,
-    customerBankAccount: inspection.refundAccount ?? null,
+    customerBankAccount: customerAccount.account,
+    customerBankAccountSource: customerAccount.source,
     invoices: invoices.map((i) => ({
       id: i.id,
       invoiceNo: i.invoiceNo,

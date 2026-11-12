@@ -142,6 +142,7 @@ export function toSettlementDetailRecord(parts: SettlementDetailParts): Settleme
     customer_bank_account: settlement
       ? (settlement.customerBankAccount ?? null)
       : (input?.customerBankAccount ?? null),
+    customer_bank_account_source: settlement ? null : (input?.customerBankAccountSource ?? null),
     bank_account: bankAccount,
     bank_override: settlement?.bankOverrideReason
       ? {

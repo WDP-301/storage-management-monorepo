@@ -1,6 +1,7 @@
 import type {
   CreateShelfReceiptInput,
   CreateShelfRecoveryInput,
+  DropOffRequestLineView,
   PickupRequestLineView,
   ShelfItemView,
   ShelfReceiptType,
@@ -83,6 +84,29 @@ export const removeLine = (draft: ReceiptDraft, key: string): ReceiptDraft => ({
   lines: draft.lines.filter((line) => line.key !== key),
 });
 
+/** Drop-off lines preset from the customer's request: known items by id, new ones by name. */
+export function prefillDropOff(
+  requestLines: readonly Pick<DropOffRequestLineView, 'itemId' | 'name' | 'quantity'>[] = [],
+): ReceiptDraft {
+  return {
+    type: 'DROP_OFF',
+    lines: requestLines.map((line) =>
+      line.itemId
+        ? {
+            key: line.itemId,
+            itemId: line.itemId,
+            name: line.name,
+            quantity: clampQuantity(line.quantity),
+          }
+        : {
+            key: `new:${nameKey(line.name)}`,
+            name: cleanName(line.name),
+            quantity: clampQuantity(line.quantity),
+          },
+    ),
+  };
+}
+
 /** One stepper per item on the shelf, preset to what the customer asked for (never above stock). */
 export function prefillPickUp(
   items: readonly ShelfItemView[],
@@ -132,6 +156,8 @@ export type ReceiptContext = {
   note: string;
   /** Set when the pick-up completes the customer's open request. */
   pickupRequestId?: string;
+  /** Set when the drop-off completes the customer's open drop-off request. */
+  dropOffRequestId?: string;
 };
 
 export function toReceiptInput(
@@ -159,6 +185,9 @@ export function toReceiptInput(
       ...(note ? { note } : {}),
       ...(draft.type === 'PICK_UP' && ctx.pickupRequestId
         ? { pickupRequestId: ctx.pickupRequestId }
+        : {}),
+      ...(draft.type === 'DROP_OFF' && ctx.dropOffRequestId
+        ? { dropOffRequestId: ctx.dropOffRequestId }
         : {}),
     },
   };

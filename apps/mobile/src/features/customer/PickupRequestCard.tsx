@@ -66,9 +66,7 @@ export function PickupRequestCard({
         <Text className="font-body text-body-sm text-muted">Ghi chú: {request.note}</Text>
       ) : null}
       {request.status === 'READY' ? (
-        <Text className="font-body text-caption text-muted">
-          Đồ đã được chuẩn bị. Đưa mã gửi / lấy đồ cho nhân viên khi tới.
-        </Text>
+        <Text className="font-body text-caption text-muted">Tới quầy, đưa mã gửi / lấy đồ.</Text>
       ) : null}
       {error ? <Text className="font-body text-body-sm text-danger">{error}</Text> : null}
       {onCancelled ? (

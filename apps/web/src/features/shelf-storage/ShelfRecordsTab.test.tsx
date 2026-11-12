@@ -7,6 +7,7 @@ const api = vi.hoisted(() => ({
   warehouseStock: vi.fn(),
   warehouseReceipts: vi.fn(),
   warehousePickupRequests: vi.fn(),
+  warehouseDropOffRequests: vi.fn(),
   receipt: vi.fn(),
   voidReceipt: vi.fn(),
 }));
@@ -57,6 +58,30 @@ describe('ShelfRecordsTab', () => {
       meta,
     });
     api.warehousePickupRequests.mockResolvedValue([]);
+    api.warehouseDropOffRequests.mockResolvedValue([
+      {
+        id: 'd1',
+        status: 'CONFIRMED',
+        contractId: 'c1',
+        contractNo: 'HD-001',
+        shelf: { id: 's1', code: 'K-01', name: 'Kệ 01' },
+        warehouse: { id: 'w1', code: 'KK-02', name: 'Kho kệ 2' },
+        customer: { id: 'u1', fullName: 'Nguyễn An', phone: '0900000001' },
+        requestedFor: '2026-11-13T02:00:00.000Z',
+        note: 'Mang thêm thùng',
+        lines: [
+          { itemId: 'i1', name: 'Thùng sách', quantity: 2 },
+          { itemId: null, name: 'Xe đạp', quantity: 1 },
+        ],
+        createdAt: '2026-11-12T02:00:00.000Z',
+        confirmedAt: '2026-11-12T03:00:00.000Z',
+        confirmedBy: { id: 'st1', fullName: 'Nhân viên Bình' },
+        cancelledAt: null,
+        cancelledBy: null,
+        completedAt: null,
+        completedReceiptId: null,
+      },
+    ]);
   });
   afterEach(() => vi.clearAllMocks());
 
@@ -94,6 +119,16 @@ describe('ShelfRecordsTab', () => {
         status: 'ACTIVE',
       }),
     );
+  });
+
+  it('lists drop-off requests, marking new items, and asks for all of them on demand', async () => {
+    render(<ShelfRecordsTab warehouseId="w1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Yêu cầu gửi đồ' }));
+    expect(await screen.findByText(/Xe đạp ×1 \(món mới\)/)).toBeTruthy();
+    expect(screen.getByText(/Thùng sách ×2/)).toBeTruthy();
+    expect(screen.getByText('Đã xác nhận')).toBeTruthy();
+    expect(screen.getByText('Mang thêm thùng')).toBeTruthy();
+    expect(api.warehouseDropOffRequests).toHaveBeenLastCalledWith('w1', 'OPEN');
   });
 
   it('shows the permission message when a panel is refused', async () => {

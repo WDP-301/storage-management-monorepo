@@ -6,7 +6,7 @@ import { CounterContractCard } from './CounterContractCard';
 type Props = {
   session: CounterSessionView;
   secondsLeft: number;
-  onDropOff: (contractId: string) => void;
+  onDropOff: (contractId: string, requestId?: string) => void;
   onPickUp: (contractId: string, requestId?: string) => void;
   onOpenReceipt: (receiptId: string) => void;
   onNextCustomer: () => void;
@@ -52,7 +52,7 @@ export function CounterCustomerPanel({
         <CounterContractCard
           key={contract.contractId}
           contract={contract}
-          onDropOff={() => onDropOff(contract.contractId)}
+          onDropOff={(requestId) => onDropOff(contract.contractId, requestId)}
           onPickUp={(requestId) => onPickUp(contract.contractId, requestId)}
           onOpenReceipt={onOpenReceipt}
         />

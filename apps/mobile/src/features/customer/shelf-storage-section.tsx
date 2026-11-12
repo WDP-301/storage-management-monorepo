@@ -2,16 +2,22 @@ import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { Button } from 'heroui-native';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
-import { pickupRequestBlockLabel } from '../../../lib/shelf-storage-format';
+import {
+  dropOffRequestBlockLabel,
+  pickupRequestBlockLabel,
+} from '../../../lib/shelf-storage-format';
 import type { ApiContract } from '../../types/contract-api';
 import { SectionCard } from './contract-sections';
+import { DropOffRequestCard } from './DropOffRequestCard';
+import { DropOffRequestForm } from './DropOffRequestForm';
 import { PickupRequestCard } from './PickupRequestCard';
 import { PickupRequestSheet } from './PickupRequestSheet';
+import { RequestFormSheet } from './RequestFormSheet';
 import { ShelfReceiptHistory } from './ShelfReceiptHistory';
 import { ShelfStockList } from './ShelfStockList';
 import { useShelfStorage } from './use-shelf-storage';
 
-/** "Đồ đang gửi" on a shelf contract: stock, pick-up requests and receipt history. */
+/** "Đồ đang gửi" on a shelf contract: stock, drop-off and pick-up requests, receipt history. */
 export function ShelfStorageSection({ contract }: { contract: ApiContract }) {
   if (
     contract.unit?.kind !== 'SHELF' ||
@@ -28,12 +34,30 @@ function ShelfStorageBody({ contract }: { contract: ApiContract }) {
     contract,
   );
   const sheetRef = useRef<BottomSheetModal>(null);
+  const dropOffSheetRef = useRef<BottomSheetModal>(null);
   const [pastOpen, setPastOpen] = useState(false);
 
   const storage = data?.storage;
-  const past = data?.requests.filter((request) => request.id !== storage?.openRequest?.id) ?? [];
+  // Finished requests already show as receipts below, so only cancelled ones are listed.
+  const past = data?.requests.filter((request) => request.status === 'CANCELLED') ?? [];
   const block = storage?.pickupRequestBlock ?? null;
+  const openDropOff = storage?.openDropOffRequest ?? null;
+  const pastDropOffs =
+    data?.dropOffRequests.filter((request) => request.status === 'CANCELLED') ?? [];
+  const dropOffBlock = storage?.dropOffRequestBlock ?? null;
   const canRequest = contract.status === 'ACTIVE';
+  const pastCount = past.length + pastDropOffs.length;
+  // An open request is already on screen and an empty shelf is obvious; only other reasons need words.
+  const blockNote = [
+    dropOffBlock && dropOffBlock !== 'OPEN_REQUEST_EXISTS'
+      ? dropOffRequestBlockLabel(dropOffBlock)
+      : null,
+    block && block !== 'OPEN_REQUEST_EXISTS' && block !== 'NO_STOCK'
+      ? pickupRequestBlockLabel(block)
+      : null,
+  ]
+    .filter((note, i, all) => note && all.indexOf(note) === i)
+    .join(' · ');
 
   return (
     <SectionCard
@@ -54,31 +78,38 @@ function ShelfStorageBody({ contract }: { contract: ApiContract }) {
         <>
           <ShelfStockList items={storage.items} />
 
+          {openDropOff ? <DropOffRequestCard request={openDropOff} onCancelled={reload} /> : null}
           {storage.openRequest ? (
-            <View className="gap-2">
-              <Text className="font-strong text-body-sm text-foreground">Yêu cầu lấy đồ</Text>
-              <PickupRequestCard request={storage.openRequest} onCancelled={reload} />
-            </View>
+            <PickupRequestCard request={storage.openRequest} onCancelled={reload} />
           ) : null}
 
           {canRequest ? (
             <View className="gap-1.5">
-              <Button
-                isDisabled={block !== null}
-                variant="secondary"
-                onPress={() => sheetRef.current?.present()}
-              >
-                <Button.Label>Yêu cầu lấy đồ</Button.Label>
-              </Button>
-              {block ? (
-                <Text className="font-body text-caption text-muted">
-                  {pickupRequestBlockLabel(block)}
-                </Text>
+              <View className="flex-row gap-2">
+                <Button
+                  className="flex-1"
+                  isDisabled={dropOffBlock !== null}
+                  variant="secondary"
+                  onPress={() => dropOffSheetRef.current?.present()}
+                >
+                  <Button.Label>Hẹn gửi đồ</Button.Label>
+                </Button>
+                <Button
+                  className="flex-1"
+                  isDisabled={block !== null}
+                  variant="secondary"
+                  onPress={() => sheetRef.current?.present()}
+                >
+                  <Button.Label>Hẹn lấy đồ</Button.Label>
+                </Button>
+              </View>
+              {blockNote ? (
+                <Text className="font-body text-caption text-muted">{blockNote}</Text>
               ) : null}
             </View>
           ) : null}
 
-          {past.length > 0 ? (
+          {pastCount > 0 ? (
             <View className="gap-2">
               <Pressable
                 accessibilityRole="button"
@@ -86,10 +117,19 @@ function ShelfStorageBody({ contract }: { contract: ApiContract }) {
                 onPress={() => setPastOpen((open) => !open)}
               >
                 <Text className="font-strong text-body-sm text-accent">
-                  Yêu cầu trước đây ({past.length}) {pastOpen ? '▴' : '▾'}
+                  Yêu cầu đã hủy ({pastCount}) {pastOpen ? '▴' : '▾'}
                 </Text>
               </Pressable>
-              {pastOpen ? past.map((r) => <PickupRequestCard key={r.id} request={r} />) : null}
+              {pastOpen ? (
+                <>
+                  {pastDropOffs.map((r) => (
+                    <DropOffRequestCard key={r.id} request={r} />
+                  ))}
+                  {past.map((r) => (
+                    <PickupRequestCard key={r.id} request={r} />
+                  ))}
+                </>
+              ) : null}
             </View>
           ) : null}
 
@@ -105,6 +145,11 @@ function ShelfStorageBody({ contract }: { contract: ApiContract }) {
             items={storage.items}
             onSubmitted={reload}
           />
+          <RequestFormSheet sheetRef={dropOffSheetRef} onSubmitted={reload}>
+            {(done) => (
+              <DropOffRequestForm contractId={contract.id} items={storage.items} onDone={done} />
+            )}
+          </RequestFormSheet>
         </>
       ) : null}
     </SectionCard>

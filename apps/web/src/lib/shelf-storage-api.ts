@@ -1,5 +1,6 @@
 import type {
   ApiResponse,
+  DropOffRequestView,
   PickupRequestView,
   ShelfReceiptPage,
   ShelfReceiptView,
@@ -54,6 +55,17 @@ export const ShelfStorageApi = {
   ): Promise<PickupRequestView[]> => {
     const res = await apiClient.get<ApiResponse<PickupRequestView[]>>(
       `${base}/warehouses/${warehouseId}/pickup-requests`,
+      { params: { status } },
+    );
+    return res.data.data;
+  },
+
+  warehouseDropOffRequests: async (
+    warehouseId: string,
+    status: 'OPEN' | 'ALL' = 'OPEN',
+  ): Promise<DropOffRequestView[]> => {
+    const res = await apiClient.get<ApiResponse<DropOffRequestView[]>>(
+      `${base}/warehouses/${warehouseId}/drop-off-requests`,
       { params: { status } },
     );
     return res.data.data;

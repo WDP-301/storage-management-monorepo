@@ -1,9 +1,11 @@
 import type {
   AbandonedShelfContractView,
   CounterSessionView,
+  CreateDropOffRequestInput,
   CreatePickupRequestInput,
   CreateShelfReceiptInput,
   CreateShelfRecoveryInput,
+  DropOffRequestView,
   OpenCounterSessionInput,
   PickupRequestView,
   ShelfContractStorageView,
@@ -124,6 +126,31 @@ export const ShelfStorageApi = {
   markPickupReady: (requestId: string) =>
     request<PickupRequestView>(
       `/shelf-storage/pickup-requests/${enc(requestId)}/ready`,
+      json('POST'),
+    ),
+
+  /** Customer: their latest drop-off requests for the contract. */
+  contractDropOffRequests: (contractId: string) =>
+    request<DropOffRequestView[]>(`/shelf-storage/contracts/${enc(contractId)}/drop-off-requests`),
+  createDropOffRequest: (contractId: string, input: CreateDropOffRequestInput) =>
+    request<DropOffRequestView>(
+      `/shelf-storage/contracts/${enc(contractId)}/drop-off-requests`,
+      json('POST', input),
+    ),
+  cancelDropOffRequest: (requestId: string) =>
+    request<DropOffRequestView>(
+      `/shelf-storage/drop-off-requests/${enc(requestId)}/cancel`,
+      json('POST'),
+    ),
+
+  /** Staff: open drop-off requests (soonest first) or the latest 50 of any status. */
+  warehouseDropOffRequests: (warehouseId: string, status: 'OPEN' | 'ALL' = 'OPEN') =>
+    request<DropOffRequestView[]>(
+      `/shelf-storage/warehouses/${enc(warehouseId)}/drop-off-requests?status=${status}`,
+    ),
+  confirmDropOffRequest: (requestId: string) =>
+    request<DropOffRequestView>(
+      `/shelf-storage/drop-off-requests/${enc(requestId)}/confirm`,
       json('POST'),
     ),
 

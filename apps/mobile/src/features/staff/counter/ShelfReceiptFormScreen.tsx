@@ -3,10 +3,11 @@ import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
 import { Button } from 'heroui-native';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, Text, TextInput, View } from 'react-native';
 import { newOpenNonce } from '../../../../lib/open-nonce';
 import {
   newDraft,
+  prefillDropOff,
   prefillPickUp,
   type ReceiptDraft,
   toReceiptInput,
@@ -41,7 +42,6 @@ export function ShelfReceiptFormScreen({ params }: { params: ReceiptFormParams }
   const [draft, setDraft] = useState<ReceiptDraft | null>(null);
   const [photos, setPhotos] = useState<EvidenceFile[]>([]);
   const [note, setNote] = useState('');
-  const [complete, setComplete] = useState(!!requestId);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -53,7 +53,11 @@ export function ShelfReceiptFormScreen({ params }: { params: ReceiptFormParams }
   useEffect(() => {
     if (!source || draft) return;
     setDraft(
-      type === 'DROP_OFF' ? newDraft('DROP_OFF') : prefillPickUp(source.items, source.requestLines),
+      type === 'DROP_OFF'
+        ? source.dropOffLines.length > 0
+          ? prefillDropOff(source.dropOffLines)
+          : newDraft('DROP_OFF')
+        : prefillPickUp(source.items, source.requestLines),
     );
   }, [source, draft, type]);
 
@@ -75,7 +79,13 @@ export function ShelfReceiptFormScreen({ params }: { params: ReceiptFormParams }
           contractId: params.contractId,
           photos,
           note,
-          ...(complete && requestId ? { pickupRequestId: requestId } : {}),
+          // A form opened from a customer request always completes that request. Items the
+          // customer brings or takes on a later visit go on a walk-in receipt.
+          ...(requestId
+            ? type === 'DROP_OFF'
+              ? { dropOffRequestId: requestId }
+              : { pickupRequestId: requestId }
+            : {}),
         });
     if ('error' in built) {
       setError(built.error);
@@ -181,15 +191,6 @@ export function ShelfReceiptFormScreen({ params }: { params: ReceiptFormParams }
                 setNote(text);
               }}
             />
-
-            {requestId && !recovery ? (
-              <View className="flex-row items-center justify-between gap-3">
-                <Text className="flex-1 font-ui text-body-sm text-foreground">
-                  Hoàn tất yêu cầu lấy đồ
-                </Text>
-                <Switch value={complete} onValueChange={setComplete} />
-              </View>
-            ) : null}
 
             {error ? (
               <Text className="rounded-xl bg-danger-bg p-3 font-body text-body-sm text-danger">

@@ -1,5 +1,7 @@
 import type {
   DropOffBlockReason,
+  DropOffRequestBlockReason,
+  DropOffRequestStatus,
   PickUpBlockReason,
   PickupRequestBlockReason,
   PickupRequestStatus,
@@ -24,6 +26,15 @@ const PICKUP_STATUS_LABEL: Record<PickupRequestStatus, string> = {
 };
 export const pickupStatusLabel = (status: PickupRequestStatus): string =>
   PICKUP_STATUS_LABEL[status] ?? status;
+
+const DROP_OFF_STATUS_LABEL: Record<DropOffRequestStatus, string> = {
+  PENDING: 'Chờ xác nhận',
+  CONFIRMED: 'Đã xác nhận',
+  COMPLETED: 'Đã gửi',
+  CANCELLED: 'Đã hủy',
+};
+export const dropOffStatusLabel = (status: DropOffRequestStatus): string =>
+  DROP_OFF_STATUS_LABEL[status] ?? status;
 
 /** Badge on a receipt a manager recorded without the customer, on an abandoned shelf. */
 export const recoveredLabel = 'Thu hồi (khách bỏ kệ)';
@@ -50,6 +61,14 @@ const PICKUP_REQUEST_BLOCK: Record<PickupRequestBlockReason, string> = {
 };
 export const pickupRequestBlockLabel = (reason: PickupRequestBlockReason): string =>
   PICKUP_REQUEST_BLOCK[reason] ?? 'Chưa thể tạo yêu cầu lấy đồ';
+
+const DROP_OFF_REQUEST_BLOCK: Record<DropOffRequestBlockReason, string> = {
+  CONTRACT_NOT_ACTIVE: 'Hợp đồng không còn hiệu lực',
+  OPEN_REQUEST_EXISTS: 'Bạn đã có một yêu cầu gửi đồ đang chờ',
+  INVOICE_OVERDUE: 'Thanh toán hóa đơn quá hạn để gửi đồ',
+};
+export const dropOffRequestBlockLabel = (reason: DropOffRequestBlockReason): string =>
+  DROP_OFF_REQUEST_BLOCK[reason] ?? 'Chưa thể tạo yêu cầu gửi đồ';
 
 type NamedQuantity = { name: string; quantity: number };
 
@@ -97,7 +116,7 @@ const FIELD_ERROR: Record<string, string> = {
   notOwnUpload: 'Ảnh không hợp lệ, hãy chụp lại ảnh rồi thử lại.',
   required: 'Cần ít nhất một ảnh.',
   notAllowed: 'Phiếu gửi đồ không thể gắn với yêu cầu lấy đồ.',
-  outOfRange: 'Thời gian lấy đồ phải trong vòng 30 ngày tới.',
+  outOfRange: 'Thời gian hẹn phải trong vòng 30 ngày tới.',
 };
 
 /**
@@ -145,6 +164,8 @@ export function shelfErrorMessage(
         return date ? `Hợp đồng chưa bắt đầu (từ ${date}).` : 'Hợp đồng chưa bắt đầu.';
       }
       if (reason === 'PICKUP_REQUEST_MISMATCH') return 'Yêu cầu lấy đồ không còn khớp với kệ này.';
+      if (reason === 'DROP_OFF_REQUEST_MISMATCH')
+        return 'Yêu cầu gửi đồ không còn khớp với kệ này.';
       if (reason === 'ITEM_NOT_IN_CONTRACT') return 'Có món không thuộc kệ của khách.';
       if (reason === 'CLIENT_REQUEST_REUSED')
         return 'Phiếu này đã được lưu cho kệ khác. Tạo phiếu mới.';
@@ -169,6 +190,19 @@ export function shelfErrorMessage(
         return list ? `Số lượng vượt quá đồ trên kệ: ${list}.` : 'Số lượng vượt quá đồ trên kệ.';
       }
       if (reason === 'ITEM_NOT_IN_CONTRACT') return 'Có món không còn trên kệ.';
+      if (reason === 'NOT_PENDING') return 'Yêu cầu này đã được xử lý.';
+      if (reason === 'NOT_OPEN') return 'Yêu cầu này đã đóng.';
+      return fallback;
+    case 'DROP_OFF_REQUEST_NOT_ALLOWED':
+      if (reason === 'CONTRACT_NOT_ACTIVE') return 'Hợp đồng không còn hiệu lực.';
+      if (reason === 'OPEN_REQUEST_EXISTS') return 'Đã có một yêu cầu gửi đồ đang chờ.';
+      if (reason === 'BEFORE_CONTRACT_START') {
+        const date = effectiveDate(details);
+        return date
+          ? `Hợp đồng bắt đầu từ ${date}, hãy chọn thời gian sau đó.`
+          : 'Hợp đồng chưa bắt đầu vào thời gian này.';
+      }
+      if (reason === 'ITEM_NOT_IN_CONTRACT') return 'Có món không còn thuộc kệ của bạn.';
       if (reason === 'NOT_PENDING') return 'Yêu cầu này đã được xử lý.';
       if (reason === 'NOT_OPEN') return 'Yêu cầu này đã đóng.';
       return fallback;

@@ -4,6 +4,7 @@ import { Pressable, Text, View } from 'react-native';
 import { formatIsoDateTime } from '../../../../lib/format-vi';
 import {
   dropOffBlockLabel,
+  dropOffStatusLabel,
   linesSummary,
   pickUpBlockLabel,
   pickupStatusLabel,
@@ -13,14 +14,14 @@ import { StatusPill } from '../../customer/contract-display';
 
 type Props = {
   contract: CounterContractView;
-  onDropOff: () => void;
+  onDropOff: (requestId?: string) => void;
   onPickUp: (requestId?: string) => void;
   onOpenReceipt: (receiptId: string) => void;
 };
 
 /** One shelf contract of the customer at this warehouse: stock, what is blocked, and the actions. */
 export function CounterContractCard({ contract, onDropOff, onPickUp, onOpenReceipt }: Props) {
-  const { items, openRequest, recentReceipts } = contract;
+  const { items, openRequest, openDropOffRequest, recentReceipts } = contract;
   return (
     <View className="gap-3 rounded-xl border border-border bg-surface p-4">
       <View className="flex-row items-center justify-between gap-2">
@@ -57,7 +58,11 @@ export function CounterContractCard({ contract, onDropOff, onPickUp, onOpenRecei
       ) : null}
 
       <View className="flex-row gap-2">
-        <Button className="flex-1" isDisabled={!!contract.dropOff} onPress={onDropOff}>
+        <Button
+          className="flex-1"
+          isDisabled={!!contract.dropOff}
+          onPress={() => onDropOff(openDropOffRequest?.id)}
+        >
           <Button.Label>Nhận đồ</Button.Label>
         </Button>
         <Button
@@ -69,6 +74,31 @@ export function CounterContractCard({ contract, onDropOff, onPickUp, onOpenRecei
           <Button.Label>Trả đồ</Button.Label>
         </Button>
       </View>
+
+      {openDropOffRequest ? (
+        <View className="gap-1.5 rounded-lg bg-surface-secondary p-3">
+          <View className="flex-row items-center justify-between gap-2">
+            <Text className="font-ui text-body-sm text-foreground">Khách yêu cầu gửi đồ</Text>
+            <StatusPill
+              label={dropOffStatusLabel(openDropOffRequest.status)}
+              tone={openDropOffRequest.status === 'CONFIRMED' ? 'success' : 'accent'}
+            />
+          </View>
+          <Text className="font-body text-body-sm text-foreground">
+            {linesSummary(openDropOffRequest.lines)}
+          </Text>
+          <Text className="font-body text-caption text-muted">
+            Hẹn gửi {formatIsoDateTime(String(openDropOffRequest.requestedFor))}
+          </Text>
+          <Button
+            size="sm"
+            isDisabled={!!contract.dropOff}
+            onPress={() => onDropOff(openDropOffRequest.id)}
+          >
+            <Button.Label>Nhận đồ theo yêu cầu</Button.Label>
+          </Button>
+        </View>
+      ) : null}
 
       {openRequest ? (
         <View className="gap-1.5 rounded-lg bg-surface-secondary p-3">

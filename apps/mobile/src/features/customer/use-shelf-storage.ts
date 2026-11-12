@@ -1,4 +1,9 @@
-import type { PickupRequestView, ShelfContractStorageView, ShelfReceiptView } from '@storage/types';
+import type {
+  DropOffRequestView,
+  PickupRequestView,
+  ShelfContractStorageView,
+  ShelfReceiptView,
+} from '@storage/types';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../../../lib/api';
@@ -11,6 +16,7 @@ type Loaded = {
   receipts: ShelfReceiptView[];
   hasMore: boolean;
   requests: PickupRequestView[];
+  dropOffRequests: DropOffRequestView[];
 };
 
 /** API messages are English; show Vietnamese text instead, naming only the cases we can tell apart. */
@@ -20,7 +26,7 @@ const message = (cause: unknown, fallback: string) =>
     : fallback;
 
 /**
- * Stock, receipt history and pick-up requests of one shelf contract. Reloads on focus and whenever
+ * Stock, receipt history, pick-up and drop-off requests of one shelf contract. Reloads on focus and whenever
  * `refreshKey` changes (the parent hands over a new contract object after its own refresh).
  */
 export function useShelfStorage(contractId: string, refreshKey: unknown) {
@@ -38,10 +44,11 @@ export function useShelfStorage(contractId: string, refreshKey: unknown) {
     setIsLoading(true);
     setError(null);
     try {
-      const [storage, receiptPage, requests] = await Promise.all([
+      const [storage, receiptPage, requests, dropOffRequests] = await Promise.all([
         ShelfStorageApi.contractStorage(contractId),
         ShelfStorageApi.contractReceipts(contractId, 1, RECEIPT_PAGE_SIZE),
         ShelfStorageApi.contractPickupRequests(contractId),
+        ShelfStorageApi.contractDropOffRequests(contractId),
       ]);
       if (loadId !== loadIdRef.current) return;
       pageRef.current = 1;
@@ -50,6 +57,7 @@ export function useShelfStorage(contractId: string, refreshKey: unknown) {
         receipts: receiptPage.receipts,
         hasMore: receiptPage.meta.page < receiptPage.meta.totalPages,
         requests,
+        dropOffRequests,
       });
     } catch (cause) {
       if (loadId !== loadIdRef.current) return;

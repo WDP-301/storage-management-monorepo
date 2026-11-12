@@ -20,7 +20,8 @@ import { MonthCalendar } from './MonthCalendar';
 
 const ACCENT = 'hsl(203 100% 30%)';
 
-function Stepper({
+/** − value + control for a request form inside a bottom sheet (no typed input, no keyboard). */
+export function Stepper({
   value,
   max,
   onChange,

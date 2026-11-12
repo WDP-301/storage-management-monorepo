@@ -432,6 +432,16 @@ export const StaffShiftStatus = {
 } as const;
 export type StaffShiftStatus = (typeof StaffShiftStatus)[keyof typeof StaffShiftStatus];
 
+/**
+ * What a shift template is for. OFFICE covers administrative working hours (the window a
+ * warehouse handover / receiving time must fall in); WAREHOUSE is the storage duty shift.
+ */
+export const ShiftTemplateType = {
+  OFFICE: 'OFFICE',
+  WAREHOUSE: 'WAREHOUSE',
+} as const;
+export type ShiftTemplateType = (typeof ShiftTemplateType)[keyof typeof ShiftTemplateType];
+
 export const DocumentType = {
   IDENTITY: 'IDENTITY',
   CONTRACT: 'CONTRACT',

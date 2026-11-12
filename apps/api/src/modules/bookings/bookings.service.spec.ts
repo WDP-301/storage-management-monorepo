@@ -140,6 +140,7 @@ describe('BookingsService.handlePaymentReceived', () => {
       {} as never,
       { createForUsers: jest.fn() } as never,
       handoverAssignment as never,
+      { find: jest.fn().mockResolvedValue([]) } as never,
     );
     warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
     logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation();
@@ -497,6 +498,7 @@ describe('BookingsService.cancel', () => {
       {} as never,
       { createForUsers: jest.fn() } as never,
       { assignSafely: jest.fn() } as never,
+      { find: jest.fn().mockResolvedValue([]) } as never,
     );
     warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
   });
@@ -580,7 +582,8 @@ describe('BookingsService.create — shelf rules', () => {
       items: ids.map((storageUnitId) => ({
         storageUnitId,
         rentalMonths: 3,
-        requestedStartAt: new Date().toISOString(),
+        // Comfortably in the future so it passes the receiving-time check.
+        requestedStartAt: new Date(Date.now() + 3_600_000).toISOString(),
       })),
     }) as never;
 
@@ -663,6 +666,12 @@ describe('BookingsService.create — shelf rules', () => {
       settings as never,
       { createForUsers: jest.fn() } as never,
       { assignSafely: jest.fn() } as never,
+      // A single 00:00→00:00 OFFICE template is a full 24h window, so any time passes the check.
+      {
+        find: jest
+          .fn()
+          .mockResolvedValue([{ type: 'OFFICE', startTime: '00:00', endTime: '00:00' }]),
+      } as never,
     );
   });
 

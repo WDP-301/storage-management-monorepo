@@ -175,16 +175,19 @@ export function warehouseDeposit(
   return warehouse.monthlyPrice * warehouse.effectiveDepositMonths;
 }
 
-/** Items for `POST /bookings`: each warehouse is booked through its hidden unit id. */
+/**
+ * Items for `POST /bookings`: each warehouse is booked through its hidden unit id.
+ * `requestedStartAt` is the receiving instant picked inside an OFFICE window — the API refuses a
+ * time outside the administrative working hours.
+ */
 export function buildBookingItems(
   warehouses: readonly Pick<Warehouse, 'id'>[],
-  startDate: string,
+  requestedStartAt: string,
   rentalMonths: number,
 ) {
   return warehouses.map((warehouse) => ({
     storageUnitId: warehouse.id,
-    // Noon UTC keeps the selected calendar day stable for the API's date validation.
-    requestedStartAt: `${startDate}T12:00:00.000Z`,
+    requestedStartAt,
     rentalMonths,
   }));
 }

@@ -5,7 +5,7 @@ import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { InspectionType, StaffShiftStatus, UserRole, UserStatus } from '@storage/types';
-import { type EntityManager, In, IsNull, LessThanOrEqual, MoreThan, Not } from 'typeorm';
+import { Between, type EntityManager, In, IsNull, LessThanOrEqual, MoreThan, Not } from 'typeorm';
 import { handoverAssignedNotification } from './handover-assigned.notification';
 import { nextInRotation, staffOnShiftAt } from './handover-rotation';
 
@@ -40,6 +40,42 @@ export class HandoverAssignmentService {
         err instanceof Error ? err.stack : String(err),
       );
     }
+  }
+
+  /**
+   * Re-runs the round-robin assignment for every still-unassigned handover of `facilityId` whose
+   * appointment falls in `[from, to]`. Called when staff shifts are added, so a handover left for
+   * a manager while nobody was on shift is taken as soon as the shift exists. Never throws — a
+   * failure only leaves the handovers unassigned — so it cannot undo the shift write it runs
+   * inside. Returns how many bookings were re-visited.
+   */
+  async assignPendingForFacility(
+    em: EntityManager,
+    facilityId: string,
+    from: Date,
+    to: Date,
+  ): Promise<number> {
+    let bookingIds: string[];
+    try {
+      const pending = await em.find(Inspection, {
+        where: {
+          type: InspectionType.PRE_HANDOVER,
+          inspectedBy: IsNull(),
+          scheduledAt: Between(from, to),
+          contract: { bookingItem: { storageUnit: { facilityId } } },
+        },
+        relations: { contract: { bookingItem: { storageUnit: true } } },
+      });
+      bookingIds = [...new Set(pending.map((row) => row.contract.bookingItem.bookingId))];
+    } catch (err) {
+      this.logger.error(
+        `Listing pending handovers of facility ${facilityId} failed; left for a manager`,
+        err instanceof Error ? err.stack : String(err),
+      );
+      return 0;
+    }
+    for (const bookingId of bookingIds) await this.assignSafely(em, bookingId);
+    return bookingIds.length;
   }
 
   private async assign(em: EntityManager, bookingId: string): Promise<void> {

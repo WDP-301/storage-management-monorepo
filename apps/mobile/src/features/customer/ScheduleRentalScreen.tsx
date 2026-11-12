@@ -7,11 +7,19 @@ import {
   ShieldCheck,
   Warehouse as WarehouseIcon,
 } from 'phosphor-react-native';
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useBookingSettings, useReturnSettings } from '../../../lib/client-settings';
 import { formatIsoDate, formatMoney, formatNumber } from '../../../lib/format-vi';
 import type { RentalSchedule } from '../../../lib/hold';
+import { ReceivingSlotsApi } from '../../../lib/receiving-slots-api';
+import type { ReceivingDay } from '../../../lib/receiving-time';
+import {
+  defaultInstant,
+  formatVnTime,
+  isWithinWindows,
+  timeOptionsForDate,
+} from '../../../lib/receiving-time';
 import { latestStartIso, rentalEndIso, todayIso } from '../../../lib/rental-schedule';
 import { rentalName } from '../../../lib/shelf-rental';
 import { warehouseDeposit } from '../../../lib/warehouse-query';
@@ -43,6 +51,9 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
   const { noticeDays } = useReturnSettings();
   const [pickedStart, setStartDate] = useState(todayIso);
   const [pickedMonths, setPickedMonths] = useState(defaultRentalMonths);
+  const [slots, setSlots] = useState<ReceivingDay[]>([]);
+  const [requestedStartAt, setRequestedStartAt] = useState<string | null>(null);
+  const [isLoadingSlots, setIsLoadingSlots] = useState(true);
   // Rules can refresh while the screen is open. A pick the API still accepts is kept even when it is
   // no longer suggested; anything else is pulled back in, so the summary always shows what is sent.
   const latestStart = latestStartIso(leadDays);
@@ -56,6 +67,37 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
     : [...rentalMonthsOptions, durationMonths].sort((a, b) => a - b);
   const dateSheetRef = useRef<BottomSheetModal>(null);
   const endDate = rentalEndIso(startDate, durationMonths);
+  const timeOptions = useMemo(() => timeOptionsForDate(slots, startDate), [slots, startDate]);
+  // The pick only counts while it still falls inside the shown day's windows — after a date
+  // change it is stale until the refetched slots replace it, so it must not be shown or sent.
+  const receivingTime =
+    requestedStartAt && isWithinWindows(slots, startDate, requestedStartAt)
+      ? requestedStartAt
+      : null;
+
+  // The receiving time must fall inside an OFFICE window, so it is offered from the server's slots
+  // rather than picked freely. Refetched whenever the chosen day changes.
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoadingSlots(true);
+    ReceivingSlotsApi.list(startDate, startDate)
+      .then((days) => {
+        if (cancelled) return;
+        setSlots(days);
+        setRequestedStartAt(defaultInstant(days, startDate));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSlots([]);
+        setRequestedStartAt(null);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingSlots(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [startDate]);
 
   const monthlyRent = warehouses.reduce((sum, item) => sum + item.monthlyPrice, 0);
   const deposit = warehouses.reduce((sum, item) => sum + warehouseDeposit(item), 0);
@@ -138,9 +180,31 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
         <View className="mx-4 mt-2 flex-row items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2">
           <Text className="font-body text-body-sm text-muted">Nhận bàn giao kho</Text>
           <Text className="font-strong text-body-sm text-foreground">
-            {formatIsoDate(startDate)}
+            {receivingTime
+              ? `${formatIsoDate(startDate)} · ${formatVnTime(receivingTime)}`
+              : formatIsoDate(startDate)}
           </Text>
         </View>
+
+        <SectionLabel text="Giờ nhận kho" />
+        {isLoadingSlots ? (
+          <Text className="font-body px-4 text-body-sm text-muted">Đang tải khung giờ…</Text>
+        ) : timeOptions.length === 0 ? (
+          <Text className="font-body px-4 text-body-sm text-danger">
+            Ngày này không còn khung nhận kho. Vui lòng chọn ngày khác.
+          </Text>
+        ) : (
+          <View className="flex-row flex-wrap gap-2 px-4">
+            {timeOptions.map((option) => (
+              <ChoiceChip
+                key={option.value}
+                isSelected={requestedStartAt === option.value}
+                label={option.label}
+                onPress={() => setRequestedStartAt(option.value)}
+              />
+            ))}
+          </View>
+        )}
 
         <SectionLabel text="Thời hạn thuê dự kiến" />
         <View className="flex-row flex-wrap gap-2 px-4">
@@ -207,7 +271,13 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
             {formatMoney(deposit)}
           </Text>
         </View>
-        <Button isDisabled={isCreating} onPress={() => onConfirm({ startDate, durationMonths })}>
+        <Button
+          isDisabled={isCreating || !receivingTime}
+          onPress={() => {
+            if (receivingTime)
+              onConfirm({ startDate, durationMonths, requestedStartAt: receivingTime });
+          }}
+        >
           <Button.Label className="font-ui">
             {isCreating ? 'Đang giữ kho...' : 'Giữ chỗ & Lấy VietQR'}
           </Button.Label>

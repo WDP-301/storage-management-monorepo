@@ -1,4 +1,5 @@
 import { AuditWithTimezone } from '@shared/models/audit.model';
+import { ShiftTemplateType } from '@storage/types';
 import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 /**
@@ -19,6 +20,10 @@ export class ShiftTemplate extends AuditWithTimezone {
 
   @Column({ type: 'varchar', length: 100 })
   name: string;
+
+  /** OFFICE for administrative hours, WAREHOUSE for the storage duty shift. */
+  @Column({ type: 'varchar', length: 20 })
+  type: ShiftTemplateType;
 
   /** Local wall-clock time (HH:mm:ss). An end_time at or before start_time means overnight. */
   @Column({ type: 'time', name: 'start_time' })

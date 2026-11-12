@@ -4,6 +4,7 @@ import { Booking } from '@entities/booking.entity';
 import { BookingItem } from '@entities/booking-item.entity';
 import { IdempotencyKey } from '@entities/idempotency-key.entity';
 import { Payment } from '@entities/payment.entity';
+import { ShiftTemplate } from '@entities/shift-template.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
@@ -15,6 +16,7 @@ import { markSepayOutcome } from '@modules/payments/sepay-transfers.util';
 import { PAYMENT_EVENTS, PaymentReceivedEvent } from '@modules/payments/types/payment';
 import { buildPaymentQrUrl, paymentQrConfigured } from '@modules/payments/vietqr.util';
 import { SettingsService } from '@modules/settings/settings.service';
+import { assertDateRange, eachDate } from '@modules/staff-shifts/shift-calendar';
 import { HttpStatus, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
@@ -34,6 +36,7 @@ import {
   PaymentMethod,
   PaymentStatus,
   PaymentType,
+  ShiftTemplateType,
   StorageUnitStatus,
 } from '@storage/types';
 import Decimal from 'decimal.js';
@@ -41,6 +44,12 @@ import { DataSource, DeepPartial, In, LessThan, MoreThan, Not, Repository } from
 import { extractBookingNos, generateBookingNo } from './booking-no.util';
 import { depositPartialNotification } from './deposit-notifications';
 import { BookingResponseDto, CreateBookingDto } from './dto/booking.dto';
+import type { ReceivingSlotsResponse } from './dto/receiving-slot.dto';
+import {
+  futureWindows,
+  receivingWindowsForDate,
+  validateReceivingTimes,
+} from './receiving-window.util';
 import { findUnrentable, lockShelfParents } from './rentable-units.util';
 
 const STATUSES_AWAITING_DEPOSIT: BookingStatus[] = [
@@ -76,6 +85,8 @@ export class BookingsService implements OnApplicationBootstrap {
     private readonly settings: SettingsService,
     private readonly notifications: NotificationsService,
     private readonly handoverAssignment: HandoverAssignmentService,
+    @InjectRepository(ShiftTemplate)
+    private readonly shiftTemplates: Repository<ShiftTemplate>,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -158,6 +169,15 @@ export class BookingsService implements OnApplicationBootstrap {
           });
         }
       });
+
+      // The receiving time must land inside an OFFICE shift (the administrative working hours),
+      // so a handover can actually be staffed.
+      const officeTemplates = await this.shiftTemplates.find({
+        where: { isActive: true, type: ShiftTemplateType.OFFICE },
+        order: { startTime: 'ASC' },
+      });
+      fieldErrors.push(...validateReceivingTimes(dto.items, officeTemplates));
+
       if (fieldErrors.length > 0) {
         throw new DomainException(
           ErrorCode.VALIDATION_FAILED,
@@ -408,6 +428,28 @@ export class BookingsService implements OnApplicationBootstrap {
   // ---------------------------------------------------------------------------
   // Read
   // ---------------------------------------------------------------------------
+
+  /**
+   * The system work-shift windows a warehouse may be received in, per Vietnam day, from the
+   * active OFFICE templates. Windows are returned as instants; only the future part of each day
+   * is served. Used to constrain the receiving time offered on checkout.
+   */
+  async listReceivingSlots(from: string, to: string): Promise<ReceivingSlotsResponse> {
+    assertDateRange(from, to);
+    const templates = await this.shiftTemplates.find({
+      where: { isActive: true, type: ShiftTemplateType.OFFICE },
+      order: { startTime: 'ASC' },
+    });
+    const now = new Date();
+    const days = eachDate(from, to).map((date) => ({
+      date,
+      windows: futureWindows(receivingWindowsForDate(date, templates), now).map((window) => ({
+        startAt: window.startAt.toISOString(),
+        endAt: window.endAt.toISOString(),
+      })),
+    }));
+    return { days };
+  }
 
   async findByCustomer(userId: string): Promise<BookingResponseDto[]> {
     const bookings = await this.bookingRepo.find({

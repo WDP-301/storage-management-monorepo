@@ -19,6 +19,7 @@ import { AppDataSource } from '../data-source';
 import { seed } from './demo-seed';
 import { DEMO_ACCOUNTS, DEMO_FACILITIES, DEMO_PASSWORD, DEMO_WAREHOUSES } from './demo-seed-data';
 import { DEMO_SHELF_WAREHOUSE } from './demo-shelf-warehouse-data';
+import { seedShiftTemplates } from './shift-templates-seed';
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -65,6 +66,7 @@ const WIPE_STEPS: { table: string; sql: string }[] = [
     table: 'user_role_assignments',
     sql: 'DELETE FROM "user_role_assignments" WHERE "facility_id" IS NOT NULL',
   },
+  { table: 'staff_shifts', sql: 'DELETE FROM "staff_shifts"' },
   { table: 'storage_unit_amenities', sql: 'DELETE FROM "storage_unit_amenities"' },
   { table: 'storage_units', sql: 'DELETE FROM "storage_units"' },
   { table: 'amenities', sql: 'DELETE FROM "amenities"' },
@@ -143,6 +145,7 @@ async function main(): Promise<void> {
     const steps = wipeUsers ? [...WIPE_STEPS, ...USER_WIPE_STEPS] : WIPE_STEPS;
     await AppDataSource.transaction((manager) => wipe(manager, steps));
     const applied = await AppDataSource.runMigrations({ transaction: 'each' });
+    await AppDataSource.transaction((manager) => seedShiftTemplates(manager));
     await AppDataSource.transaction((manager) => seed(manager, demoPassword));
     console.log(
       `db:reset-demo: wiped business data${wipeUsers ? ' and all users' : ''}, applied ${applied.length} migration(s), seeded ` +

@@ -14,7 +14,12 @@ import { formatIsoDate, formatMoney, formatNumber } from '../../../lib/format-vi
 import type { RentalSchedule } from '../../../lib/hold';
 import { ReceivingSlotsApi } from '../../../lib/receiving-slots-api';
 import type { ReceivingDay } from '../../../lib/receiving-time';
-import { defaultInstant, formatVnTime, timeOptionsForDate } from '../../../lib/receiving-time';
+import {
+  defaultInstant,
+  formatVnTime,
+  isWithinWindows,
+  timeOptionsForDate,
+} from '../../../lib/receiving-time';
 import { latestStartIso, rentalEndIso, todayIso } from '../../../lib/rental-schedule';
 import { rentalName } from '../../../lib/shelf-rental';
 import { warehouseDeposit } from '../../../lib/warehouse-query';
@@ -63,6 +68,12 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
   const dateSheetRef = useRef<BottomSheetModal>(null);
   const endDate = rentalEndIso(startDate, durationMonths);
   const timeOptions = useMemo(() => timeOptionsForDate(slots, startDate), [slots, startDate]);
+  // The pick only counts while it still falls inside the shown day's windows — after a date
+  // change it is stale until the refetched slots replace it, so it must not be shown or sent.
+  const receivingTime =
+    requestedStartAt && isWithinWindows(slots, startDate, requestedStartAt)
+      ? requestedStartAt
+      : null;
 
   // The receiving time must fall inside an OFFICE window, so it is offered from the server's slots
   // rather than picked freely. Refetched whenever the chosen day changes.
@@ -169,8 +180,8 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
         <View className="mx-4 mt-2 flex-row items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2">
           <Text className="font-body text-body-sm text-muted">Nhận bàn giao kho</Text>
           <Text className="font-strong text-body-sm text-foreground">
-            {requestedStartAt
-              ? `${formatIsoDate(startDate)} · ${formatVnTime(requestedStartAt)}`
+            {receivingTime
+              ? `${formatIsoDate(startDate)} · ${formatVnTime(receivingTime)}`
               : formatIsoDate(startDate)}
           </Text>
         </View>
@@ -261,9 +272,10 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
           </Text>
         </View>
         <Button
-          isDisabled={isCreating || !requestedStartAt}
+          isDisabled={isCreating || !receivingTime}
           onPress={() => {
-            if (requestedStartAt) onConfirm({ startDate, durationMonths, requestedStartAt });
+            if (receivingTime)
+              onConfirm({ startDate, durationMonths, requestedStartAt: receivingTime });
           }}
         >
           <Button.Label className="font-ui">

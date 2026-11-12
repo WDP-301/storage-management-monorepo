@@ -1,4 +1,5 @@
 import {
+  DropOffRequestStatus,
   PickupRequestStatus,
   type ShelfReceiptLineView,
   ShelfReceiptStatus,
@@ -23,6 +24,13 @@ export const PICKUP_REQUEST_STATUS_LABEL: Record<PickupRequestStatus, string> = 
   [PickupRequestStatus.READY]: 'Đã chuẩn bị',
   [PickupRequestStatus.COMPLETED]: 'Đã hoàn tất',
   [PickupRequestStatus.CANCELLED]: 'Đã hủy',
+};
+
+export const DROP_OFF_REQUEST_STATUS_LABEL: Record<DropOffRequestStatus, string> = {
+  [DropOffRequestStatus.PENDING]: 'Chờ xác nhận',
+  [DropOffRequestStatus.CONFIRMED]: 'Đã xác nhận',
+  [DropOffRequestStatus.COMPLETED]: 'Đã gửi',
+  [DropOffRequestStatus.CANCELLED]: 'Đã hủy',
 };
 
 export const TICKET_STATUS_LABEL: Record<TicketStatus, string> = {

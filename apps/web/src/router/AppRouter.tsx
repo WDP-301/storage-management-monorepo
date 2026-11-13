@@ -106,6 +106,19 @@ export const AppRouter: React.FC = () => {
             >
               <Route path="/admin/facilities" element={<FacilityManagementPage />} />
               <Route path="/admin/warehouses" element={<WarehouseManagementPage />} />
+            </Route>
+
+            <Route
+              element={
+                <RoleRoute
+                  allowedRoles={[
+                    UserRole.ADMIN,
+                    UserRole.OPERATIONS_MANAGER,
+                    UserRole.FACILITY_MANAGER,
+                  ]}
+                />
+              }
+            >
               <Route path="/admin/sepay-transfers" element={<SepayReconciliationPage />} />
             </Route>
 

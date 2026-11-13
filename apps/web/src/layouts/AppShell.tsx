@@ -57,6 +57,7 @@ const ROLE_NAV: Record<UserRole, NavItem[]> = {
   [UserRole.FACILITY_MANAGER]: [
     { to: '/facility-manager', label: 'Kho của chi nhánh', icon: Warehouse },
     { to: '/facility-manager/tickets', label: 'Vé sự cố', icon: Lifebuoy },
+    { to: '/admin/sepay-transfers', label: 'Đối soát chuyển khoản', icon: Money },
     // Handover/return records are part of a contract: managers assign staff from its detail.
     { to: '/contracts', label: 'Hợp đồng', icon: FileText },
     { to: '/facility-manager/tour-appointments', label: 'Lịch xem kho', icon: CalendarCheck },

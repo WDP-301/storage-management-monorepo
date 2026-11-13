@@ -228,8 +228,8 @@ export const SepayReconciliationPage: React.FC = () => {
               <Table.Head>Số tiền</Table.Head>
               <Table.Head>Nội dung chuyển khoản</Table.Head>
               <Table.Head>Trạng thái</Table.Head>
-              <Table.Head>Xử lý</Table.Head>
-              <Table.Head className="text-right">Thao tác</Table.Head>
+              <Table.Head>Chi tiết xử lý</Table.Head>
+              <Table.Head className="text-center">Thao tác</Table.Head>
             </Table.Row>
           </Table.Header>
           <Table.Body>
@@ -282,47 +282,47 @@ export const SepayReconciliationPage: React.FC = () => {
                       {t.resolution_note ? (
                         <span className="text-xs text-kumo-subtle">{t.resolution_note}</span>
                       ) : t.booking_id ? (
-                        <span className="text-xs text-kumo-subtle font-mono">booking đã gán</span>
+                        <span className="text-xs text-kumo-subtle">Booking đã gán</span>
+                      ) : t.invoice_id ? (
+                        <span className="text-xs text-kumo-subtle">Đã ghi nhận hóa đơn</span>
                       ) : (
                         <span className="text-xs text-kumo-subtle">—</span>
                       )}
                     </Table.Cell>
-                    <Table.Cell className="whitespace-nowrap text-right">
-                      <DropdownMenu>
-                        <DropdownMenu.Trigger
-                          render={
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              shape="square"
-                              icon={<DotsThree weight="bold" />}
-                              aria-label={`Thao tác chuyển khoản ${t.sepay_id}`}
-                              title={`Thao tác chuyển khoản ${t.sepay_id}`}
-                            />
-                          }
-                        />
-                        <DropdownMenu.Content align="end" sideOffset={4}>
-                          {actionable ? (
-                            <>
-                              <DropdownMenu.Item icon={LinkIcon} onClick={() => openAssign(t)}>
-                                Gán vào booking…
-                              </DropdownMenu.Item>
-                              <DropdownMenu.Item
-                                icon={CheckCircle}
-                                onClick={() => {
-                                  setResolveTarget(t);
-                                  setResolveNote('');
-                                  setResolveError(null);
-                                }}
-                              >
-                                Đóng thủ công…
-                              </DropdownMenu.Item>
-                            </>
-                          ) : (
-                            <DropdownMenu.Item disabled>Đã xử lý xong</DropdownMenu.Item>
-                          )}
-                        </DropdownMenu.Content>
-                      </DropdownMenu>
+                    <Table.Cell className="whitespace-nowrap text-center">
+                      {actionable ? (
+                        <DropdownMenu>
+                          <DropdownMenu.Trigger
+                            render={
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                shape="square"
+                                icon={<DotsThree weight="bold" />}
+                                aria-label={`Thao tác chuyển khoản ${t.sepay_id}`}
+                                title={`Thao tác chuyển khoản ${t.sepay_id}`}
+                              />
+                            }
+                          />
+                          <DropdownMenu.Content align="end" sideOffset={4}>
+                            <DropdownMenu.Item icon={LinkIcon} onClick={() => openAssign(t)}>
+                              Gán vào booking…
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Item
+                              icon={CheckCircle}
+                              onClick={() => {
+                                setResolveTarget(t);
+                                setResolveNote('');
+                                setResolveError(null);
+                              }}
+                            >
+                              Đóng thủ công…
+                            </DropdownMenu.Item>
+                          </DropdownMenu.Content>
+                        </DropdownMenu>
+                      ) : (
+                        <span className="text-xs text-kumo-subtle">Đã xong</span>
+                      )}
                     </Table.Cell>
                   </Table.Row>
                 );
@@ -383,28 +383,26 @@ export const SepayReconciliationPage: React.FC = () => {
               </div>
             )}
 
-            <InputGroup>
-              <InputGroup.Label>Mã booking (BK-…)</InputGroup.Label>
+            <InputGroup
+              label="Mã booking (BK-…)"
+              description="Hệ thống sẽ ghi nhận khoản này như tiền cọc của booking và xác nhận nếu đủ."
+            >
               <InputGroup.Input
                 value={bookingNo}
                 onChange={(e) => setBookingNo(e.target.value)}
                 placeholder="VD: BK-20261110-1234"
                 autoFocus
               />
-              <InputGroup.Description>
-                Hệ thống sẽ ghi nhận khoản này như tiền cọc của booking và xác nhận nếu đủ.
-              </InputGroup.Description>
             </InputGroup>
 
-            <InputGroup>
-              <InputGroup.Label>Ghi chú (không bắt buộc)</InputGroup.Label>
-              <Textarea
-                value={assignNote}
-                onChange={(e) => setAssignNote(e.target.value)}
-                placeholder="Vì sao gán vào booking này — khách xác nhận qua hotline…"
-                rows={2}
-              />
-            </InputGroup>
+            <Textarea
+              label="Ghi chú (không bắt buộc)"
+              value={assignNote}
+              onChange={(e) => setAssignNote(e.target.value)}
+              placeholder="Vì sao gán vào booking này — khách xác nhận qua hotline…"
+              rows={2}
+              className="w-full min-w-0 resize-y"
+            />
 
             {assignError && (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-kumo-danger-tint text-kumo-danger text-sm">
@@ -472,16 +470,16 @@ export const SepayReconciliationPage: React.FC = () => {
               ngoài hệ thống. Ghi chú là bắt buộc để đối soát sau này.
             </Text>
 
-            <InputGroup>
-              <InputGroup.Label>Cách xử lý (bắt buộc)</InputGroup.Label>
-              <Textarea
-                value={resolveNote}
-                onChange={(e) => setResolveNote(e.target.value)}
-                placeholder="VD: Khách CK nhầm, đã hoàn 1.500.000₫ qua MB lúc 14h 10/11 — phiếu chi #123"
-                rows={3}
-                autoFocus
-              />
-            </InputGroup>
+            <Textarea
+              label="Cách xử lý"
+              required
+              value={resolveNote}
+              onChange={(e) => setResolveNote(e.target.value)}
+              placeholder="VD: Khách CK nhầm, đã hoàn 1.500.000₫ qua MB lúc 14h 10/11 — phiếu chi #123"
+              rows={4}
+              autoFocus
+              className="w-full min-w-0 resize-y"
+            />
 
             {resolveError && (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-kumo-danger-tint text-kumo-danger text-sm">

@@ -208,15 +208,18 @@ export const FacilityManagerDashboard: React.FC = () => {
 
   const handleChangeAction = async (
     requestId: string,
-    action: 'start' | 'complete' | 'cancel',
+    action: 'final-approve' | 'cancel',
     done: string,
   ) => {
     setBusyId(requestId);
     try {
-      const { request } = await ChangeRequestsApi[action](requestId);
+      const { request } =
+        action === 'final-approve'
+          ? await ChangeRequestsApi.finalApprove(requestId)
+          : await ChangeRequestsApi.cancel(requestId);
       setRequests((prev) => prev.map((r) => (r.id === requestId ? request : r)));
       toast.info('Cập nhật đổi kho', done);
-      if (action !== 'start') await load(false);
+      await load(false);
     } catch (err) {
       toast.error('Không cập nhật được', describeActionError(err));
       await load(false);
@@ -253,6 +256,10 @@ export const FacilityManagerDashboard: React.FC = () => {
   const occupancy =
     warehouses.length > 0 ? ((occupied / warehouses.length) * 100).toFixed(1) : '0.0';
   const pendingRequests = requests.filter((r) => r.status === 'REQUESTED').length;
+  // Settled moves whose destination handover is signed and now await the manager's L2 sign-off.
+  const awaitingFinalApproval = requests.filter(
+    (r) => r.status === 'AWAITING_FINAL_APPROVAL',
+  ).length;
 
   if (isLoading || (waitingForFacility && facilityLoading)) {
     return <Text variant="secondary">Đang tải danh sách kho...</Text>;
@@ -320,7 +327,7 @@ export const FacilityManagerDashboard: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
         <KpiCard
           label="Kho đang cho thuê"
           value={occupied}
@@ -350,6 +357,16 @@ export const FacilityManagerDashboard: React.FC = () => {
           value={pendingRequests}
           icon={<WarningCircle className="w-4 h-4 text-kumo-warning" />}
           badge={<Badge variant="warning">Cần xử lý</Badge>}
+        />
+        <KpiCard
+          label="Cần chốt cuối"
+          value={awaitingFinalApproval}
+          icon={<CheckCircle className="w-4 h-4 text-kumo-brand" />}
+          badge={
+            <Badge variant={awaitingFinalApproval > 0 ? 'warning' : 'neutral'}>
+              {awaitingFinalApproval > 0 ? 'Chờ xác nhận hoàn tất' : 'Không có'}
+            </Badge>
+          }
         />
         <KpiCard
           label="Đang bảo trì / ngừng"
@@ -404,9 +421,12 @@ export const FacilityManagerDashboard: React.FC = () => {
         requests={requests}
         busyId={busyId}
         onDecide={handleDecision}
-        onStart={(id) => void handleChangeAction(id, 'start', 'Đã bắt đầu chuyển kho.')}
-        onComplete={(id) =>
-          void handleChangeAction(id, 'complete', 'Đã hoàn tất — hợp đồng chuyển sang kho mới.')
+        onFinalApprove={(id) =>
+          void handleChangeAction(
+            id,
+            'final-approve',
+            'Đã hoàn tất — kho cũ chuyển bảo trì, yêu cầu khép lại.',
+          )
         }
         onCancel={(id) =>
           void handleChangeAction(id, 'cancel', 'Đã thu hồi — kho giữ chỗ được giải phóng.')

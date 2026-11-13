@@ -89,33 +89,36 @@ export class ChangeRequestsController {
     return this.changeRequests.decide(id, dto, user);
   }
 
-  @Post(':id/start')
-  @Roles(UserRole.ADMIN, UserRole.FACILITY_MANAGER)
-  @ApiOperation({ summary: 'Mark the physical move started (APPROVED → TRANSITIONING)' })
-  start(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: AuthUser,
-  ): Promise<ChangeRequestResponse> {
-    return this.changeRequests.start(id, user);
-  }
-
-  @Post(':id/complete')
+  @Post(':id/final-approve')
   @Roles(UserRole.ADMIN, UserRole.FACILITY_MANAGER)
   @ApiOperation({
-    summary: 'Confirm the move is done — swaps the units and retires the old one to MAINTENANCE',
+    summary:
+      'L2 final approval after handover — retires the old unit to MAINTENANCE and completes the move',
   })
-  complete(
+  finalApprove(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthUser,
   ): Promise<ChangeRequestResponse> {
-    return this.changeRequests.complete(id, user);
+    return this.changeRequests.finalApprove(id, user);
+  }
+
+  @Post(':id/retry-settle')
+  @Roles(UserRole.ADMIN, UserRole.FACILITY_MANAGER)
+  @ApiOperation({
+    summary: 'Retry the settle step when a paid top-up left the request stuck in AWAITING_PAYMENT',
+  })
+  retrySettle(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<ChangeRequestResponse> {
+    return this.changeRequests.retrySettle(id, user);
   }
 
   @Post(':id/cancel')
   @Roles(UserRole.ADMIN, UserRole.CUSTOMER, UserRole.FACILITY_MANAGER)
   @ApiOperation({
     summary:
-      'Withdraw a request — customer while REQUESTED; manager also on approved requests (releases the held unit, voids an unpaid top-up)',
+      'Withdraw a request — customer before paying; manager up to the signed handover (releases the held unit, or unwinds the destination contract)',
   })
   cancel(
     @Param('id', ParseUUIDPipe) id: string,

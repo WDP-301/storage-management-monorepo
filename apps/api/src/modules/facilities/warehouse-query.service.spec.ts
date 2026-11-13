@@ -84,6 +84,7 @@ function build(options: {
       createQueryBuilder: jest.fn((entity: unknown) =>
         entity === StorageUnitAmenity ? amenities.qb : summary.qb,
       ),
+      query: jest.fn().mockResolvedValue([]),
     },
   };
   const roleAssignments = { find: jest.fn().mockResolvedValue(options.assignments ?? []) };

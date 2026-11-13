@@ -110,16 +110,37 @@ export const InvoiceKind = {
 } as const;
 export type InvoiceKind = (typeof InvoiceKind)[keyof typeof InvoiceKind];
 
+/**
+ * Two-approval move flow: REQUESTED → AWAITING_PAYMENT (deposit top-up billed) or
+ * AWAITING_HANDOVER (nothing to pay, settled immediately) → AWAITING_FINAL_APPROVAL (handover
+ * signed) → COMPLETED. PROPOSED/APPROVED/TRANSITIONING are the old one-approval statuses, kept so
+ * historical rows stay valid — no code writes them any more.
+ */
 export const ChangeRequestStatus = {
   REQUESTED: 'REQUESTED',
-  PROPOSED: 'PROPOSED',
-  APPROVED: 'APPROVED',
-  TRANSITIONING: 'TRANSITIONING',
+  /** L1 done: a deposit top-up is billed and must be paid before anything moves. */
+  AWAITING_PAYMENT: 'AWAITING_PAYMENT',
+  /** Settled: old contract CANCELLED, destination contract created, handover scheduled. */
+  AWAITING_HANDOVER: 'AWAITING_HANDOVER',
+  /** Handover signed (destination contract ACTIVE) — waiting for the manager's final approval. */
+  AWAITING_FINAL_APPROVAL: 'AWAITING_FINAL_APPROVAL',
   COMPLETED: 'COMPLETED',
   REJECTED: 'REJECTED',
   CANCELLED: 'CANCELLED',
+  /** Legacy one-approval statuses — historical rows only. */
+  PROPOSED: 'PROPOSED',
+  APPROVED: 'APPROVED',
+  TRANSITIONING: 'TRANSITIONING',
 } as const;
 export type ChangeRequestStatus = (typeof ChangeRequestStatus)[keyof typeof ChangeRequestStatus];
+
+/** Statuses that still occupy a contract's single open-change slot (mirrors UQ_open_change_request). */
+export const OPEN_CHANGE_REQUEST_STATUSES: readonly ChangeRequestStatus[] = [
+  ChangeRequestStatus.REQUESTED,
+  ChangeRequestStatus.AWAITING_PAYMENT,
+  ChangeRequestStatus.AWAITING_HANDOVER,
+  ChangeRequestStatus.AWAITING_FINAL_APPROVAL,
+];
 
 export const InvoiceStatus = {
   DRAFT: 'DRAFT',
@@ -416,6 +437,12 @@ export const NotificationType = {
   UNIT_CHANGE_CANCELLED: 'UNIT_CHANGE_CANCELLED',
   /** To managers of the unit being left: the approved move happens today (or is overdue). */
   UNIT_CHANGE_MOVE_TODAY: 'UNIT_CHANGE_MOVE_TODAY',
+  /** To the destination branch: the customer's handover is signed, awaiting the final approval. */
+  UNIT_CHANGE_READY_FOR_FINAL_APPROVAL: 'UNIT_CHANGE_READY_FOR_FINAL_APPROVAL',
+  /** To the old branch: the vacated unit is out of rotation and needs a maintenance check. */
+  MAINTENANCE_CHECK_DUE: 'MAINTENANCE_CHECK_DUE',
+  /** To the old branch: the maintenance check is done and the unit is back (or still out). */
+  MAINTENANCE_COMPLETED: 'MAINTENANCE_COMPLETED',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 

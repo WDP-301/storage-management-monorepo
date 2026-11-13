@@ -62,6 +62,7 @@ export default function StaffTabsLayout() {
           <RouterTabs.Screen name="shelf-receipt-form" options={{ title: 'Phiếu gửi / lấy đồ' }} />
           <RouterTabs.Screen name="shelf-receipt" options={{ title: 'Chi tiết phiếu' }} />
           <RouterTabs.Screen name="staff-tour" options={{ title: 'Ca dẫn khách' }} />
+          <RouterTabs.Screen name="staff-maintenance" options={{ title: 'Bảo trì' }} />
         </RouterTabs>
       </SafeAreaView>
     </NotificationsUnreadProvider>
@@ -117,7 +118,13 @@ function StaffTabBar({
 }
 
 function toStaffTab(routeName: string | undefined): StaffTab {
-  if (routeName === 'staff-contract' || routeName === 'staff-tour') return 'today';
+  if (
+    routeName === 'staff-contract' ||
+    routeName === 'staff-tour' ||
+    routeName === 'staff-maintenance'
+  ) {
+    return 'today';
+  }
   if (routeName === 'staff-ticket') return 'requests';
   if (routeName === 'shelf-receipt-form' || routeName === 'shelf-receipt') return 'scan';
   if (

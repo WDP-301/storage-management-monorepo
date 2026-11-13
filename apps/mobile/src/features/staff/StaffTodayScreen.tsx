@@ -10,20 +10,22 @@ import { groupBySchedule, SCHEDULE_GROUP_LABEL } from './inspection-display';
 import { StaffTourListItem } from './StaffTourListItem';
 import { useStaffInspections } from './use-staff-inspections';
 
-type Segment = 'handover' | 'return' | 'tours' | 'done';
+type Segment = 'handover' | 'return' | 'maintenance' | 'tours' | 'done';
 
 const SEGMENT_KIND: Record<Exclude<Segment, 'done' | 'tours'>, InspectionKind> = {
   handover: 'PRE_HANDOVER',
   return: 'RETURN',
+  maintenance: 'MAINTENANCE',
 };
 
 type Props = {
   onOpen: (contractId: string) => void;
   onOpenTour?: (tourId: string) => void;
+  onOpenMaintenance?: (inspectionId: string) => void;
 };
 
-/** Today tab: the handovers, returns and tour appointments to carry out. */
-export function StaffTodayScreen({ onOpen, onOpenTour }: Props) {
+/** Today tab: the handovers, returns, maintenance checks and tour appointments to carry out. */
+export function StaffTodayScreen({ onOpen, onOpenTour, onOpenMaintenance }: Props) {
   const [segment, setSegment] = useState<Segment>('handover');
   const { items, isLoading, error, refetch } = useStaffInspections(
     segment === 'done' ? 'done' : 'open',
@@ -63,6 +65,10 @@ export function StaffTodayScreen({ onOpen, onOpenTour }: Props) {
   }, [items, segment]);
 
   const open = (item: StaffInspection) => {
+    if (item.type === 'MAINTENANCE') {
+      onOpenMaintenance?.(item.id);
+      return;
+    }
     if (item.contract) onOpen(item.contract.id);
     else Alert.alert('Không mở được', 'Biên bản này chưa gắn với hợp đồng nào.');
   };
@@ -88,7 +94,7 @@ export function StaffTodayScreen({ onOpen, onOpenTour }: Props) {
       <View className="px-4 pb-4 pt-5">
         <Text className="text-title-md font-strong tracking-tight text-foreground">Hôm nay</Text>
         <Text className="font-body mt-1 text-body-sm text-muted">
-          Lượt nhận kho, trả kho và các ca dẫn khách tham quan.
+          Lượt nhận kho, trả kho, bảo trì và các ca dẫn khách tham quan.
         </Text>
 
         <View className="mt-4 flex-row flex-wrap gap-2">
@@ -101,6 +107,11 @@ export function StaffTodayScreen({ onOpen, onOpenTour }: Props) {
             label="Trả kho"
             isSelected={segment === 'return'}
             onPress={() => setSegment('return')}
+          />
+          <ChipButton
+            label="Bảo trì"
+            isSelected={segment === 'maintenance'}
+            onPress={() => setSegment('maintenance')}
           />
           <ChipButton
             label="Dẫn khách"
@@ -128,7 +139,9 @@ export function StaffTodayScreen({ onOpen, onOpenTour }: Props) {
               ? 'Không có ca dẫn khách nào được gán.'
               : segment === 'done'
                 ? 'Chưa có biên bản nào được chốt.'
-                : 'Không có lượt nào cần xử lý.'}
+                : segment === 'maintenance'
+                  ? 'Không có kho nào cần kiểm tra bảo trì.'
+                  : 'Không có lượt nào cần xử lý.'}
           </Text>
         ) : segment === 'tours' ? (
           <View className="mt-5 gap-3">

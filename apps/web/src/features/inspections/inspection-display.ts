@@ -11,6 +11,13 @@ export const INSPECTION_KIND_LABEL: Record<InspectionKind, string> = {
   MAINTENANCE: 'Bảo trì',
 };
 
+/** Badge tone per record kind; maintenance is the one that can hold a unit back for repair. */
+export const INSPECTION_KIND_TONE: Record<InspectionKind, 'info' | 'neutral' | 'warning'> = {
+  PRE_HANDOVER: 'info',
+  RETURN: 'neutral',
+  MAINTENANCE: 'warning',
+};
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type InspectionState = 'unassigned' | 'open' | 'done';
@@ -91,6 +98,11 @@ export function matchesSearch(row: InspectionRecord, query: string): boolean {
 export function finalizeConsequence(row: InspectionRecord): string {
   if (row.type === 'PRE_HANDOVER') {
     return 'Hợp đồng sẽ có hiệu lực và kho chuyển sang Đang thuê.';
+  }
+  // A maintenance record only records the check: the old unit stays in maintenance, and reopening
+  // it is the manager's decision. The contract itself stays cancelled.
+  if (row.type === 'MAINTENANCE') {
+    return 'Biên bản sẽ được chốt. Kho vẫn ở Bảo trì — chi nhánh sẽ quyết định mở lại kho.';
   }
   // Only a major damage takes the unit out of service; minor ones are settled from the deposit.
   const major = toDamages(row.damages).some((damage) => damage.severity === 'MAJOR');

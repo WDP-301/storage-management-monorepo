@@ -63,6 +63,13 @@ const KNOWN_TYPES: Partial<Record<NotificationType, NotificationDisplay>> = {
   UNIT_CHANGE_COMPLETED: { label: 'Đã đổi kho', icon: 'return', tone: 'success' },
   UNIT_CHANGE_CANCELLED: { label: 'Đổi kho bị huỷ', icon: 'overdue', tone: 'warning' },
   UNIT_CHANGE_MOVE_TODAY: { label: 'Hôm nay chuyển kho', icon: 'return', tone: 'warning' },
+  UNIT_CHANGE_READY_FOR_FINAL_APPROVAL: {
+    label: 'Chờ chốt đổi kho',
+    icon: 'return',
+    tone: 'warning',
+  },
+  MAINTENANCE_CHECK_DUE: { label: 'Cần kiểm tra kho cũ', icon: 'return', tone: 'warning' },
+  MAINTENANCE_COMPLETED: { label: 'Đã kiểm tra kho cũ', icon: 'return', tone: 'success' },
 };
 
 const FALLBACK_DISPLAY: NotificationDisplay = {

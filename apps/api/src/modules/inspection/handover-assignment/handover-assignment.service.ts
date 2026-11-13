@@ -4,7 +4,13 @@ import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { Injectable, Logger } from '@nestjs/common';
-import { InspectionType, StaffShiftStatus, UserRole, UserStatus } from '@storage/types';
+import {
+  InspectionType,
+  NotificationType,
+  StaffShiftStatus,
+  UserRole,
+  UserStatus,
+} from '@storage/types';
 import { Between, type EntityManager, In, IsNull, LessThanOrEqual, MoreThan, Not } from 'typeorm';
 import { handoverAssignedNotification } from './handover-assigned.notification';
 import { nextInRotation, staffOnShiftAt } from './handover-rotation';
@@ -40,6 +46,78 @@ export class HandoverAssignmentService {
         err instanceof Error ? err.stack : String(err),
       );
     }
+  }
+
+  /**
+   * Assigns a maintenance check of a vacated unit to a staff member of THAT unit's facility, round
+   * robin by name. No customer is met, so no shift has to cover the time — every active staff
+   * member of the facility is eligible. Returns the chosen staff id, or null when the facility has
+   * no staff left for a manager.
+   */
+  async assignMaintenanceInspection(
+    em: EntityManager,
+    inspectionId: string,
+  ): Promise<string | null> {
+    const inspection = await em.findOne(Inspection, {
+      where: { id: inspectionId },
+      relations: { contract: { bookingItem: { storageUnit: true } } },
+    });
+    if (!inspection || inspection.type !== InspectionType.MAINTENANCE) return null;
+    if (inspection.inspectedBy) return inspection.inspectedBy;
+
+    const unit = inspection.contract?.bookingItem?.storageUnit;
+    const facilityId = unit?.facilityId;
+    if (!facilityId) return null;
+
+    const staff = await this.facilityStaff(em, facilityId);
+    if (staff.length === 0) {
+      this.logger.warn(
+        `No staff at facility ${facilityId} to check the maintenance of ${unit?.code ?? '?'}`,
+      );
+      return null;
+    }
+
+    await em.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+      `handover_rotation:${facilityId}`,
+    ]);
+    const staffId = nextInRotation(
+      staff,
+      await this.lastMaintenanceStaffId(em, facilityId),
+      new Set(staff.map((member) => member.id)),
+    );
+    if (!staffId) return null;
+
+    await em.update(Inspection, { id: inspection.id }, { inspectedBy: staffId });
+    await this.notifications.createForUsers(em, [staffId], {
+      type: NotificationType.MAINTENANCE_CHECK_DUE,
+      title: 'Bạn được phân công kiểm tra kho',
+      body:
+        `Kho ${unit?.code ?? ''} đã trống sau khi khách chuyển đi — kiểm tra và chốt biên bản ` +
+        'bảo trì.',
+      data: {
+        inspectionId: inspection.id,
+        contractId: inspection.contractId,
+        unitCode: unit?.code ?? null,
+      },
+    });
+    return staffId;
+  }
+
+  /** Staff member of the facility's most recently assigned maintenance inspection. */
+  private async lastMaintenanceStaffId(
+    em: EntityManager,
+    facilityId: string,
+  ): Promise<string | null> {
+    const last = await em.findOne(Inspection, {
+      where: {
+        type: InspectionType.MAINTENANCE,
+        inspectedBy: Not(IsNull()),
+        contract: { bookingItem: { storageUnit: { facilityId } } },
+      },
+      relations: { contract: { bookingItem: { storageUnit: true } } },
+      order: { createdAt: 'DESC', id: 'DESC' },
+    });
+    return last?.inspectedBy ?? null;
   }
 
   /**

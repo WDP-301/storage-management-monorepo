@@ -117,7 +117,8 @@ function ContractDetail({
   const isActive = contract.status === 'ACTIVE';
   const pending = openReturn(contract);
   const canRequestReturn = isActive && !pending;
-  const changeRequests = useUnitChangeRequests(isActive);
+  // A settled move CANCELLED the old contract, but the customer must still see the status card.
+  const changeRequests = useUnitChangeRequests(isActive || contract.status === 'CANCELLED');
   const openChange =
     openChangeRequest(changeRequests.requests.filter((r) => r.contract_id === contract.id)) ?? null;
   // A pending return already blocks a change request server-side; hide the entry point too.

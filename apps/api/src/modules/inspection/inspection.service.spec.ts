@@ -87,14 +87,16 @@ describe('InspectionService', () => {
       await service.findAll(MANAGER, { type: InspectionType.RETURN, status: 'open' });
 
       expect(em.find).toHaveBeenLastCalledWith(Inspection, {
-        where: {
-          type: InspectionType.RETURN,
-          finalizedAt: IsNull(),
-          contract: {
-            bookingItem: { storageUnit: { facilityId: In(['facility-1']) } },
-            status: Not(ContractStatus.CANCELLED),
+        where: [
+          {
+            type: InspectionType.RETURN,
+            finalizedAt: IsNull(),
+            contract: {
+              bookingItem: { storageUnit: { facilityId: In(['facility-1']) } },
+              status: Not(ContractStatus.CANCELLED),
+            },
           },
-        },
+        ],
         relations: INSPECTION_RELATIONS,
         order: { scheduledAt: { direction: 'ASC', nulls: 'LAST' }, createdAt: 'DESC' },
       });
@@ -110,7 +112,12 @@ describe('InspectionService', () => {
 
       expect(em.find).toHaveBeenCalledWith(
         Inspection,
-        expect.objectContaining({ where: { contract: { status: Not(ContractStatus.CANCELLED) } } }),
+        expect.objectContaining({
+          where: expect.arrayContaining([
+            expect.objectContaining({ contract: { status: Not(ContractStatus.CANCELLED) } }),
+            expect.objectContaining({ type: InspectionType.MAINTENANCE }),
+          ]),
+        }),
       );
     });
 
@@ -146,7 +153,7 @@ describe('InspectionService', () => {
       expect(em.find).toHaveBeenCalledWith(
         Inspection,
         expect.objectContaining({
-          where: expect.objectContaining({ inspectedBy: 'staff-1' }),
+          where: expect.arrayContaining([expect.objectContaining({ inspectedBy: 'staff-1' })]),
         }),
       );
     });

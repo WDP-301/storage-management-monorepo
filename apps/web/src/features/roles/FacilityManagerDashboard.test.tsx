@@ -289,6 +289,11 @@ describe('FacilityManagerDashboard', () => {
       transition_start_at: null,
       transition_end_at: null,
       topup_invoice_id: null,
+      new_contract_id: null,
+      new_booking_id: null,
+      settled_at: null,
+      final_approved_by: null,
+      final_approved_at: null,
       created_at: '2026-10-01T00:00:00.000Z',
       requester: { id: 'c', full_name: `Khách ${id}`, email: 'c@x.vn' },
       old_unit: { id: 'u1', code: 'A-1', facility_id },
@@ -307,6 +312,54 @@ describe('FacilityManagerDashboard', () => {
     expect(screen.queryByText('Khách other')).toBeNull();
     // A request entering this facility as the destination is also visible here.
     expect(screen.getByText('Khách incoming')).toBeTruthy();
+  });
+
+  it('offers the final approval action for a settled move and counts it as "Cần chốt cuối"', async () => {
+    mockAuth(UserRole.FACILITY_MANAGER);
+    vi.spyOn(WarehousesApi, 'listMine').mockResolvedValue([wh({})]);
+    const settled = {
+      id: 'req-final',
+      status: 'AWAITING_FINAL_APPROVAL' as const,
+      reason: 'đổi kho mới',
+      rent_difference: 0,
+      deposit_difference: 0,
+      decision_note: null,
+      facility_id: 'fac-1',
+      move_at: '2026-11-20T12:00:00.000Z',
+      transition_start_at: null,
+      transition_end_at: null,
+      topup_invoice_id: null,
+      new_contract_id: 'c-2',
+      new_booking_id: 'b-2',
+      settled_at: '2026-11-19T00:00:00.000Z',
+      final_approved_by: null,
+      final_approved_at: null,
+      created_at: '2026-10-01T00:00:00.000Z',
+      requester: { id: 'c', full_name: 'Khách chốt', email: 'c@x.vn' },
+      old_unit: { id: 'u1', code: 'A-1', facility_id: 'fac-1' },
+      new_unit: { id: 'u2', code: 'B-1', facility_id: 'fac-1' },
+    };
+    vi.spyOn(ChangeRequestsApi, 'list').mockResolvedValue({
+      requests: [settled],
+      meta: { page: 1, limit: 50, total: 1, totalPages: 1 },
+    });
+    const finalApprove = vi
+      .spyOn(ChangeRequestsApi, 'finalApprove')
+      .mockResolvedValue({ request: { ...settled, status: 'COMPLETED', final_approved_by: 'u' } });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Khách chốt')).toBeTruthy());
+    // The new KPI card surfaces the move waiting on the manager's final sign-off.
+    expect(screen.getByText('Cần chốt cuối')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hoàn tất' }));
+    await waitFor(() => expect(finalApprove).toHaveBeenCalledWith('req-final'));
+    await waitFor(() =>
+      expect(toast.info).toHaveBeenCalledWith(
+        'Cập nhật đổi kho',
+        'Đã hoàn tất — kho cũ chuyển bảo trì, yêu cầu khép lại.',
+      ),
+    );
   });
 
   it('refetches and shows a Vietnamese message when toggling maintenance fails', async () => {

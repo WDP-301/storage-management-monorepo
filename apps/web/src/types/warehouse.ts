@@ -53,6 +53,13 @@ export interface WarehouseImage {
   url?: string;
 }
 
+/** Latest finalized maintenance check of a vacated unit; drives the manager's reopen decision. */
+export interface WarehouseMaintenance {
+  inspectionId: string;
+  finalizedAt: string;
+  hasDamages: boolean;
+}
+
 export interface Warehouse {
   id: string;
   facility: WarehouseFacility;
@@ -81,6 +88,8 @@ export interface Warehouse {
   images: WarehouseImage[];
   /** Optional so older fixtures without amenities still type-check. */
   amenities?: WarehouseAmenity[];
+  /** The staff's finished maintenance check; set only while it awaits the manager's decision. */
+  maintenance?: WarehouseMaintenance | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -9,6 +9,7 @@ import { InvoiceItem } from '@entities/invoice-item.entity';
 import { Payment } from '@entities/payment.entity';
 import { AuthModule } from '@modules/auth/auth.module';
 import { BanksModule } from '@modules/banks/banks.module';
+import { InspectionModule } from '@modules/inspection/inspection.module';
 import { NotificationsModule } from '@modules/notifications/notifications.module';
 import { SettingsModule } from '@modules/settings/settings.module';
 import { Module } from '@nestjs/common';
@@ -45,6 +46,7 @@ import { TermEndReminderService } from './term-end-reminder.service';
     ]),
     AuthModule,
     BanksModule,
+    InspectionModule,
     NotificationsModule,
     SettingsModule,
   ],

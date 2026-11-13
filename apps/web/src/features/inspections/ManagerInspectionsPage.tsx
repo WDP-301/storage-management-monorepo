@@ -23,6 +23,7 @@ import {
   customerPhone,
   formatDay,
   INSPECTION_KIND_LABEL,
+  INSPECTION_KIND_TONE,
   INSPECTION_STATE_LABEL,
   type InspectionState,
   inspectionMetrics,
@@ -41,6 +42,7 @@ const TYPE_OPTIONS = [
   { value: 'ALL', label: 'Tất cả' },
   { value: 'PRE_HANDOVER', label: 'Nhận kho' },
   { value: 'RETURN', label: 'Trả kho' },
+  { value: 'MAINTENANCE', label: 'Bảo trì' },
 ];
 const STATE_OPTIONS = [
   { value: 'ACTIVE', label: 'Chưa chốt' },
@@ -49,7 +51,10 @@ const STATE_OPTIONS = [
   { value: 'ALL', label: 'Tất cả' },
 ];
 
-/** Handover and return records of the selected facility: assign staff, review, finalize. */
+/**
+ * Handover, return and maintenance records of the selected facility: assign staff, review,
+ * finalize. A maintenance record sits on a cancelled old contract after a unit change.
+ */
 export const ManagerInspectionsPage: React.FC = () => {
   const { selectedFacility } = useFacility();
   const { activeRole } = useAuth();
@@ -95,7 +100,6 @@ export const ManagerInspectionsPage: React.FC = () => {
   const visible = useMemo(
     () =>
       rows.filter((row) => {
-        if (row.type === 'MAINTENANCE') return false;
         if (typeFilter !== 'ALL' && row.type !== (typeFilter as InspectionKind)) return false;
         const state = inspectionState(row);
         if (stateFilter === 'ACTIVE' && state === 'done') return false;
@@ -112,10 +116,11 @@ export const ManagerInspectionsPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="grid gap-1.5">
           <Text as="h1" variant="heading" size="lg">
-            Biên bản nhận & trả kho
+            Biên bản nhận, trả &amp; bảo trì kho
           </Text>
           <Text variant="secondary">
-            Giao nhân viên cho từng lượt nhận/trả kho, xem ảnh hiện trạng và chốt biên bản.
+            Giao nhân viên cho từng lượt nhận/trả kho và bảo trì, xem ảnh hiện trạng và chốt biên
+            bản.
           </Text>
         </div>
         <Button
@@ -226,7 +231,11 @@ export const ManagerInspectionsPage: React.FC = () => {
                 const state = inspectionState(row);
                 return (
                   <Table.Row key={row.id}>
-                    <Table.Cell>{INSPECTION_KIND_LABEL[row.type]}</Table.Cell>
+                    <Table.Cell>
+                      <Badge variant={INSPECTION_KIND_TONE[row.type]}>
+                        {INSPECTION_KIND_LABEL[row.type]}
+                      </Badge>
+                    </Table.Cell>
                     <Table.Cell>
                       <div className="font-mono font-semibold">{unitCode(row)}</div>
                       <div className="text-xs text-kumo-subtle">

@@ -85,6 +85,10 @@ export class Contract {
   @Column({ type: 'jsonb', nullable: true, name: 'amenities_snapshot' })
   amenitiesSnapshot: ContractAmenity[] | null;
 
+  /** Free-text note; set to "khách đổi kho mới" when a unit change cancels the contract. */
+  @Column({ type: 'text', nullable: true })
+  note?: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

@@ -3,13 +3,17 @@ import { request } from './api';
 /** Statuses that still occupy the contract's open-request slot — mirrors UQ_open_change_request. */
 export const CHANGE_REQUEST_OPEN_STATUSES = [
   'REQUESTED',
-  'PROPOSED',
-  'APPROVED',
-  'TRANSITIONING',
+  'AWAITING_PAYMENT',
+  'AWAITING_HANDOVER',
+  'AWAITING_FINAL_APPROVAL',
 ] as const;
 
 export type ChangeRequestStatus =
   | (typeof CHANGE_REQUEST_OPEN_STATUSES)[number]
+  /** Legacy statuses still present on historical rows; new code never writes them. */
+  | 'PROPOSED'
+  | 'APPROVED'
+  | 'TRANSITIONING'
   | 'COMPLETED'
   | 'REJECTED'
   | 'CANCELLED';
@@ -31,6 +35,11 @@ export type UnitChangeRequest = {
   transition_start_at: string | null;
   transition_end_at: string | null;
   topup_invoice_id: string | null;
+  new_contract_id: string | null;
+  new_booking_id: string | null;
+  settled_at: string | null;
+  final_approved_by: string | null;
+  final_approved_at: string | null;
   decision_note: string | null;
   rent_difference: string | number | null;
   deposit_difference: string | number | null;
@@ -59,9 +68,6 @@ type OptionsResponse = {
   options: UnitChangeOption[];
 };
 
-// Noon UTC keeps the same calendar day in Vietnam, like booking/return dates.
-const toMoveAt = (dayIso: string) => `${dayIso}T12:00:00.000Z`;
-
 export const ChangeRequestsApi = {
   /** Units the contract could move to, each with its rent/deposit delta. */
   options: (contractId: string, signal?: AbortSignal) =>
@@ -74,15 +80,15 @@ export const ChangeRequestsApi = {
   listMine: (signal?: AbortSignal) =>
     request<ListResponse>('/unit-change-requests', { signal }).then((r) => r.requests),
 
-  /** Asks to move the contract to another unit on `dayIso` (local day). */
-  create: (input: { contractId: string; newUnitId: string; reason: string; dayIso: string }) =>
+  /** Asks to move the contract to another unit at `moveAt` (an instant inside OFFICE hours). */
+  create: (input: { contractId: string; newUnitId: string; reason: string; moveAt: string }) =>
     request<{ request: UnitChangeRequest }>('/unit-change-requests', {
       method: 'POST',
       body: JSON.stringify({
         contractId: input.contractId,
         newUnitId: input.newUnitId,
         reason: input.reason,
-        scheduledMoveAt: toMoveAt(input.dayIso),
+        scheduledMoveAt: input.moveAt,
       }),
     }).then((r) => r.request),
 

@@ -73,6 +73,9 @@ export function finalizeConsequence(
   if (inspection.type === 'PRE_HANDOVER') {
     return 'Hợp đồng sẽ có hiệu lực và kho chuyển sang Đang thuê. Biên bản không sửa được sau khi chốt.';
   }
+  if (inspection.type === 'MAINTENANCE') {
+    return 'Biên bản sẽ được chốt và không sửa được nữa. Kho vẫn ở Bảo trì — chi nhánh sẽ quyết định mở lại kho.';
+  }
   // Only a major damage takes the unit out of rotation; minor wear leaves it rentable.
   const unit = damages.some((damage) => damage.severity === 'MAJOR')
     ? 'Bảo trì (có hư hỏng nặng)'

@@ -71,7 +71,11 @@ describe('FirstRentPaymentListener', () => {
     const notificationsService = {
       createForUsers: jest.fn().mockResolvedValue(1),
     };
-    listener = new FirstRentPaymentListener(dataSource as never, notificationsService as never);
+    listener = new FirstRentPaymentListener(
+      dataSource as never,
+      notificationsService as never,
+      { assignSafely: jest.fn() } as never,
+    );
     jest.spyOn(Logger.prototype, 'log').mockImplementation();
     jest.spyOn(Logger.prototype, 'warn').mockImplementation();
   });

@@ -19,7 +19,12 @@ import type {
 } from './dto/warehouse.dto';
 import { applySort, applyUnitScope, type ListMode, shelfSearchExists } from './shelf-scope.query';
 import { loadShelfSummaries } from './shelf-summary.query';
-import { toWarehouseView, type WarehouseImageView, type WarehouseView } from './warehouse.view';
+import {
+  toWarehouseView,
+  type WarehouseImageView,
+  type WarehouseMaintenanceSummary,
+  type WarehouseView,
+} from './warehouse.view';
 
 /** Long enough for a customer to browse a page of results without the photos going stale. */
 const IMAGE_URL_TTL_SECONDS = 6 * 3600;
@@ -71,7 +76,7 @@ export class WarehouseQueryService {
       .orderBy('facility.code', 'ASC')
       .addOrderBy('unit.code', 'ASC')
       .getMany();
-    return this.toViews(units);
+    return this.toViews(units, undefined, { includeMaintenance: true });
   }
 
   /** Every rentable warehouse, unpaginated — the nearby search ranks them by distance. */
@@ -113,7 +118,7 @@ export class WarehouseQueryService {
   async findOne(id: string): Promise<WarehouseView> {
     const unit = await this.baseQuery().andWhere('unit.id = :id', { id }).getOne();
     if (!unit) notFound('Warehouse', id);
-    return (await this.toViews([unit]))[0];
+    return (await this.toViews([unit], undefined, { includeMaintenance: true }))[0];
   }
 
   private async assignedFacilityIds(userId: string, roles: UserRole[]): Promise<string[]> {
@@ -186,6 +191,7 @@ export class WarehouseQueryService {
   private async toViews(
     units: StorageUnit[],
     filter?: WarehouseListQueryDto,
+    options: { includeMaintenance?: boolean } = {},
   ): Promise<WarehouseView[]> {
     const parentIds = units
       .filter((unit) => unit.kind === StorageUnitKind.SHELF_WAREHOUSE)
@@ -196,6 +202,9 @@ export class WarehouseQueryService {
       this.units.manager,
       units.filter((unit) => unit.kind !== StorageUnitKind.SHELF).map((unit) => unit.id),
     );
+    const maintenance = options.includeMaintenance
+      ? await this.loadMaintenanceSummaries(units.map((unit) => unit.id))
+      : new Map<string, WarehouseMaintenanceSummary>();
     return Promise.all(
       units.map(async (unit) =>
         toWarehouseView(
@@ -204,8 +213,48 @@ export class WarehouseQueryService {
           await this.signImages(unit),
           summaries.get(unit.id) ?? null,
           amenities.get(unit.id) ?? [],
+          maintenance.get(unit.id) ?? null,
         ),
       ),
+    );
+  }
+
+  /**
+   * Latest FINALIZED maintenance check per unit (the vacated unit of a unit change). MAINTENANCE
+   * inspections live on the cancelled old contract, so no contract-status filter is applied.
+   */
+  private async loadMaintenanceSummaries(
+    unitIds: string[],
+  ): Promise<Map<string, WarehouseMaintenanceSummary>> {
+    if (unitIds.length === 0) return new Map();
+    const rows: {
+      unitId: string;
+      inspectionId: string;
+      finalizedAt: Date | string;
+      damagesCount: number;
+    }[] = await this.units.manager.query(
+      `SELECT DISTINCT ON (su.id) su.id AS "unitId", i.id AS "inspectionId",
+              i.finalized_at AS "finalizedAt",
+              CASE WHEN jsonb_typeof(i.damages) = 'array'
+                   THEN jsonb_array_length(i.damages) ELSE 0 END AS "damagesCount"
+         FROM inspections i
+         JOIN contracts c ON c.id = i.contract_id
+         JOIN booking_items bi ON bi.id = c.booking_item_id
+         JOIN storage_units su ON su.id = bi.storage_unit_id
+        WHERE i.type = 'MAINTENANCE' AND i.finalized_at IS NOT NULL
+          AND su.id = ANY($1::uuid[])
+        ORDER BY su.id, i.finalized_at DESC, i.id DESC`,
+      [unitIds],
+    );
+    return new Map(
+      rows.map((row) => [
+        row.unitId,
+        {
+          inspectionId: row.inspectionId,
+          finalizedAt: new Date(row.finalizedAt),
+          hasDamages: Number(row.damagesCount) > 0,
+        },
+      ]),
     );
   }
 

@@ -9,6 +9,7 @@ import { HttpStatus, Logger } from '@nestjs/common';
 import { fromVietnamDate, vietnamToday } from '@shared/utils/calendar.util';
 import {
   ContractStatus,
+  DamageSeverity,
   InspectionType,
   InvoiceStatus,
   NotificationType,
@@ -82,7 +83,13 @@ describe('InspectionLifecycleService.finalize', () => {
       if (entity === Contract) return where.id ? contract : otherContract;
       if (entity === UnitHold) return otherHold;
       if (entity === Invoice) return firstRent;
-      if (entity === StorageUnit) return { id: 'unit-1', status: StorageUnitStatus.AVAILABLE };
+      if (entity === StorageUnit)
+        return {
+          id: 'unit-1',
+          code: 'A-01',
+          facilityId: 'facility-1',
+          status: StorageUnitStatus.AVAILABLE,
+        };
       return null;
     });
   };
@@ -94,11 +101,20 @@ describe('InspectionLifecycleService.finalize', () => {
     firstRent = { id: 'inv-1', status: InvoiceStatus.PAID, months: 1 };
     em = {
       // Manager-1 manages facility-1 only.
-      find: jest.fn(async (_entity, { where }) =>
-        where.userId === 'manager-1'
-          ? [{ facilityId: 'facility-1', startsAt: new Date('2024-01-01T00:00:00Z'), endsAt: null }]
-          : [],
-      ),
+      find: jest.fn(async (_entity, { where } = {}) => {
+        if (where?.userId === 'manager-1' || where?.facilityId === 'facility-1') {
+          return [
+            {
+              role: 'FACILITY_MANAGER',
+              facilityId: 'facility-1',
+              userId: 'manager-1',
+              startsAt: new Date('2024-01-01T00:00:00Z'),
+              endsAt: null,
+            },
+          ];
+        }
+        return [];
+      }),
       findOne: jest.fn(),
       findOneOrFail: jest.fn().mockResolvedValue({ id: 'item-1', storageUnitId: 'unit-1' }),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
@@ -128,6 +144,7 @@ describe('InspectionLifecycleService.finalize', () => {
       dataSource as never,
       notifications as never,
       queue as never,
+      { assignMaintenanceInspection: jest.fn() } as never,
     );
     jest.spyOn(Logger.prototype, 'log').mockImplementation();
   });
@@ -156,6 +173,66 @@ describe('InspectionLifecycleService.finalize', () => {
     expect(result.returnedOn).toBeUndefined();
     expect(em.query).not.toHaveBeenCalled();
     expect(notifications.createForUsers).not.toHaveBeenCalled();
+  });
+
+  it('finalizes a maintenance check without reopening the unit or touching the cancelled contract', async () => {
+    stubRows(
+      buildInspection({ type: InspectionType.MAINTENANCE }),
+      buildContract({ status: ContractStatus.CANCELLED }),
+    );
+
+    const result = await service.finalize('insp-1', actor('staff-1'));
+
+    // Reopening the warehouse is the manager's call — the check only records the result.
+    expect(em.update).not.toHaveBeenCalledWith(StorageUnit, expect.anything(), expect.anything());
+    // The old contract stays CANCELLED — no status write and no date stamp.
+    expect(em.update).not.toHaveBeenCalledWith(Contract, expect.anything(), expect.anything());
+    expect(result.finalizedAt).toBeInstanceOf(Date);
+    expect(result.returnedOn).toBeUndefined();
+  });
+
+  it('still leaves the unit untouched when the check found major damage', async () => {
+    stubRows(
+      buildInspection({
+        type: InspectionType.MAINTENANCE,
+        damages: [{ description: 'Nứt tường', severity: DamageSeverity.MAJOR }],
+      }),
+      buildContract({ status: ContractStatus.CANCELLED }),
+    );
+
+    await service.finalize('insp-1', actor('staff-1'));
+
+    expect(em.update).not.toHaveBeenCalledWith(StorageUnit, expect.anything(), expect.anything());
+  });
+
+  it('refuses a maintenance check on a contract that is not cancelled', async () => {
+    stubRows(
+      buildInspection({ type: InspectionType.MAINTENANCE }),
+      buildContract({ status: ContractStatus.ACTIVE }),
+    );
+
+    await expect(service.finalize('insp-1', actor('staff-1'))).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+    });
+    expect(em.update).not.toHaveBeenCalled();
+  });
+
+  it('tells the old facility managers when a maintenance check is finalized', async () => {
+    stubRows(
+      buildInspection({ type: InspectionType.MAINTENANCE }),
+      buildContract({ status: ContractStatus.CANCELLED }),
+    );
+
+    await service.finalize('insp-1', actor('staff-1'));
+
+    expect(notifications.createForUsers).toHaveBeenCalledWith(
+      em,
+      ['manager-1'],
+      expect.objectContaining({
+        type: NotificationType.MAINTENANCE_COMPLETED,
+        body: expect.stringContaining('mở lại kho'),
+      }),
+    );
   });
 
   it('refuses to finalize a handover while the contract has no signed files', async () => {
@@ -387,14 +464,6 @@ describe('InspectionLifecycleService.finalize', () => {
       status: HttpStatus.CONFLICT,
     });
     expect(em.update).not.toHaveBeenCalled();
-  });
-
-  it('does not finalize MAINTENANCE inspections', async () => {
-    stubRows(buildInspection({ type: InspectionType.MAINTENANCE }));
-
-    await expect(service.finalize('insp-1', actor('staff-1'))).rejects.toMatchObject({
-      status: HttpStatus.CONFLICT,
-    });
   });
 
   it('rejects a manager of another facility', async () => {

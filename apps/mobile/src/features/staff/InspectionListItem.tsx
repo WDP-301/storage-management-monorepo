@@ -24,7 +24,13 @@ export function InspectionListItem({ inspection, onPress }: Props) {
             </View>
             <StatusPill
               label={INSPECTION_KIND_LABEL[inspection.type]}
-              tone={inspection.type === 'RETURN' ? 'accent' : 'success'}
+              tone={
+                inspection.type === 'RETURN'
+                  ? 'accent'
+                  : inspection.type === 'PRE_HANDOVER'
+                    ? 'success'
+                    : 'warning'
+              }
             />
           </View>
 

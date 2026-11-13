@@ -6,7 +6,16 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import { ChangeRequestsApi, type UnitChangeOption } from '../../../lib/change-requests-api';
 import { formatArea, formatIsoDate, formatMoney } from '../../../lib/format-vi';
+import { ReceivingSlotsApi } from '../../../lib/receiving-slots-api';
+import type { ReceivingDay } from '../../../lib/receiving-time';
+import {
+  defaultInstant,
+  formatVnTime,
+  isWithinWindows,
+  timeOptionsForDate,
+} from '../../../lib/receiving-time';
 import { fromIsoDate, todayIso, toIsoDate } from '../../../lib/rental-schedule';
+import { ChoiceChip } from '../../components/ChoiceChip';
 import type { ApiContract } from '../../types/contract-api';
 import { contractWarehouseName } from './contract-display';
 import { MonthCalendar } from './MonthCalendar';
@@ -27,6 +36,10 @@ export function UnitChangeRequestForm({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dayIso, setDayIso] = useState<string | null>(null);
+  const [slots, setSlots] = useState<ReceivingDay[]>([]);
+  const [moveAt, setMoveAt] = useState<string | null>(null);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsError, setSlotsError] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -48,12 +61,46 @@ export function UnitChangeRequestForm({
     return () => controller.abort();
   }, [contract.id]);
 
+  // The move time must land inside an OFFICE window, so the slots come from the server rather than
+  // being picked freely. Refetched whenever the chosen day changes.
+  useEffect(() => {
+    if (!dayIso) {
+      setSlots([]);
+      setMoveAt(null);
+      return;
+    }
+    let cancelled = false;
+    setSlotsLoading(true);
+    setSlotsError(null);
+    ReceivingSlotsApi.list(dayIso, dayIso)
+      .then((days) => {
+        if (cancelled) return;
+        setSlots(days);
+        setMoveAt(defaultInstant(days, dayIso));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSlots([]);
+        setMoveAt(null);
+        setSlotsError('Không tải được khung giờ. Vui lòng thử lại.');
+      })
+      .finally(() => {
+        if (!cancelled) setSlotsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dayIso]);
+
   const selected = options?.find((o) => o.unit.id === selectedId) ?? null;
+  const timeOptions = useMemo(() => timeOptionsForDate(slots, dayIso ?? ''), [slots, dayIso]);
+  // The pick only counts while it still falls inside the shown day's windows.
+  const chosenMoveAt = dayIso && moveAt && isWithinWindows(slots, dayIso, moveAt) ? moveAt : null;
   const canSubmit =
-    selected !== null && dayIso !== null && reason.trim().length > 0 && !isSubmitting;
+    selected !== null && chosenMoveAt !== null && reason.trim().length > 0 && !isSubmitting;
 
   const submit = async () => {
-    if (!selected || !dayIso) return;
+    if (!selected || !chosenMoveAt) return;
     setIsSubmitting(true);
     setError(null);
     try {
@@ -61,7 +108,7 @@ export function UnitChangeRequestForm({
         contractId: contract.id,
         newUnitId: selected.unit.id,
         reason: reason.trim(),
-        dayIso,
+        moveAt: chosenMoveAt,
       });
       onDone();
     } catch (e) {
@@ -77,8 +124,8 @@ export function UnitChangeRequestForm({
           Đổi kho {contractWarehouseName(contract)}
         </Text>
         <Text className="font-body mt-1 text-caption leading-5 text-muted">
-          Chọn kho muốn chuyển tới và ngày bạn sẽ qua chuyển đồ. Kho mới được giữ chỗ sau khi quản
-          lý duyệt.
+          Chọn kho muốn chuyển tới, ngày và giờ hành chính bạn sẽ qua chuyển đồ. Kho mới được giữ
+          chỗ sau khi quản lý duyệt.
         </Text>
       </View>
 
@@ -145,7 +192,9 @@ export function UnitChangeRequestForm({
           <Text
             className={`flex-1 text-body-sm ${dayIso ? 'font-numeric text-foreground' : 'font-body text-muted'}`}
           >
-            {dayIso ? formatIsoDate(dayIso) : 'Chọn ngày'}
+            {dayIso
+              ? `${formatIsoDate(dayIso)}${chosenMoveAt ? ` · ${formatVnTime(chosenMoveAt)}` : ''}`
+              : 'Chọn ngày'}
           </Text>
         </Pressable>
         {calendarOpen ? (
@@ -155,10 +204,38 @@ export function UnitChangeRequestForm({
             selectedIso={dayIso}
             onSelect={(iso) => {
               setDayIso(iso);
+              setSlots([]);
+              setMoveAt(null);
               setCalendarOpen(false);
             }}
           />
         ) : null}
+      </View>
+
+      <View className="gap-2">
+        <Text className="text-body-sm font-strong text-foreground">Giờ chuyển đồ</Text>
+        {dayIso === null ? (
+          <Text className="font-body text-body-sm text-muted">Chọn ngày chuyển đồ trước.</Text>
+        ) : slotsLoading ? (
+          <Text className="font-body text-body-sm text-muted">Đang tải khung giờ…</Text>
+        ) : slotsError !== null ? (
+          <Text className="font-body text-body-sm text-danger">{slotsError}</Text>
+        ) : timeOptions.length === 0 ? (
+          <Text className="font-body text-body-sm text-danger">
+            Ngày này không còn khung giờ hành chính. Vui lòng chọn ngày khác.
+          </Text>
+        ) : (
+          <View className="flex-row flex-wrap gap-2">
+            {timeOptions.map((option) => (
+              <ChoiceChip
+                key={option.value}
+                isSelected={chosenMoveAt === option.value}
+                label={option.label}
+                onPress={() => setMoveAt(option.value)}
+              />
+            ))}
+          </View>
+        )}
       </View>
 
       <View className="gap-2">

@@ -3,7 +3,10 @@ import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { Invoice } from '@entities/invoice.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
+import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
+import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { advanceChangeRequestToFinalApproval } from '@modules/change-requests/change-request-handover.util';
 import { lockUnitClaimedOnlyBy } from '@modules/contracts/unit-claim.util';
 import { queueInvoicePdf } from '@modules/invoices/rent-period-invoice.util';
 import { NotificationsService } from '@modules/notifications/notifications.service';
@@ -16,8 +19,16 @@ import {
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { ContractStatus, DamageSeverity, InspectionType, StorageUnitStatus } from '@storage/types';
+import {
+  ContractStatus,
+  DamageSeverity,
+  InspectionType,
+  NotificationType,
+  StorageUnitStatus,
+  UserRole,
+} from '@storage/types';
 import { DataSource, type EntityManager, In } from 'typeorm';
+import { HandoverAssignmentService } from './handover-assignment/handover-assignment.service';
 import { assertReadyForHandover } from './handover-ready.util';
 import {
   assertInspectorOrManager,
@@ -29,10 +40,12 @@ import { applyReturnFinalize, resolveReturnedOn } from './return-finalize.util';
 interface Transition {
   contractFrom: ContractStatus;
   contractTo: ContractStatus;
-  /** Contract date stamped with the finalize time. */
-  stamp: 'signedAt' | 'endedAt';
+  /** Contract date stamped with the finalize time (only when the status actually changes). */
+  stamp?: 'signedAt' | 'endedAt';
   unitFrom: StorageUnitStatus[];
   unitTo: (inspection: Inspection) => StorageUnitStatus;
+  /** When true the finalize records the inspection only and leaves the unit alone. */
+  skipUnit?: boolean;
 }
 
 const TRANSITIONS: Partial<Record<InspectionType, Transition>> = {
@@ -56,6 +69,16 @@ const TRANSITIONS: Partial<Record<InspectionType, Transition>> = {
         ? StorageUnitStatus.MAINTENANCE
         : StorageUnitStatus.AVAILABLE,
   },
+  // Maintenance check of a unit vacated by a unit change: the old contract is already CANCELLED and
+  // stays so. The staff only records the check — reopening the warehouse (MAINTENANCE → AVAILABLE)
+  // is the manager's decision, made from the warehouse status control.
+  [InspectionType.MAINTENANCE]: {
+    contractFrom: ContractStatus.CANCELLED,
+    contractTo: ContractStatus.CANCELLED,
+    unitFrom: [StorageUnitStatus.MAINTENANCE],
+    unitTo: () => StorageUnitStatus.MAINTENANCE,
+    skipUnit: true,
+  },
 };
 
 @Injectable()
@@ -66,6 +89,7 @@ export class InspectionLifecycleService {
     private readonly dataSource: DataSource,
     private readonly notifications: NotificationsService,
     private readonly queue: QueueService,
+    private readonly handoverAssignment: HandoverAssignmentService,
   ) {}
 
   /**
@@ -127,7 +151,10 @@ export class InspectionLifecycleService {
           ? await assertReadyForHandover(em, contract)
           : null;
 
-      const storageUnitId = await this.moveUnit(em, contract, transition, inspection);
+      const storageUnitId = transition.skipUnit
+        ? (await em.findOneOrFail(BookingItem, { where: { id: contract.bookingItemId } }))
+            .storageUnitId
+        : await this.moveUnit(em, contract, transition, inspection);
       // The first paid month runs from the day the customer actually took the unit.
       if (firstRent) {
         const endAt = new Date(now);
@@ -145,11 +172,29 @@ export class InspectionLifecycleService {
             now,
           })
         : null;
-      await em.update(
-        Contract,
-        { id: contract.id },
-        { status: transition.contractTo, [transition.stamp]: now },
-      );
+      if (transition.contractTo !== transition.contractFrom) {
+        await em.update(
+          Contract,
+          { id: contract.id },
+          {
+            status: transition.contractTo,
+            ...(transition.stamp ? { [transition.stamp]: now } : {}),
+          },
+        );
+      }
+      // A unit change's destination contract turns ACTIVE here — hand it to the L2 queue.
+      if (inspection.type === InspectionType.PRE_HANDOVER) {
+        await advanceChangeRequestToFinalApproval(
+          em,
+          contract.id,
+          now,
+          this.notifications,
+          this.handoverAssignment,
+        );
+      }
+      if (inspection.type === InspectionType.MAINTENANCE) {
+        await this.notifyMaintenanceCompleted(em, contract, inspection, storageUnitId);
+      }
       inspection.finalizedAt = now;
       inspection.inspectedAt ??= now;
       const saved = await em.save(Inspection, inspection);
@@ -166,6 +211,39 @@ export class InspectionLifecycleService {
       );
     }
     return finalized;
+  }
+
+  /** Tells the old facility's managers the check is done so THEY decide whether to reopen the unit. */
+  private async notifyMaintenanceCompleted(
+    em: EntityManager,
+    contract: Contract,
+    inspection: Inspection,
+    storageUnitId: string,
+  ): Promise<void> {
+    const unit = await em.findOne(StorageUnit, { where: { id: storageUnitId } });
+    if (!unit) return;
+    const assignments = await em.find(UserRoleAssignment, {
+      where: { role: UserRole.FACILITY_MANAGER, facilityId: unit.facilityId },
+    });
+    const managerIds = [
+      ...new Set(assignments.filter((a) => isAssignmentActive(a)).map((a) => a.userId)),
+    ];
+    if (managerIds.length === 0) return;
+    const major = inspection.damages?.some((damage) => damage?.severity === DamageSeverity.MAJOR);
+    await this.notifications.createForUsers(em, managerIds, {
+      type: NotificationType.MAINTENANCE_COMPLETED,
+      title: 'Đã kiểm tra kho cũ',
+      body:
+        `Kho ${unit.code} đã kiểm tra xong${major ? ' — phát hiện hư hỏng nặng' : ''}. ` +
+        'Vào "Kho của chi nhánh" để quyết định mở lại kho.',
+      data: {
+        inspectionId: inspection.id,
+        contractId: contract.id,
+        unitId: unit.id,
+        unitCode: unit.code,
+        hasMajorDamage: major,
+      },
+    });
   }
 
   private async moveUnit(

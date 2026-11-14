@@ -105,6 +105,14 @@ test('finalizeConsequence sends only a major damage to maintenance', () => {
   assert.match(finalizeConsequence({ type: 'PRE_HANDOVER' }, [major]), /Đang thuê/);
 });
 
+test('finalizeConsequence explains a vacated unit maintenance check', () => {
+  const { finalizeConsequence } = load(`${staffDir}/inspection-display.ts`);
+  const text = finalizeConsequence({ type: 'MAINTENANCE' }, []);
+  assert.match(text, /vẫn ở Bảo trì/);
+  assert.match(text, /chi nhánh sẽ quyết định mở lại kho/);
+  assert.match(text, /không sửa được/);
+});
+
 test('finalizeConsequence adds the proposed fee total for returns only when there is one', () => {
   const { finalizeConsequence } = load(`${staffDir}/inspection-display.ts`);
   const damages = [

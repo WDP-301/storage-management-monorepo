@@ -208,6 +208,15 @@ export interface UnitChangeRequestRecord {
   transition_start_at: string | null;
   transition_end_at: string | null;
   topup_invoice_id: string | null;
+  /** Contract minted for the destination unit once the request is settled. */
+  new_contract_id: string | null;
+  /** Booking that backs the destination contract (created at settle). */
+  new_booking_id: string | null;
+  /** When the old contract was cancelled and the destination contract created. */
+  settled_at: string | null;
+  /** Manager who gave the final (L2) approval that completed the move. */
+  final_approved_by: string | null;
+  final_approved_at: string | null;
   created_at: string;
   requester: { id: string; full_name: string; email: string } | null;
   old_unit: { id: string; code: string; facility_id?: string } | null;
@@ -547,16 +556,18 @@ export const ChangeRequestsApi = {
     return res.data.data;
   },
 
-  start: async (id: string) => {
+  /** L2: completes the move — old unit goes to MAINTENANCE and the request closes. */
+  finalApprove: async (id: string) => {
     const res = await apiClient.post<ApiResponse<{ request: UnitChangeRequestRecord }>>(
-      `/unit-change-requests/${id}/start`,
+      `/unit-change-requests/${id}/final-approve`,
     );
     return res.data.data;
   },
 
-  complete: async (id: string) => {
+  /** Manual retry of the settle step when a paid top-up did not advance the request. */
+  retrySettle: async (id: string) => {
     const res = await apiClient.post<ApiResponse<{ request: UnitChangeRequestRecord }>>(
-      `/unit-change-requests/${id}/complete`,
+      `/unit-change-requests/${id}/retry-settle`,
     );
     return res.data.data;
   },

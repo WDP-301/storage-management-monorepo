@@ -28,6 +28,11 @@ export interface ChangeRequestRecord {
   transition_start_at: string | Date | null;
   transition_end_at: string | Date | null;
   topup_invoice_id: string | null;
+  new_contract_id: string | null;
+  new_booking_id: string | null;
+  settled_at: string | Date | null;
+  final_approved_by: string | null;
+  final_approved_at: string | Date | null;
   history: unknown[];
   created_at: string | Date;
   updated_at: string | Date;
@@ -54,6 +59,11 @@ export function toChangeRequestRecord(request: UnitChangeRequest): ChangeRequest
     transition_start_at: request.transitionStartAt ?? null,
     transition_end_at: request.transitionEndAt ?? null,
     topup_invoice_id: request.topupInvoiceId ?? null,
+    new_contract_id: request.newContractId ?? null,
+    new_booking_id: request.newBookingId ?? null,
+    settled_at: request.settledAt ?? null,
+    final_approved_by: request.finalApprovedBy ?? null,
+    final_approved_at: request.finalApprovedAt ?? null,
     history: request.history ?? [],
     created_at: request.createdAt,
     updated_at: request.updatedAt,

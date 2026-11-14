@@ -10,6 +10,7 @@ import {
   DialogHeader,
 } from '../../../components/dialog-layout';
 import type { UnitChangeRequestRecord } from '../../../lib/api';
+import { vnTimeOfDay } from '../../../lib/vn-day';
 
 type BadgeVariant = 'success' | 'primary' | 'error' | 'warning' | 'neutral';
 
@@ -18,6 +19,9 @@ const REQUEST_STATUS_LABEL: Record<
   { label: string; variant: BadgeVariant }
 > = {
   REQUESTED: { label: 'Chờ duyệt', variant: 'warning' },
+  AWAITING_PAYMENT: { label: 'Chờ thanh toán bù cọc', variant: 'warning' },
+  AWAITING_HANDOVER: { label: 'Chờ bàn giao', variant: 'primary' },
+  AWAITING_FINAL_APPROVAL: { label: 'Chờ chốt cuối', variant: 'warning' },
   PROPOSED: { label: 'Đề xuất', variant: 'primary' },
   APPROVED: { label: 'Đã duyệt', variant: 'success' },
   TRANSITIONING: { label: 'Đang chuyển', variant: 'primary' },
@@ -43,6 +47,13 @@ const toDateInputValue = (iso: string | null) => {
   ).padStart(2, '0')}`;
 };
 
+/**
+ * The approver's day plus the customer's chosen time-of-day (Vietnam), so approving does not
+ * discard the hour the customer picked. 08:00 when the request carries no time.
+ */
+const moveAtOn = (day: string, existing: string | null) =>
+  new Date(`${day}T${existing ? vnTimeOfDay(existing) : '08:00'}:00+07:00`).toISOString();
+
 const isCrossFacility = (r: UnitChangeRequestRecord) =>
   r.old_unit?.facility_id && r.new_unit?.facility_id
     ? r.old_unit.facility_id !== r.new_unit.facility_id
@@ -56,8 +67,7 @@ interface Props {
     decision: 'APPROVED' | 'REJECTED',
     options?: { moveAt?: string; decisionNote?: string },
   ) => void;
-  onStart: (id: string) => void;
-  onComplete: (id: string) => void;
+  onFinalApprove: (id: string) => void;
   onCancel: (id: string) => void;
 }
 
@@ -65,8 +75,7 @@ export const ChangeRequestsTable: React.FC<Props> = ({
   requests,
   busyId,
   onDecide,
-  onStart,
-  onComplete,
+  onFinalApprove,
   onCancel,
 }) => {
   const [approving, setApproving] = React.useState<UnitChangeRequestRecord | null>(null);
@@ -160,7 +169,7 @@ export const ChangeRequestsTable: React.FC<Props> = ({
                   </Badge>
                 </Table.Cell>
                 <Table.Cell className="whitespace-nowrap text-right">
-                  {req.status === 'REQUESTED' || req.status === 'PROPOSED' ? (
+                  {req.status === 'REQUESTED' ? (
                     <div className="inline-flex items-center gap-2">
                       <Button
                         variant="primary"
@@ -179,16 +188,11 @@ export const ChangeRequestsTable: React.FC<Props> = ({
                         Từ chối
                       </Button>
                     </div>
-                  ) : req.status === 'APPROVED' ? (
+                  ) : req.status === 'AWAITING_PAYMENT' || req.status === 'AWAITING_HANDOVER' ? (
                     <div className="inline-flex items-center gap-2">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        disabled={busyId === req.id}
-                        onClick={() => onStart(req.id)}
-                      >
-                        Bắt đầu chuyển
-                      </Button>
+                      <span className="text-xs text-kumo-subtle">
+                        {req.status === 'AWAITING_PAYMENT' ? 'Chờ khách bù cọc' : 'Chờ bàn giao'}
+                      </span>
                       <Button
                         variant="secondary-destructive"
                         size="sm"
@@ -198,15 +202,15 @@ export const ChangeRequestsTable: React.FC<Props> = ({
                         Thu hồi
                       </Button>
                     </div>
-                  ) : req.status === 'TRANSITIONING' ? (
+                  ) : req.status === 'AWAITING_FINAL_APPROVAL' ? (
                     <div className="inline-flex items-center gap-2">
                       <Button
                         variant="primary"
                         size="sm"
                         disabled={busyId === req.id}
-                        onClick={() => onComplete(req.id)}
+                        onClick={() => onFinalApprove(req.id)}
                       >
-                        Xác nhận xong
+                        Xác nhận hoàn tất
                       </Button>
                       <Button
                         variant="secondary-destructive"
@@ -235,7 +239,7 @@ export const ChangeRequestsTable: React.FC<Props> = ({
               e.preventDefault();
               if (!approving || !moveDay) return;
               onDecide(approving.id, 'APPROVED', {
-                moveAt: `${moveDay}T12:00:00.000Z`,
+                moveAt: moveAtOn(moveDay, approving.move_at),
                 decisionNote: note.trim() || undefined,
               });
               setApproving(null);
@@ -261,12 +265,14 @@ export const ChangeRequestsTable: React.FC<Props> = ({
             <DialogBody>
               {approving ? (
                 <Text variant="secondary" size="sm">
-                  Kho {approving.new_unit?.code ?? '—'} sẽ được giữ chỗ cho khách ngay khi duyệt.
+                  {`Kho ${approving.new_unit?.code ?? '—'} sẽ được giữ chỗ cho khách ngay khi duyệt.`}
                   {Number(approving.deposit_difference) > 0
-                    ? ` Hệ thống sẽ xuất hoá đơn bù cọc ${Number(
+                    ? ` Vì tiền cọc mới cao hơn, hệ thống xuất hoá đơn bù cọc ${Number(
                         approving.deposit_difference,
-                      ).toLocaleString('vi-VN')} đ.`
-                    : ''}
+                      ).toLocaleString(
+                        'vi-VN',
+                      )} đ và vẫn giữ kho đích đến khi khách thanh toán xong — khi đó mới huỷ hợp đồng cũ và tạo hợp đồng mới cho kho này.`
+                    : ' Tiền cọc không tăng, nên ngay sau khi duyệt hệ thống huỷ hợp đồng cũ, tạo hợp đồng mới cho kho này và lên lịch bàn giao.'}
                 </Text>
               ) : null}
               <DateField label="Ngày chuyển đồ" required value={moveDay} onChange={setMoveDay} />

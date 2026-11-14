@@ -2,7 +2,7 @@ import { Inspection } from '@entities/inspection.entity';
 import { StaffShift } from '@entities/staff-shift.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { Logger } from '@nestjs/common';
-import { NotificationType } from '@storage/types';
+import { InspectionType, NotificationType } from '@storage/types';
 import { HandoverAssignmentService } from './handover-assignment.service';
 
 const TEN_AM = new Date('2026-11-01T03:00:00Z'); // 10:00 in Vietnam
@@ -167,5 +167,77 @@ describe('HandoverAssignmentService', () => {
 
     await expect(service.assignSafely(em as never, 'booking-1')).resolves.toBeUndefined();
     expect(errorSpy).toHaveBeenCalled();
+  });
+
+  describe('assignMaintenanceInspection', () => {
+    const maintenance = (over: Record<string, unknown> = {}) =>
+      ({
+        id: 'm-1',
+        contractId: 'c-old',
+        type: InspectionType.MAINTENANCE,
+        inspectedBy: null,
+        contract: {
+          bookingItem: { bookingId: 'b-old', storageUnit: { facilityId: 'hcm', code: 'A-01' } },
+        },
+        ...over,
+      }) as unknown as Inspection;
+
+    const routeInspection = (inspection: Inspection, lastAssignedRow: unknown = null) => {
+      em.findOne.mockImplementation(
+        async (entity: unknown, options?: { where?: { id?: string } }) =>
+          entity === Inspection && options?.where?.id ? inspection : lastAssignedRow,
+      );
+    };
+
+    it('assigns the next facility staff round-robin and notifies them', async () => {
+      routeInspection(maintenance());
+
+      const id = await service.assignMaintenanceInspection(em as never, 'm-1');
+
+      expect(id).toBe('an');
+      expect(em.query).toHaveBeenCalledWith('SELECT pg_advisory_xact_lock(hashtext($1))', [
+        'handover_rotation:hcm',
+      ]);
+      // Only staff assigned to the old unit's facility are eligible.
+      expect(em.find).toHaveBeenCalledWith(
+        UserRoleAssignment,
+        expect.objectContaining({
+          where: expect.objectContaining({ facilityId: 'hcm', role: 'FACILITY_STAFF' }),
+        }),
+      );
+      expect(em.update).toHaveBeenCalledWith(Inspection, { id: 'm-1' }, { inspectedBy: 'an' });
+      expect(notifications.createForUsers).toHaveBeenCalledWith(
+        em,
+        ['an'],
+        expect.objectContaining({ type: NotificationType.MAINTENANCE_CHECK_DUE }),
+      );
+    });
+
+    it('continues the maintenance rotation after the last assigned staff member', async () => {
+      routeInspection(maintenance(), { inspectedBy: 'an' });
+
+      const id = await service.assignMaintenanceInspection(em as never, 'm-1');
+
+      expect(id).toBe('binh');
+      expect(em.update).toHaveBeenCalledWith(Inspection, { id: 'm-1' }, { inspectedBy: 'binh' });
+    });
+
+    it('leaves an already-assigned maintenance inspection alone', async () => {
+      em.findOne.mockResolvedValue(maintenance({ inspectedBy: 'chi' }));
+
+      const id = await service.assignMaintenanceInspection(em as never, 'm-1');
+
+      expect(id).toBe('chi');
+      expect(em.update).not.toHaveBeenCalled();
+    });
+
+    it('ignores inspections that are not maintenance', async () => {
+      em.findOne.mockResolvedValue(maintenance({ type: InspectionType.PRE_HANDOVER }));
+
+      const id = await service.assignMaintenanceInspection(em as never, 'm-1');
+
+      expect(id).toBeNull();
+      expect(em.update).not.toHaveBeenCalled();
+    });
   });
 });

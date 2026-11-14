@@ -55,6 +55,25 @@ export class UnitChangeRequest {
   @Column({ type: 'uuid', nullable: true, name: 'topup_invoice_id' })
   topupInvoiceId?: string;
 
+  /** Destination contract minted at settlement (the booking-like DRAFT contract for the new unit). */
+  @Column({ type: 'uuid', nullable: true, name: 'new_contract_id' })
+  newContractId?: string | null;
+
+  /** Destination booking created at settlement — carries the destination handovers. */
+  @Column({ type: 'uuid', nullable: true, name: 'new_booking_id' })
+  newBookingId?: string | null;
+
+  /** When the old contract was cancelled and the destination contract created. */
+  @Column({ type: 'timestamptz', nullable: true, name: 'settled_at' })
+  settledAt?: Date | null;
+
+  /** The manager who gave the final approval that completed the move. */
+  @Column({ type: 'uuid', nullable: true, name: 'final_approved_by' })
+  finalApprovedBy?: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true, name: 'final_approved_at' })
+  finalApprovedAt?: Date | null;
+
   @Column({ type: 'decimal', precision: 14, scale: 2, default: 0, name: 'rent_difference' })
   rentDifference: number;
 

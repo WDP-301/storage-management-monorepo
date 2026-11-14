@@ -1,9 +1,13 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
+import { AppState } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import { InspectionsApi } from '../../../lib/inspections-api';
 import { useSession } from '../../../lib/session';
 import type { InspectionListStatus, StaffInspection } from '../../types/inspection-api';
+
+/** How often an open screen re-reads the list, so a manager's approval shows up on its own. */
+const POLL_MS = 15_000;
 
 type State = {
   /** scope+status the items belong to; a different one means they are stale. */
@@ -14,8 +18,10 @@ type State = {
 };
 
 /**
- * Inspections for the staff area, refreshed on every focus. Facility managers see their whole
- * facility; staff only what is assigned to them.
+ * Inspections for the staff area, refreshed on focus, on `reload`, when the app returns to the
+ * foreground, and every `POLL_MS` while the screen is open — a unit change or a booking creates a
+ * handover on the back office, so the list must catch up without navigating away and back.
+ * Facility managers see their whole facility; staff only what is assigned to them.
  */
 export function useStaffInspections(status: InspectionListStatus) {
   const { user } = useSession();
@@ -33,17 +39,32 @@ export function useStaffInspections(status: InspectionListStatus) {
           ? { ...current, isLoading: true, error: null }
           : { key, items: [], isLoading: true, error: null },
       );
-      InspectionsApi.list(scope, status, controller.signal)
-        .then((items) => {
-          if (!controller.signal.aborted) setState({ key, items, isLoading: false, error: null });
-        })
-        .catch((error: unknown) => {
-          if (controller.signal.aborted) return;
-          const message =
-            error instanceof ApiError ? error.message : 'Không tải được danh sách biên bản.';
-          setState((current) => ({ ...current, isLoading: false, error: message }));
-        });
-      return () => controller.abort();
+
+      const load = () => {
+        InspectionsApi.list(scope, status, controller.signal)
+          .then((items) => {
+            if (controller.signal.aborted) return;
+            setState({ key, items, isLoading: false, error: null });
+          })
+          .catch((error: unknown) => {
+            if (controller.signal.aborted) return;
+            const message =
+              error instanceof ApiError ? error.message : 'Không tải được danh sách biên bản.';
+            setState((current) => ({ ...current, isLoading: false, error: message }));
+          });
+      };
+
+      load();
+      const timer = setInterval(load, POLL_MS);
+      const appState = AppState.addEventListener('change', (next) => {
+        if (next === 'active') load();
+      });
+
+      return () => {
+        clearInterval(timer);
+        appState.remove();
+        controller.abort();
+      };
       // reloadToken re-runs the load on pull-to-refresh.
     }, [scope, status, reloadToken]),
   );

@@ -7,7 +7,7 @@ import type { AuthUser } from '@modules/auth/types/auth-user';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { Injectable } from '@nestjs/common';
 import { fieldValidationError, notFound } from '@shared/exceptions/domain.exception';
-import { ContractStatus, UserRole, UserStatus } from '@storage/types';
+import { ContractStatus, InspectionType, UserRole, UserStatus } from '@storage/types';
 import { DataSource, type FindOptionsWhere, In, IsNull, Not } from 'typeorm';
 import { AssignInspectionDto } from './dto/assign-inspection.dto';
 import { ListInspectionsQueryDto } from './dto/list-inspections-query.dto';
@@ -185,13 +185,19 @@ export class InspectionService {
     where: FindOptionsWhere<Inspection>,
     view: (inspection: Inspection) => Inspection,
   ): Promise<Inspection[]> {
-    // A cancelled contract never reaches handover, so its inspection is not work to do.
+    // A cancelled contract never reaches handover, so its handover/return inspections are not work
+    // to do — but a MAINTENANCE check of the vacated unit lives on the cancelled old contract and
+    // must still show. A caller filtering a specific type keeps only that type.
     const contract = {
       ...(where.contract as FindOptionsWhere<Contract> | undefined),
       status: Not(ContractStatus.CANCELLED),
     };
+    const branches: FindOptionsWhere<Inspection>[] = [{ ...where, contract }];
+    if (!where.type || where.type === InspectionType.MAINTENANCE) {
+      branches.push({ ...where, type: InspectionType.MAINTENANCE });
+    }
     const rows = await this.em.find(Inspection, {
-      where: { ...where, contract },
+      where: branches,
       relations: INSPECTION_RELATIONS,
       order: { scheduledAt: { direction: 'ASC', nulls: 'LAST' }, createdAt: 'DESC' },
     });

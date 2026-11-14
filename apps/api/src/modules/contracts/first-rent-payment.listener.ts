@@ -1,5 +1,10 @@
 import { Invoice } from '@entities/invoice.entity';
 import { Payment } from '@entities/payment.entity';
+import {
+  type SettleDeps,
+  settleIfTopUpInvoicePaid,
+} from '@modules/change-requests/change-request-settle.util';
+import { HandoverAssignmentService } from '@modules/inspection/handover-assignment/handover-assignment.service';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { extractInvoiceNos } from '@modules/payments/invoice-no.util';
 import { generatePaymentNo } from '@modules/payments/payment-no.util';
@@ -108,7 +113,15 @@ export class FirstRentPaymentListener {
   constructor(
     private readonly dataSource: DataSource,
     private readonly notificationsService: NotificationsService,
+    private readonly handoverAssignment: HandoverAssignmentService,
   ) {}
+
+  private get settleDeps(): SettleDeps {
+    return {
+      handoverAssignment: this.handoverAssignment,
+      notifications: this.notificationsService,
+    };
+  }
 
   @OnEvent(PAYMENT_EVENTS.RECEIVED, { async: true })
   async handlePaymentReceived(event: PaymentReceivedEvent): Promise<void> {
@@ -185,6 +198,9 @@ export class FirstRentPaymentListener {
             [invoice.customerId],
             invoicePaidNotification(invoice, event.amount),
           );
+          // A unit change's top-up being paid triggers the move's settle step (savepoint-wrapped,
+          // never rolls back the payment).
+          await settleIfTopUpInvoicePaid(em, invoice, this.settleDeps, null);
         }
 
         return status;

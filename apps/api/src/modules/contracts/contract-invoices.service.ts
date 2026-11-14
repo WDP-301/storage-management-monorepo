@@ -3,6 +3,11 @@ import { Contract } from '@entities/contract.entity';
 import { Invoice } from '@entities/invoice.entity';
 import { Payment } from '@entities/payment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import {
+  type SettleDeps,
+  settleIfTopUpInvoicePaid,
+} from '@modules/change-requests/change-request-settle.util';
+import { HandoverAssignmentService } from '@modules/inspection/handover-assignment/handover-assignment.service';
 import { managesFacility } from '@modules/inspection/inspection-access.util';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { generatePaymentNo } from '@modules/payments/payment-no.util';
@@ -54,7 +59,12 @@ export class ContractInvoicesService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly notifications: NotificationsService,
+    private readonly handoverAssignment: HandoverAssignmentService,
   ) {}
+
+  private get settleDeps(): SettleDeps {
+    return { handoverAssignment: this.handoverAssignment, notifications: this.notifications };
+  }
 
   async list(contractId: string, actor: AuthUser): Promise<ContractInvoiceRecord[]> {
     const em = this.dataSource.manager;
@@ -172,6 +182,8 @@ export class ContractInvoicesService {
           [locked.customerId],
           invoicePaidNotification(locked, dto.amount),
         );
+        // A unit change's top-up being paid triggers the move's settle step.
+        await settleIfTopUpInvoicePaid(em, locked, this.settleDeps, actor.id);
       }
       this.logger.log(
         `Manual ${dto.method} ${dto.amount} on ${locked.invoiceNo} by ${actor.id}: ${status}`,

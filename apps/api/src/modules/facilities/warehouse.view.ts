@@ -20,6 +20,16 @@ export interface ShelfSummary {
 }
 
 /**
+ * The staff's finished maintenance check of a vacated unit — shown to managers so they can decide
+ * whether to reopen it. Null until a MAINTENANCE inspection is finalized.
+ */
+export interface WarehouseMaintenanceSummary {
+  inspectionId: string;
+  finalizedAt: Date;
+  hasDamages: boolean;
+}
+
+/**
  * A warehouse as clients see it: the storage unit with its owning facility (branch) summary.
  * `id` is the storage unit id — what bookings, change requests and tours reference.
  */
@@ -55,6 +65,8 @@ export interface WarehouseView {
   images: WarehouseImageView[];
   /** Equipment included in the rent; always empty for a shelf, which shares its building's. */
   amenities: WarehouseAmenityView[];
+  /** Latest finalized maintenance check of a vacated unit, for managers deciding to reopen it. */
+  maintenance: WarehouseMaintenanceSummary | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -69,6 +81,7 @@ export function toWarehouseView(
   images: WarehouseImageView[] = [],
   shelfSummary: ShelfSummary | null = null,
   amenities: WarehouseAmenityView[] = [],
+  maintenance: WarehouseMaintenanceSummary | null = null,
 ): WarehouseView {
   const { facility, parent } = unit;
   return {
@@ -97,6 +110,7 @@ export function toWarehouseView(
     notes: unit.notes ?? null,
     images,
     amenities,
+    maintenance,
     createdAt: unit.createdAt,
     updatedAt: unit.updatedAt,
   };

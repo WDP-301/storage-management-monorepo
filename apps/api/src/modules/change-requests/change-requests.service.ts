@@ -4,20 +4,19 @@ import { Facility } from '@entities/facility.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { Invoice } from '@entities/invoice.entity';
 import { InvoiceItem } from '@entities/invoice-item.entity';
+import { ShiftTemplate } from '@entities/shift-template.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { activeFacilityIds, isAssignmentActive } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { isWithinWindows, receivingWindowsForDate } from '@modules/bookings/receiving-window.util';
 import { findUnrentable, lockShelfParents } from '@modules/bookings/rentable-units.util';
+import { HandoverAssignmentService } from '@modules/inspection/handover-assignment/handover-assignment.service';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { generateInvoiceNo } from '@modules/payments/invoice-no.util';
 import { SettingsService } from '@modules/settings/settings.service';
-import {
-  assertShelfEmpty,
-  cancelOpenDropOffRequests,
-  cancelOpenPickupRequests,
-} from '@modules/shelf-storage/shelf-empty-guard.util';
+import type { ShiftWindow } from '@modules/shift-templates/shift-time';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
@@ -33,12 +32,19 @@ import {
   InvoiceKind,
   InvoiceStatus,
   NotificationType,
+  OPEN_CHANGE_REQUEST_STATUSES,
+  ShiftTemplateType,
   StorageUnitKind,
   StorageUnitStatus,
   UserRole,
 } from '@storage/types';
 import { DataSource, type EntityManager, IsNull, Repository } from 'typeorm';
 import { releaseMoveHold } from './change-request-release.util';
+import {
+  type SettleDeps,
+  settleChangeRequest,
+  unwindSettledChangeRequest,
+} from './change-request-settle.util';
 import {
   ChangeRequestOptionsQueryDto,
   CreateChangeRequestDto,
@@ -59,26 +65,21 @@ const OPTIONS_PAGE_SIZE = 50;
 export const MOVE_MAX_DAYS_AHEAD = 90;
 /** A deposit top-up is due the sooner of the move day or this many days after approval. */
 const TOP_UP_DUE_DAYS = 7;
-/** Statuses where the request still awaits a decision — only one may exist per contract. */
-const OPEN_STATUSES: readonly ChangeRequestStatus[] = [
+/** Statuses where the request still occupies the contract's open slot — mirrors UQ_open_change_request. */
+const OPEN_STATUSES: readonly ChangeRequestStatus[] = OPEN_CHANGE_REQUEST_STATUSES;
+/** A customer withdraws their own request only before any money or contract is committed. */
+const CUSTOMER_CANCELLABLE: readonly ChangeRequestStatus[] = [
   ChangeRequestStatus.REQUESTED,
-  ChangeRequestStatus.PROPOSED,
-  ChangeRequestStatus.APPROVED,
-  ChangeRequestStatus.TRANSITIONING,
+  ChangeRequestStatus.AWAITING_PAYMENT,
 ];
-/** A customer withdraws their own request only before anyone decided on it. */
-const CUSTOMER_CANCELLABLE: readonly ChangeRequestStatus[] = [ChangeRequestStatus.REQUESTED];
-/** The branch takes a request back at any point before the swap is done. */
+/** The branch takes a request back before the destination contract is signed at handover. */
 const MANAGER_CANCELLABLE: readonly ChangeRequestStatus[] = [
   ChangeRequestStatus.REQUESTED,
-  ChangeRequestStatus.APPROVED,
-  ChangeRequestStatus.TRANSITIONING,
+  ChangeRequestStatus.AWAITING_PAYMENT,
+  ChangeRequestStatus.AWAITING_HANDOVER,
 ];
-/** Approved requests waiting for (or in) the physical move. */
-const MOVE_IN_FLIGHT: readonly ChangeRequestStatus[] = [
-  ChangeRequestStatus.APPROVED,
-  ChangeRequestStatus.TRANSITIONING,
-];
+/** The one status whose cancel must undo a destination contract (still DRAFT, never signed). */
+const UNWINDABLE_STATUSES: readonly ChangeRequestStatus[] = [ChangeRequestStatus.AWAITING_HANDOVER];
 
 const REQUEST_RELATIONS = {
   requester: true,
@@ -97,10 +98,18 @@ export class ChangeRequestsService {
     private readonly storageUnits: Repository<StorageUnit>,
     @InjectRepository(UserRoleAssignment)
     private readonly roleAssignments: Repository<UserRoleAssignment>,
+    @InjectRepository(ShiftTemplate)
+    private readonly shiftTemplates: Repository<ShiftTemplate>,
     private readonly dataSource: DataSource,
     private readonly settings: SettingsService,
     private readonly notifications: NotificationsService,
+    private readonly handoverAssignment: HandoverAssignmentService,
   ) {}
+
+  /** Dependencies the settle step needs; keeps the job inside this module's transaction. */
+  private settleDeps(): SettleDeps {
+    return { handoverAssignment: this.handoverAssignment, notifications: this.notifications };
+  }
 
   /**
    * OR-of-scopes listing, same pattern as service tickets:
@@ -240,6 +249,11 @@ export class ChangeRequestsService {
     const now = new Date();
     const moveAt = new Date(dto.scheduledMoveAt);
     assertMoveDayInRange('scheduledMoveAt', moveAt, now);
+    // The move is staffed, so it must land inside an OFFICE shift — a day within range is not enough.
+    const officeTemplates = await this.shiftTemplates.find({
+      where: { isActive: true, type: ShiftTemplateType.OFFICE },
+    });
+    assertMoveTimeInOfficeShift('scheduledMoveAt', moveAt, officeTemplates, now);
 
     const contract = await this.contracts.findOne({
       where: { id: dto.contractId, deletedAt: IsNull() },
@@ -437,18 +451,13 @@ export class ChangeRequestsService {
     await this.dataSource.transaction(async (manager) => {
       await this.lockUndecidedRequest(manager, request.id);
       await this.assertContractStillMovable(manager, contract.id, request.oldUnitId);
-      // Requests written before the same-kind rule may still aim at a non-shelf unit: goods on
-      // the shelf cannot move there, and open pick-up requests would become unreachable.
-      if (request.newUnit!.kind !== StorageUnitKind.SHELF) {
-        await assertShelfEmpty(manager, contract.id, 'UNIT_CHANGE');
-        await cancelOpenPickupRequests(manager, contract.id);
-        await cancelOpenDropOffRequests(manager, contract.id);
-      }
+      // The shelf-empty guard and open-request cancel run at settle (the goods are only emptied
+      // at the move), not here at L1.
 
       // Shared facility lock first (same order as warehouse writes): a concurrent deactivation
       // waits for this commit, and the unit's facility is pinned in the claim below.
       const targetFacility = await manager.findOne(Facility, {
-        where: { id: request.newUnit!.facilityId },
+        where: { id: request.newUnit.facilityId },
         lock: { mode: 'pessimistic_read' },
       });
       if (!targetFacility || targetFacility.status !== FacilityStatus.ACTIVE) {
@@ -461,7 +470,7 @@ export class ChangeRequestsService {
 
       // A shelf's building is share-locked before the claim (building before shelves, as in
       // warehouse writes), so closing it concurrently waits and the EXISTS below sees the result.
-      await lockShelfParents(manager, [request.newUnit!]);
+      await lockShelfParents(manager, [request.newUnit]);
 
       // Hold the target until the move: nobody can book it, but the swap has not happened.
       const claimed = await manager
@@ -515,9 +524,10 @@ export class ChangeRequestsService {
             invoiceNo: generateInvoiceNo(),
             customerId: contract.customerId,
             contractId: contract.id,
-            periodNo: 0,
+            // Non-period invoice: `period_no`/`months` only satisfy their `> 0` checks (see SETTLEMENT).
+            periodNo: 1,
             kind: InvoiceKind.DEPOSIT_TOPUP,
-            months: 0,
+            months: 1,
             monthlyPriceSnapshot: newPrice,
             status: InvoiceStatus.ISSUED,
             currency: 'VND',
@@ -552,265 +562,148 @@ export class ChangeRequestsService {
         });
       }
 
-      request.status = ChangeRequestStatus.APPROVED;
       request.moveAt = moveAt;
       request.approvedBy = actor.id;
       request.decisionNote = dto.decisionNote;
+      // L1 keeps the target unit HELD. A top-up is billed and the request waits (AWAITING_PAYMENT);
+      // with nothing to pay the move settles right away — old contract cancelled, destination
+      // contract created, handover assigned — all covered by this one approval.
+      request.status = ChangeRequestStatus.AWAITING_PAYMENT;
       request.history = [
         ...(request.history ?? []),
         this.historyEntry(
           'STATUS_CHANGED',
           ChangeRequestStatus.REQUESTED,
-          ChangeRequestStatus.APPROVED,
+          ChangeRequestStatus.AWAITING_PAYMENT,
           actor.id,
-          // The approver may adjust the day — the customer's proposal lives on in the
-          // REQUESTED entry, so both stay recoverable.
-          { moveAt: moveAt.toISOString() },
+          { moveAt: moveAt.toISOString(), depositTopUp },
         ),
       ];
       await manager.save(request);
-      await this.notifications.createForUsers(manager, [contract.customerId], {
-        type: NotificationType.UNIT_CHANGE_APPROVED,
-        title: 'Yêu cầu đổi kho được duyệt',
-        body:
-          `Yêu cầu đổi sang kho ${target.code} đã được duyệt — ngày chuyển ` +
-          `${vietnamDate(moveAt).split('-').reverse().join('/')}.`,
-        data: {
-          requestId: request.id,
-          contractId: contract.id,
-          newUnitId: request.newUnitId,
-          moveAt: moveAt.toISOString(),
-        },
-      });
-      // The destination facility owns the held unit and receives the move — tell it too.
-      await this.notifyFacilityManagers(manager, request.newUnit!.facilityId, {
-        type: NotificationType.UNIT_CHANGE_APPROVED,
-        title: 'Kho sắp nhận khách chuyển đến',
-        body:
-          `Kho ${target.code} đang được giữ chỗ — khách dự kiến chuyển từ kho ` +
-          `${request.oldUnit?.code ?? 'khác'} vào ` +
-          `${vietnamDate(moveAt).split('-').reverse().join('/')}.`,
-        data: {
-          requestId: request.id,
-          contractId: contract.id,
-          newUnitId: request.newUnitId,
-          moveAt: moveAt.toISOString(),
-        },
-      });
-    });
 
-    return { request: toChangeRequestRecord(await this.findOrFail(id)) };
-  }
-
-  /**
-   * The physical move starts — from the daily move-day sweep or early by a manager. Only a
-   * marker: the swap itself is `complete`.
-   */
-  async start(id: string, actor: AuthUser): Promise<ChangeRequestResponse> {
-    const request = await this.findOrFail(id);
-    // Either end may kick the move off — the branch being left or the branch receiving it.
-    await this.assertManagesEitherFacility(actor, request);
-
-    await this.dataSource.transaction(async (manager) => {
-      const locked = await manager.findOne(UnitChangeRequest, {
-        where: { id },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (locked?.status !== ChangeRequestStatus.APPROVED) {
-        throw new DomainException(
-          ErrorCode.CONFLICT,
-          `Request cannot start moving while its status is ${locked?.status ?? 'unknown'}`,
-          HttpStatus.CONFLICT,
-        );
+      if (depositTopUp > 0) {
+        await this.notifications.createForUsers(manager, [contract.customerId], {
+          type: NotificationType.UNIT_CHANGE_APPROVED,
+          title: 'Yêu cầu đổi kho được duyệt',
+          body:
+            `Yêu cầu đổi sang kho ${target.code} đã được duyệt — vui lòng thanh toán tiền cọc ` +
+            'bù để tiếp tục chuyển kho.',
+          data: {
+            requestId: request.id,
+            contractId: contract.id,
+            newUnitId: request.newUnitId,
+            moveAt: moveAt.toISOString(),
+          },
+        });
+        await this.notifyFacilityManagers(manager, request.newUnit.facilityId, {
+          type: NotificationType.UNIT_CHANGE_APPROVED,
+          title: 'Kho sắp nhận khách chuyển đến',
+          body:
+            `Kho ${target.code} đang được giữ chỗ — chờ khách thanh toán bù cọc để chuyển đến ` +
+            `vào ${vietnamDate(moveAt).split('-').reverse().join('/')}.`,
+          data: {
+            requestId: request.id,
+            contractId: contract.id,
+            newUnitId: request.newUnitId,
+            moveAt: moveAt.toISOString(),
+          },
+        });
+      } else {
+        // Nothing to pay: settle now, inside this transaction.
+        await settleChangeRequest(manager, request.id, this.settleDeps(), {
+          actorId: actor.id,
+          now,
+        });
       }
-      await this.assertContractStillMovable(manager, locked.contractId, locked.oldUnitId);
-      locked.status = ChangeRequestStatus.TRANSITIONING;
-      locked.transitionStartAt = new Date();
-      locked.history = [
-        ...(locked.history ?? []),
-        this.historyEntry(
-          'STATUS_CHANGED',
-          ChangeRequestStatus.APPROVED,
-          ChangeRequestStatus.TRANSITIONING,
-          actor.id,
-        ),
-      ];
-      await manager.save(locked);
-      await this.notifyBothFacilities(manager, request, {
-        type: NotificationType.UNIT_CHANGE_MOVE_TODAY,
-        title: 'Khách bắt đầu chuyển kho',
-        body:
-          `Yêu cầu đổi từ kho ${request.oldUnit?.code ?? ''} sang kho ` +
-          `${request.newUnit?.code ?? ''} đang được thực hiện — xác nhận khi khách chuyển xong.`,
-        data: { requestId: locked.id, contractId: locked.contractId },
-      });
     });
 
     return { request: toChangeRequestRecord(await this.findOrFail(id)) };
   }
 
   /**
-   * The move is done: repoint the contract to the held unit (HELD → RENTED), retire the old
-   * unit to MAINTENANCE until staff confirm it empty, and close the request COMPLETED.
+   * L2 — the manager's final approval. The destination contract is already ACTIVE (the customer
+   * signed the handover), so this re-checks the destination, retires the old unit to MAINTENANCE
+   * until staff confirm it empty, and closes the request COMPLETED.
    */
-  async complete(id: string, actor: AuthUser): Promise<ChangeRequestResponse> {
+  async finalApprove(id: string, actor: AuthUser): Promise<ChangeRequestResponse> {
     const request = await this.findOrFail(id);
     // The receiving branch confirms the goods arrived just as well as the sending one.
     await this.assertManagesEitherFacility(actor, request);
 
-    if (!MOVE_IN_FLIGHT.includes(request.status)) {
+    if (request.status !== ChangeRequestStatus.AWAITING_FINAL_APPROVAL) {
       throw new DomainException(
         ErrorCode.CONFLICT,
         `Request cannot be completed while its status is ${request.status}`,
         HttpStatus.CONFLICT,
       );
     }
-    if (!request.newUnitId || !request.newUnit) {
+    if (!request.newContractId) {
       throw new DomainException(
         ErrorCode.CONFLICT,
-        'Request has no target unit to move into',
-        HttpStatus.CONFLICT,
-      );
-    }
-    if (request.newUnit.kind !== request.oldUnit.kind) {
-      throw new DomainException(
-        ErrorCode.CONFLICT,
-        'New unit must be the same kind as the current one',
+        'Request has no destination contract',
         HttpStatus.CONFLICT,
       );
     }
 
-    const contract = await this.contracts.findOne({
-      where: { id: request.contractId, deletedAt: IsNull() },
-      relations: { bookingItem: true },
-    });
-    if (!contract || contract.status !== ContractStatus.ACTIVE) {
-      throw new DomainException(
-        ErrorCode.CONFLICT,
-        'Contract is no longer active',
-        HttpStatus.CONFLICT,
-      );
-    }
-
+    const now = new Date();
     await this.dataSource.transaction(async (manager) => {
       const locked = await manager.findOne(UnitChangeRequest, {
         where: { id },
         lock: { mode: 'pessimistic_write' },
       });
-      if (!locked || !MOVE_IN_FLIGHT.includes(locked.status)) {
+      if (!locked || locked.status !== ChangeRequestStatus.AWAITING_FINAL_APPROVAL) {
         throw new DomainException(
           ErrorCode.CONFLICT,
           `Request cannot be completed while its status is ${locked?.status ?? 'unknown'}`,
           HttpStatus.CONFLICT,
         );
       }
-      await this.assertContractStillMovable(manager, contract.id, request.oldUnitId);
-      if (request.newUnit!.kind !== StorageUnitKind.SHELF) {
-        await assertShelfEmpty(manager, contract.id, 'UNIT_CHANGE');
-        await cancelOpenPickupRequests(manager, contract.id);
-        await cancelOpenDropOffRequests(manager, contract.id);
-      }
-
-      const targetFacility = await manager.findOne(Facility, {
-        where: { id: request.newUnit!.facilityId },
-        lock: { mode: 'pessimistic_read' },
+      const newContract = await manager.findOne(Contract, {
+        where: { id: locked.newContractId as string, deletedAt: IsNull() },
       });
-      if (!targetFacility || targetFacility.status !== FacilityStatus.ACTIVE) {
+      if (!newContract || newContract.status !== ContractStatus.ACTIVE) {
         throw new DomainException(
           ErrorCode.CONFLICT,
-          'Target unit facility is not active',
-          HttpStatus.CONFLICT,
-        );
-      }
-      await lockShelfParents(manager, [request.newUnit!]);
-
-      // The unit was held at approval; if it was released or moved underneath us, bail out.
-      const claimed = await manager
-        .createQueryBuilder()
-        .update(StorageUnit)
-        .set({ status: StorageUnitStatus.RENTED })
-        .where(`id = :id AND status = :held AND deleted_at IS NULL`, {
-          id: request.newUnitId,
-          held: StorageUnitStatus.HELD,
-        })
-        .execute();
-      if (!claimed.affected) {
-        throw new DomainException(
-          ErrorCode.CONFLICT,
-          'Target unit is no longer held for this move',
+          'Destination contract is not active yet',
           HttpStatus.CONFLICT,
         );
       }
 
-      // Read after the claim: the claim row-locks the unit, so the price cannot change underneath.
-      const target = await manager.findOneByOrFail(StorageUnit, { id: request.newUnitId });
-      const newPrice = Number(target.monthlyPrice);
-      const newDeposit = newPrice * (await this.settings.getDepositMonthsFor(target));
-
-      // A HELD unit's price stays editable; if it moved since approval the billed top-up no
-      // longer matches the deposit the swap would write — stop and let a human re-quote.
-      const item = await manager.findOne(BookingItem, { where: { id: contract.bookingItemId } });
-      const rentDifference = newPrice - Number(item?.monthlyPriceSnapshot ?? 0);
-      const depositDifference = newDeposit - Number(item?.depositSnapshot ?? 0);
-      if (
-        rentDifference !== Number(request.rentDifference ?? 0) ||
-        depositDifference !== Number(request.depositDifference ?? 0)
-      ) {
-        throw new DomainException(
-          ErrorCode.CONFLICT,
-          'Target unit pricing changed since approval — cancel and resubmit',
-          HttpStatus.CONFLICT,
-        );
-      }
-
-      // The customer's goods may still be in the old warehouse; it stays out of the
-      // catalogue until staff confirm it is empty and put it back in service.
-      await manager.update(
-        StorageUnit,
-        { id: request.oldUnitId },
-        { status: StorageUnitStatus.MAINTENANCE },
-      );
-      await manager.update(
-        BookingItem,
-        { id: contract.bookingItemId },
-        {
-          storageUnitId: request.newUnitId,
-          monthlyPriceSnapshot: newPrice,
-          depositSnapshot: newDeposit,
-        },
-      );
-      await manager.update(Contract, { id: contract.id }, { monthlyPriceSnapshot: newPrice });
-
+      // The old unit was retired and the old contract cancelled at handover — here we only close
+      // the request.
       locked.status = ChangeRequestStatus.COMPLETED;
-      locked.transitionEndAt = new Date();
+      locked.finalApprovedBy = actor.id;
+      locked.finalApprovedAt = now;
       locked.history = [
         ...(locked.history ?? []),
         this.historyEntry(
           'STATUS_CHANGED',
-          ChangeRequestStatus.TRANSITIONING,
+          ChangeRequestStatus.AWAITING_FINAL_APPROVAL,
           ChangeRequestStatus.COMPLETED,
           actor.id,
         ),
       ];
       await manager.save(locked);
-      await this.notifications.createForUsers(manager, [contract.customerId], {
+      await this.notifications.createForUsers(manager, [locked.requestedBy], {
         type: NotificationType.UNIT_CHANGE_COMPLETED,
         title: 'Đã chuyển kho thành công',
-        body: `Hợp đồng ${contract.contractNo} đã chuyển sang kho ${target.code}.`,
+        body: `Yêu cầu đổi sang kho ${request.newUnit?.code ?? ''} đã hoàn tất.`,
         data: {
           requestId: locked.id,
-          contractId: contract.id,
-          newUnitId: request.newUnitId,
+          contractId: locked.newContractId,
+          newUnitId: locked.newUnitId,
         },
       });
       await this.notifyBothFacilities(manager, request, {
         type: NotificationType.UNIT_CHANGE_COMPLETED,
         title: 'Đã hoàn tất chuyển kho',
-        body: `Khách đã chuyển từ kho ${request.oldUnit?.code ?? ''} sang kho ${target.code}.`,
+        body:
+          `Kho cũ ${request.oldUnit?.code ?? ''} đã được đưa sang bảo trì — hoàn tất đổi kho sang ` +
+          `kho ${request.newUnit?.code ?? ''}.`,
         data: {
           requestId: locked.id,
-          contractId: contract.id,
-          newUnitId: request.newUnitId,
+          contractId: locked.newContractId,
+          newUnitId: locked.newUnitId,
         },
       });
     });
@@ -844,7 +737,6 @@ export class ChangeRequestsService {
       );
     }
 
-    const now = new Date();
     await this.dataSource.transaction(async (manager) => {
       const locked = await manager.findOne(UnitChangeRequest, {
         where: { id },
@@ -858,11 +750,13 @@ export class ChangeRequestsService {
         );
       }
 
-      if (MOVE_IN_FLIGHT.includes(locked.status)) {
-        // The move was booked: give the target back and void the top-up it billed. Paid
-        // money stays in the deposit for the end-of-contract settlement.
+      if (UNWINDABLE_STATUSES.includes(locked.status)) {
+        // Settled but not signed: cancel the destination draft contract and release the new unit.
+        // The old contract was never touched, so the customer keeps it.
+        await this.unwindSettled(manager, locked);
+      } else if (locked.status === ChangeRequestStatus.AWAITING_PAYMENT) {
+        // Give the held unit back and void the top-up it billed; paid money stays in the deposit.
         await releaseMoveHold(manager, locked);
-        locked.transitionEndAt = now;
       }
 
       const from = locked.status;
@@ -892,6 +786,43 @@ export class ChangeRequestsService {
       }
     });
 
+    return { request: toChangeRequestRecord(await this.findOrFail(id)) };
+  }
+
+  /**
+   * Undoes a settled-but-unsigned move through the shared helper: cancel the destination draft
+   * contract and release its new unit. The old contract was never touched.
+   */
+  private unwindSettled(manager: EntityManager, request: UnitChangeRequest): Promise<void> {
+    return unwindSettledChangeRequest(manager, request);
+  }
+
+  /** Re-runs the settle step for a request whose top-up was paid but the settle step failed. */
+  async retrySettle(id: string, actor: AuthUser): Promise<ChangeRequestResponse> {
+    const request = await this.findOrFail(id);
+    await this.assertManagesEitherFacility(actor, request);
+    if (request.status !== ChangeRequestStatus.AWAITING_PAYMENT) {
+      throw new DomainException(
+        ErrorCode.CONFLICT,
+        `Request cannot be settled while its status is ${request.status}`,
+        HttpStatus.CONFLICT,
+      );
+    }
+    const invoice = request.topupInvoiceId
+      ? await this.dataSource.getRepository(Invoice).findOne({
+          where: { id: request.topupInvoiceId },
+        })
+      : null;
+    if (!invoice || invoice.status !== InvoiceStatus.PAID) {
+      throw new DomainException(
+        ErrorCode.CONFLICT,
+        'Hoá đơn bù cọc chưa được thanh toán',
+        HttpStatus.CONFLICT,
+      );
+    }
+    await this.dataSource.transaction((manager) =>
+      settleChangeRequest(manager, id, this.settleDeps(), { actorId: actor.id }),
+    );
     return { request: toChangeRequestRecord(await this.findOrFail(id)) };
   }
 
@@ -1081,5 +1012,27 @@ export function assertMoveDayInRange(field: string, at: Date, now: Date = new Da
         ],
       },
     );
+  }
+}
+
+/** 400 unless `at` is in the future and inside an OFFICE work-shift window on its Vietnam day. */
+export function assertMoveTimeInOfficeShift(
+  field: string,
+  at: Date,
+  templates: readonly ShiftWindow[],
+  now: Date = new Date(),
+): void {
+  const reject = (code: string, message: string): never => {
+    throw new DomainException(
+      ErrorCode.VALIDATION_FAILED,
+      'Validation failed',
+      HttpStatus.BAD_REQUEST,
+      { fields: [{ field, code, message }] },
+    );
+  };
+  if (at <= now) reject('pastTime', 'Giờ chuyển kho phải ở tương lai');
+  const windows = receivingWindowsForDate(vietnamDate(at), templates);
+  if (!isWithinWindows(at, windows)) {
+    reject('moveTimeNotInShift', 'Giờ chuyển kho phải nằm trong khung giờ hành chính');
   }
 }

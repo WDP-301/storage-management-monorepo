@@ -110,6 +110,7 @@ describe('ContractInvoicesService', () => {
     service = new ContractInvoicesService(
       dataSource as never,
       new NotificationsService({} as never),
+      { assignSafely: jest.fn() } as never,
     );
   });
 

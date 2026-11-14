@@ -30,7 +30,8 @@ export class CreateChangeRequestDto {
 
   @ApiProperty({
     format: 'date-time',
-    description: 'Day the customer wants to move, within today..+90 days (Vietnam calendar)',
+    description:
+      'Day and time the customer wants to move — a Vietnam day within today..+90 days, at a time inside an OFFICE work-shift window',
   })
   @IsDateString()
   scheduledMoveAt: string;

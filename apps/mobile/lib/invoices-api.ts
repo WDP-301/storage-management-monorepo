@@ -17,6 +17,12 @@ export const InvoicesApi = {
       .filter((item) => item.contractId == null || item.contractId === contractId)
       .map(normaliseInvoice);
   },
+
+  /** One of the customer's invoices, with the VietQR for what is still owed. */
+  getById: async (id: string, signal?: AbortSignal): Promise<ApiInvoice> => {
+    const row = await request<InvoiceResponse>(`/invoices/${encodeURIComponent(id)}`, { signal });
+    return normaliseInvoice(row);
+  },
 };
 
 export function normaliseInvoice(row: InvoiceResponse): ApiInvoice {

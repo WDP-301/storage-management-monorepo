@@ -32,9 +32,9 @@ export const RETURN_MESSAGES = {
 /** A unit change in any of these statuses still owns the contract's right to keep moving. */
 export const OPEN_CHANGE_STATUSES: readonly ChangeRequestStatus[] = [
   ChangeRequestStatus.REQUESTED,
-  ChangeRequestStatus.PROPOSED,
-  ChangeRequestStatus.APPROVED,
-  ChangeRequestStatus.TRANSITIONING,
+  ChangeRequestStatus.AWAITING_PAYMENT,
+  ChangeRequestStatus.AWAITING_HANDOVER,
+  ChangeRequestStatus.AWAITING_FINAL_APPROVAL,
 ];
 
 export function returnConflict(

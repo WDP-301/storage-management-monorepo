@@ -27,6 +27,11 @@ export interface PersistContractInput {
    * the contract describes a past rental, where today's amenities would be a guess.
    */
   snapshotAmenities?: boolean;
+  /**
+   * Record the contract's deposit in the ledger (default true). Pass false when the caller moves
+   * an existing deposit row itself (a unit change carries the old deposit onto the new contract).
+   */
+  captureDeposit?: boolean;
 }
 
 /**
@@ -95,6 +100,6 @@ export async function persistContract(
       scheduledAt: saved.effectiveAt,
     }),
   );
-  await captureDepositSafely(manager, saved);
+  if (input.captureDeposit !== false) await captureDepositSafely(manager, saved);
   return saved;
 }

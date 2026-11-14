@@ -33,7 +33,7 @@ test('options hits the options endpoint with the contract id', async () => {
   assert.equal(options.length, 1);
 });
 
-test('create sends noon-UTC moveAt so the Vietnam day stays put', async () => {
+test('create sends the chosen move instant as scheduledMoveAt', async () => {
   const calls = [];
   const { ChangeRequestsApi } = load('change-requests-api.ts', async (path, init) => {
     calls.push({ path, body: JSON.parse(init.body) });
@@ -43,14 +43,14 @@ test('create sends noon-UTC moveAt so the Vietnam day stays put', async () => {
     contractId: 'c1',
     newUnitId: 'u9',
     reason: '  cần rộng hơn  ',
-    dayIso: '2026-11-20',
+    moveAt: '2026-11-20T02:00:00.000Z',
   });
   assert.equal(created.id, 'r1');
   assert.deepEqual(calls[0].body, {
     contractId: 'c1',
     newUnitId: 'u9',
     reason: '  cần rộng hơn  ',
-    scheduledMoveAt: '2026-11-20T12:00:00.000Z',
+    scheduledMoveAt: '2026-11-20T02:00:00.000Z',
   });
 });
 
@@ -68,9 +68,26 @@ test('cancel posts to the cancel endpoint', async () => {
 test('openChangeRequest returns the open one and ignores settled requests', () => {
   const { openChangeRequest } = load('change-requests-api.ts', async () => null);
   const rows = (statuses) => statuses.map((status, i) => ({ id: `r${i}`, status }));
-  assert.equal(openChangeRequest(rows(['COMPLETED', 'CANCELLED'])), null);
-  const open = openChangeRequest(rows(['COMPLETED', 'APPROVED', 'CANCELLED']));
-  assert.equal(open.status, 'APPROVED');
-  assert.equal(openChangeRequest(rows(['TRANSITIONING'])).status, 'TRANSITIONING');
+  assert.equal(openChangeRequest(rows(['COMPLETED', 'CANCELLED', 'REJECTED'])), null);
+  const open = openChangeRequest(rows(['COMPLETED', 'AWAITING_PAYMENT', 'CANCELLED']));
+  assert.equal(open.status, 'AWAITING_PAYMENT');
+  assert.equal(openChangeRequest(rows(['AWAITING_HANDOVER'])).status, 'AWAITING_HANDOVER');
+  assert.equal(
+    openChangeRequest(rows(['AWAITING_FINAL_APPROVAL'])).status,
+    'AWAITING_FINAL_APPROVAL',
+  );
   assert.equal(openChangeRequest(rows(['REQUESTED'])).status, 'REQUESTED');
+  // Legacy statuses are no longer open, even though old rows may still carry them.
+  assert.equal(openChangeRequest(rows(['APPROVED'])), null);
+  assert.equal(openChangeRequest(rows(['TRANSITIONING'])), null);
+});
+
+test('CHANGE_REQUEST_OPEN_STATUSES mirrors the four open statuses', () => {
+  const { CHANGE_REQUEST_OPEN_STATUSES } = load('change-requests-api.ts', async () => null);
+  assert.deepEqual(CHANGE_REQUEST_OPEN_STATUSES, [
+    'REQUESTED',
+    'AWAITING_PAYMENT',
+    'AWAITING_HANDOVER',
+    'AWAITING_FINAL_APPROVAL',
+  ]);
 });

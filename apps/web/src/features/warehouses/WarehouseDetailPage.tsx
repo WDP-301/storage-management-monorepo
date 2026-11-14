@@ -33,12 +33,15 @@ import {
 import { UserRole } from '@storage/types';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { SignedFileGallery } from '../../components/SignedImageLightbox';
 import { useAuth } from '../../context/AuthContext';
-import { FacilitiesApi, type FacilityRecord, WarehousesApi } from '../../lib/api';
+import { FacilitiesApi, type FacilityRecord, InspectionsApi, WarehousesApi } from '../../lib/api';
 import { hasAllowedRole } from '../../lib/roles';
 import { useAppToast } from '../../lib/toast';
 import { useClientPagination } from '../../lib/use-client-pagination';
+import type { InspectionRecord } from '../../types/inspection';
 import type { Warehouse, WarehouseStatus } from '../../types/warehouse';
+import { formatDateTime, toDamages, toEvidence } from '../inspections/inspection-display';
 import { ShelfRecordsTab } from '../shelf-storage/ShelfRecordsTab';
 import { ShelfLayoutEditor } from './ShelfLayoutEditor';
 import {
@@ -103,6 +106,7 @@ export const WarehouseDetailPage: React.FC = () => {
   const toast = useAppToast();
 
   const [warehouse, setWarehouse] = useState<Warehouse | null>(null);
+  const [maintenance, setMaintenance] = useState<InspectionRecord | null>(null);
   const [shelves, setShelves] = useState<Warehouse[]>([]);
   const [facilities, setFacilities] = useState<FacilityRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -139,6 +143,13 @@ export const WarehouseDetailPage: React.FC = () => {
       ]);
       setWarehouse(wh);
       setFacilities(facs);
+
+      // The staff's finished maintenance check of a vacated unit, for the manager's decision.
+      setMaintenance(
+        wh.maintenance?.inspectionId
+          ? await InspectionsApi.get(wh.maintenance.inspectionId).catch(() => null)
+          : null,
+      );
 
       if (wh.kind === 'SHELF_WAREHOUSE') {
         const shelfList = await WarehousesApi.listShelvesAdmin(id);
@@ -600,6 +611,8 @@ export const WarehouseDetailPage: React.FC = () => {
           </div>
         </div>
       </LayerCard>
+
+      {maintenance && <MaintenanceResultCard inspection={maintenance} />}
 
       <WarehouseAmenitiesCard amenities={warehouse.amenities} />
 
@@ -1139,5 +1152,77 @@ export const WarehouseDetailPage: React.FC = () => {
         </div>
       )}
     </div>
+  );
+};
+
+/** What the staff recorded when they checked the vacated warehouse, for the manager to decide. */
+const MaintenanceResultCard: React.FC<{ inspection: InspectionRecord }> = ({ inspection }) => {
+  const evidence = toEvidence(inspection.evidence);
+  const damages = toDamages(inspection.damages);
+  return (
+    <LayerCard className="p-5 ring ring-kumo-line space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Wrench className="w-4 h-4 text-kumo-danger" />
+          <Text as="strong" bold>
+            Kết quả kiểm tra bảo trì
+          </Text>
+        </div>
+        <Badge variant={damages.length > 0 ? 'error' : 'success'}>
+          {damages.length > 0 ? 'Có hư hỏng' : 'Bình thường'}
+        </Badge>
+      </div>
+      <Text variant="secondary" size="sm">
+        {inspection.inspector?.fullName ?? 'Nhân viên kiểm tra'} · Chốt lúc{' '}
+        {formatDateTime(inspection.finalizedAt)}
+      </Text>
+
+      <div className="space-y-1.5">
+        <span className="text-xs font-semibold text-kumo-default block">Ghi chú tình trạng</span>
+        <p className="p-3 bg-kumo-control rounded-lg text-sm text-kumo-default whitespace-pre-wrap">
+          {inspection.conditionNotes || 'Chưa có ghi chú.'}
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <span className="text-xs font-semibold text-kumo-default block">
+          Ảnh hiện trạng ({evidence.length})
+        </span>
+        {evidence.length > 0 ? (
+          <SignedFileGallery files={evidence} />
+        ) : (
+          <Text variant="secondary">Chưa có ảnh.</Text>
+        )}
+      </div>
+
+      {damages.length > 0 && (
+        <div className="space-y-2">
+          <span className="text-xs font-semibold text-kumo-default block">
+            Hư hỏng ({damages.length})
+          </span>
+          {damages.map((damage, index) => (
+            <div
+              key={`${damage.description}-${index}`}
+              className="p-3 rounded-lg ring ring-kumo-line space-y-2"
+            >
+              <div className="flex items-start justify-between gap-3 text-sm">
+                <span className="text-kumo-default">{damage.description}</span>
+                <Badge variant={damage.severity === 'MAJOR' ? 'error' : 'warning'}>
+                  {damage.severity === 'MAJOR' ? 'Nghiêm trọng' : 'Nhẹ'}
+                </Badge>
+              </div>
+              {damage.proposedFee != null && (
+                <p className="text-xs text-kumo-subtle">
+                  Phí đề xuất: {formatVnd(damage.proposedFee)}
+                </p>
+              )}
+              {damage.evidence && damage.evidence.length > 0 && (
+                <SignedFileGallery files={damage.evidence} />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </LayerCard>
   );
 };

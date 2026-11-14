@@ -5,13 +5,16 @@ import type { EntityManager } from 'typeorm';
 
 /**
  * The booking a DEPOSIT_TOPUP invoice feeds back into. Null for any other kind — the payment
- * then behaves exactly as a rent or fee payment (no booking link, no deposit credit).
+ * then behaves exactly as a rent or fee payment (no booking link, no deposit credit). Also null
+ * for a top-up billed by a unit change: that money is applied by the change's settle step (to the
+ * destination booking), so crediting the old booking here would double-count it.
  */
 export async function topUpBookingId(
   em: EntityManager,
-  invoice: Pick<Invoice, 'kind' | 'contractId'>,
+  invoice: Pick<Invoice, 'kind' | 'contractId'> & { id?: string },
 ): Promise<string | null> {
   if (invoice.kind !== InvoiceKind.DEPOSIT_TOPUP || !invoice.contractId) return null;
+  if (invoice.id && (await isChangeRequestTopUp(em, invoice.id))) return null;
   const [row] = (await em.query(
     `SELECT bi.booking_id AS "bookingId" FROM contracts c
        JOIN booking_items bi ON bi.id = c.booking_item_id
@@ -19,6 +22,27 @@ export async function topUpBookingId(
     [invoice.contractId],
   )) as Array<{ bookingId: string }>;
   return row?.bookingId ?? null;
+}
+
+/** The unit-change request that billed this DEPOSIT_TOPUP invoice, if any. */
+export async function topUpChangeRequestId(
+  em: EntityManager,
+  invoice: Pick<Invoice, 'kind'> & { id: string },
+): Promise<string | null> {
+  if (invoice.kind !== InvoiceKind.DEPOSIT_TOPUP) return null;
+  const [row] = (await em.query(
+    `SELECT id FROM unit_change_requests WHERE topup_invoice_id = $1 LIMIT 1`,
+    [invoice.id],
+  )) as Array<{ id: string }>;
+  return row?.id ?? null;
+}
+
+async function isChangeRequestTopUp(em: EntityManager, invoiceId: string): Promise<boolean> {
+  const rows: unknown[] = await em.query(
+    `SELECT 1 FROM unit_change_requests WHERE topup_invoice_id = $1 LIMIT 1`,
+    [invoiceId],
+  );
+  return rows.length > 0;
 }
 
 /**

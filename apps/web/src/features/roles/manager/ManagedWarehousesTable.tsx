@@ -141,6 +141,8 @@ export const ManagedWarehousesTable: React.FC<Props> = ({
           <Table.Body>
             {warehouses.map((w) => {
               const shelfCount = formatShelfSummary(w);
+              // A finished maintenance check awaits the manager's reopen decision.
+              const hasMaintenanceResult = w.status === 'MAINTENANCE' && Boolean(w.maintenance);
               return (
                 <Table.Row key={w.id}>
                   <Table.Cell className="whitespace-nowrap text-kumo-default">
@@ -194,9 +196,23 @@ export const ManagedWarehousesTable: React.FC<Props> = ({
                               size="sm"
                               variant="ghost"
                               shape="square"
-                              icon={<DotsThree weight="bold" className="w-4 h-4" />}
+                              icon={
+                                <span className="relative inline-flex">
+                                  <DotsThree weight="bold" className="w-4 h-4" />
+                                  {hasMaintenanceResult && (
+                                    <span
+                                      className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-red-500"
+                                      aria-hidden
+                                    />
+                                  )}
+                                </span>
+                              }
                               aria-label={`Thao tác kho ${w.code}`}
-                              title={`Thao tác kho ${w.code}`}
+                              title={
+                                hasMaintenanceResult
+                                  ? `Thao tác kho ${w.code} — có kết quả kiểm tra bảo trì`
+                                  : `Thao tác kho ${w.code}`
+                              }
                             />
                           }
                         />

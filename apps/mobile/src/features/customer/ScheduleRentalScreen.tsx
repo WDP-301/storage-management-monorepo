@@ -23,6 +23,7 @@ import {
 import { latestStartIso, rentalEndIso, todayIso } from '../../../lib/rental-schedule';
 import { rentalName } from '../../../lib/shelf-rental';
 import { warehouseDeposit } from '../../../lib/warehouse-query';
+import { ChoiceChip } from '../../components/ChoiceChip';
 import type { Warehouse } from '../../types/storage-api';
 import { RentalDatePickerSheet } from './RentalDatePickerSheet';
 
@@ -325,35 +326,5 @@ function CostRow({
         {value}
       </Text>
     </View>
-  );
-}
-
-/** Pill choice for rental duration. */
-function ChoiceChip({
-  label,
-  isSelected,
-  onPress,
-}: {
-  label: string;
-  isSelected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: isSelected }}
-      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-      onPress={onPress}
-    >
-      <View
-        className={`rounded-full border px-3.5 py-2 ${
-          isSelected ? 'border-foreground bg-foreground' : 'border-border bg-surface'
-        }`}
-      >
-        <Text className={`font-ui text-body-sm ${isSelected ? 'text-surface' : 'text-subtle'}`}>
-          {label}
-        </Text>
-      </View>
-    </Pressable>
   );
 }

@@ -7,11 +7,23 @@ const VN_DAY = new Intl.DateTimeFormat('en-CA', {
   day: '2-digit',
 });
 
+const VN_TIME = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Ho_Chi_Minh',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
 const DAY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /** Vietnam calendar day of an instant. */
 export function vnDay(at: string | number | Date): string {
   return VN_DAY.format(new Date(at));
+}
+
+/** `HH:mm` of an instant in Vietnam time. */
+export function vnTimeOfDay(at: string | number | Date): string {
+  return VN_TIME.format(new Date(at));
 }
 
 export const vnToday = (now: Date = new Date()): string => vnDay(now);

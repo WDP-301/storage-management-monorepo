@@ -1,18 +1,31 @@
-import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
+import { Invoice } from '@entities/invoice.entity';
 import { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { isAssignmentActive } from '@modules/auth/role-assignment.util';
+import { HandoverAssignmentService } from '@modules/inspection/handover-assignment/handover-assignment.service';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { vietnamDate, vietnamToday } from '@shared/utils/calendar.util';
-import { ChangeRequestStatus, ContractStatus, NotificationType, UserRole } from '@storage/types';
+import {
+  ChangeRequestStatus,
+  ContractStatus,
+  InvoiceStatus,
+  NotificationType,
+  UserRole,
+} from '@storage/types';
 import { DataSource, type EntityManager, In } from 'typeorm';
 import { releaseMoveHold } from './change-request-release.util';
+import {
+  destinationStillRunnable,
+  type SettleDeps,
+  settleIfTopUpInvoicePaid,
+  unwindSettledChangeRequest,
+} from './change-request-settle.util';
 
 const LOCK_NAME = 'cron_unit_change_move_day';
-/** A TRANSITIONING move unconfirmed for this long pings the facility managers daily. */
+/** How long a move may sit unattended before the sweep cancels it, in days. */
 const MOVE_OVERDUE_DAYS = 7;
 /** The sweep's actor recorded in history entries. */
 const SYSTEM_ACTOR = 'system';
@@ -24,14 +37,18 @@ export interface MoveDaySweepResult {
 }
 
 /**
- * The move-day sweep. Each request is handled in its own transaction under its own row lock,
- * so a concurrent decide/complete/cancel — or one bad row — can never corrupt or stall the run:
+ * The move-day sweep, now spanning the two-approval flow. Each request is handled in its own
+ * transaction under its own row lock, so a concurrent decide/final-approve/cancel — or one bad
+ * row — can never corrupt or stall the run:
  *
- * - APPROVED whose move day arrived → TRANSITIONING, but only while the contract is still
- *   alive and still on the source unit; a dead move is auto-cancelled with its hold released.
- * - TRANSITIONING stuck past MOVE_OVERDUE_DAYS → daily reminder to managers of both facilities;
- *   a dead contract's stuck move is auto-cancelled the same way.
  * - REQUESTED whose proposed move day already passed → auto-cancelled (nobody ever decided).
+ * - AWAITING_PAYMENT: a paid top-up whose settle failed is retried (self-heal); past the move day
+ *   the managers are reminded, and past MOVE_OVERDUE_DAYS the request is auto-cancelled (hold
+ *   released, unpaid invoice voided).
+ * - AWAITING_HANDOVER: a destination that is no longer runnable is auto-cancelled (unwound); past
+ *   the move day both facilities are reminded daily.
+ * - AWAITING_FINAL_APPROVAL: the destination branch is reminded daily to give the final approval;
+ *   a destination contract that fell over auto-cancels the request.
  *
  * A session-level advisory lock (not xact — the run spans many transactions) keeps concurrent
  * instances from double-sending; the row locks make each request's branch idempotent anyway.
@@ -43,7 +60,12 @@ export class MoveDaySweepService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly notifications: NotificationsService,
+    private readonly handoverAssignment: HandoverAssignmentService,
   ) {}
+
+  private settleDeps(): SettleDeps {
+    return { handoverAssignment: this.handoverAssignment, notifications: this.notifications };
+  }
 
   @Cron('15 7 * * *', { timeZone: 'Asia/Ho_Chi_Minh' })
   async handle(): Promise<void> {
@@ -72,8 +94,9 @@ export class MoveDaySweepService {
         where: {
           status: In([
             ChangeRequestStatus.REQUESTED,
-            ChangeRequestStatus.APPROVED,
-            ChangeRequestStatus.TRANSITIONING,
+            ChangeRequestStatus.AWAITING_PAYMENT,
+            ChangeRequestStatus.AWAITING_HANDOVER,
+            ChangeRequestStatus.AWAITING_FINAL_APPROVAL,
           ]),
         },
         relations: { oldUnit: true, newUnit: true },
@@ -126,65 +149,78 @@ export class MoveDaySweepService {
       return 'cancelled';
     }
 
-    if (request.status === ChangeRequestStatus.APPROVED) {
-      if (!request.moveAt || vietnamDate(request.moveAt) > today) return null;
-      if (!(await this.contractStillMovable(em, request))) {
-        await this.autoCancel(em, request, now, 'Hợp đồng không còn ở trạng thái chuyển được');
-        return 'cancelled';
+    if (request.status === ChangeRequestStatus.AWAITING_PAYMENT) {
+      // A paid top-up whose settle failed is retried every run.
+      if (request.topupInvoiceId) {
+        const invoice = await em.findOne(Invoice, { where: { id: request.topupInvoiceId } });
+        if (invoice?.status === InvoiceStatus.PAID) {
+          await settleIfTopUpInvoicePaid(em, invoice, this.settleDeps(), null);
+          const refreshed = await em.findOne(UnitChangeRequest, { where: { id } });
+          if (refreshed && refreshed.status !== ChangeRequestStatus.AWAITING_PAYMENT) {
+            return 'started';
+          }
+        }
       }
-      request.status = ChangeRequestStatus.TRANSITIONING;
-      request.transitionStartAt = now;
-      request.history = [
-        ...(request.history ?? []),
-        {
-          action: 'STATUS_CHANGED',
-          from: ChangeRequestStatus.APPROVED,
-          to: ChangeRequestStatus.TRANSITIONING,
-          at: now.toISOString(),
-          by: SYSTEM_ACTOR,
-        },
-      ];
-      await em.save(request);
-      await this.notifyManagers(em, request, 'Hôm nay khách chuyển kho', request.moveAt);
-      return 'started';
-    }
-
-    if (request.status === ChangeRequestStatus.TRANSITIONING) {
-      if (!(await this.contractStillMovable(em, request))) {
-        await this.autoCancel(em, request, now, 'Hợp đồng không còn ở trạng thái chuyển được');
-        return 'cancelled';
-      }
-      const startedAt = request.transitionStartAt ?? request.moveAt;
-      if (!startedAt) return null;
+      if (!request.moveAt || vietnamDate(request.moveAt) >= today) return null;
       const overdueAfter = vietnamDate(new Date(now.getTime() - MOVE_OVERDUE_DAYS * 86400_000));
-      if (vietnamDate(startedAt) >= overdueAfter) return null;
+      if (vietnamDate(request.moveAt) < overdueAfter) {
+        await this.autoCancel(em, request, now, 'Quá hạn ngày chuyển mà chưa thanh toán bù cọc');
+        return 'cancelled';
+      }
       await this.notifyManagers(
         em,
         request,
-        'Chuyển kho quá hạn xác nhận',
-        startedAt,
-        `Chuyển kho từ ${vietnamDate(startedAt)} chưa được xác nhận — xác nhận hoặc thu hồi yêu cầu.`,
+        'Yêu cầu đổi kho chờ thanh toán bù cọc',
+        request.moveAt,
+        'Khách chưa thanh toán bù cọc — nhắc khách hoặc thu hồi yêu cầu.',
+      );
+      return 'reminded';
+    }
+
+    if (request.status === ChangeRequestStatus.AWAITING_HANDOVER) {
+      if (!(await destinationStillRunnable(em, request))) {
+        await unwindSettledChangeRequest(em, request);
+        await this.recordCancelled(
+          em,
+          request,
+          now,
+          'Kho đích không còn sẵn sàng cho việc chuyển kho',
+        );
+        return 'cancelled';
+      }
+      if (!request.moveAt || vietnamDate(request.moveAt) > today) return null;
+      await this.notifyManagers(
+        em,
+        request,
+        'Đến ngày bàn giao kho mới',
+        request.moveAt,
+        'Khách bàn giao kho mới hôm nay — xác nhận khi hoàn tất.',
+      );
+      return 'reminded';
+    }
+
+    if (request.status === ChangeRequestStatus.AWAITING_FINAL_APPROVAL) {
+      const newContract = request.newContractId
+        ? await em.findOne(Contract, { where: { id: request.newContractId } })
+        : null;
+      if (
+        !newContract ||
+        newContract.status === ContractStatus.CANCELLED ||
+        newContract.status === ContractStatus.ENDED
+      ) {
+        await this.recordCancelled(em, request, now, 'Hợp đồng mới không còn hiệu lực');
+        return 'cancelled';
+      }
+      await this.notifyManagers(
+        em,
+        request,
+        'Chờ chốt hoàn tất đổi kho',
+        request.moveAt ?? now,
+        'Khách đã bàn giao kho mới — xác nhận hoàn tất để khép lại yêu cầu.',
       );
       return 'reminded';
     }
     return null;
-  }
-
-  /**
-   * The move's contract is still ACTIVE and still on the source unit — anything else means
-   * the move can never complete and must be cancelled instead of left holding a unit.
-   */
-  private async contractStillMovable(
-    em: EntityManager,
-    request: UnitChangeRequest,
-  ): Promise<boolean> {
-    const contract = await em.findOne(Contract, {
-      where: { id: request.contractId },
-      lock: { mode: 'pessimistic_read' },
-    });
-    if (!contract || contract.status !== ContractStatus.ACTIVE) return false;
-    const item = await em.findOne(BookingItem, { where: { id: contract.bookingItemId } });
-    return item?.storageUnitId === request.oldUnitId;
   }
 
   private async autoCancel(
@@ -193,13 +229,19 @@ export class MoveDaySweepService {
     now: Date,
     reason: string,
   ): Promise<void> {
-    if (
-      request.status === ChangeRequestStatus.APPROVED ||
-      request.status === ChangeRequestStatus.TRANSITIONING
-    ) {
+    if (request.status === ChangeRequestStatus.AWAITING_PAYMENT) {
       await releaseMoveHold(em, request);
-      request.transitionEndAt = now;
     }
+    await this.recordCancelled(em, request, now, reason);
+  }
+
+  /** Flips the request to CANCELLED with a history entry and tells the customer. */
+  private async recordCancelled(
+    em: EntityManager,
+    request: UnitChangeRequest,
+    now: Date,
+    reason: string,
+  ): Promise<void> {
     const from = request.status;
     request.status = ChangeRequestStatus.CANCELLED;
     request.history = [

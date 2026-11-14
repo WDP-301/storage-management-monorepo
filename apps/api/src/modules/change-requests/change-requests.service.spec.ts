@@ -1,4 +1,6 @@
+import { AppUser } from '@entities/app-user.entity';
 import { BookingItem } from '@entities/booking-item.entity';
+import { Contract } from '@entities/contract.entity';
 import { Facility } from '@entities/facility.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { Invoice } from '@entities/invoice.entity';
@@ -15,7 +17,6 @@ import {
   InvoiceKind,
   InvoiceStatus,
   NotificationType,
-  PaymentStatus,
   StorageUnitKind,
   StorageUnitStatus,
   UserRole,
@@ -25,7 +26,18 @@ import { ChangeRequestsService } from './change-requests.service';
 
 const FACILITY_ID = 'facility-1';
 const CUSTOMER_ID = 'customer-1';
-const TOMORROW = () => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+// An instant inside OFFICE hours (09:00 VN) tomorrow — `create` validates the move time now.
+const TOMORROW = () => {
+  const at = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  at.setUTCHours(2, 0, 0, 0);
+  return at.toISOString();
+};
+// 20:00 VN tomorrow — a valid day, but outside the OFFICE shift.
+const TOMORROW_EVENING = () => {
+  const at = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  at.setUTCHours(13, 0, 0, 0);
+  return at.toISOString();
+};
 
 const manager: AuthUser = {
   id: 'manager-1',
@@ -115,8 +127,18 @@ function lockedRow(
     return {
       id: 'bi-1',
       storageUnitId: bookedUnitId,
+      rentalMonths: 3,
       depositSnapshot: 550000,
       monthlyPriceSnapshot: 550000,
+    };
+  if (entity === StorageUnit)
+    // The destination unit as the settle step's HELD-check reads it.
+    return {
+      id: 'unit-new',
+      code: 'A-02',
+      status: StorageUnitStatus.HELD,
+      facilityId: FACILITY_ID,
+      facility: { id: FACILITY_ID, status: FacilityStatus.ACTIVE },
     };
   if (entity === Invoice) return { id: 'inv-1', status: InvoiceStatus.ISSUED, invoiceNo: 'INV-1' };
   return { id: 'contract-1', status: ContractStatus.ACTIVE, bookingItemId: 'bi-1' };
@@ -133,6 +155,7 @@ describe('ChangeRequestsService', () => {
   let contracts: { findOne: jest.Mock };
   let storageUnits: { findOne: jest.Mock; find: jest.Mock };
   let roleAssignments: { find: jest.Mock };
+  let shiftTemplates: { find: jest.Mock };
   let txManager: {
     find: jest.Mock;
     create: jest.Mock;
@@ -140,6 +163,7 @@ describe('ChangeRequestsService', () => {
     update: jest.Mock;
     save: jest.Mock;
     findOne: jest.Mock;
+    findOneOrFail: jest.Mock;
     count: jest.Mock;
     findOneByOrFail: jest.Mock;
     query: jest.Mock;
@@ -153,6 +177,7 @@ describe('ChangeRequestsService', () => {
   /** What `txManager.find` returns for UserRoleAssignment rows (manager lookups). */
   let managerAssignments: UserRoleAssignment[];
   let notifications: { createForUsers: jest.Mock };
+  let handoverAssignment: { assignSafely: jest.Mock; assignPendingForFacility: jest.Mock };
   let settings: SettingsService;
   let service: ChangeRequestsService;
   /** The request row as persisted — shared between the outer find and the locked re-read. */
@@ -200,9 +225,15 @@ describe('ChangeRequestsService', () => {
     };
     storageUnits = { findOne: jest.fn(), find: jest.fn().mockResolvedValue([]) };
     roleAssignments = { find: jest.fn().mockResolvedValue([activeAssignment()]) };
+    shiftTemplates = {
+      find: jest.fn().mockResolvedValue([{ startTime: '08:00', endTime: '17:00' }]),
+    };
     shelfRows = [];
     txManager = {
-      query: jest.fn(async () => shelfRows),
+      // TypeORM returns [rows, affected] for UPDATE ... RETURNING and the bare rows otherwise.
+      query: jest.fn(async (sql: string) =>
+        sql.trimStart().startsWith('UPDATE') ? [[], 0] : shelfRows,
+      ),
       find: jest.fn(async (entity: unknown) =>
         entity === UserRoleAssignment ? managerAssignments : [],
       ),
@@ -219,9 +250,14 @@ describe('ChangeRequestsService', () => {
         return v;
       }),
       // Locked re-reads: the request is still undecided, the contract is still active and
-      // still on the old unit.
+      // still on the old unit, the destination unit is still HELD.
       findOne: jest.fn(async (entity: unknown) =>
         lockedRow(entity, 'unit-old', requestRow, requestStatus ?? persistedStatus),
+      ),
+      findOneOrFail: jest.fn(async (entity: unknown) =>
+        entity === AppUser
+          ? { id: CUSTOMER_ID, fullName: 'Cust', email: 'c@test.dev' }
+          : lockedRow(entity, 'unit-old', requestRow, requestStatus ?? persistedStatus),
       ),
       count: jest.fn(async (entity: unknown) => {
         if (entity === Inspection) return openReturns;
@@ -241,6 +277,7 @@ describe('ChangeRequestsService', () => {
     };
     txManager.createQueryBuilder.mockReturnValue(claimBuilder);
     notifications = { createForUsers: jest.fn() };
+    handoverAssignment = { assignSafely: jest.fn(), assignPendingForFacility: jest.fn() };
 
     // Real resolution logic; only the stored system-wide level is stubbed.
     settings = Object.assign(Object.create(SettingsService.prototype), {
@@ -252,6 +289,7 @@ describe('ChangeRequestsService', () => {
       contracts as never,
       storageUnits as never,
       roleAssignments as never,
+      shiftTemplates as never,
       {
         transaction: jest.fn(async (fn: (m: unknown) => unknown) => fn(txManager)),
         getRepository: jest.fn().mockReturnValue({
@@ -260,6 +298,7 @@ describe('ChangeRequestsService', () => {
       } as never,
       settings,
       notifications as never,
+      handoverAssignment as never,
     );
   });
 
@@ -316,6 +355,28 @@ describe('ChangeRequestsService', () => {
       await expect(
         service.create(
           createDto({ scheduledMoveAt: new Date(Date.now() + 120 * 86400_000).toISOString() }),
+          customer,
+        ),
+      ).rejects.toMatchObject({ status: 400 });
+      expect(storageUnits.findOne).not.toHaveBeenCalled();
+    });
+
+    it('rejects a move time outside the OFFICE shift', async () => {
+      await expect(
+        service.create(createDto({ scheduledMoveAt: TOMORROW_EVENING() }), customer),
+      ).rejects.toMatchObject({
+        status: 400,
+        response: {
+          details: { fields: [expect.objectContaining({ code: 'moveTimeNotInShift' })] },
+        },
+      });
+      expect(storageUnits.findOne).not.toHaveBeenCalled();
+    });
+
+    it('rejects a move time in the past', async () => {
+      await expect(
+        service.create(
+          createDto({ scheduledMoveAt: new Date(Date.now() - 60_000).toISOString() }),
           customer,
         ),
       ).rejects.toMatchObject({ status: 400 });
@@ -485,7 +546,7 @@ describe('ChangeRequestsService', () => {
   });
 
   describe('decide', () => {
-    it('approve holds the target unit instead of renting it outright', async () => {
+    it('approve holds the target unit and waits for the deposit top-up', async () => {
       const claim = {
         update: jest.fn().mockReturnThis(),
         set: jest.fn().mockReturnThis(),
@@ -501,13 +562,15 @@ describe('ChangeRequestsService', () => {
       expect(claim.set).toHaveBeenCalledWith({ status: StorageUnitStatus.HELD });
       const [condition] = claim.where.mock.calls[0];
       expect(condition).toContain('status = :available');
-      expect(result.request.status).toBe(ChangeRequestStatus.APPROVED);
+      // A top-up is billed, so the request waits for payment instead of settling.
+      expect(result.request.status).toBe(ChangeRequestStatus.AWAITING_PAYMENT);
       // The contract must not be repointed yet.
       expect(txManager.update).not.toHaveBeenCalledWith(
         BookingItem,
         expect.anything(),
         expect.anything(),
       );
+      expect(handoverAssignment.assignSafely).not.toHaveBeenCalled();
     });
 
     it('approve requires a move day for legacy requests that carry none', async () => {
@@ -538,7 +601,7 @@ describe('ChangeRequestsService', () => {
       requestRow = request;
       const moveAt = TOMORROW();
 
-      await service.decide('req-1', { decision: 'APPROVED', moveAt }, manager);
+      const result = await service.decide('req-1', { decision: 'APPROVED', moveAt }, manager);
 
       expect(txManager.save).toHaveBeenCalledWith(
         Invoice,
@@ -550,6 +613,8 @@ describe('ChangeRequestsService', () => {
         }),
       );
       expect(request.topupInvoiceId).toBeDefined();
+      // Billing a top-up leaves the request waiting for payment, not settled.
+      expect(result.request.status).toBe(ChangeRequestStatus.AWAITING_PAYMENT);
       const [, userIds, payload] = notifications.createForUsers.mock.calls[0];
       expect(userIds).toEqual([CUSTOMER_ID]);
       expect(payload.type).toBe(NotificationType.INVOICE_ISSUED);
@@ -562,6 +627,7 @@ describe('ChangeRequestsService', () => {
         (c) => c[2].type === NotificationType.UNIT_CHANGE_APPROVED && c[1].includes('manager-1'),
       );
       expect(managerCall).toBeDefined();
+      expect(handoverAssignment.assignSafely).not.toHaveBeenCalled();
     });
 
     it('approve defers the top-up no further than a week out', async () => {
@@ -576,25 +642,33 @@ describe('ChangeRequestsService', () => {
       expect(invoice.dueAt.getTime()).toBeLessThan(new Date(moveAt).getTime());
     });
 
-    it('approve skips the top-up invoice when the deposit does not rise', async () => {
+    it('approve settles inline and moves to AWAITING_HANDOVER when the deposit does not rise', async () => {
       txManager.findOneByOrFail.mockResolvedValue({
         id: 'unit-new',
         monthlyPrice: '100000.00',
+        code: 'A-02',
       });
       const request = buildRequest({ depositDifference: 100000 * 2 - 550000 });
       requestRow = request;
 
-      await service.decide('req-1', { decision: 'APPROVED' }, manager);
+      const result = await service.decide('req-1', { decision: 'APPROVED' }, manager);
 
+      // Nothing to pay: the whole settle step runs inside this one approval.
       expect(txManager.save).not.toHaveBeenCalledWith(
         Invoice,
         expect.objectContaining({ kind: InvoiceKind.DEPOSIT_TOPUP }),
       );
       expect(request.topupInvoiceId).toBeUndefined();
-      const approveCall = notifications.createForUsers.mock.calls.find(
-        (c) => c[2].type === NotificationType.UNIT_CHANGE_APPROVED && c[1].includes(CUSTOMER_ID),
-      );
-      expect(approveCall).toBeDefined();
+      expect(result.request.status).toBe(ChangeRequestStatus.AWAITING_HANDOVER);
+      expect(result.request.new_contract_id).toBeDefined();
+      expect(result.request.new_booking_id).toBeDefined();
+      expect(handoverAssignment.assignSafely).toHaveBeenCalledWith(txManager, expect.any(String));
+      // No top-up invoice means no INVOICE_ISSUED ping.
+      expect(
+        notifications.createForUsers.mock.calls.some(
+          (c) => c[2].type === NotificationType.INVOICE_ISSUED,
+        ),
+      ).toBe(false);
     });
 
     it('approve share-locks the target shelf warehouse before claiming the shelf', async () => {
@@ -705,147 +779,64 @@ describe('ChangeRequestsService', () => {
     });
   });
 
-  describe('start', () => {
-    it('moves an approved request to TRANSITIONING and pings the facility managers', async () => {
-      requestRow = buildRequest({ status: ChangeRequestStatus.APPROVED });
+  describe('finalApprove', () => {
+    it('completes the request without touching the old unit (retired at handover)', async () => {
+      requestRow = buildRequest({
+        status: ChangeRequestStatus.AWAITING_FINAL_APPROVAL,
+        newContractId: 'contract-new',
+      });
 
-      const result = await service.start('req-1', manager);
+      const result = await service.finalApprove('req-1', manager);
 
-      const saved = txManager.save.mock.calls[0][0];
-      expect(saved.status).toBe(ChangeRequestStatus.TRANSITIONING);
-      expect(saved.transitionStartAt).toBeInstanceOf(Date);
-      const [, userIds, payload] = notifications.createForUsers.mock.calls[0];
-      expect(userIds).toEqual(['manager-1']);
-      expect(payload.type).toBe(NotificationType.UNIT_CHANGE_MOVE_TODAY);
-      expect(result.request.status).toBe(ChangeRequestStatus.TRANSITIONING);
-    });
-
-    it('refuses to start a request that is not approved', async () => {
-      await expect(service.start('req-1', manager)).rejects.toMatchObject({ status: 409 });
-      expect(txManager.save).not.toHaveBeenCalled();
-    });
-
-    it('refuses to start once the contract left the source unit', async () => {
-      requestRow = buildRequest({ status: ChangeRequestStatus.APPROVED });
-      txManager.findOne.mockImplementation(async (entity: unknown) =>
-        lockedRow(entity, 'unit-elsewhere', requestRow, persistedStatus),
-      );
-
-      await expect(service.start('req-1', manager)).rejects.toMatchObject({ status: 409 });
-      expect(txManager.save).not.toHaveBeenCalled();
-    });
-
-    it('lets the destination facility manager kick the move off', async () => {
-      const request = buildRequest({ status: ChangeRequestStatus.APPROVED });
-      request.newUnit = { ...request.newUnit, facilityId: 'fac-dest' } as StorageUnit;
-      requestRow = request;
-      roleAssignments.find.mockResolvedValue([activeAssignment({ facilityId: 'fac-dest' })]);
-
-      await service.start('req-1', manager);
-
-      const saved = txManager.save.mock.calls[0][0];
-      expect(saved.status).toBe(ChangeRequestStatus.TRANSITIONING);
-    });
-  });
-
-  describe('complete', () => {
-    it('performs the swap and completes the request', async () => {
-      requestRow = buildRequest({ status: ChangeRequestStatus.TRANSITIONING });
-
-      const result = await service.complete('req-1', manager);
-
-      const saved = txManager.save.mock.calls[0][0];
-      expect(saved.status).toBe(ChangeRequestStatus.COMPLETED);
-      expect(saved.transitionEndAt).toBeInstanceOf(Date);
-      expect(txManager.update).toHaveBeenCalledWith(
+      expect(txManager.update).not.toHaveBeenCalledWith(
         StorageUnit,
-        { id: 'unit-old' },
-        { status: StorageUnitStatus.MAINTENANCE },
-      );
-      expect(txManager.update).toHaveBeenCalledWith(
-        BookingItem,
-        { id: 'bi-1' },
-        expect.objectContaining({ storageUnitId: 'unit-new', monthlyPriceSnapshot: 950000 }),
+        expect.anything(),
+        expect.anything(),
       );
       expect(result.request.status).toBe(ChangeRequestStatus.COMPLETED);
+      expect(result.request.final_approved_by).toBe('manager-1');
+      expect(result.request.final_approved_at).toBeInstanceOf(Date);
       const completeCall = notifications.createForUsers.mock.calls.find(
         (c) => c[2].type === NotificationType.UNIT_CHANGE_COMPLETED && c[1].includes(CUSTOMER_ID),
       );
       expect(completeCall).toBeDefined();
     });
 
-    it('claims the held target back into RENTED', async () => {
-      requestRow = buildRequest({ status: ChangeRequestStatus.APPROVED });
-      const claim = {
-        update: jest.fn().mockReturnThis(),
-        set: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        execute: jest.fn().mockResolvedValue({ affected: 1 }),
-      };
-      txManager.createQueryBuilder.mockReturnValue(claim);
+    it.each([
+      ChangeRequestStatus.REQUESTED,
+      ChangeRequestStatus.AWAITING_PAYMENT,
+      ChangeRequestStatus.AWAITING_HANDOVER,
+    ])('refuses to complete a request still in %s', async (status) => {
+      requestRow = buildRequest({ status, newContractId: 'contract-new' });
 
-      await service.complete('req-1', manager);
-
-      expect(claim.set).toHaveBeenCalledWith({ status: StorageUnitStatus.RENTED });
-      const [condition, params] = claim.where.mock.calls[0];
-      expect(condition).toContain('status = :held');
-      expect(params).toMatchObject({ held: StorageUnitStatus.HELD });
-    });
-
-    it('fails when the held target was released underneath it', async () => {
-      requestRow = buildRequest({ status: ChangeRequestStatus.APPROVED });
-      txManager.createQueryBuilder.mockReturnValue({
-        update: jest.fn().mockReturnThis(),
-        set: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        execute: jest.fn().mockResolvedValue({ affected: 0 }),
-      });
-
-      await expect(service.complete('req-1', manager)).rejects.toMatchObject({ status: 409 });
+      await expect(service.finalApprove('req-1', manager)).rejects.toMatchObject({ status: 409 });
       expect(txManager.save).not.toHaveBeenCalled();
     });
 
-    it('refuses when the target was re-priced since approval', async () => {
-      requestRow = buildRequest({ status: ChangeRequestStatus.APPROVED });
-      txManager.findOneByOrFail.mockResolvedValue({
-        id: 'unit-new',
-        monthlyPrice: '1200000.00',
-        code: 'A-02',
+    it('refuses when the destination contract has not gone active', async () => {
+      requestRow = buildRequest({
+        status: ChangeRequestStatus.AWAITING_FINAL_APPROVAL,
+        newContractId: 'contract-new',
       });
-
-      await expect(service.complete('req-1', manager)).rejects.toMatchObject({ status: 409 });
-      expect(txManager.update).not.toHaveBeenCalled();
-    });
-
-    it('refuses a legacy cross-kind request', async () => {
-      const request = buildRequest({ status: ChangeRequestStatus.APPROVED });
-      request.oldUnit = { ...request.oldUnit, kind: StorageUnitKind.SHELF } as StorageUnit;
-      requestRow = request;
-
-      await expect(service.complete('req-1', manager)).rejects.toMatchObject({ status: 409 });
-      expect(txManager.update).not.toHaveBeenCalled();
-    });
-
-    it('refuses while the contract has a return in progress', async () => {
-      requestRow = buildRequest({ status: ChangeRequestStatus.APPROVED });
-      openReturns = 1;
-
-      await expect(service.complete('req-1', manager)).rejects.toMatchObject({ status: 409 });
-      expect(txManager.update).not.toHaveBeenCalled();
-    });
-
-    it('refuses a request made from a unit the contract has already left', async () => {
-      requestRow = buildRequest({ status: ChangeRequestStatus.APPROVED });
       txManager.findOne.mockImplementation(async (entity: unknown) =>
-        lockedRow(entity, 'unit-elsewhere', requestRow, persistedStatus),
+        entity === Contract
+          ? { id: 'contract-new', status: ContractStatus.CANCELLED }
+          : lockedRow(entity, 'unit-old', requestRow, requestStatus ?? persistedStatus),
       );
 
-      await expect(service.complete('req-1', manager)).rejects.toMatchObject({ status: 409 });
+      await expect(service.finalApprove('req-1', manager)).rejects.toMatchObject({ status: 409 });
       expect(txManager.update).not.toHaveBeenCalled();
     });
 
-    it('refuses to complete a request still awaiting a decision', async () => {
-      await expect(service.complete('req-1', manager)).rejects.toMatchObject({ status: 409 });
+    it('denies a manager who manages neither facility on the move', async () => {
+      requestRow = buildRequest({
+        status: ChangeRequestStatus.AWAITING_FINAL_APPROVAL,
+        newContractId: 'contract-new',
+      });
+      roleAssignments.find.mockResolvedValue([activeAssignment({ facilityId: 'other-facility' })]);
+
+      await expect(service.finalApprove('req-1', manager)).rejects.toMatchObject({ status: 403 });
+      expect(txManager.update).not.toHaveBeenCalled();
     });
   });
 
@@ -862,14 +853,28 @@ describe('ChangeRequestsService', () => {
       expect(result.request.status).toBe(ChangeRequestStatus.CANCELLED);
     });
 
+    it('lets the customer withdraw while the deposit top-up is still unpaid', async () => {
+      requestRow = buildRequest({ status: ChangeRequestStatus.AWAITING_PAYMENT });
+
+      const result = await service.cancel('req-1', customer);
+
+      // The held unit goes back and nothing was committed.
+      expect(txManager.update).toHaveBeenCalledWith(
+        StorageUnit,
+        { id: 'unit-new', status: StorageUnitStatus.HELD },
+        { status: StorageUnitStatus.AVAILABLE },
+      );
+      expect(result.request.status).toBe(ChangeRequestStatus.CANCELLED);
+    });
+
     it("hides another customer's request", async () => {
       requestRow = buildRequest({ requestedBy: 'someone-else' });
 
       await expect(service.cancel('req-1', customer)).rejects.toMatchObject({ status: 404 });
     });
 
-    it('refuses a customer cancel once the request was approved', async () => {
-      requestRow = buildRequest({ status: ChangeRequestStatus.APPROVED });
+    it('refuses a customer cancel once the move is under way', async () => {
+      requestRow = buildRequest({ status: ChangeRequestStatus.AWAITING_HANDOVER });
 
       await expect(service.cancel('req-1', customer)).rejects.toMatchObject({ status: 409 });
       expect(txManager.save).not.toHaveBeenCalled();
@@ -877,7 +882,7 @@ describe('ChangeRequestsService', () => {
 
     it('manager cancel releases the held unit and voids an unpaid top-up', async () => {
       requestRow = buildRequest({
-        status: ChangeRequestStatus.APPROVED,
+        status: ChangeRequestStatus.AWAITING_PAYMENT,
         topupInvoiceId: 'inv-1',
       });
 
@@ -900,7 +905,7 @@ describe('ChangeRequestsService', () => {
 
     it('manager cancel keeps a paid top-up but still releases and cancels', async () => {
       requestRow = buildRequest({
-        status: ChangeRequestStatus.APPROVED,
+        status: ChangeRequestStatus.AWAITING_PAYMENT,
         topupInvoiceId: 'inv-1',
       });
       succeededPayments = 1;
@@ -929,6 +934,41 @@ describe('ChangeRequestsService', () => {
         expect.anything(),
         expect.anything(),
       );
+    });
+
+    it('manager cancel of a settled move unwinds the destination contract', async () => {
+      requestRow = buildRequest({
+        status: ChangeRequestStatus.AWAITING_HANDOVER,
+        newContractId: 'contract-new',
+      });
+      txManager.findOne.mockImplementation(
+        async (entity: unknown, options?: { where?: { id?: string } }) => {
+          if (entity === Contract && options?.where?.id === 'contract-new') {
+            return { id: 'contract-new', status: ContractStatus.DRAFT };
+          }
+          return lockedRow(entity, 'unit-old', requestRow, requestStatus ?? persistedStatus);
+        },
+      );
+
+      const result = await service.cancel('req-1', manager);
+
+      // The destination draft contract is cancelled and its unit returned; the old contract stays.
+      expect(txManager.update).toHaveBeenCalledWith(
+        Contract,
+        { id: 'contract-new' },
+        { status: ContractStatus.CANCELLED, note: 'Huỷ do rút yêu cầu đổi kho' },
+      );
+      expect(txManager.update).toHaveBeenCalledWith(
+        StorageUnit,
+        { id: 'unit-new', status: StorageUnitStatus.BOOKED },
+        { status: StorageUnitStatus.AVAILABLE },
+      );
+      expect(txManager.update).not.toHaveBeenCalledWith(
+        Contract,
+        { id: 'contract-1' },
+        expect.anything(),
+      );
+      expect(result.request.status).toBe(ChangeRequestStatus.CANCELLED);
     });
   });
 });

@@ -79,3 +79,26 @@ test('normaliseInvoice keeps no QR when the API sends none', () => {
   assert.equal(invoice.paymentQrUrl, null);
   assert.equal(invoice.startAt, null);
 });
+
+test('getById fetches one invoice and normalises its amounts', async () => {
+  const paths = [];
+  const { InvoicesApi } = loadInvoicesApi(async (p) => {
+    paths.push(p);
+    return row;
+  });
+  const invoice = await InvoicesApi.getById('i1');
+  assert.equal(paths[0], '/invoices/i1');
+  assert.deepEqual(invoice, {
+    id: 'i1',
+    invoiceNo: 'INV-001',
+    kind: 'INITIAL',
+    periodNo: 2,
+    startAt: '2026-11-30T17:00:00.000Z',
+    dueAt: '2026-12-05T17:00:00.000Z',
+    status: 'PARTIALLY_PAID',
+    total: 1000000,
+    paidAmount: 400000,
+    amountDue: 600000,
+    paymentQrUrl: 'https://img.vietqr.io/x.png',
+  });
+});

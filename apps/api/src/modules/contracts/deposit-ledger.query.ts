@@ -35,12 +35,14 @@ export const DEPOSIT_COLUMNS = `d.id, d.contract_id AS "contractId", d.payment_i
  * change overwrites the item's deposit snapshot with the new unit's, while the booking total keeps
  * what was paid; so a single item takes the booking total, an unchanged item its own snapshot,
  * the only changed item the total minus the others' snapshots, and anything else has a NULL
- * amount (cannot be told apart). `payment_id` is the latest successful deposit transfer.
+ * amount (cannot be told apart). A COMPLETED change that minted a destination booking has already
+ * moved the held deposit onto that new booking, so this item derives nothing (NULL).
+ * `payment_id` is the latest successful deposit transfer.
  *
  * The subtraction trusts the other items' snapshots only while every other item still has a
  * contract (any status, soft-deleted included): an item whose contracts were removed has also
  * lost the change requests that would show its snapshot was overwritten.
- * Keep in sync with the copy in the ReturnSettlement migration.
+ * The copy in the ReturnSettlement migration is frozen history — change this one only.
  */
 export function paidDepositByItemSql(param: string): string {
   return `
@@ -50,6 +52,11 @@ export function paidDepositByItemSql(param: string): string {
                        JOIN unit_change_requests r ON r.contract_id = c.id
                       WHERE c.booking_item_id = o.id
                         AND r.status = '${ChangeRequestStatus.COMPLETED}') AS changed,
+             EXISTS (SELECT 1 FROM contracts c
+                       JOIN unit_change_requests r ON r.contract_id = c.id
+                      WHERE c.booking_item_id = o.id
+                        AND r.status = '${ChangeRequestStatus.COMPLETED}'
+                        AND r.new_booking_id IS NOT NULL) AS moved,
              EXISTS (SELECT 1 FROM contracts c WHERE c.booking_item_id = o.id) AS has_contract
         FROM booking_items o
        WHERE o.booking_id IN (SELECT booking_id FROM booking_items WHERE id = ANY(${param}::uuid[]))
@@ -61,6 +68,7 @@ export function paidDepositByItemSql(param: string): string {
     )
     SELECT i.id AS item_id,
            CASE
+             WHEN i.moved THEN NULL
              WHEN pb.item_count = 1 THEN b.deposit_total
              WHEN NOT i.changed THEN i.deposit_snapshot
              WHEN pb.changed_count = 1 AND pb.contractless_count = 0

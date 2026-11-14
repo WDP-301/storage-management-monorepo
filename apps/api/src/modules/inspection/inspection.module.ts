@@ -4,6 +4,7 @@ import { Contract } from '@entities/contract.entity';
 import { Deposit } from '@entities/deposit.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { Invoice } from '@entities/invoice.entity';
+import { ShiftTemplate } from '@entities/shift-template.entity';
 import { StaffShift } from '@entities/staff-shift.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
@@ -28,6 +29,7 @@ import { InspectionLifecycleService } from './inspection-lifecycle.service';
       AppUser,
       UserRoleAssignment,
       StaffShift,
+      ShiftTemplate,
       Invoice,
       Deposit,
     ]),

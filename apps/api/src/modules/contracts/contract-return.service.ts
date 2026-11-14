@@ -1,6 +1,8 @@
 import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { BanksService } from '@modules/banks/banks.service';
+import { officeShiftTemplates } from '@modules/bookings/receiving-window.util';
+import { HandoverAssignmentService } from '@modules/inspection/handover-assignment/handover-assignment.service';
 import { forContractOwner } from '@modules/inspection/inspection-access.util';
 import { SettingsService } from '@modules/settings/settings.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
@@ -11,21 +13,16 @@ import { DataSource, type EntityManager, IsNull } from 'typeorm';
 import {
   assertContractActive,
   assertReturnDayInRange,
+  assertReturnTimeInOfficeShift,
   currentReturnRules,
   moveReturn,
   openReturnInspection,
   RETURN_MESSAGES,
   returnConflict,
+  staffStarted,
 } from './contract-return.util';
 import { ReturnRequestDto, UpdateReturnRequestDto } from './dto/return-request.dto';
 import { rememberRefundAccount } from './refund-account.util';
-
-/** Staff wrote something on the return, so it is now part of the inspection record. */
-const staffStarted = (inspection: Inspection): boolean =>
-  (inspection.evidence?.length ?? 0) > 0 ||
-  (inspection.damages?.length ?? 0) > 0 ||
-  Boolean(inspection.conditionNotes?.trim()) ||
-  inspection.inspectedAt != null;
 
 /** The customer's own return request: create, change and withdraw it. */
 @Injectable()
@@ -34,9 +31,13 @@ export class ContractReturnService {
     private readonly dataSource: DataSource,
     private readonly settings: SettingsService,
     private readonly banks: BanksService,
+    private readonly assignment: HandoverAssignmentService,
   ) {}
 
-  /** Opens a RETURN inspection on the requested day; the refund account is optional. */
+  /**
+   * Opens a RETURN inspection at the requested in-shift time and gives it to staff on shift then;
+   * the refund account is optional.
+   */
   async requestReturn(
     contractId: string,
     customerId: string,
@@ -45,6 +46,8 @@ export class ContractReturnService {
     const now = new Date();
     const scheduledAt = new Date(dto.scheduledAt);
     assertReturnDayInRange('scheduledAt', scheduledAt, now);
+    const templates = await officeShiftTemplates(this.dataSource.manager);
+    assertReturnTimeInOfficeShift('scheduledAt', scheduledAt, templates, now);
     const rules = await currentReturnRules(this.settings);
     // Looked up before any lock is taken: the bank call can take seconds.
     const refundAccount = dto.refundAccount
@@ -68,14 +71,17 @@ export class ContractReturnService {
         now,
       });
       if (refundAccount) await rememberRefundAccount(em, customerId, refundAccount);
+      inspection.inspectedBy =
+        (await this.assignment.assignReturnSafely(em, inspection.id)) ?? inspection.inspectedBy;
       return inspection;
     });
     return forContractOwner(created);
   }
 
   /**
-   * Changes the day, note or refund account of the open return. Only the return row is locked,
-   * never the contract, so this cannot deadlock with a finalize (inspection → contract).
+   * Changes the appointment, note or refund account of the open return; a moved appointment is
+   * re-assigned when its inspector is not on shift then. Only the return row is locked, never
+   * the contract, so this cannot deadlock with a finalize (inspection → contract).
    */
   async updateReturn(
     contractId: string,
@@ -91,13 +97,20 @@ export class ContractReturnService {
 
     const saved = await this.dataSource.transaction(async (em) => {
       const inspection = await this.lockOpenReturn(em, contractId, customerId);
-      if (scheduledAt) moveReturn(inspection, scheduledAt, now);
+      const moved =
+        scheduledAt !== null &&
+        moveReturn(inspection, scheduledAt, await officeShiftTemplates(em), now);
       if (dto.note !== undefined) inspection.requestNote = dto.note.trim() || null;
       if (refundAccount) {
         inspection.refundAccount = refundAccount;
         await rememberRefundAccount(em, customerId, refundAccount);
       }
-      return em.save(Inspection, inspection);
+      const updated = await em.save(Inspection, inspection);
+      if (moved) {
+        updated.inspectedBy =
+          (await this.assignment.assignReturnSafely(em, updated.id, true)) ?? updated.inspectedBy;
+      }
+      return updated;
     });
     return forContractOwner(saved);
   }

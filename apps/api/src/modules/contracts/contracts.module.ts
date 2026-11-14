@@ -7,6 +7,7 @@ import { Inspection } from '@entities/inspection.entity';
 import { Invoice } from '@entities/invoice.entity';
 import { InvoiceItem } from '@entities/invoice-item.entity';
 import { Payment } from '@entities/payment.entity';
+import { ShiftTemplate } from '@entities/shift-template.entity';
 import { AuthModule } from '@modules/auth/auth.module';
 import { BanksModule } from '@modules/banks/banks.module';
 import { InspectionModule } from '@modules/inspection/inspection.module';
@@ -43,6 +44,7 @@ import { TermEndReminderService } from './term-end-reminder.service';
       InvoiceItem,
       Payment,
       Deposit,
+      ShiftTemplate,
     ]),
     AuthModule,
     BanksModule,

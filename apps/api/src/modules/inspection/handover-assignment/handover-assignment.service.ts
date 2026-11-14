@@ -1,31 +1,17 @@
 import { Inspection } from '@entities/inspection.entity';
-import { StaffShift } from '@entities/staff-shift.entity';
-import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
-import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  InspectionType,
-  NotificationType,
-  StaffShiftStatus,
-  UserRole,
-  UserStatus,
-} from '@storage/types';
-import { Between, type EntityManager, In, IsNull, LessThanOrEqual, MoreThan, Not } from 'typeorm';
+import { InspectionType, NotificationType } from '@storage/types';
+import { Between, type EntityManager, In, IsNull } from 'typeorm';
+import { facilityStaff, lastAssignedStaffId, staffOnShiftFor } from './assignment-queries';
 import { handoverAssignedNotification } from './handover-assigned.notification';
-import { nextInRotation, staffOnShiftAt } from './handover-rotation';
-
-/** Shifts the staff member can still be working: not ended by a check-out, absence or cancel. */
-const WORKING = [StaffShiftStatus.SCHEDULED, StaffShiftStatus.CHECKED_IN];
-
-interface RotationMember {
-  id: string;
-  fullName: string;
-}
+import { nextInRotation } from './handover-rotation';
+import { assignReturn } from './return-assignment';
 
 /**
  * Gives the handovers of a confirmed booking to one staff member per facility, round robin by
  * name among the staff whose shifts cover every handover time of that booking at that facility.
+ * Returns go the same way, one appointment at a time.
  */
 @Injectable()
 export class HandoverAssignmentService {
@@ -45,6 +31,30 @@ export class HandoverAssignmentService {
         `Assigning the handovers of booking ${bookingId} failed; left for a manager`,
         err instanceof Error ? err.stack : String(err),
       );
+    }
+  }
+
+  /**
+   * Gives an open return to staff on shift at its appointment (see `assignReturn`); `moved` when
+   * its appointment just changed, so its inspector is told. Runs in a savepoint and never throws:
+   * a failure only leaves the return for a manager; it must not undo the request or reschedule it
+   * runs inside. Returns the inspector, or null when unassigned.
+   */
+  async assignReturnSafely(
+    em: EntityManager,
+    inspectionId: string,
+    moved = false,
+  ): Promise<string | null> {
+    try {
+      return await em.transaction((savepoint) =>
+        assignReturn(savepoint, inspectionId, this.notifications, moved),
+      );
+    } catch (err) {
+      this.logger.error(
+        `Assigning return ${inspectionId} failed; left for a manager`,
+        err instanceof Error ? err.stack : String(err),
+      );
+      return null;
     }
   }
 
@@ -69,7 +79,7 @@ export class HandoverAssignmentService {
     const facilityId = unit?.facilityId;
     if (!facilityId) return null;
 
-    const staff = await this.facilityStaff(em, facilityId);
+    const staff = await facilityStaff(em, facilityId);
     if (staff.length === 0) {
       this.logger.warn(
         `No staff at facility ${facilityId} to check the maintenance of ${unit?.code ?? '?'}`,
@@ -82,7 +92,7 @@ export class HandoverAssignmentService {
     ]);
     const staffId = nextInRotation(
       staff,
-      await this.lastMaintenanceStaffId(em, facilityId),
+      await lastAssignedStaffId(em, facilityId, InspectionType.MAINTENANCE),
       new Set(staff.map((member) => member.id)),
     );
     if (!staffId) return null;
@@ -103,29 +113,12 @@ export class HandoverAssignmentService {
     return staffId;
   }
 
-  /** Staff member of the facility's most recently assigned maintenance inspection. */
-  private async lastMaintenanceStaffId(
-    em: EntityManager,
-    facilityId: string,
-  ): Promise<string | null> {
-    const last = await em.findOne(Inspection, {
-      where: {
-        type: InspectionType.MAINTENANCE,
-        inspectedBy: Not(IsNull()),
-        contract: { bookingItem: { storageUnit: { facilityId } } },
-      },
-      relations: { contract: { bookingItem: { storageUnit: true } } },
-      order: { createdAt: 'DESC', id: 'DESC' },
-    });
-    return last?.inspectedBy ?? null;
-  }
-
   /**
-   * Re-runs the round-robin assignment for every still-unassigned handover of `facilityId` whose
-   * appointment falls in `[from, to]`. Called when staff shifts are added, so a handover left for
-   * a manager while nobody was on shift is taken as soon as the shift exists. Never throws — a
-   * failure only leaves the handovers unassigned — so it cannot undo the shift write it runs
-   * inside. Returns how many bookings were re-visited.
+   * Re-runs the round-robin assignment for every still-unassigned handover and open return of
+   * `facilityId` whose appointment falls in `[from, to]`. Called when staff shifts are added, so
+   * an appointment left for a manager while nobody was on shift is taken as soon as the shift
+   * exists. Never throws — a failure only leaves it unassigned — so it cannot undo the shift
+   * write it runs inside. Returns how many bookings and returns were re-visited.
    */
   async assignPendingForFacility(
     em: EntityManager,
@@ -134,17 +127,23 @@ export class HandoverAssignmentService {
     to: Date,
   ): Promise<number> {
     let bookingIds: string[];
+    let returnIds: string[];
     try {
       const pending = await em.find(Inspection, {
         where: {
-          type: InspectionType.PRE_HANDOVER,
+          type: In([InspectionType.PRE_HANDOVER, InspectionType.RETURN]),
           inspectedBy: IsNull(),
+          finalizedAt: IsNull(),
           scheduledAt: Between(from, to),
           contract: { bookingItem: { storageUnit: { facilityId } } },
         },
         relations: { contract: { bookingItem: { storageUnit: true } } },
+        // Oldest first, so the rotation hands them out in the order they were requested.
+        order: { createdAt: 'ASC', id: 'ASC' },
       });
-      bookingIds = [...new Set(pending.map((row) => row.contract.bookingItem.bookingId))];
+      const handovers = pending.filter((row) => row.type === InspectionType.PRE_HANDOVER);
+      bookingIds = [...new Set(handovers.map((row) => row.contract.bookingItem.bookingId))];
+      returnIds = pending.filter((row) => row.type === InspectionType.RETURN).map((row) => row.id);
     } catch (err) {
       this.logger.error(
         `Listing pending handovers of facility ${facilityId} failed; left for a manager`,
@@ -153,7 +152,8 @@ export class HandoverAssignmentService {
       return 0;
     }
     for (const bookingId of bookingIds) await this.assignSafely(em, bookingId);
-    return bookingIds.length;
+    for (const returnId of returnIds) await this.assignReturnSafely(em, returnId);
+    return bookingIds.length + returnIds.length;
   }
 
   private async assign(em: EntityManager, bookingId: string): Promise<void> {
@@ -208,54 +208,16 @@ export class HandoverAssignmentService {
     facilityId: string,
     times: Date[],
   ): Promise<string | null> {
-    const staff = await this.facilityStaff(em, facilityId);
+    const staff = await facilityStaff(em, facilityId);
     if (staff.length === 0) return null;
 
-    const earliest = new Date(Math.min(...times.map(Number)));
-    const latest = new Date(Math.max(...times.map(Number)));
-    const shifts = await em.find(StaffShift, {
-      where: {
-        facilityId,
-        staffId: In(staff.map((member) => member.id)),
-        status: In(WORKING),
-        startAt: LessThanOrEqual(latest),
-        endAt: MoreThan(earliest),
-      },
-    });
-    const onShift = staffOnShiftAt(shifts, times);
+    const onShift = await staffOnShiftFor(em, facilityId, staff, times);
     if (onShift.size === 0) return null;
 
-    return nextInRotation(staff, await this.lastAssignedStaffId(em, facilityId), onShift);
-  }
-
-  /** Active staff of the facility in rotation order: by name, then id for equal names. */
-  private async facilityStaff(em: EntityManager, facilityId: string): Promise<RotationMember[]> {
-    const assignments = await em.find(UserRoleAssignment, {
-      where: { facilityId, role: UserRole.FACILITY_STAFF, user: { status: UserStatus.ACTIVE } },
-      relations: { user: true },
-    });
-    const staff = new Map<string, RotationMember>();
-    for (const assignment of assignments) {
-      if (!isAssignmentActive(assignment) || !assignment.user) continue;
-      const { id, fullName } = assignment.user;
-      staff.set(id, { id, fullName });
-    }
-    return [...staff.values()].sort(
-      (a, b) => a.fullName.localeCompare(b.fullName, 'vi') || a.id.localeCompare(b.id),
+    return nextInRotation(
+      staff,
+      await lastAssignedStaffId(em, facilityId, InspectionType.PRE_HANDOVER),
+      onShift,
     );
-  }
-
-  /** Staff member of the facility's most recently created handover that has someone on it. */
-  private async lastAssignedStaffId(em: EntityManager, facilityId: string): Promise<string | null> {
-    const last = await em.findOne(Inspection, {
-      where: {
-        type: InspectionType.PRE_HANDOVER,
-        inspectedBy: Not(IsNull()),
-        contract: { bookingItem: { storageUnit: { facilityId } } },
-      },
-      relations: { contract: { bookingItem: { storageUnit: true } } },
-      order: { createdAt: 'DESC', id: 'DESC' },
-    });
-    return last?.inspectedBy ?? null;
   }
 }

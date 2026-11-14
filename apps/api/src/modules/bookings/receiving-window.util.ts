@@ -1,6 +1,9 @@
+import { ShiftTemplate } from '@entities/shift-template.entity';
 import type { ShiftWindow } from '@modules/shift-templates/shift-time';
 import { shiftPeriod } from '@modules/staff-shifts/shift-calendar';
 import { addVietnamDays, fromVietnamDate, vietnamDate } from '@shared/utils/calendar.util';
+import { ShiftTemplateType } from '@storage/types';
+import type { EntityManager } from 'typeorm';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -72,6 +75,29 @@ export function futureWindows(windows: readonly ReceivingWindow[], now: Date): R
 
 export function isWithinWindows(instant: Date, windows: readonly ReceivingWindow[]): boolean {
   return windows.some((window) => window.startAt <= instant && instant < window.endAt);
+}
+
+/** The active OFFICE shifts — the administrative hours a customer appointment can be staffed in. */
+export function officeShiftTemplates(em: EntityManager): Promise<ShiftTemplate[]> {
+  return em.find(ShiftTemplate, {
+    where: { isActive: true, type: ShiftTemplateType.OFFICE },
+    order: { startTime: 'ASC' },
+  });
+}
+
+/**
+ * Why `at` cannot be a staffed appointment — already past, or outside every OFFICE window of its
+ * Vietnam day — or null when it can.
+ */
+export function officeTimeProblem(
+  at: Date,
+  templates: readonly ShiftWindow[],
+  now: Date = new Date(),
+): 'pastTime' | 'notInShift' | null {
+  if (at <= now) return 'pastTime';
+  return isWithinWindows(at, receivingWindowsForDate(vietnamDate(at), templates))
+    ? null
+    : 'notInShift';
 }
 
 /**

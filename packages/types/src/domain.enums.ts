@@ -394,7 +394,7 @@ export const NotificationType = {
   CONTRACT_NO_SHOW: 'CONTRACT_NO_SHOW',
   /** To the customer: the branch cancelled the contract before handover. */
   CONTRACT_CANCELLED: 'CONTRACT_CANCELLED',
-  /** The branch moved the customer's return appointment. */
+  /** A return appointment moved: to the customer when the branch moved it, to its inspector always. */
   RETURN_RESCHEDULED: 'RETURN_RESCHEDULED',
   RETURN_FINALIZED: 'RETURN_FINALIZED',
   SETTLEMENT_APPROVED: 'SETTLEMENT_APPROVED',
@@ -408,6 +408,10 @@ export const NotificationType = {
   SHIFT_CANCELLED: 'SHIFT_CANCELLED',
   /** A confirmed booking's unit handover was given to this staff member. */
   HANDOVER_ASSIGNED: 'HANDOVER_ASSIGNED',
+  /** A customer's return appointment was given to this staff member (on shift at that time). */
+  RETURN_ASSIGNED: 'RETURN_ASSIGNED',
+  /** To the staff member who had a return: it moved outside their shift and went to someone else. */
+  RETURN_REASSIGNED: 'RETURN_REASSIGNED',
   /** Staff recorded goods the customer handed over onto their shelf. */
   SHELF_DROP_OFF: 'SHELF_DROP_OFF',
   /** Staff handed goods back to the customer (or recovered them from an abandoned shelf). */

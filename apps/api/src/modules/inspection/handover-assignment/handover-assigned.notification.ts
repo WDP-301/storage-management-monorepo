@@ -28,3 +28,53 @@ export function handoverAssignedNotification(input: {
     },
   };
 }
+
+export interface ReturnJob {
+  inspectionId: string;
+  contractId: string;
+  facilityId: string;
+  unitCode: string | null;
+  scheduledAt: Date;
+}
+
+const returnData = (job: ReturnJob) => ({
+  inspectionId: job.inspectionId,
+  inspectionIds: [job.inspectionId],
+  contractId: job.contractId,
+  facilityId: job.facilityId,
+  scheduledAt: job.scheduledAt.toISOString(),
+});
+
+const unitOf = (job: ReturnJob) => (job.unitCode ? `kho ${job.unitCode}` : 'kho');
+
+/** To the staff member now meeting the customer for the return. */
+export function returnAssignedNotification(job: ReturnJob): NotificationPayload {
+  return {
+    type: NotificationType.RETURN_ASSIGNED,
+    title: 'Được giao việc nhận trả kho',
+    body: `Bạn sẽ kiểm tra và nhận trả ${unitOf(job)} cùng khách lúc ${VIETNAM_TIME.format(job.scheduledAt)}.`,
+    data: returnData(job),
+  };
+}
+
+/** To the inspector who keeps a return whose appointment moved. */
+export function returnMovedNotification(job: ReturnJob): NotificationPayload {
+  return {
+    type: NotificationType.RETURN_RESCHEDULED,
+    title: 'Đổi lịch nhận trả kho',
+    body: `Lịch nhận trả ${unitOf(job)} đã đổi sang ${VIETNAM_TIME.format(job.scheduledAt)}.`,
+    data: returnData(job),
+  };
+}
+
+/** To the inspector who lost a return: it moved outside their shift and went to someone else. */
+export function returnReassignedNotification(job: ReturnJob): NotificationPayload {
+  return {
+    type: NotificationType.RETURN_REASSIGNED,
+    title: 'Việc nhận trả kho đã chuyển người',
+    body:
+      `Lịch nhận trả ${unitOf(job)} đã đổi sang ${VIETNAM_TIME.format(job.scheduledAt)}, ngoài ca ` +
+      'của bạn — đã giao cho nhân viên khác trực ca.',
+    data: returnData(job),
+  };
+}

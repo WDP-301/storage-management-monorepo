@@ -1,6 +1,7 @@
 import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
+import { ShiftTemplate } from '@entities/shift-template.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { Logger } from '@nestjs/common';
 import { addVietnamDays, vietnamToday } from '@shared/utils/calendar.util';
@@ -17,6 +18,7 @@ describe('ManagedReturnService.requestOnBehalf', () => {
   let openReturn: Partial<Inspection> | null;
   let service: ManagedReturnService;
   let banks: { verifyAccount: jest.Mock };
+  let assignment: { assignReturnSafely: jest.Mock };
   const dto = {
     scheduledAt: inDays(7),
     note: ' Khách gọi hotline ',
@@ -33,11 +35,13 @@ describe('ManagedReturnService.requestOnBehalf', () => {
     openReturn = null;
     em = {
       // manager-1 manages facility-1 only.
-      find: jest.fn(async (_entity, { where }) =>
-        where.userId === 'manager-1'
+      find: jest.fn(async (entity, { where }) => {
+        // The OFFICE shift: 08:00–17:00 Vietnam time.
+        if (entity === ShiftTemplate) return [{ startTime: '08:00', endTime: '17:00' }];
+        return where.userId === 'manager-1'
           ? [{ facilityId: 'facility-1', startsAt: new Date('2024-01-01T00:00:00Z'), endsAt: null }]
-          : [],
-      ),
+          : [];
+      }),
       findOne: jest.fn(async (entity) => {
         if (entity === Contract) return contract;
         if (entity === BookingItem) return { storageUnit: { facilityId: 'facility-1' } };
@@ -59,15 +63,37 @@ describe('ManagedReturnService.requestOnBehalf', () => {
       getReturnNoticeDays: jest.fn().mockResolvedValue(30),
       getOverduePenaltyPercent: jest.fn().mockResolvedValue(100),
     };
+    assignment = { assignReturnSafely: jest.fn().mockResolvedValue('staff-1') };
     service = new ManagedReturnService(
-      { transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)) } as never,
+      { transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)), manager: em } as never,
       settings as never,
       banks as never,
+      assignment as never,
     );
     jest.spyOn(Logger.prototype, 'log').mockImplementation();
   });
 
   afterEach(() => jest.restoreAllMocks());
+
+  it('gives the return to the staff on shift at its time', async () => {
+    const result = await service.requestOnBehalf('contract-1', MANAGER, dto);
+
+    expect(assignment.assignReturnSafely).toHaveBeenCalledWith(em, 'return-1');
+    expect(result).toMatchObject({ inspectedBy: 'staff-1' });
+  });
+
+  it('rejects a time outside the OFFICE shift before opening anything', async () => {
+    // 20:00 in Vietnam, a week out.
+    const evening = `${addVietnamDays(vietnamToday(), 7)}T13:00:00.000Z`;
+
+    await expect(
+      service.requestOnBehalf('contract-1', MANAGER, { ...dto, scheduledAt: evening }),
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { details: { fields: [{ field: 'scheduledAt', code: 'returnTimeNotInShift' }] } },
+    });
+    expect(em.save).not.toHaveBeenCalled();
+  });
 
   it('records who made the request and why, under the rules in force now', async () => {
     const before = Date.now();
@@ -129,13 +155,18 @@ describe('ManagedReturnService.requestOnBehalf', () => {
   });
 
   it('refuses a facility manager whose assignment to the facility has ended', async () => {
-    em.find.mockResolvedValue([
-      {
-        facilityId: 'facility-1',
-        startsAt: new Date('2024-01-01T00:00:00Z'),
-        endsAt: new Date('2025-01-01T00:00:00Z'),
-      },
-    ]);
+    const officeShift = em.find.getMockImplementation();
+    em.find.mockImplementation(async (entity, options) =>
+      entity === ShiftTemplate
+        ? officeShift?.(entity, options)
+        : [
+            {
+              facilityId: 'facility-1',
+              startsAt: new Date('2024-01-01T00:00:00Z'),
+              endsAt: new Date('2025-01-01T00:00:00Z'),
+            },
+          ],
+    );
 
     await expect(service.requestOnBehalf('contract-1', MANAGER, dto)).rejects.toMatchObject({
       status: 403,

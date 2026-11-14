@@ -10,10 +10,25 @@ const TEN_AM = new Date('2026-11-01T03:00:00Z'); // 10:00 in Vietnam
 const handover = (id: string, facilityId: string, unitCode: string, scheduledAt = TEN_AM) =>
   ({
     id,
+    type: InspectionType.PRE_HANDOVER,
     scheduledAt,
     contract: {
       bookingItem: { bookingId: 'booking-1', storageUnit: { facilityId, code: unitCode } },
     },
+  }) as unknown as Inspection;
+
+const returnInspection = (overrides: Partial<Inspection> = {}) =>
+  ({
+    id: 'r-1',
+    type: InspectionType.RETURN,
+    contractId: 'contract-1',
+    scheduledAt: TEN_AM,
+    finalizedAt: null,
+    inspectedBy: null,
+    evidence: [],
+    damages: [],
+    contract: { bookingItem: { storageUnit: { facilityId: 'hcm', code: 'A-09' } } },
+    ...overrides,
   }) as unknown as Inspection;
 
 const staffRole = (id: string, fullName: string) => ({
@@ -33,6 +48,7 @@ describe('HandoverAssignmentService', () => {
   let handovers: Inspection[];
   let shifts: ReturnType<typeof morningShift>[];
   let lastAssigned: { inspectedBy: string } | null;
+  let returnRow: Inspection | null;
   let em: {
     transaction: jest.Mock;
     find: jest.Mock;
@@ -47,6 +63,7 @@ describe('HandoverAssignmentService', () => {
     handovers = [handover('i-1', 'hcm', 'A-01'), handover('i-2', 'hcm', 'A-02')];
     shifts = [morningShift('an'), morningShift('binh')];
     lastAssigned = null;
+    returnRow = returnInspection();
     em = {
       transaction: jest.fn((work: (e: unknown) => unknown) => work(em)),
       find: jest.fn((entity: unknown) => {
@@ -61,7 +78,10 @@ describe('HandoverAssignmentService', () => {
         if (entity === StaffShift) return Promise.resolve(shifts);
         return Promise.resolve([]);
       }),
-      findOne: jest.fn(() => Promise.resolve(lastAssigned)),
+      // A lookup by id reads the return being assigned; anything else is the rotation's last pick.
+      findOne: jest.fn((_entity: unknown, options: { where: { id?: string } }) =>
+        Promise.resolve(options?.where?.id ? returnRow : lastAssigned),
+      ),
       query: jest.fn().mockResolvedValue([]),
       update: jest.fn().mockResolvedValue({ affected: 2 }),
     };
@@ -238,6 +258,155 @@ describe('HandoverAssignmentService', () => {
 
       expect(id).toBeNull();
       expect(em.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('returns', () => {
+    it('gives an unassigned return to the first staff on shift at its time, and notifies them', async () => {
+      const staffId = await service.assignReturnSafely(em as never, 'r-1');
+
+      expect(staffId).toBe('an');
+      expect(em.query).toHaveBeenCalledWith(expect.any(String), ['return_rotation:hcm']);
+      expect(em.update).toHaveBeenCalledWith(Inspection, expect.objectContaining({ id: 'r-1' }), {
+        inspectedBy: 'an',
+      });
+      expect(notifications.createForUsers).toHaveBeenCalledWith(
+        em,
+        ['an'],
+        expect.objectContaining({
+          type: NotificationType.RETURN_ASSIGNED,
+          body: expect.stringContaining('A-09'),
+          data: expect.objectContaining({ inspectionId: 'r-1', contractId: 'contract-1' }),
+        }),
+      );
+    });
+
+    it('continues the return rotation after the last assigned staff member', async () => {
+      lastAssigned = { inspectedBy: 'an' };
+
+      await expect(service.assignReturnSafely(em as never, 'r-1')).resolves.toBe('binh');
+    });
+
+    it('keeps the current inspector while they are on shift at the (new) time', async () => {
+      returnRow = returnInspection({ inspectedBy: 'binh' });
+
+      await expect(service.assignReturnSafely(em as never, 'r-1')).resolves.toBe('binh');
+      expect(em.update).not.toHaveBeenCalled();
+      expect(notifications.createForUsers).not.toHaveBeenCalled();
+    });
+
+    it('hands a moved return to someone on shift when its inspector is not', async () => {
+      returnRow = returnInspection({ inspectedBy: 'chi' });
+
+      await expect(service.assignReturnSafely(em as never, 'r-1')).resolves.toBe('an');
+      expect(em.update).toHaveBeenCalledWith(Inspection, expect.objectContaining({ id: 'r-1' }), {
+        inspectedBy: 'an',
+      });
+    });
+
+    it('tells the inspector who keeps a moved return its new time', async () => {
+      returnRow = returnInspection({ inspectedBy: 'binh' });
+
+      await expect(service.assignReturnSafely(em as never, 'r-1', true)).resolves.toBe('binh');
+      expect(em.update).not.toHaveBeenCalled();
+      expect(notifications.createForUsers).toHaveBeenCalledTimes(1);
+      expect(notifications.createForUsers).toHaveBeenCalledWith(
+        em,
+        ['binh'],
+        expect.objectContaining({
+          type: NotificationType.RETURN_RESCHEDULED,
+          body: expect.stringContaining('A-09'),
+          data: expect.objectContaining({ inspectionId: 'r-1', scheduledAt: TEN_AM.toISOString() }),
+        }),
+      );
+    });
+
+    it('tells both sides when a moved return changes hands', async () => {
+      returnRow = returnInspection({ inspectedBy: 'chi' });
+
+      await expect(service.assignReturnSafely(em as never, 'r-1', true)).resolves.toBe('an');
+      expect(notifications.createForUsers).toHaveBeenCalledWith(
+        em,
+        ['an'],
+        expect.objectContaining({ type: NotificationType.RETURN_ASSIGNED }),
+      );
+      expect(notifications.createForUsers).toHaveBeenCalledWith(
+        em,
+        ['chi'],
+        expect.objectContaining({
+          type: NotificationType.RETURN_REASSIGNED,
+          body: expect.stringContaining('nhân viên khác'),
+        }),
+      );
+    });
+
+    it('still tells a kept inspector about the move when nobody else is on shift', async () => {
+      returnRow = returnInspection({ inspectedBy: 'chi' });
+      shifts = [];
+
+      await expect(service.assignReturnSafely(em as never, 'r-1', true)).resolves.toBe('chi');
+      expect(notifications.createForUsers).toHaveBeenCalledWith(
+        em,
+        ['chi'],
+        expect.objectContaining({ type: NotificationType.RETURN_RESCHEDULED }),
+      );
+    });
+
+    it('keeps an inspector who has started the record, shift or not', async () => {
+      returnRow = returnInspection({ inspectedBy: 'chi', conditionNotes: 'Đã xem trước' });
+
+      await expect(service.assignReturnSafely(em as never, 'r-1')).resolves.toBe('chi');
+      expect(em.update).not.toHaveBeenCalled();
+    });
+
+    it('leaves the return as it is when nobody is on shift', async () => {
+      shifts = [];
+
+      await expect(service.assignReturnSafely(em as never, 'r-1')).resolves.toBeNull();
+      expect(em.update).not.toHaveBeenCalled();
+    });
+
+    it('never throws — a failure leaves the return for a manager', async () => {
+      jest.spyOn(Logger.prototype, 'error').mockImplementation();
+      em.find.mockRejectedValue(new Error('db down'));
+
+      await expect(service.assignReturnSafely(em as never, 'r-1')).resolves.toBeNull();
+    });
+
+    it('skips a return another transaction is editing — that edit re-assigns it', async () => {
+      em.findOne.mockImplementation((_entity: unknown, options: { lock?: unknown }) =>
+        Promise.resolve(options?.lock ? null : returnRow),
+      );
+
+      await expect(service.assignReturnSafely(em as never, 'r-1')).resolves.toBeNull();
+      expect(em.update).not.toHaveBeenCalled();
+    });
+
+    it('locks the return before reading it, and never assigns a finalized one', async () => {
+      await service.assignReturnSafely(em as never, 'r-1');
+
+      expect(em.findOne).toHaveBeenCalledWith(Inspection, {
+        where: { id: 'r-1' },
+        lock: { mode: 'pessimistic_write', onLocked: 'skip_locked' },
+      });
+      const [, where] = em.update.mock.calls[0];
+      expect(where).toEqual({ id: 'r-1', finalizedAt: expect.anything() });
+    });
+
+    it('picks up pending returns when shifts are added', async () => {
+      handovers = [returnInspection()];
+
+      const visited = await service.assignPendingForFacility(
+        em as never,
+        'hcm',
+        new Date('2026-11-01T00:00:00Z'),
+        new Date('2026-11-02T00:00:00Z'),
+      );
+
+      expect(visited).toBe(1);
+      expect(em.update).toHaveBeenCalledWith(Inspection, expect.objectContaining({ id: 'r-1' }), {
+        inspectedBy: 'an',
+      });
     });
   });
 });

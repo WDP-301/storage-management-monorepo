@@ -7,6 +7,10 @@ import { ContractReturnService } from './contract-return.service';
 
 /** Noon in Vietnam, `days` from today. */
 const inDays = (days: number) => `${addVietnamDays(vietnamToday(), days)}T05:00:00.000Z`;
+/** 07:00 in Vietnam today — before the OFFICE shift, so today's noon is still ahead. */
+const earlyToday = () => new Date(`${vietnamToday()}T00:00:00.000Z`);
+/** The OFFICE shift the tests run under: 08:00–17:00 Vietnam time. */
+const OFFICE = [{ startTime: '08:00', endTime: '17:00' }];
 
 const ACCOUNT_INPUT = {
   bankBin: '970436',
@@ -24,6 +28,7 @@ const RULES = { noticeDays: 30, penaltyPercent: 100 };
 
 describe('ContractReturnService', () => {
   let em: {
+    find: jest.Mock;
     findOne: jest.Mock;
     create: jest.Mock;
     save: jest.Mock;
@@ -36,6 +41,7 @@ describe('ContractReturnService', () => {
   /** The latest return, locked by a change or a withdrawal. */
   let latestReturn: Inspection | null;
   let settings: { getReturnNoticeDays: jest.Mock; getOverduePenaltyPercent: jest.Mock };
+  let assignment: { assignReturnSafely: jest.Mock };
   let service: ContractReturnService;
 
   const buildReturn = (overrides: Partial<Inspection> = {}): Inspection =>
@@ -57,6 +63,7 @@ describe('ContractReturnService', () => {
     openReturn = null;
     latestReturn = buildReturn();
     em = {
+      find: jest.fn().mockResolvedValue(OFFICE),
       findOne: jest.fn(async (entity, options) => {
         if (entity === Contract) return contract;
         return options.lock ? latestReturn : openReturn;
@@ -70,10 +77,12 @@ describe('ContractReturnService', () => {
       getReturnNoticeDays: jest.fn().mockResolvedValue(RULES.noticeDays),
       getOverduePenaltyPercent: jest.fn().mockResolvedValue(RULES.penaltyPercent),
     };
+    assignment = { assignReturnSafely: jest.fn().mockResolvedValue('staff-1') };
     service = new ContractReturnService(
-      { transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)) } as never,
+      { transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)), manager: em } as never,
       settings as never,
       { verifyAccount: jest.fn().mockResolvedValue(ACCOUNT) } as never,
+      assignment as never,
     );
   });
 
@@ -127,6 +136,7 @@ describe('ContractReturnService', () => {
     });
 
     it.each([0, 365])('accepts a day %d days from today', async (days) => {
+      jest.useFakeTimers({ now: earlyToday(), doNotFake: ['nextTick'] });
       await expect(
         service.requestReturn('contract-1', 'customer-1', { scheduledAt: inDays(days) }),
       ).resolves.toBeDefined();
@@ -151,11 +161,36 @@ describe('ContractReturnService', () => {
           scheduledAt: '2026-10-21T12:00:00.000Z',
         }),
       ).rejects.toMatchObject({ status: 400 });
+      // 09:00 on 22/10 in Vietnam.
       await expect(
         service.requestReturn('contract-1', 'customer-1', {
-          scheduledAt: '2026-10-21T17:30:00.000Z',
+          scheduledAt: '2026-10-22T02:00:00.000Z',
         }),
       ).resolves.toBeDefined();
+    });
+
+    it('rejects a time outside the OFFICE shift, or already past', async () => {
+      // 20:00 in Vietnam, 20 days out.
+      const evening = `${addVietnamDays(vietnamToday(), 20)}T13:00:00.000Z`;
+      await expect(
+        service.requestReturn('contract-1', 'customer-1', { scheduledAt: evening }),
+      ).rejects.toMatchObject({
+        status: 400,
+        response: { details: { fields: [{ field: 'scheduledAt', code: 'returnTimeNotInShift' }] } },
+      });
+      await expect(
+        service.requestReturn('contract-1', 'customer-1', {
+          scheduledAt: new Date(Date.now() - 60_000).toISOString(),
+        }),
+      ).rejects.toMatchObject({ status: 400 });
+      expect(em.save).not.toHaveBeenCalled();
+    });
+
+    it('gives the new return to the staff on shift at its time', async () => {
+      const result = await service.requestReturn('contract-1', 'customer-1', dto);
+
+      expect(assignment.assignReturnSafely).toHaveBeenCalledWith(em, 'return-1');
+      expect(result).toMatchObject({ inspectedBy: 'staff-1' });
     });
 
     it('hides another customer’s contract as not found', async () => {
@@ -195,8 +230,8 @@ describe('ContractReturnService', () => {
     it.each([
       ['moves earlier', () => inDays(10)],
       ['moves later', () => inDays(60)],
-      // 22:00 in Vietnam on the appointment day.
-      ['keeps its day', () => `${addVietnamDays(vietnamToday(), 30)}T15:00:00.000Z`],
+      // 09:00 in Vietnam on the appointment day.
+      ['changes only its time', () => `${addVietnamDays(vietnamToday(), 30)}T02:00:00.000Z`],
     ])('keeps the notice anchor and the rules when the appointment %s', async (_label, at) => {
       const scheduledAt = at();
       const result = await service.updateReturn('contract-1', 'customer-1', { scheduledAt });
@@ -205,6 +240,19 @@ describe('ContractReturnService', () => {
       expect(result.noticeFrom).toEqual(new Date('2026-01-01T00:00:00.000Z'));
       expect(result.returnRules).toEqual({ noticeDays: 15, penaltyPercent: 50 });
       expect(settings.getReturnNoticeDays).not.toHaveBeenCalled();
+      // A moved appointment may need someone else on shift, and its inspector is told.
+      expect(assignment.assignReturnSafely).toHaveBeenCalledWith(em, 'return-1', true);
+    });
+
+    it('rejects moving the appointment to a time outside the OFFICE shift', async () => {
+      await expect(
+        service.updateReturn('contract-1', 'customer-1', {
+          scheduledAt: `${addVietnamDays(vietnamToday(), 30)}T15:00:00.000Z`,
+        }),
+      ).rejects.toMatchObject({
+        status: 400,
+        response: { details: { fields: [{ field: 'scheduledAt', code: 'returnTimeNotInShift' }] } },
+      });
     });
 
     it('changes the note and the refund account, remembering the account', async () => {
@@ -274,10 +322,11 @@ describe('ContractReturnService', () => {
 
       await expect(
         service.updateReturn('contract-1', 'customer-1', {
-          scheduledAt: `${addVietnamDays(vietnamToday(), -2)}T10:00:00.000Z`,
+          scheduledAt: inDays(-2),
           refundAccount: ACCOUNT_INPUT,
         }),
       ).resolves.toMatchObject({ refundAccount: ACCOUNT });
+      expect(assignment.assignReturnSafely).not.toHaveBeenCalled();
     });
 
     it('still refuses moving a past appointment to another past day', async () => {

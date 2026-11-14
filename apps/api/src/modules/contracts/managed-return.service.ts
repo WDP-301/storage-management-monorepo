@@ -3,6 +3,8 @@ import { Contract } from '@entities/contract.entity';
 import type { Inspection } from '@entities/inspection.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { BanksService } from '@modules/banks/banks.service';
+import { officeShiftTemplates } from '@modules/bookings/receiving-window.util';
+import { HandoverAssignmentService } from '@modules/inspection/handover-assignment/handover-assignment.service';
 import { managesFacility, withoutRefundAccount } from '@modules/inspection/inspection-access.util';
 import { SettingsService } from '@modules/settings/settings.service';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
@@ -11,6 +13,7 @@ import { ErrorCode } from '@shared/models/api-response';
 import { DataSource, IsNull } from 'typeorm';
 import {
   assertReturnDayInRange,
+  assertReturnTimeInOfficeShift,
   currentReturnRules,
   openReturnInspection,
 } from './contract-return.util';
@@ -29,6 +32,7 @@ export class ManagedReturnService {
     private readonly dataSource: DataSource,
     private readonly settings: SettingsService,
     private readonly banks: BanksService,
+    private readonly assignment: HandoverAssignmentService,
   ) {}
 
   /** Facility managers only for the facility of the unit; admin and operations everywhere. */
@@ -40,6 +44,8 @@ export class ManagedReturnService {
     const now = new Date();
     const scheduledAt = new Date(dto.scheduledAt);
     assertReturnDayInRange('scheduledAt', scheduledAt, now);
+    const templates = await officeShiftTemplates(this.dataSource.manager);
+    assertReturnTimeInOfficeShift('scheduledAt', scheduledAt, templates, now);
     const rules = await currentReturnRules(this.settings);
     // Looked up before any lock is taken: the bank call can take seconds.
     const refundAccount = dto.refundAccount
@@ -64,7 +70,7 @@ export class ManagedReturnService {
           { contractId },
         );
       }
-      return openReturnInspection(em, contract, {
+      const inspection = await openReturnInspection(em, contract, {
         scheduledAt,
         note: dto.note,
         refundAccount,
@@ -73,6 +79,9 @@ export class ManagedReturnService {
         source: dto.source,
         now,
       });
+      inspection.inspectedBy =
+        (await this.assignment.assignReturnSafely(em, inspection.id)) ?? inspection.inspectedBy;
+      return inspection;
     });
     this.logger.log(
       `Return ${created.id} of contract ${contractId} requested by ${actor.id} (${dto.source})`,

@@ -10,7 +10,7 @@ import { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { activeFacilityIds, isAssignmentActive } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { isWithinWindows, receivingWindowsForDate } from '@modules/bookings/receiving-window.util';
+import { officeTimeProblem } from '@modules/bookings/receiving-window.util';
 import { findUnrentable, lockShelfParents } from '@modules/bookings/rentable-units.util';
 import { HandoverAssignmentService } from '@modules/inspection/handover-assignment/handover-assignment.service';
 import { NotificationsService } from '@modules/notifications/notifications.service';
@@ -1052,9 +1052,9 @@ export function assertMoveTimeInOfficeShift(
       { fields: [{ field, code, message }] },
     );
   };
-  if (at <= now) reject('pastTime', 'Giờ chuyển kho phải ở tương lai');
-  const windows = receivingWindowsForDate(vietnamDate(at), templates);
-  if (!isWithinWindows(at, windows)) {
+  const problem = officeTimeProblem(at, templates, now);
+  if (problem === 'pastTime') reject('pastTime', 'Giờ chuyển kho phải ở tương lai');
+  if (problem === 'notInShift') {
     reject('moveTimeNotInShift', 'Giờ chuyển kho phải nằm trong khung giờ hành chính');
   }
 }

@@ -1,6 +1,7 @@
 import { AppUser } from '@entities/app-user.entity';
 import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
+import { ShiftTemplate } from '@entities/shift-template.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { createApiValidationPipe } from '@shared/pipes/api-validation.pipe';
@@ -55,6 +56,7 @@ describe('InspectionService', () => {
   let assignments: UserRoleAssignment[];
   let inspection: Inspection | null;
   let notifications: { createForUsers: jest.Mock };
+  let returnAssignment: { assignReturnSafely: jest.Mock };
   let service: InspectionService;
 
   beforeEach(() => {
@@ -62,6 +64,8 @@ describe('InspectionService', () => {
     inspection = buildInspection();
     em = {
       find: jest.fn(async (entity, options) => {
+        // The OFFICE shift: 08:00–17:00 Vietnam time.
+        if (entity === ShiftTemplate) return [{ startTime: '08:00', endTime: '17:00' }];
         if (entity !== UserRoleAssignment) return [];
         const { userId, role } = options.where;
         return assignments.filter((a) => a.userId === userId && a.role === role);
@@ -76,9 +80,11 @@ describe('InspectionService', () => {
       save: jest.fn(async (_entity, data) => data),
     };
     notifications = { createForUsers: jest.fn().mockResolvedValue(1) };
+    returnAssignment = { assignReturnSafely: jest.fn().mockResolvedValue('staff-2') };
     service = new InspectionService(
       { manager: em, transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)) } as never,
       notifications as never,
+      returnAssignment as never,
     );
   });
 
@@ -371,11 +377,17 @@ describe('InspectionService', () => {
           const saved = em.save.mock.calls[0][1] as Inspection;
           expect(saved.scheduledAt).toEqual(new Date(inDays(days)));
           expect(saved.noticeFrom).toBe(anchor);
+          // Staff are assigned by the appointment time, so the move re-runs the assignment.
+          expect(returnAssignment.assignReturnSafely).toHaveBeenCalledWith(
+            em,
+            'inspection-1',
+            true,
+          );
           const day = addVietnamDays(vietnamToday(), days).split('-').reverse().join('/');
           expect(notifications.createForUsers).toHaveBeenCalledWith(em, ['customer-1'], {
             type: NotificationType.RETURN_RESCHEDULED,
             title: 'Đổi lịch hẹn trả kho',
-            body: `Chi nhánh đã đổi lịch hẹn trả kho A101 sang ngày ${day}`,
+            body: `Chi nhánh đã đổi lịch hẹn trả kho A101 sang 12:00 ngày ${day}`,
             data: {
               contractId: 'contract-1',
               contractNo: 'CT-1',
@@ -415,16 +427,41 @@ describe('InspectionService', () => {
         ).rejects.toMatchObject({ status: 403 });
       });
 
-      it('tells nobody when a manager sends the same day back', async () => {
-        const sameDay = `${addVietnamDays(vietnamToday(), 30)}T10:00:00.000Z`;
-
+      it('tells nobody when a manager sends the same appointment back', async () => {
         await service.update(
           'inspection-1',
-          { scheduledAt: sameDay, conditionNotes: 'OK' },
+          { scheduledAt: inDays(30), conditionNotes: 'OK' },
           MANAGER,
         );
 
         expect(notifications.createForUsers).not.toHaveBeenCalled();
+        expect(returnAssignment.assignReturnSafely).not.toHaveBeenCalled();
+      });
+
+      it('treats another time of the same day as a move', async () => {
+        // 09:00 in Vietnam on the appointment day.
+        const morning = `${addVietnamDays(vietnamToday(), 30)}T02:00:00.000Z`;
+
+        await service.update('inspection-1', { scheduledAt: morning }, MANAGER);
+
+        expect((em.save.mock.calls[0][1] as Inspection).scheduledAt).toEqual(new Date(morning));
+        expect(notifications.createForUsers).toHaveBeenCalledTimes(1);
+        expect(returnAssignment.assignReturnSafely).toHaveBeenCalledTimes(1);
+      });
+
+      it('rejects moving it outside the OFFICE shift', async () => {
+        // 20:00 in Vietnam.
+        const evening = `${addVietnamDays(vietnamToday(), 30)}T13:00:00.000Z`;
+
+        await expect(
+          service.update('inspection-1', { scheduledAt: evening }, MANAGER),
+        ).rejects.toMatchObject({
+          status: 400,
+          response: {
+            details: { fields: [{ field: 'scheduledAt', code: 'returnTimeNotInShift' }] },
+          },
+        });
+        expect(em.save).not.toHaveBeenCalled();
       });
 
       it('refuses the assigned inspector moving it, changing nothing', async () => {
@@ -455,11 +492,8 @@ describe('InspectionService', () => {
         await expect(
           service.update(
             'inspection-1',
-            // Another time of the same Vietnam day, as a form may send it back.
-            {
-              scheduledAt: `${addVietnamDays(vietnamToday(), -3)}T12:00:00.000Z`,
-              conditionNotes: 'OK',
-            },
+            // The appointment it already has, as a form may send it back.
+            { scheduledAt: inDays(-3), conditionNotes: 'OK' },
             STAFF,
           ),
         ).resolves.toMatchObject({ conditionNotes: 'OK' });

@@ -4,9 +4,9 @@ import { Type } from 'class-transformer';
 import { IsDateString, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
 import { RefundAccountDto } from './refund-account.dto';
 
-// The day bounds (today .. +365 in Vietnam) depend on "now", so the services check them.
+// The bounds depend on "now" and the shift templates, so the services check them.
 const SCHEDULED_AT_DESCRIPTION =
-  'Requested move-out date; its Vietnam calendar day must be from today to 365 days ahead';
+  'Requested move-out appointment: a future time inside an OFFICE work-shift window (see GET /bookings/receiving-slots), on a Vietnam day from today to 365 days ahead. Staff on shift then are assigned to it';
 
 export class ReturnRequestDto implements ReturnRequestInput {
   @ApiProperty({ example: '2027-04-12T12:00:00.000Z', description: SCHEDULED_AT_DESCRIPTION })
@@ -33,7 +33,7 @@ export class ReturnRequestDto implements ReturnRequestInput {
 export class UpdateReturnRequestDto implements UpdateReturnRequestInput {
   @ApiPropertyOptional({
     example: '2027-04-12T12:00:00.000Z',
-    description: `${SCHEDULED_AT_DESCRIPTION}. Only an appointment: money counts to the day the return is finalized`,
+    description: `${SCHEDULED_AT_DESCRIPTION}. Only an appointment: money counts to the day the return is finalized. Re-sending the current appointment is not a move`,
   })
   @IsOptional()
   @IsDateString()
@@ -53,7 +53,11 @@ export class UpdateReturnRequestDto implements UpdateReturnRequestInput {
 }
 
 export class ReturnPreviewQueryDto {
-  @ApiProperty({ example: '2027-04-12T12:00:00.000Z', description: SCHEDULED_AT_DESCRIPTION })
+  @ApiProperty({
+    example: '2027-04-12T12:00:00.000Z',
+    description:
+      'Day to price the return on; only its Vietnam day (today to 365 days ahead) counts',
+  })
   @IsDateString()
   scheduledAt: string;
 }

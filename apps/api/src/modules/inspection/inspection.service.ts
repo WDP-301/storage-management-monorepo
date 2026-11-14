@@ -4,6 +4,7 @@ import { Inspection } from '@entities/inspection.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { activeFacilityIds } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { officeShiftTemplates } from '@modules/bookings/receiving-window.util';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { Injectable } from '@nestjs/common';
 import { fieldValidationError, notFound } from '@shared/exceptions/domain.exception';
@@ -12,6 +13,7 @@ import { DataSource, type FindOptionsWhere, In, IsNull, Not } from 'typeorm';
 import { AssignInspectionDto } from './dto/assign-inspection.dto';
 import { ListInspectionsQueryDto } from './dto/list-inspections-query.dto';
 import { UpdateInspectionDto } from './dto/update-inspection.dto';
+import { HandoverAssignmentService } from './handover-assignment/handover-assignment.service';
 import {
   assertInspectorOrManager,
   assertManagesInspection,
@@ -33,6 +35,7 @@ export class InspectionService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly notifications: NotificationsService,
+    private readonly assignment: HandoverAssignmentService,
   ) {}
 
   private get em() {
@@ -144,6 +147,7 @@ export class InspectionService {
           inspection,
           new Date(dto.scheduledAt),
           await managesInspectionFacility(em, inspection, actor),
+          await officeShiftTemplates(em),
         );
       if (dto.conditionNotes !== undefined) {
         inspection.conditionNotes = dto.conditionNotes;
@@ -151,6 +155,8 @@ export class InspectionService {
       if (dto.evidence !== undefined) inspection.evidence = dto.evidence;
       if (dto.damages !== undefined) inspection.damages = dto.damages;
       await em.save(Inspection, inspection);
+      // Staff are assigned by the appointment time, so a moved return may change hands.
+      if (moved) await this.assignment.assignReturnSafely(em, inspection.id, true);
       // Clients re-render from this response, so it carries the same relations as a read.
       const reloaded = await em.findOne(Inspection, {
         where: { id },

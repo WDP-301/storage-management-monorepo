@@ -1,7 +1,9 @@
 import type { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { UnitChangeRequest } from '@entities/unit-change-request.entity';
+import { officeTimeProblem } from '@modules/bookings/receiving-window.util';
 import type { SettingsService } from '@modules/settings/settings.service';
+import type { ShiftWindow } from '@modules/shift-templates/shift-time';
 import { HttpStatus } from '@nestjs/common';
 import { DomainException, fieldValidationError } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
@@ -27,6 +29,8 @@ export const RETURN_MESSAGES = {
   locked: 'Chi nhánh đã bắt đầu kiểm tra kho — không huỷ được yêu cầu trả kho',
   notFound: 'Không tìm thấy yêu cầu trả kho đang mở',
   dayOutOfRange: `Chọn ngày trả trong khoảng từ hôm nay đến ${RETURN_MAX_DAYS_AHEAD} ngày tới`,
+  pastTime: 'Giờ trả kho phải ở tương lai',
+  notInShift: 'Giờ trả kho phải nằm trong khung giờ hành chính',
 } as const;
 
 /** A unit change in any of these statuses still owns the contract's right to keep moving. */
@@ -53,6 +57,31 @@ export function assertReturnDayInRange(field: string, at: Date, now: Date = new 
     throw fieldValidationError(field, 'outOfRange', RETURN_MESSAGES.dayOutOfRange);
   }
 }
+
+/**
+ * 400 unless `at` is in the future and inside an OFFICE work-shift window: staff meet the
+ * customer to inspect the unit, so the appointment is assigned to whoever is on shift then.
+ */
+export function assertReturnTimeInOfficeShift(
+  field: string,
+  at: Date,
+  templates: readonly ShiftWindow[],
+  now: Date = new Date(),
+): void {
+  const problem = officeTimeProblem(at, templates, now);
+  if (problem === 'pastTime')
+    throw fieldValidationError(field, 'pastTime', RETURN_MESSAGES.pastTime);
+  if (problem === 'notInShift') {
+    throw fieldValidationError(field, 'returnTimeNotInShift', RETURN_MESSAGES.notInShift);
+  }
+}
+
+/** Staff wrote something on the return, so it is now part of the inspection record. */
+export const staffStarted = (inspection: Inspection): boolean =>
+  (inspection.evidence?.length ?? 0) > 0 ||
+  (inspection.damages?.length ?? 0) > 0 ||
+  Boolean(inspection.conditionNotes?.trim()) ||
+  inspection.inspectedAt != null;
 
 /** The return rules in force now, to be captured on a return request. */
 export async function currentReturnRules(settings: SettingsService): Promise<ReturnRules> {
@@ -132,24 +161,27 @@ export async function openReturnInspection(
   );
 }
 
-/** Whether `scheduledAt` falls on another Vietnam day than the current appointment. */
-export function changesAppointmentDay(inspection: Inspection, scheduledAt: Date): boolean {
-  return (
-    inspection.scheduledAt == null ||
-    vietnamDate(inspection.scheduledAt) !== vietnamDate(scheduledAt)
-  );
+/** Whether `scheduledAt` is another instant than the current appointment (day or time). */
+export function changesAppointment(inspection: Inspection, scheduledAt: Date): boolean {
+  return inspection.scheduledAt?.getTime() !== scheduledAt.getTime();
 }
 
 /**
- * A requested appointment for an open return, checked and applied. The appointment is only a
- * schedule: money counts to the day the return is finalized, so moving it changes no notice or
- * rent. Sending back the day it already has (another time of that Vietnam day) is not a move: it
- * is accepted even once that day is behind us, so a form that resends every field never fails on
- * an old appointment.
+ * A requested appointment for an open return, checked and applied; returns whether it moved. The
+ * appointment is only a schedule: money counts to the day the return is finalized, so moving it
+ * changes no notice or rent. Sending back the appointment it already has is not a move: it is
+ * accepted even once that time is behind us, so a form that resends every field never fails on
+ * an old appointment. A move must land on a future in-shift time — staff are assigned by it.
  */
-export function moveReturn(inspection: Inspection, scheduledAt: Date, now: Date): void {
-  if (changesAppointmentDay(inspection, scheduledAt)) {
-    assertReturnDayInRange('scheduledAt', scheduledAt, now);
-  }
+export function moveReturn(
+  inspection: Inspection,
+  scheduledAt: Date,
+  templates: readonly ShiftWindow[],
+  now: Date,
+): boolean {
+  if (!changesAppointment(inspection, scheduledAt)) return false;
+  assertReturnDayInRange('scheduledAt', scheduledAt, now);
+  assertReturnTimeInOfficeShift('scheduledAt', scheduledAt, templates, now);
   inspection.scheduledAt = scheduledAt;
+  return true;
 }

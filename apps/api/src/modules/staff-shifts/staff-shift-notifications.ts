@@ -2,15 +2,21 @@ import type { StaffShift } from '@entities/staff-shift.entity';
 import type { NotificationPayload } from '@modules/notifications/types/notification';
 import { NotificationType } from '@storage/types';
 
+/** `workDate` is a Vietnam `YYYY-MM-DD`; render it `dd/mm/yyyy` like the rest of the notices. */
+function dayVi(isoDay: string): string {
+  const [year, month, day] = isoDay.split('-');
+  return `${day}/${month}/${year}`;
+}
+
 /** Shifts already sorted by start time, all belonging to one staff member. */
 export function shiftsAssignedNotification(shifts: StaffShift[]): NotificationPayload {
   const first = shifts[0].workDate;
   const last = shifts[shifts.length - 1].workDate;
-  const days = first === last ? `on ${first}` : `from ${first} to ${last}`;
+  const days = first === last ? `ngày ${dayVi(first)}` : `từ ${dayVi(first)} đến ${dayVi(last)}`;
   return {
     type: NotificationType.SHIFT_ASSIGNED,
-    title: 'New shifts assigned',
-    body: `You have been scheduled for ${shifts.length} shift(s) ${days}.`,
+    title: 'Bạn được xếp ca mới',
+    body: `Bạn được xếp ${shifts.length} ca làm việc ${days}.`,
     data: { shiftIds: shifts.map((shift) => shift.id), facilityId: shifts[0].facilityId },
   };
 }
@@ -18,8 +24,8 @@ export function shiftsAssignedNotification(shifts: StaffShift[]): NotificationPa
 export function shiftUpdatedNotification(shift: StaffShift): NotificationPayload {
   return {
     type: NotificationType.SHIFT_UPDATED,
-    title: 'Shift changed',
-    body: `Your shift is now on ${shift.workDate}; check the new time in your schedule.`,
+    title: 'Ca làm việc thay đổi',
+    body: `Ca làm việc của bạn đã chuyển sang ngày ${dayVi(shift.workDate)} — kiểm tra lại giờ trong lịch.`,
     data: { shiftId: shift.id, facilityId: shift.facilityId },
   };
 }
@@ -27,8 +33,8 @@ export function shiftUpdatedNotification(shift: StaffShift): NotificationPayload
 export function shiftCancelledNotification(shift: StaffShift): NotificationPayload {
   return {
     type: NotificationType.SHIFT_CANCELLED,
-    title: 'Shift cancelled',
-    body: `Your shift on ${shift.workDate} has been cancelled.`,
+    title: 'Ca làm việc đã hủy',
+    body: `Ca làm việc ngày ${dayVi(shift.workDate)} của bạn đã bị hủy.`,
     data: { shiftId: shift.id, facilityId: shift.facilityId },
   };
 }

@@ -776,8 +776,8 @@ export const StaffShiftsPage: React.FC = () => {
                   </div>
                   {detail.check_in_at && (
                     <div className="text-kumo-secondary">
-                      Check-in {timeOf(detail.check_in_at)}
-                      {detail.check_out_at && ` · Check-out ${timeOf(detail.check_out_at)}`}
+                      Chấm công vào {timeOf(detail.check_in_at)}
+                      {detail.check_out_at && ` · Chấm công ra ${timeOf(detail.check_out_at)}`}
                     </div>
                   )}
                 </div>

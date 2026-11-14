@@ -118,8 +118,6 @@ export function SettingsScreen({
           ) : null}
           <SettingItem title="Thông báo" description="Booking, thanh toán và nhắc lịch" />
           <View className="h-px bg-separator" />
-          <SettingItem title="Bảo mật" description="Mật khẩu và phiên đăng nhập" />
-          <View className="h-px bg-separator" />
           <SettingItem title="Hỗ trợ" description="Liên hệ và yêu cầu hỗ trợ" onPress={onSupport} />
         </View>
 

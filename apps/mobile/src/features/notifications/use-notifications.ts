@@ -8,12 +8,6 @@ import type { NotificationRecord } from '../../types/notification-api';
 /** What the list is busy with; `idle` also covers a quiet reload when the tab regains focus. */
 type LoadPhase = 'idle' | 'initial' | 'refreshing' | 'more';
 
-/** Offset paging can repeat a row when new mail arrives between pages; keep the first copy. */
-function mergeById(existing: NotificationRecord[], incoming: NotificationRecord[]) {
-  const seen = new Set(existing.map((item) => item.id));
-  return [...existing, ...incoming.filter((item) => !seen.has(item.id))];
-}
-
 function toMessage(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.message : fallback;
 }
@@ -23,12 +17,14 @@ export function useNotifications() {
   const { unread, adjust, setUnread, refresh: refreshUnread } = useUnreadNotifications();
   const [items, setItems] = useState<NotificationRecord[]>([]);
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
+  const [totalPages, setTotalPages] = useState(1);
   const [phase, setPhase] = useState<LoadPhase>('initial');
   const [error, setError] = useState<string | null>(null);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
   const itemsRef = useRef(items);
   itemsRef.current = items;
+  const pageRef = useRef(page);
+  pageRef.current = page;
   const controllerRef = useRef<AbortController | null>(null);
 
   // Only the newest load may touch state: starting one aborts the previous, so a slow page two can
@@ -42,11 +38,9 @@ export function useNotifications() {
     try {
       const response = await NotificationsApi.list(nextPage, false, controller.signal);
       if (controller.signal.aborted) return;
-      setItems((current) =>
-        nextPage === 1 ? response.notifications : mergeById(current, response.notifications),
-      );
+      setItems(response.notifications);
       setPage(response.meta.page);
-      setHasMore(response.meta.page < response.meta.totalPages);
+      setTotalPages(response.meta.totalPages);
     } catch (e) {
       if (controller.signal.aborted) return;
       setError(toMessage(e, 'Không tải được thông báo. Vui lòng thử lại.'));
@@ -60,7 +54,7 @@ export function useNotifications() {
   // Tab bar buttons only navigate, so the screen stays mounted: reload whenever it regains focus.
   useFocusEffect(
     useCallback(() => {
-      void load(1, itemsRef.current.length === 0 ? 'initial' : 'idle');
+      void load(pageRef.current, itemsRef.current.length === 0 ? 'initial' : 'idle');
       void refreshUnread();
     }, [load, refreshUnread]),
   );
@@ -70,9 +64,13 @@ export function useNotifications() {
     void refreshUnread();
   }, [load, refreshUnread]);
 
-  const loadMore = useCallback(() => {
-    if (hasMore && phase === 'idle') void load(page + 1, 'more');
-  }, [hasMore, phase, page, load]);
+  const goToPage = useCallback(
+    (next: number) => {
+      if (phase !== 'idle' || next === page || next < 1 || next > totalPages) return;
+      void load(next, 'more');
+    },
+    [phase, page, totalPages, load],
+  );
 
   const markRead = useCallback(
     async (id: string) => {
@@ -123,13 +121,14 @@ export function useNotifications() {
     items,
     unread,
     error,
-    hasMore,
+    page,
+    totalPages,
     isMarkingAll,
     isLoading: phase === 'initial',
     isRefreshing: phase === 'refreshing',
-    isLoadingMore: phase === 'more',
+    isChangingPage: phase === 'more',
     refresh,
-    loadMore,
+    goToPage,
     markRead,
     markAllRead,
   };

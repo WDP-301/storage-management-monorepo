@@ -15,7 +15,6 @@ import { BrowseFiltersSheet } from './BrowseFiltersSheet';
 import { BrowseBrandHeader, BrowseLocationControls, nearbyTitle } from './BrowseHeader';
 import { BrowseMapOverlay } from './BrowseMapOverlay';
 import { BrowseMapView } from './BrowseMapView';
-import { BrowseQuickFilters } from './BrowseQuickFilters';
 import { BrowseResultsList } from './BrowseResultsList';
 import { BrowseSelectionBar } from './BrowseSelectionBar';
 import { ErrorState, LoadingState } from './BrowseStates';
@@ -137,7 +136,6 @@ export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHol
     ? nearbyTitle(nearbySearch)
     : (selectedProvince?.name ??
       (provinceOptions.length === 1 ? provinceOptions[0].name : 'Tất cả kho'));
-  const provinceCount = selectedProvince?.count ?? provinceOptions.reduce((n, o) => n + o.count, 0);
   const openFilters = () => {
     reloadAmenities();
     filtersSheetRef.current?.present();
@@ -153,31 +151,22 @@ export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHol
       <BrowseLocationControls
         location={location}
         criteria={criteria}
-        totalInProvince={provinceCount}
         wards={wardOptions}
         view={view}
         plottableCount={mapWarehouses.filter(hasPlottableCoords).length}
         onView={setView}
-        onChange={changeCriteria}
         onOpenFilters={openFilters}
         nearby={nearbySearch}
         isLocating={nearby.isBusy && !nearbySearch}
         onOpenLocation={openLocation}
         onClearNearby={clearNearby}
       />
-      {view === 'list' ? (
-        <BrowseQuickFilters criteria={criteria} onChange={changeCriteria} />
-      ) : null}
     </View>
   );
 
   return (
     <View className="flex-1">
-      <BrowseBrandHeader
-        location={location}
-        scope={nearbySearch ? `Trong ${nearbySearch.radiusKm} km` : undefined}
-        onLocation={openLocation}
-      />
+      <BrowseBrandHeader />
       {view === 'map' ? (
         // Outside the ScrollView on purpose: a ScrollView swallows the map's pan and zoom gestures.
         <>

@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import { ChangeRequestsApi, type UnitChangeOption } from '../../../lib/change-requests-api';
+import { useRefreshBookingSettings, useUnitChangeSettings } from '../../../lib/client-settings';
 import { formatArea, formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import { ReceivingSlotsApi } from '../../../lib/receiving-slots-api';
 import type { ReceivingDay } from '../../../lib/receiving-time';
@@ -21,6 +22,7 @@ import {
   timeOptionsForDate,
 } from '../../../lib/receiving-time';
 import { fromIsoDate, todayIso, toIsoDate } from '../../../lib/rental-schedule';
+import { unitChangeErrorMessage } from '../../../lib/unit-change-errors';
 import { ChoiceChip } from '../../components/ChoiceChip';
 import type { ApiContract } from '../../types/contract-api';
 import { contractWarehouseName } from './contract-display';
@@ -28,7 +30,6 @@ import { ChipButton } from './FilterChips';
 import { MonthCalendar } from './MonthCalendar';
 
 const ACCENT = 'hsl(203 100% 30%)';
-const MOVE_MAX_DAYS_AHEAD = 90;
 const PAGE_SIZE = 5;
 
 /** Accent-free lowercase match so "di an" finds "Kho Dĩ An". */
@@ -66,8 +67,11 @@ export function UnitChangeRequestForm({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const minIso = useMemo(() => addDays(todayIso(), 1), []);
-  const maxIso = useMemo(() => addDays(todayIso(), MOVE_MAX_DAYS_AHEAD), []);
+  // The admin-configured window: minimum notice and furthest day a move can be booked.
+  const { minLeadDays, maxDaysAhead } = useUnitChangeSettings();
+  const refreshSettings = useRefreshBookingSettings();
+  const minIso = useMemo(() => addDays(todayIso(), minLeadDays), [minLeadDays]);
+  const maxIso = useMemo(() => addDays(todayIso(), maxDaysAhead), [maxDaysAhead]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -162,8 +166,10 @@ export function UnitChangeRequestForm({
       });
       onDone();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Gửi yêu cầu thất bại. Vui lòng thử lại.');
+      setError(unitChangeErrorMessage(e, 'Gửi yêu cầu thất bại. Vui lòng thử lại.'));
       setIsSubmitting(false);
+      // The window may have changed since it was loaded; the calendar picks up the live one.
+      refreshSettings();
     }
   };
 

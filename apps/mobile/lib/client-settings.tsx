@@ -1,4 +1,8 @@
-import type { ClientBookingSettings, ClientReturnSettings } from '@storage/types';
+import type {
+  ClientBookingSettings,
+  ClientReturnSettings,
+  ClientUnitChangeSettings,
+} from '@storage/types';
 import {
   createContext,
   type ReactNode,
@@ -32,9 +36,16 @@ const INITIAL_RETURN_SETTINGS: ClientReturnSettings = {
   overduePenaltyPercent: 100,
 };
 
+/** Seeded unit-change move window; the API re-checks the picked day against the live rules. */
+const INITIAL_UNIT_CHANGE_SETTINGS: ClientUnitChangeSettings = {
+  minLeadDays: 1,
+  maxDaysAhead: 90,
+};
+
 type ClientSettings = {
   booking: ClientBookingSettings;
   return: ClientReturnSettings;
+  unitChange: ClientUnitChangeSettings;
   /** Refetches the rules, e.g. after the API rejected a booking under rules that have changed. */
   refresh: () => void;
 };
@@ -68,17 +79,28 @@ function isReturnSettings(value: unknown): value is ClientReturnSettings {
   );
 }
 
+function isUnitChangeSettings(value: unknown): value is ClientUnitChangeSettings {
+  const settings = value as Partial<ClientUnitChangeSettings> | null | undefined;
+  return (
+    Number.isInteger(settings?.minLeadDays) &&
+    (settings?.minLeadDays ?? -1) >= 0 &&
+    Number.isInteger(settings?.maxDaysAhead) &&
+    (settings?.maxDaysAhead ?? -1) >= (settings?.minLeadDays ?? 0)
+  );
+}
+
 /** Identical rules keep the same object, so consumers (the browse map among them) skip a render. */
 const keepIfSame = <T,>(current: T, next: T): T =>
   JSON.stringify(current) === JSON.stringify(next) ? current : next;
 
 /**
- * Loads the admin-configured booking and return rules on mount and again when the app returns from the
+ * Loads the admin-configured booking, return and unit-change rules on mount and again when the app returns from the
  * background, so a long-lived session picks up changes without a restart.
  */
 export function ClientSettingsProvider({ children }: { children: ReactNode }) {
   const [booking, setBooking] = useState(INITIAL_BOOKING_SETTINGS);
   const [returnRules, setReturnRules] = useState(INITIAL_RETURN_SETTINGS);
+  const [unitChange, setUnitChange] = useState(INITIAL_UNIT_CHANGE_SETTINGS);
   const inFlight = useRef<AbortController | null>(null);
 
   const refresh = useCallback(() => {
@@ -96,6 +118,10 @@ export function ClientSettingsProvider({ children }: { children: ReactNode }) {
         const nextReturn = result?.return;
         if (isReturnSettings(nextReturn)) {
           setReturnRules((current) => keepIfSame(current, nextReturn));
+        }
+        const nextUnitChange = result?.unitChange;
+        if (isUnitChangeSettings(nextUnitChange)) {
+          setUnitChange((current) => keepIfSame(current, nextUnitChange));
         }
       })
       // Keep the last known rules; the next return from background or booking rejection retries.
@@ -121,8 +147,8 @@ export function ClientSettingsProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const value = useMemo(
-    () => ({ booking, return: returnRules, refresh }),
-    [booking, returnRules, refresh],
+    () => ({ booking, return: returnRules, unitChange, refresh }),
+    [booking, returnRules, unitChange, refresh],
   );
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
@@ -140,6 +166,11 @@ export function useBookingSettings(): ClientBookingSettings {
 /** Notice and overstay rules, for copy shown before the customer asks to move out. */
 export function useReturnSettings(): ClientReturnSettings {
   return useClientSettings().return;
+}
+
+/** The days a unit-change move may be booked on, counted from today. */
+export function useUnitChangeSettings(): ClientUnitChangeSettings {
+  return useClientSettings().unitChange;
 }
 
 export function useRefreshBookingSettings(): () => void {

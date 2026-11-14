@@ -50,6 +50,26 @@ test('timeOptionsForDate begins at the next step when the window is trimmed to n
   assert.deepEqual(options[0], { value: '2027-03-10T08:00:00.000Z', label: '15:00' });
 });
 
+test('timeOptionsForDate rounds a last-hour window trimmed to now up to the quarter hour', () => {
+  // Fetched at 16:05:12 VN with the shift ending at 17:00 — never offer the (past) fetch instant.
+  const trimmed = [
+    {
+      date: '2026-11-20',
+      windows: [{ startAt: '2026-11-20T09:05:12.345Z', endAt: '2026-11-20T10:00:00.000Z' }],
+    },
+  ];
+  assert.deepEqual(t.timeOptionsForDate(trimmed, '2026-11-20'), [
+    { value: '2026-11-20T09:15:00.000Z', label: '16:15' },
+  ]);
+  const closing = [
+    {
+      date: '2026-11-20',
+      windows: [{ startAt: '2026-11-20T09:50:00.000Z', endAt: '2026-11-20T10:00:00.000Z' }],
+    },
+  ];
+  assert.deepEqual(t.timeOptionsForDate(closing, '2026-11-20'), []);
+});
+
 test('timeOptionsForDate is empty for a day without windows', () => {
   assert.deepEqual(t.timeOptionsForDate([DAY], '2027-03-11'), []);
 });

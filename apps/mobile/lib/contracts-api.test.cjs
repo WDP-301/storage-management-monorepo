@@ -167,7 +167,7 @@ test('normaliseContract keeps the refund proof and drops entries that are not fi
   assert.deepEqual(contract.settlement.refund_evidence, [receipt]);
 });
 
-test('return request calls send the Vietnam day at noon UTC and the refund account', async () => {
+test('return request calls send the appointment instant and the refund account', async () => {
   const calls = [];
   const { ContractsApi } = load('contracts-api.ts', async (path, init) => {
     calls.push({ path, init });
@@ -175,7 +175,11 @@ test('return request calls send the Vietnam day at noon UTC and the refund accou
   });
   const refundAccount = { bankBin: '970436', accountNo: '0123' };
   await ContractsApi.returnPreview('c1', '2027-04-12');
-  await ContractsApi.requestReturn('c1', { dayIso: '2027-04-12', note: '', refundAccount });
+  await ContractsApi.requestReturn('c1', {
+    scheduledAt: '2027-04-12T02:00:00.000Z',
+    note: '',
+    refundAccount,
+  });
   await ContractsApi.updateReturn('c1', { note: '' });
   const cancelled = await ContractsApi.cancelReturn('c1');
 
@@ -185,7 +189,7 @@ test('return request calls send the Vietnam day at noon UTC and the refund accou
   );
   assert.equal(calls[1].init.method, 'POST');
   assert.deepEqual(JSON.parse(calls[1].init.body), {
-    scheduledAt: '2027-04-12T12:00:00.000Z',
+    scheduledAt: '2027-04-12T02:00:00.000Z',
     refundAccount,
   });
   // Omitted fields stay as they are; an empty note is sent so it clears.

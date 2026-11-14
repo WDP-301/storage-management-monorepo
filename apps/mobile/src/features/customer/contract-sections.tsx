@@ -93,7 +93,7 @@ export function HandoverSection({
       {handover ? (
         <InspectionBody
           inspection={handover}
-          scheduledLabel="Ngày hẹn nhận"
+          scheduledLabel="Lịch hẹn nhận"
           doneLabel="Nhận lúc"
           viewer={viewer}
         />
@@ -134,7 +134,7 @@ export function ReturnSection({
       {inspection ? (
         <InspectionBody
           inspection={inspection}
-          scheduledLabel="Ngày hẹn trả"
+          scheduledLabel="Lịch hẹn trả"
           doneLabel="Trả lúc"
           viewer={viewer}
         />

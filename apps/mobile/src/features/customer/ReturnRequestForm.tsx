@@ -4,8 +4,10 @@ import { CalendarBlank } from 'phosphor-react-native';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { formatIsoDate } from '../../../lib/format-vi';
+import { formatVnTime } from '../../../lib/receiving-time';
 import type { ApiContract } from '../../types/contract-api';
 import { contractEndIso, contractWarehouseName, openReturn } from './contract-display';
+import { OfficeTimeChips } from './OfficeTimeChips';
 import { RefundAccountFields } from './RefundAccountFields';
 import { ReturnDatePicker } from './ReturnDatePicker';
 import { ReturnPreviewNotice } from './ReturnPreviewNotice';
@@ -34,7 +36,8 @@ export function ReturnRequestForm({
           {isEdit ? 'Đổi lịch trả kho' : 'Yêu cầu trả kho'} {contractWarehouseName(contract)}
         </Text>
         <Text className="font-body mt-1 text-caption leading-5 text-muted">
-          Chọn ngày bạn qua dọn đồ. Nhân viên sẽ kiểm tra kho cùng bạn và lập biên trả.
+          Chọn ngày và giờ hành chính bạn qua dọn đồ. Nhân viên trực ca giờ đó sẽ kiểm tra kho cùng
+          bạn và lập biên trả.
         </Text>
       </View>
 
@@ -50,7 +53,9 @@ export function ReturnRequestForm({
           <Text
             className={`flex-1 text-body-sm ${form.dayIso ? 'font-numeric text-foreground' : 'font-body text-muted'}`}
           >
-            {form.dayIso ? formatIsoDate(form.dayIso) : 'Chọn ngày'}
+            {form.dayIso
+              ? `${formatIsoDate(form.dayIso)}${form.scheduledAt ? ` · ${formatVnTime(form.scheduledAt)}` : ''}`
+              : 'Chọn ngày'}
           </Text>
         </Pressable>
         {calendarOpen ? (
@@ -70,6 +75,8 @@ export function ReturnRequestForm({
           error={form.preview.error}
         />
       </View>
+
+      <OfficeTimeChips label="Giờ trả kho" slots={form.slots} />
 
       <RefundAccountFields
         draft={form.account}

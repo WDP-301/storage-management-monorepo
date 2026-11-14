@@ -13,21 +13,15 @@ import { ApiError } from '../../../lib/api';
 import { ChangeRequestsApi, type UnitChangeOption } from '../../../lib/change-requests-api';
 import { useRefreshBookingSettings, useUnitChangeSettings } from '../../../lib/client-settings';
 import { formatArea, formatIsoDate, formatMoney } from '../../../lib/format-vi';
-import { ReceivingSlotsApi } from '../../../lib/receiving-slots-api';
-import type { ReceivingDay } from '../../../lib/receiving-time';
-import {
-  defaultInstant,
-  formatVnTime,
-  isWithinWindows,
-  timeOptionsForDate,
-} from '../../../lib/receiving-time';
+import { formatVnTime } from '../../../lib/receiving-time';
 import { fromIsoDate, todayIso, toIsoDate } from '../../../lib/rental-schedule';
 import { unitChangeErrorMessage } from '../../../lib/unit-change-errors';
-import { ChoiceChip } from '../../components/ChoiceChip';
 import type { ApiContract } from '../../types/contract-api';
 import { contractWarehouseName } from './contract-display';
 import { ChipButton } from './FilterChips';
 import { MonthCalendar } from './MonthCalendar';
+import { OfficeTimeChips } from './OfficeTimeChips';
+import { useOfficeTimeSlots } from './use-office-time-slots';
 
 const ACCENT = 'hsl(203 100% 30%)';
 const PAGE_SIZE = 5;
@@ -58,10 +52,6 @@ export function UnitChangeRequestForm({
   const [facilityId, setFacilityId] = useState<string | 'all'>('all');
   const [page, setPage] = useState(0);
   const [dayIso, setDayIso] = useState<string | null>(null);
-  const [slots, setSlots] = useState<ReceivingDay[]>([]);
-  const [moveAt, setMoveAt] = useState<string | null>(null);
-  const [slotsLoading, setSlotsLoading] = useState(false);
-  const [slotsError, setSlotsError] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -86,36 +76,8 @@ export function UnitChangeRequestForm({
     return () => controller.abort();
   }, [contract.id]);
 
-  // The move time must land inside an OFFICE window, so the slots come from the server rather than
-  // being picked freely. Refetched whenever the chosen day changes.
-  useEffect(() => {
-    if (!dayIso) {
-      setSlots([]);
-      setMoveAt(null);
-      return;
-    }
-    let cancelled = false;
-    setSlotsLoading(true);
-    setSlotsError(null);
-    ReceivingSlotsApi.list(dayIso, dayIso)
-      .then((days) => {
-        if (cancelled) return;
-        setSlots(days);
-        setMoveAt(defaultInstant(days, dayIso));
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setSlots([]);
-        setMoveAt(null);
-        setSlotsError('Không tải được khung giờ. Vui lòng thử lại.');
-      })
-      .finally(() => {
-        if (!cancelled) setSlotsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [dayIso]);
+  // The move time must land inside an OFFICE window, so the slots come from the server.
+  const slots = useOfficeTimeSlots(dayIso);
 
   const facilities = useMemo(() => {
     const seen = new Map<string, string>();
@@ -147,9 +109,7 @@ export function UnitChangeRequestForm({
   const pageItems = visible.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
 
   const selected = options?.find((o) => o.unit.id === selectedId) ?? null;
-  const timeOptions = useMemo(() => timeOptionsForDate(slots, dayIso ?? ''), [slots, dayIso]);
-  // The pick only counts while it still falls inside the shown day's windows.
-  const chosenMoveAt = dayIso && moveAt && isWithinWindows(slots, dayIso, moveAt) ? moveAt : null;
+  const chosenMoveAt = slots.chosen;
   const canContinue = chosenMoveAt !== null && reason.trim().length > 0;
   const canSubmit = selected !== null && canContinue && !isSubmitting;
 
@@ -215,39 +175,13 @@ export function UnitChangeRequestForm({
                 selectedIso={dayIso}
                 onSelect={(iso) => {
                   setDayIso(iso);
-                  setSlots([]);
-                  setMoveAt(null);
                   setCalendarOpen(false);
                 }}
               />
             ) : null}
           </View>
 
-          <View className="gap-2">
-            <Text className="text-body-sm font-strong text-foreground">Giờ chuyển đồ</Text>
-            {dayIso === null ? (
-              <Text className="font-body text-body-sm text-muted">Chọn ngày chuyển đồ trước.</Text>
-            ) : slotsLoading ? (
-              <Text className="font-body text-body-sm text-muted">Đang tải khung giờ…</Text>
-            ) : slotsError !== null ? (
-              <Text className="font-body text-body-sm text-danger">{slotsError}</Text>
-            ) : timeOptions.length === 0 ? (
-              <Text className="font-body text-body-sm text-danger">
-                Ngày này không còn khung giờ hành chính. Vui lòng chọn ngày khác.
-              </Text>
-            ) : (
-              <View className="flex-row flex-wrap gap-2">
-                {timeOptions.map((option) => (
-                  <ChoiceChip
-                    key={option.value}
-                    isSelected={chosenMoveAt === option.value}
-                    label={option.label}
-                    onPress={() => setMoveAt(option.value)}
-                  />
-                ))}
-              </View>
-            )}
-          </View>
+          <OfficeTimeChips label="Giờ chuyển đồ" slots={slots} />
 
           <View className="gap-2">
             <Text className="text-body-sm font-strong text-foreground">Lý do đổi kho</Text>

@@ -40,6 +40,20 @@ test('returnErrorMessage shows conflicts verbatim and words 400 and 404 for the 
     returnErrorMessage(new ApiError('Validation failed', 400, 'V', fields('scheduledAt')), 'f'),
     'Chọn ngày trong 365 ngày tới',
   );
+  // Appointment rules come with a message written for the customer.
+  const outOfShift = {
+    fields: [
+      {
+        field: 'scheduledAt',
+        code: 'returnTimeNotInShift',
+        message: 'Giờ trả kho phải nằm trong khung giờ hành chính',
+      },
+    ],
+  };
+  assert.equal(
+    returnErrorMessage(new ApiError('Validation failed', 400, 'V', outOfShift), 'f'),
+    'Giờ trả kho phải nằm trong khung giờ hành chính',
+  );
   assert.equal(
     returnErrorMessage(
       new ApiError('Validation failed', 400, 'V', fields('refundAccount.accountNo')),

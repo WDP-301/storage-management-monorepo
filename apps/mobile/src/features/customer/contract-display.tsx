@@ -1,5 +1,6 @@
 import { Text, View } from 'react-native';
 import { formatArea, formatDimensions, formatIsoDate } from '../../../lib/format-vi';
+import { formatVnTime } from '../../../lib/receiving-time';
 import { rentalEndIso, toIsoDate } from '../../../lib/rental-schedule';
 import { endedContractHint, lastDayIso } from '../../../lib/settlement-format';
 import type { ApiContract, ApiInspection } from '../../types/contract-api';
@@ -114,8 +115,10 @@ export function storageState(contract: ApiContract, now: number): StorageState {
     case 'ACTIVE': {
       const pending = openReturn(contract);
       if (pending) {
-        const day = pending.scheduledAt ? formatIsoDate(localDayIso(pending.scheduledAt)) : null;
-        return { label: 'Chờ trả kho', tone: 'accent', hint: day ? `Hẹn trả ${day}` : null };
+        const at = pending.scheduledAt
+          ? `${formatIsoDate(localDayIso(pending.scheduledAt))} · ${formatVnTime(pending.scheduledAt)}`
+          : null;
+        return { label: 'Chờ trả kho', tone: 'accent', hint: at ? `Hẹn trả ${at}` : null };
       }
       const daysLeft = contractDaysLeft(contract, now);
       return {

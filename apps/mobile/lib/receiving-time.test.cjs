@@ -84,3 +84,16 @@ test('isWithinWindows counts the start but not the end', () => {
   assert.equal(t.isWithinWindows([DAY], '2027-03-10', '2027-03-10T10:00:00.000Z'), false);
   assert.equal(t.isWithinWindows([DAY], '2027-03-10', '2027-03-10T00:30:00.000Z'), false);
 });
+
+test('preferredInstant keeps the preferred time of day, never picking another one', () => {
+  // 14:00 Vietnam on another day.
+  assert.equal(
+    t.preferredInstant([DAY], '2027-03-10', '2027-03-01T07:00:00.000Z'),
+    '2027-03-10T07:00:00.000Z',
+  );
+  // 19:00 Vietnam is not offered — nothing is picked for the customer.
+  assert.equal(t.preferredInstant([DAY], '2027-03-10', '2027-03-01T12:00:00.000Z'), null);
+  // Without a preference, the first slot.
+  assert.equal(t.preferredInstant([DAY], '2027-03-10', null), '2027-03-10T01:00:00.000Z');
+  assert.equal(t.preferredInstant([], '2027-03-10', null), null);
+});

@@ -1,6 +1,8 @@
 import type { ReturnRequestSource } from '@storage/types';
 import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
+import { formatVnTime } from '../../../lib/receiving-time';
 import { toIsoDate } from '../../../lib/rental-schedule';
+import { vietnamDayIso } from '../../../lib/settlement-format';
 import type { InspectionKind, StaffDamage, StaffInspection } from '../../types/inspection-api';
 
 /** Largest fee one damage can carry, VND — the API rejects anything above. */
@@ -45,9 +47,17 @@ export function groupBySchedule(
     .filter((bucket) => bucket.items.length > 0);
 }
 
+/**
+ * "Hẹn dd/mm/yyyy · HH:mm" — customer appointments carry the hour staff are assigned by. Day and
+ * hour are both read in Vietnam time, so a device on another timezone shows the same slot.
+ */
 export function scheduledLabel(inspection: StaffInspection): string {
-  const day = scheduledDayIso(inspection);
-  return day ? `Hẹn ${formatIsoDate(day)}` : 'Chưa hẹn ngày';
+  const dayIso = inspection.scheduledAt ? vietnamDayIso(inspection.scheduledAt) : null;
+  if (!inspection.scheduledAt || !dayIso) return 'Chưa hẹn ngày';
+  const day = formatIsoDate(dayIso);
+  return inspection.type === 'MAINTENANCE'
+    ? `Hẹn ${day}`
+    : `Hẹn ${day} · ${formatVnTime(inspection.scheduledAt)}`;
 }
 
 /**

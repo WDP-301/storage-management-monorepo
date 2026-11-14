@@ -1,5 +1,6 @@
 import { Text, View } from 'react-native';
 import { formatIsoDateTime } from '../../../lib/format-vi';
+import { formatVnTime } from '../../../lib/receiving-time';
 import { EvidenceGallery } from '../../components/EvidenceGallery';
 import type { ApiInspection, InspectionDamage } from '../../types/contract-api';
 import { dayOf, StatusPill } from './contract-display';
@@ -22,7 +23,11 @@ export function InspectionBody({
   return (
     <>
       {inspection.scheduledAt ? (
-        <InfoRow isNumeric label={scheduledLabel} value={dayOf(inspection.scheduledAt) ?? ''} />
+        <InfoRow
+          isNumeric
+          label={scheduledLabel}
+          value={`${dayOf(inspection.scheduledAt) ?? ''} · ${formatVnTime(inspection.scheduledAt)}`}
+        />
       ) : null}
       {inspection.finalizedAt ? (
         <InfoRow isNumeric label={doneLabel} value={formatIsoDateTime(inspection.finalizedAt)} />

@@ -14,6 +14,19 @@ function invalidFields(details: Record<string, unknown> | undefined): string[] {
     .filter((field): field is string => typeof field === 'string');
 }
 
+/** Appointment rules whose field message is written for the customer (other codes are not). */
+const APPOINTMENT_CODES = new Set(['outOfRange', 'pastTime', 'returnTimeNotInShift']);
+
+function scheduledAtMessage(details: Record<string, unknown> | undefined): string | null {
+  const fields = details?.fields;
+  if (!Array.isArray(fields)) return null;
+  const entry = fields.find((item) => {
+    const { field, code } = (item ?? {}) as { field?: unknown; code?: unknown };
+    return field === 'scheduledAt' && typeof code === 'string' && APPOINTMENT_CODES.has(code);
+  }) as { message?: unknown } | undefined;
+  return typeof entry?.message === 'string' && entry.message ? entry.message : null;
+}
+
 /**
  * Vietnamese message for a failed return request call. Conflicts (409) already carry a message
  * written for the customer — a locked or finalized request, a contract no longer active.
@@ -28,7 +41,8 @@ export function returnErrorMessage(error: unknown, fallback: string): string {
   if (error.statusCode === 400) {
     const fields = invalidFields(error.details);
     if (fields.some((field) => field.startsWith('refundAccount'))) return BAD_ACCOUNT;
-    if (fields.includes('scheduledAt')) return DAY_OUT_OF_RANGE;
+    if (fields.includes('scheduledAt'))
+      return scheduledAtMessage(error.details) ?? DAY_OUT_OF_RANGE;
   }
   return fallback;
 }

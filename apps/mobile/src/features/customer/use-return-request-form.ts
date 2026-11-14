@@ -10,11 +10,13 @@ import {
   refundAccountPayload,
 } from './refund-account-draft';
 import { returnErrorMessage } from './return-errors';
+import { useOfficeTimeSlots } from './use-office-time-slots';
 import { useReturnPreview } from './use-return-preview';
 
 /**
  * State of the return request form: a new request, or a change to the open one (`openReturn`),
- * which starts from its day and note. A new request pre-fills the refund account used last time
+ * which starts from its day, time and note. The time is an OFFICE-shift hour: staff on shift then
+ * are assigned to meet the customer. A new request pre-fills the refund account used last time
  * (unless the customer already started typing). A change starts with an empty account form and
  * sends one only if the customer fills it in: the request's own account is not visible to the
  * app, and the last-used one may belong to another contract or predate a branch-made request.
@@ -37,7 +39,23 @@ export function useReturnRequestForm(
   const [isSubmitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const preview = useReturnPreview(contractId, dayIso);
+  const current = openReturn?.scheduledAt ?? null;
+  const officeSlots = useOfficeTimeSlots(dayIso, current);
   const isEdit = openReturn !== null;
+  // A change sends the appointment only once the customer picked another day or hour: editing
+  // the note or refund account must never move it (or hand it to other staff).
+  const [scheduleTouched, setScheduleTouched] = useState(!isEdit || dayIso === null);
+  const pickDay = (iso: string) => {
+    setScheduleTouched(true);
+    setDayIso(iso);
+  };
+  const slots = {
+    ...officeSlots,
+    pick: (instant: string) => {
+      setScheduleTouched(true);
+      officeSlots.pick(instant);
+    },
+  };
 
   const saved = preview.preview?.saved_refund_account;
   useEffect(() => {
@@ -62,8 +80,9 @@ export function useReturnRequestForm(
       touched: accountTouched.current,
     });
 
+  const scheduledAt = scheduleTouched ? slots.chosen : current;
   const submit = async () => {
-    if (!dayIso || isSubmitting) return;
+    if (!scheduledAt || isSubmitting) return;
     const { problem, refundAccount } = payload();
     if (problem) {
       setError(problem);
@@ -74,12 +93,17 @@ export function useReturnRequestForm(
     try {
       if (isEdit) {
         await ContractsApi.updateReturn(contractId, {
-          dayIso: dayIso === currentDay ? undefined : dayIso,
+          scheduledAt:
+            scheduleTouched && !sameInstant(scheduledAt, current) ? scheduledAt : undefined,
           note: note.trim(),
           refundAccount,
         });
       } else {
-        await ContractsApi.requestReturn(contractId, { dayIso, note: note.trim(), refundAccount });
+        await ContractsApi.requestReturn(contractId, {
+          scheduledAt,
+          note: note.trim(),
+          refundAccount,
+        });
       }
       onDone();
     } catch (err) {
@@ -92,7 +116,9 @@ export function useReturnRequestForm(
   return {
     today,
     dayIso,
-    setDayIso,
+    setDayIso: pickDay,
+    /** The appointment that will be kept or sent: the untouched current one, or the new pick. */
+    scheduledAt,
     note,
     setNote,
     account,
@@ -100,10 +126,21 @@ export function useReturnRequestForm(
     accountRequired,
     accountHint: isEdit ? 'Để trống để giữ tài khoản đã gửi' : null,
     preview,
+    slots,
     isSubmitting,
     error,
     // An account that is filled in but not yet verified at the bank cannot be sent.
-    canSubmit: dayIso !== null && !preview.isLoading && !isSubmitting && payload().problem === null,
+    canSubmit:
+      dayIso !== null &&
+      scheduledAt !== null &&
+      !preview.isLoading &&
+      !isSubmitting &&
+      payload().problem === null,
     submit,
   };
+}
+
+/** Whether two ISO instants are the same moment (the API may format it differently). */
+function sameInstant(a: string, b: string | null): boolean {
+  return b !== null && new Date(a).getTime() === new Date(b).getTime();
 }

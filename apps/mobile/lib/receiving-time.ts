@@ -65,6 +65,23 @@ export function defaultInstant(
   return timeOptionsForDate(days, date, stepMinutes)[0]?.value ?? null;
 }
 
+/**
+ * The slot to pre-pick on `date`. With a `preferred` instant (the current appointment), the slot
+ * at its time of day, or none when that time is not offered — another hour is never chosen for
+ * the customer. Without one, the first slot. Null when the day has no slots.
+ */
+export function preferredInstant(
+  days: readonly ReceivingDay[],
+  date: string,
+  preferred: string | null,
+  stepMinutes = 60,
+): string | null {
+  const options = timeOptionsForDate(days, date, stepMinutes);
+  if (!preferred) return options[0]?.value ?? null;
+  const wanted = formatVnTime(preferred);
+  return options.find((option) => option.label === wanted)?.value ?? null;
+}
+
 /** Whether `instant` still falls inside one of the day's windows. */
 export function isWithinWindows(
   days: readonly ReceivingDay[],

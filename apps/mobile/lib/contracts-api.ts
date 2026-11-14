@@ -12,12 +12,13 @@ import { request } from './api';
 import { isEvidenceFile, toDamages } from './evidence';
 
 export type ReturnRequestDraft = {
-  dayIso: string;
+  /** The appointment: an in-shift instant from `GET /bookings/receiving-slots`. */
+  scheduledAt: string;
   note?: string;
   refundAccount?: RefundBankAccountInput;
 };
 
-// Noon UTC keeps the same calendar day in Vietnam, like booking start dates.
+// Noon UTC keeps the same calendar day in Vietnam — the preview only prices the day.
 const toScheduledAt = (dayIso: string) => `${dayIso}T12:00:00.000Z`;
 
 export const ContractsApi = {
@@ -34,12 +35,12 @@ export const ContractsApi = {
       { signal },
     ),
 
-  /** Opens a return request (biên trả) for an active contract. `dayIso` is the local day. */
+  /** Opens a return request (biên trả) for an active contract at an in-shift appointment. */
   requestReturn: (contractId: string, input: ReturnRequestDraft) =>
     request<{ id: string }>(`/contracts/${contractId}/return-request`, {
       method: 'POST',
       body: JSON.stringify({
-        scheduledAt: toScheduledAt(input.dayIso),
+        scheduledAt: input.scheduledAt,
         note: input.note || undefined,
         refundAccount: input.refundAccount,
       }),
@@ -50,7 +51,7 @@ export const ContractsApi = {
     request<{ id: string }>(`/contracts/${contractId}/return-request`, {
       method: 'PATCH',
       body: JSON.stringify({
-        scheduledAt: input.dayIso ? toScheduledAt(input.dayIso) : undefined,
+        scheduledAt: input.scheduledAt,
         note: input.note,
         refundAccount: input.refundAccount,
       }),

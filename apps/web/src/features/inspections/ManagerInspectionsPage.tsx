@@ -21,7 +21,7 @@ import { InspectionDetailDialog } from './InspectionDetailDialog';
 import {
   customerName,
   customerPhone,
-  formatDay,
+  formatAppointment,
   INSPECTION_KIND_LABEL,
   INSPECTION_KIND_TONE,
   INSPECTION_STATE_LABEL,
@@ -247,7 +247,7 @@ export const ManagerInspectionsPage: React.FC = () => {
                       <div className="text-xs text-kumo-subtle">{customerPhone(row) ?? ''}</div>
                     </Table.Cell>
                     <Table.Cell className="whitespace-nowrap">
-                      {formatDay(row.scheduledAt)}
+                      {formatAppointment(row.type, row.scheduledAt)}
                     </Table.Cell>
                     <Table.Cell>
                       {row.inspector?.fullName ?? (

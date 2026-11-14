@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as AuthContextModule from '../../context/AuthContext';
 import * as FacilityContextModule from '../../context/FacilityContext';
 import { ContractsApi, FacilitiesApi, InspectionsApi, UploadsApi } from '../../lib/api';
-import { addDays, formatVnDay, vnNoonIso, vnToday } from '../../lib/vn-day';
+import { MoveSlotsApi } from '../../lib/move-slots-api';
+import { addDays, formatVnDay, vnToday } from '../../lib/vn-day';
 import { pickComboboxOption } from '../../test-utils/pick-combobox-option';
 import type { InspectionRecord } from '../../types/inspection';
 import { finalizeConsequence, inspectionMetrics, matchesSearch } from './inspection-display';
@@ -218,16 +219,46 @@ describe('ManagerInspectionsPage', () => {
   it('lets the manager move an open return appointment, then reloads', async () => {
     const reschedule = vi.spyOn(InspectionsApi, 'reschedule').mockResolvedValue(ASSIGNED_RETURN);
     const day = addDays(vnToday(), 3);
+    const at = (time: string) => new Date(`${day}T${time}:00+07:00`).toISOString();
+    vi.spyOn(MoveSlotsApi, 'windows').mockResolvedValue([
+      { startAt: at('07:00'), endAt: at('12:00') },
+    ]);
     render(<ManagerInspectionsPage />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Xem biên bản B-202' }));
     const save = screen.getByRole('button', { name: 'Lưu ngày hẹn' }) as HTMLButtonElement;
     fireEvent.change(screen.getByLabelText('Ngày hẹn trả kho'), { target: { value: day } });
-    expect(save.disabled).toBe(false);
+    // The current appointment's time of day (07:00) is pre-selected on the new day.
+    await waitFor(() => expect(save.disabled).toBe(false));
     fireEvent.click(save);
 
-    await waitFor(() => expect(reschedule).toHaveBeenCalledWith('insp-B-202', vnNoonIso(day)));
+    await waitFor(() => expect(reschedule).toHaveBeenCalledWith('insp-B-202', at('07:00')));
     await waitFor(() => expect(InspectionsApi.list).toHaveBeenCalledTimes(2));
+  });
+
+  it('shows the return appointment time but only the day for a handover', async () => {
+    render(<ManagerInspectionsPage />);
+    await screen.findByText('Trần Thị Bình');
+    expect(screen.getByText('13/10/2026 · 07:00')).toBeTruthy();
+    expect(screen.getByText('13/10/2026')).toBeTruthy();
+  });
+
+  it('does not count re-sending the current appointment instant as a change', async () => {
+    const reschedule = vi.spyOn(InspectionsApi, 'reschedule').mockResolvedValue(ASSIGNED_RETURN);
+    const current = new Date(ASSIGNED_RETURN.scheduledAt as string).getTime();
+    vi.spyOn(MoveSlotsApi, 'windows').mockResolvedValue([
+      {
+        startAt: new Date(current - 3_600_000).toISOString(),
+        endAt: new Date(current + 7_200_000).toISOString(),
+      },
+    ]);
+    render(<ManagerInspectionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem biên bản B-202' }));
+    await waitFor(() => expect(MoveSlotsApi.windows).toHaveBeenCalled());
+    const save = screen.getByRole('button', { name: 'Lưu ngày hẹn' }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    expect(reschedule).not.toHaveBeenCalled();
   });
 
   it('offers no appointment change on a handover', async () => {

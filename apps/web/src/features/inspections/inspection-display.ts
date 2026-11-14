@@ -1,3 +1,4 @@
+import { formatVnDateTime } from '../../lib/vn-day';
 import type {
   EvidenceFile,
   InspectionDamage,
@@ -48,6 +49,11 @@ export function formatDay(iso: string | null): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
+/** A return appointment is a time slot (Vietnam time); a handover one stays a plain day. */
+export function formatAppointment(kind: string, iso: string | null): string {
+  return kind === 'RETURN' ? formatVnDateTime(iso) : formatDay(iso);
 }
 
 export function formatDateTime(iso: string | null): string {

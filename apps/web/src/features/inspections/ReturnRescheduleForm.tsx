@@ -2,8 +2,10 @@ import { Button } from '@cloudflare/kumo';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { DateField } from '../../components/DateField';
+import { OfficeTimeSelect } from '../../components/OfficeTimeSelect';
 import { InspectionsApi } from '../../lib/api';
-import { addDays, vnDay, vnNoonIso, vnToday } from '../../lib/vn-day';
+import { useOfficeTimeSlots } from '../../lib/use-office-time-slots';
+import { addDays, vnDay, vnToday } from '../../lib/vn-day';
 import type { InspectionRecord } from '../../types/inspection';
 import { describeApiError } from '../contracts/settlement-display';
 
@@ -22,7 +24,8 @@ interface Props {
 export const ReturnRescheduleForm: React.FC<Props> = ({ inspection, disabled, onSaved }) => {
   const today = vnToday();
   const lastDay = addDays(today, MAX_DAYS_AHEAD);
-  const current = inspection.scheduledAt ? vnDay(inspection.scheduledAt) : '';
+  const currentAt = inspection.scheduledAt;
+  const current = currentAt ? vnDay(currentAt) : '';
   const [day, setDay] = useState(current || today);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,14 +35,22 @@ export const ReturnRescheduleForm: React.FC<Props> = ({ inspection, disabled, on
     setError(null);
   }, [current]);
 
+  const slots = useOfficeTimeSlots(day, currentAt, 'hẹn trả');
   const outOfRange = !day || day < today || day > lastDay;
+
+  // Re-sending the current instant would change nothing.
+  const isUnchanged =
+    slots.chosen !== null &&
+    currentAt !== null &&
+    new Date(slots.chosen).getTime() === new Date(currentAt).getTime();
 
   const save = async () => {
     if (outOfRange) return setError('Ngày hẹn trả phải từ hôm nay đến 365 ngày tới.');
+    if (!slots.chosen) return setError('Chọn giờ hẹn trả trong ca hành chính.');
     setBusy(true);
     setError(null);
     try {
-      await InspectionsApi.reschedule(inspection.id, vnNoonIso(day));
+      await InspectionsApi.reschedule(inspection.id, slots.chosen);
       onSaved();
     } catch (err) {
       setError(describeApiError(err, 'Không đổi được ngày hẹn trả kho.'));
@@ -61,9 +72,17 @@ export const ReturnRescheduleForm: React.FC<Props> = ({ inspection, disabled, on
             onChange={setDay}
           />
         </div>
+        <div className="sm:w-40">
+          <OfficeTimeSelect
+            label="Giờ hẹn trả"
+            slots={slots}
+            hasDay={Boolean(day)}
+            disabled={busy || disabled}
+          />
+        </div>
         <Button
           variant="secondary"
-          disabled={day === current || busy || disabled}
+          disabled={!slots.chosen || isUnchanged || busy || disabled}
           loading={busy}
           onClick={() => void save()}
         >
@@ -71,8 +90,8 @@ export const ReturnRescheduleForm: React.FC<Props> = ({ inspection, disabled, on
         </Button>
       </div>
       <p className="text-xs text-kumo-subtle">
-        Ngày hẹn chỉ để sắp lịch, không đổi số tiền: tiền thuê và thời hạn báo trước tính tới ngày
-        chốt biên bản. Khách sẽ nhận thông báo khi ngày hẹn thay đổi.
+        Lịch hẹn chỉ để sắp xếp, không đổi số tiền: tiền thuê và thời hạn báo trước tính tới ngày
+        chốt biên bản. Khách sẽ nhận thông báo khi lịch hẹn thay đổi.
       </p>
       {error && (
         <p role="alert" className="text-sm text-kumo-danger">

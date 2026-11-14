@@ -1,4 +1,4 @@
-import { Button, Dialog, Input, Select, Text } from '@cloudflare/kumo';
+import { Button, Dialog, Input, Text } from '@cloudflare/kumo';
 import { X } from '@phosphor-icons/react';
 import React from 'react';
 import { DateField } from '../../../components/DateField';
@@ -9,14 +9,10 @@ import {
   DialogFooter,
   DialogHeader,
 } from '../../../components/dialog-layout';
+import { OfficeTimeSelect } from '../../../components/OfficeTimeSelect';
 import type { UnitChangeRequestRecord } from '../../../lib/api';
-import {
-  DEFAULT_UNIT_CHANGE_WINDOW,
-  MoveSlotsApi,
-  type MoveWindow,
-  moveTimeOptions,
-  pickMoveTime,
-} from '../../../lib/move-slots-api';
+import { DEFAULT_UNIT_CHANGE_WINDOW, MoveSlotsApi } from '../../../lib/move-slots-api';
+import { useOfficeTimeSlots } from '../../../lib/use-office-time-slots';
 import { addDays, vnDay, vnToday } from '../../../lib/vn-day';
 
 interface Props {
@@ -37,9 +33,6 @@ export const ApproveChangeRequestDialog: React.FC<Props> = ({
   onApprove,
 }) => {
   const [moveDay, setMoveDay] = React.useState('');
-  const [moveTime, setMoveTime] = React.useState<string | null>(null);
-  const [windows, setWindows] = React.useState<MoveWindow[]>([]);
-  const [slotsState, setSlotsState] = React.useState<'idle' | 'loading' | 'error'>('idle');
   const [maxDaysAhead, setMaxDaysAhead] = React.useState(DEFAULT_UNIT_CHANGE_WINDOW.maxDaysAhead);
   const [note, setNote] = React.useState('');
 
@@ -70,43 +63,8 @@ export const ApproveChangeRequestDialog: React.FC<Props> = ({
     };
   }, [requestId]);
 
-  React.useEffect(() => {
-    setWindows([]);
-    setMoveTime(null);
-    setSlotsState('idle');
-    if (!moveDay) return;
-    let cancelled = false;
-    setSlotsState('loading');
-    MoveSlotsApi.windows(moveDay)
-      .then((next) => {
-        if (cancelled) return;
-        setWindows(next);
-        setMoveTime(pickMoveTime(moveTimeOptions(next), customerMoveAt));
-        setSlotsState('idle');
-      })
-      .catch(() => !cancelled && setSlotsState('error'));
-    return () => {
-      cancelled = true;
-    };
-  }, [moveDay, customerMoveAt]);
-
-  const options = React.useMemo(() => moveTimeOptions(windows), [windows]);
-  // A pick only counts while it is one of the shown day's slots.
-  const chosen = options.some((o) => o.value === moveTime) ? moveTime : null;
-
-  const slotError =
-    slotsState === 'error'
-      ? 'Không tải được khung giờ — đóng và mở lại hộp thoại để thử lại.'
-      : moveDay && slotsState === 'idle' && options.length === 0
-        ? 'Ngày này không còn khung giờ hành chính. Vui lòng chọn ngày khác.'
-        : undefined;
-  const slotHint = !moveDay
-    ? 'Chọn ngày chuyển đồ trước.'
-    : slotsState === 'loading'
-      ? 'Đang tải khung giờ hành chính…'
-      : slotError
-        ? undefined
-        : 'Chỉ hiển thị giờ trong ca hành chính còn lại của ngày.';
+  const slots = useOfficeTimeSlots(moveDay, customerMoveAt, 'chuyển đồ');
+  const { chosen } = slots;
 
   return (
     <Dialog.Root open={request !== null} onOpenChange={(next) => !next && onClose()}>
@@ -157,20 +115,7 @@ export const ApproveChangeRequestDialog: React.FC<Props> = ({
               min={today}
               max={addDays(today, maxDaysAhead)}
             />
-            <Select
-              label="Giờ chuyển đồ"
-              aria-label="Giờ chuyển đồ"
-              className="w-full"
-              placeholder="Chọn giờ"
-              value={chosen}
-              onValueChange={(v) => v && setMoveTime(String(v))}
-              items={options}
-              renderValue={(v) => options.find((o) => o.value === v)?.label ?? 'Chọn giờ'}
-              disabled={!moveDay || slotsState !== 'idle' || options.length === 0}
-              loading={slotsState === 'loading'}
-              description={slotHint}
-              error={slotError}
-            />
+            <OfficeTimeSelect label="Giờ chuyển đồ" slots={slots} hasDay={Boolean(moveDay)} />
             <Input
               label="Ghi chú (không bắt buộc)"
               value={note}

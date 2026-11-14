@@ -15,8 +15,8 @@ import {
   customerName,
   customerPhone,
   facilityId,
+  formatAppointment,
   formatDateTime,
-  formatDay,
   INSPECTION_KIND_LABEL,
   toDamages,
   toEvidence,
@@ -135,7 +135,10 @@ export const InspectionDetailView: React.FC<Props> = ({
           <Fact label="Khách hàng" value={customerName(inspection)} />
           <Fact label="Điện thoại" value={customerPhone(inspection) ?? '—'} />
           <Fact label="Hợp đồng" value={inspection.contract?.contractNo ?? '—'} mono />
-          <Fact label="Ngày hẹn" value={formatDay(inspection.scheduledAt)} />
+          <Fact
+            label="Ngày hẹn"
+            value={formatAppointment(inspection.type, inspection.scheduledAt)}
+          />
           <Fact label="Phụ trách" value={inspection.inspector?.fullName ?? 'Chưa giao'} />
           <Fact label="Chốt lúc" value={done ? formatDateTime(inspection.finalizedAt) : '—'} />
         </dl>

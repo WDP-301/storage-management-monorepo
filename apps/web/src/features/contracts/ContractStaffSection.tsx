@@ -6,7 +6,7 @@ import { StaffSelect } from '../../components/StaffSelect';
 import { FacilitiesApi, InspectionsApi } from '../../lib/api';
 import type { ContractInspectionSummary, ContractRecord } from '../../types/contract';
 import type { FacilityStaffMember } from '../../types/inspection';
-import { formatDay } from '../inspections/inspection-display';
+import { formatAppointment, formatDay } from '../inspections/inspection-display';
 
 interface Props {
   contract: ContractRecord;
@@ -107,7 +107,9 @@ const StepRow: React.FC<{
               {done ? 'Đã chốt' : `Hẹn ${label.toLowerCase()}`}
             </span>
             <span className="text-sm font-semibold text-kumo-default">
-              {formatDay(done ? inspection.finalized_at : inspection.scheduled_at)}
+              {done
+                ? formatDay(inspection.finalized_at)
+                : formatAppointment(inspection.type, inspection.scheduled_at)}
             </span>
           </div>
           <div className="flex items-center gap-1.5">

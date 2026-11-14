@@ -41,6 +41,11 @@ export function formatVnDay(day: string | null | undefined): string {
   return match ? `${match[3]}/${match[2]}/${match[1]}` : '—';
 }
 
+/** `dd/mm/yyyy · HH:mm` of an instant in Vietnam time; '—' when absent. */
+export function formatVnDateTime(at: string | null | undefined): string {
+  return at ? `${formatVnDay(vnDay(at))} · ${vnTimeOfDay(at)}` : '—';
+}
+
 /** Noon in Vietnam on `day`, as ISO: an instant that stays on that day in any timezone check. */
 export function vnNoonIso(day: string): string {
   return new Date(`${day}T12:00:00+07:00`).toISOString();

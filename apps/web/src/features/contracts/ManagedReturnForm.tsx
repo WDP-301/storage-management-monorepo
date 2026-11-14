@@ -3,8 +3,10 @@ import { SignOut, WarningCircle } from '@phosphor-icons/react';
 import type React from 'react';
 import { useState } from 'react';
 import { DateField } from '../../components/DateField';
+import { OfficeTimeSelect } from '../../components/OfficeTimeSelect';
 import { ContractsApi } from '../../lib/api';
-import { addDays, vnNoonIso, vnToday } from '../../lib/vn-day';
+import { useOfficeTimeSlots } from '../../lib/use-office-time-slots';
+import { addDays, vnToday } from '../../lib/vn-day';
 import type { ContractRecord } from '../../types/contract';
 import type { ManagedReturnRequestInput } from '../../types/settlement';
 import { RefundBankAccountFields } from './RefundBankAccountFields';
@@ -39,6 +41,8 @@ export const ManagedReturnForm: React.FC<Props> = ({ contract, canRequest, onCha
   const [bank, setBank] = useState<BankFormState>(EMPTY_BANK_FORM);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // No slot lookups while the form is closed.
+  const slots = useOfficeTimeSlots(open ? day : '', null, 'hẹn trả');
 
   const openReturn = contract.return && !contract.return.finalized_at;
   if (!canRequest || contract.status !== 'ACTIVE' || openReturn) return null;
@@ -55,7 +59,8 @@ export const ManagedReturnForm: React.FC<Props> = ({ contract, canRequest, onCha
             ? validateBankForm(bank)
             : null;
     if (problem) return setError(problem);
-    const input: ManagedReturnRequestInput = { scheduledAt: vnNoonIso(day), source };
+    if (!slots.chosen) return setError('Chọn giờ hẹn trả trong ca hành chính.');
+    const input: ManagedReturnRequestInput = { scheduledAt: slots.chosen, source };
     if (note.trim()) input.note = note.trim();
     if (withAccount) input.refundAccount = toBankAccountInput(bank);
     setBusy(true);
@@ -100,6 +105,7 @@ export const ManagedReturnForm: React.FC<Props> = ({ contract, canRequest, onCha
           disabled={busy}
           onChange={setDay}
         />
+        <OfficeTimeSelect label="Giờ hẹn trả" slots={slots} hasDay={Boolean(day)} disabled={busy} />
         <fieldset className="grid gap-1 text-sm text-kumo-default">
           <legend className="text-xs font-medium mb-1">Nguồn yêu cầu</legend>
           {(
@@ -155,7 +161,7 @@ export const ManagedReturnForm: React.FC<Props> = ({ contract, canRequest, onCha
           type="submit"
           variant="primary"
           loading={busy}
-          disabled={withAccount && !currentVerification(bank)}
+          disabled={!slots.chosen || (withAccount && !currentVerification(bank))}
         >
           Tạo yêu cầu trả kho
         </Button>

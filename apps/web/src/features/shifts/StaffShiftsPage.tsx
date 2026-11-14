@@ -38,6 +38,7 @@ import {
 import { useAppToast } from '../../lib/toast';
 import { addDays, formatVnDay, vnToday } from '../../lib/vn-day';
 import type { FacilityStaffMember } from '../../types/inspection';
+import { shiftCalendarRows } from './shift-calendar-rows';
 
 const STATUS_DISPLAY: Record<
   StaffShiftStatus,
@@ -110,6 +111,7 @@ export const StaffShiftsPage: React.FC = () => {
   const [busy, setBusy] = useState<'schedule' | 'auto' | 'save' | 'cancel' | null>(null);
 
   const weekDays = useMemo(() => eachDay(weekStart, addDays(weekStart, 6)), [weekStart]);
+  const calendarRows = useMemo(() => shiftCalendarRows(templates, shifts), [templates, shifts]);
 
   const { contains: staffMatches } = Combobox.useFilter({ locale: 'vi' });
   const selectedStaff = useMemo(
@@ -348,10 +350,17 @@ export const StaffShiftsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {templates.map((tpl) => (
+                {calendarRows.map((tpl) => (
                   <tr key={tpl.id} className="border-b border-kumo-line last:border-0 align-top">
                     <td className="px-4 py-3">
-                      <div className="font-medium text-kumo-default">{tpl.name}</div>
+                      <div className="font-medium text-kumo-default">
+                        {tpl.name}
+                        {tpl.retired ? (
+                          <span className="ml-1 text-[10px] font-normal text-kumo-subtle">
+                            (đã ngưng)
+                          </span>
+                        ) : null}
+                      </div>
                       <div className="text-[10px] text-kumo-subtle">
                         {tpl.start_time} — {tpl.end_time}
                       </div>
@@ -385,7 +394,7 @@ export const StaffShiftsPage: React.FC = () => {
                     })}
                   </tr>
                 ))}
-                {templates.length === 0 && (
+                {calendarRows.length === 0 && (
                   <tr>
                     <td colSpan={8} className="px-4 py-10 text-center text-kumo-secondary">
                       Chưa có ca mẫu nào đang hoạt động.

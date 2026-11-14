@@ -59,6 +59,13 @@ const describeActionError = (err: unknown): string => {
   const status = apiErr?.status;
   const details = apiErr?.details;
   if (status === 403) return 'Bạn không có quyền thực hiện thao tác này.';
+  // Move day/time rejections carry a Vietnamese field message (past, out of shift, out of range).
+  if (status === 400 && Array.isArray(details?.fields)) {
+    const moveAt = (details.fields as { field?: unknown; message?: unknown }[]).find(
+      (f) => f?.field === 'moveAt' && typeof f.message === 'string',
+    );
+    if (moveAt) return `${moveAt.message}. Danh sách đã được làm mới.`;
+  }
   if (status === 404) return 'Không tìm thấy dữ liệu. Danh sách đã được làm mới.';
   if (status === 409) {
     if (Array.isArray(details?.shelfIds) && details.shelfIds.length > 0) {

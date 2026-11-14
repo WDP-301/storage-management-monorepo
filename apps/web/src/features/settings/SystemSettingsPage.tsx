@@ -120,6 +120,20 @@ const SETTINGS_METADATA: Record<string, SettingMetadata> = {
     unit: 'ngày',
     group: 'contract',
   },
+  'contract.unit_change_min_lead_days': {
+    label: 'Đổi kho — số ngày báo trước tối thiểu',
+    description:
+      'Ngày chuyển đồ sang kho mới khách chọn phải cách hôm nay ít nhất số ngày này, để quản lý kịp duyệt và khách kịp thanh toán bù cọc (0 = cho chọn ngay hôm nay, giờ còn lại trong ca hành chính). Giờ chuyển đồ lấy theo các ca hành chính (OFFICE).',
+    unit: 'ngày',
+    group: 'contract',
+  },
+  'contract.unit_change_max_days_ahead': {
+    label: 'Đổi kho — chọn ngày chuyển xa nhất',
+    description:
+      'Ngày chuyển đồ sang kho mới chỉ được hẹn (hoặc quản lý xác nhận) trong vòng số ngày này kể từ hôm nay; kho đích được giữ chỗ đến ngày chuyển. Nếu nhỏ hơn số ngày báo trước, hệ thống tự nới bằng số ngày báo trước.',
+    unit: 'ngày',
+    group: 'contract',
+  },
   'deposit.default_months': {
     label: 'Tỷ lệ tiền đặt cọc tối thiểu (Tháng thuê)',
     description:

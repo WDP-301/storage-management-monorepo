@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as AuthContextModule from '../../context/AuthContext';
 import * as FacilityContextModule from '../../context/FacilityContext';
 import { ChangeRequestsApi, WarehousesApi } from '../../lib/api';
+import { MoveSlotsApi } from '../../lib/move-slots-api';
+import { addDays, vnToday } from '../../lib/vn-day';
 import type { Warehouse } from '../../types/warehouse';
 import { FacilityManagerDashboard } from './FacilityManagerDashboard';
 
@@ -359,6 +361,65 @@ describe('FacilityManagerDashboard', () => {
         'Cập nhật đổi kho',
         'Đã hoàn tất — kho cũ chuyển bảo trì, yêu cầu khép lại.',
       ),
+    );
+  });
+
+  it("approves with the customer's in-shift hour on the proposed day", async () => {
+    mockAuth(UserRole.FACILITY_MANAGER);
+    vi.spyOn(WarehousesApi, 'listMine').mockResolvedValue([wh({})]);
+    const day = addDays(vnToday(), 3);
+    const at = (time: string) => new Date(`${day}T${time}:00+07:00`).toISOString();
+    const pending = {
+      id: 'req-approve',
+      status: 'REQUESTED' as const,
+      reason: 'cần kho rộng hơn',
+      rent_difference: 0,
+      deposit_difference: 0,
+      decision_note: null,
+      facility_id: 'fac-1',
+      move_at: at('14:00'),
+      transition_start_at: null,
+      transition_end_at: null,
+      topup_invoice_id: null,
+      new_contract_id: null,
+      new_booking_id: null,
+      settled_at: null,
+      final_approved_by: null,
+      final_approved_at: null,
+      created_at: '2026-10-01T00:00:00.000Z',
+      requester: { id: 'c', full_name: 'Khách duyệt', email: 'c@x.vn' },
+      old_unit: { id: 'u1', code: 'A-1', facility_id: 'fac-1' },
+      new_unit: { id: 'u2', code: 'B-1', facility_id: 'fac-1' },
+    };
+    vi.spyOn(ChangeRequestsApi, 'list').mockResolvedValue({
+      requests: [pending],
+      meta: { page: 1, limit: 50, total: 1, totalPages: 1 },
+    });
+    vi.spyOn(MoveSlotsApi, 'unitChangeWindow').mockResolvedValue({
+      minLeadDays: 1,
+      maxDaysAhead: 90,
+    });
+    const windows = vi
+      .spyOn(MoveSlotsApi, 'windows')
+      .mockResolvedValue([{ startAt: at('08:00'), endAt: at('17:00') }]);
+    const decide = vi
+      .spyOn(ChangeRequestsApi, 'decide')
+      .mockResolvedValue({ request: { ...pending, status: 'AWAITING_HANDOVER' } });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Khách duyệt')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Duyệt' }));
+    await waitFor(() => expect(windows).toHaveBeenCalledWith(day));
+    const submit = await screen.findByRole('button', { name: 'Duyệt và giữ chỗ' });
+    await waitFor(() => expect((submit as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(submit);
+
+    await waitFor(() =>
+      expect(decide).toHaveBeenCalledWith('req-approve', 'APPROVED', {
+        moveAt: at('14:00'),
+        decisionNote: undefined,
+      }),
     );
   });
 

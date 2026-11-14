@@ -1,16 +1,9 @@
-import { Badge, Button, Dialog, Empty, Input, LayerCard, Table, Text } from '@cloudflare/kumo';
-import { X } from '@phosphor-icons/react';
-import React from 'react';
-import { DateField } from '../../../components/DateField';
-import {
-  DIALOG_FORM,
-  DIALOG_SHELL,
-  DialogBody,
-  DialogFooter,
-  DialogHeader,
-} from '../../../components/dialog-layout';
+import { Badge, Button, Empty, LayerCard, Table, Text } from '@cloudflare/kumo';
+import type React from 'react';
+import { useState } from 'react';
 import type { UnitChangeRequestRecord } from '../../../lib/api';
-import { vnTimeOfDay } from '../../../lib/vn-day';
+import { formatVnDay, vnDay, vnTimeOfDay } from '../../../lib/vn-day';
+import { ApproveChangeRequestDialog } from './ApproveChangeRequestDialog';
 
 type BadgeVariant = 'success' | 'primary' | 'error' | 'warning' | 'neutral';
 
@@ -30,29 +23,9 @@ const REQUEST_STATUS_LABEL: Record<
   CANCELLED: { label: 'Đã hủy', variant: 'neutral' },
 };
 
-const formatDate = (iso: string | Date | null | undefined) =>
-  iso
-    ? new Date(iso).toLocaleDateString('vi-VN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      })
-    : '—';
-
-const toDateInputValue = (iso: string | null) => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-    d.getDate(),
-  ).padStart(2, '0')}`;
-};
-
-/**
- * The approver's day plus the customer's chosen time-of-day (Vietnam), so approving does not
- * discard the hour the customer picked. 08:00 when the request carries no time.
- */
-const moveAtOn = (day: string, existing: string | null) =>
-  new Date(`${day}T${existing ? vnTimeOfDay(existing) : '08:00'}:00+07:00`).toISOString();
+/** dd/mm/yyyy · HH:mm of the move, in Vietnam time. */
+const formatMoveAt = (iso: string | null) =>
+  iso ? `${formatVnDay(vnDay(iso))} · ${vnTimeOfDay(iso)}` : '—';
 
 const isCrossFacility = (r: UnitChangeRequestRecord) =>
   r.old_unit?.facility_id && r.new_unit?.facility_id
@@ -78,15 +51,7 @@ export const ChangeRequestsTable: React.FC<Props> = ({
   onFinalApprove,
   onCancel,
 }) => {
-  const [approving, setApproving] = React.useState<UnitChangeRequestRecord | null>(null);
-  const [moveDay, setMoveDay] = React.useState('');
-  const [note, setNote] = React.useState('');
-
-  const openApprove = (r: UnitChangeRequestRecord) => {
-    setMoveDay(toDateInputValue(r.move_at));
-    setNote('');
-    setApproving(r);
-  };
+  const [approving, setApproving] = useState<UnitChangeRequestRecord | null>(null);
 
   return (
     <div className="space-y-3">
@@ -107,7 +72,7 @@ export const ChangeRequestsTable: React.FC<Props> = ({
               <Table.Head>Kho hiện tại</Table.Head>
               <Table.Head>Kho muốn chuyển đến</Table.Head>
               <Table.Head>Chênh lệch</Table.Head>
-              <Table.Head>Ngày chuyển</Table.Head>
+              <Table.Head>Ngày giờ chuyển</Table.Head>
               <Table.Head>Lý do chuyển</Table.Head>
               <Table.Head>Trạng thái</Table.Head>
               <Table.Head className="text-right">Thao tác</Table.Head>
@@ -160,7 +125,7 @@ export const ChangeRequestsTable: React.FC<Props> = ({
                   </div>
                 </Table.Cell>
                 <Table.Cell className="whitespace-nowrap text-kumo-subtle">
-                  {formatDate(req.move_at)}
+                  {formatMoveAt(req.move_at)}
                 </Table.Cell>
                 <Table.Cell className="whitespace-nowrap text-kumo-subtle">{req.reason}</Table.Cell>
                 <Table.Cell className="whitespace-nowrap">
@@ -175,7 +140,7 @@ export const ChangeRequestsTable: React.FC<Props> = ({
                         variant="primary"
                         size="sm"
                         disabled={busyId === req.id}
-                        onClick={() => openApprove(req)}
+                        onClick={() => setApproving(req)}
                       >
                         Duyệt
                       </Button>
@@ -231,69 +196,16 @@ export const ChangeRequestsTable: React.FC<Props> = ({
         </Table>
       </LayerCard>
 
-      <Dialog.Root open={approving !== null} onOpenChange={(next) => !next && setApproving(null)}>
-        <Dialog size="lg" className={`${DIALOG_SHELL} max-w-lg w-full`}>
-          <form
-            className={DIALOG_FORM}
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!approving || !moveDay) return;
-              onDecide(approving.id, 'APPROVED', {
-                moveAt: moveAtOn(moveDay, approving.move_at),
-                decisionNote: note.trim() || undefined,
-              });
-              setApproving(null);
-            }}
-          >
-            <DialogHeader>
-              <Dialog.Title className="text-base font-semibold text-kumo-default">
-                Duyệt yêu cầu đổi kho
-              </Dialog.Title>
-              <Dialog.Close
-                render={(props) => (
-                  <button
-                    type="button"
-                    {...props}
-                    className="p-1.5 rounded-md text-kumo-subtle hover:text-kumo-default hover:bg-kumo-control cursor-pointer"
-                    aria-label="Đóng"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              />
-            </DialogHeader>
-            <DialogBody>
-              {approving ? (
-                <Text variant="secondary" size="sm">
-                  {`Kho ${approving.new_unit?.code ?? '—'} sẽ được giữ chỗ cho khách ngay khi duyệt.`}
-                  {Number(approving.deposit_difference) > 0
-                    ? ` Vì tiền cọc mới cao hơn, hệ thống xuất hoá đơn bù cọc ${Number(
-                        approving.deposit_difference,
-                      ).toLocaleString(
-                        'vi-VN',
-                      )} đ và vẫn giữ kho đích đến khi khách thanh toán xong — khi đó mới huỷ hợp đồng cũ và tạo hợp đồng mới cho kho này.`
-                    : ' Tiền cọc không tăng, nên ngay sau khi duyệt hệ thống huỷ hợp đồng cũ, tạo hợp đồng mới cho kho này và lên lịch bàn giao.'}
-                </Text>
-              ) : null}
-              <DateField label="Ngày chuyển đồ" required value={moveDay} onChange={setMoveDay} />
-              <Input
-                label="Ghi chú (không bắt buộc)"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
-            </DialogBody>
-            <DialogFooter>
-              <Button
-                variant="primary"
-                type="submit"
-                disabled={!moveDay || busyId === approving?.id}
-              >
-                Duyệt và giữ chỗ
-              </Button>
-            </DialogFooter>
-          </form>
-        </Dialog>
-      </Dialog.Root>
+      <ApproveChangeRequestDialog
+        request={approving}
+        busy={busyId === approving?.id}
+        onClose={() => setApproving(null)}
+        onApprove={(moveAt, decisionNote) => {
+          if (!approving) return;
+          onDecide(approving.id, 'APPROVED', { moveAt, decisionNote });
+          setApproving(null);
+        }}
+      />
     </div>
   );
 };

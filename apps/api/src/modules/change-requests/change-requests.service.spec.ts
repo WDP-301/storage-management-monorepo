@@ -26,18 +26,17 @@ import { ChangeRequestsService } from './change-requests.service';
 
 const FACILITY_ID = 'facility-1';
 const CUSTOMER_ID = 'customer-1';
-// An instant inside OFFICE hours (09:00 VN) tomorrow — `create` validates the move time now.
-const TOMORROW = () => {
-  const at = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  at.setUTCHours(2, 0, 0, 0);
-  return at.toISOString();
+// `HH:mm` Vietnam time on the Vietnam day `days` after today, whatever the machine timezone.
+const vnDayAt = (days: number, time: string) => {
+  const vnToday = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+  const day = new Date(`${vnToday}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() + days);
+  return new Date(`${day.toISOString().slice(0, 10)}T${time}:00+07:00`).toISOString();
 };
+// Inside OFFICE hours (09:00 VN) tomorrow — `create` validates the move time now.
+const TOMORROW = () => vnDayAt(1, '09:00');
 // 20:00 VN tomorrow — a valid day, but outside the OFFICE shift.
-const TOMORROW_EVENING = () => {
-  const at = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  at.setUTCHours(13, 0, 0, 0);
-  return at.toISOString();
-};
+const TOMORROW_EVENING = () => vnDayAt(1, '20:00');
 
 const manager: AuthUser = {
   id: 'manager-1',
@@ -282,6 +281,7 @@ describe('ChangeRequestsService', () => {
     // Real resolution logic; only the stored system-wide level is stubbed.
     settings = Object.assign(Object.create(SettingsService.prototype), {
       getDepositDefaultMonths: jest.fn().mockResolvedValue(2),
+      getUnitChangeMoveWindow: jest.fn().mockResolvedValue({ minLeadDays: 1, maxDaysAhead: 90 }),
     });
 
     service = new ChangeRequestsService(
@@ -348,15 +348,41 @@ describe('ChangeRequestsService', () => {
       expect(storageUnits.findOne).not.toHaveBeenCalled();
     });
 
-    it('rejects a move day outside today..+90 days', async () => {
+    it('rejects a move day outside the configured window', async () => {
       await expect(
         service.create(createDto({ scheduledMoveAt: '2020-01-01' }), customer),
       ).rejects.toMatchObject({ status: 400 });
       await expect(
-        service.create(
-          createDto({ scheduledMoveAt: new Date(Date.now() + 120 * 86400_000).toISOString() }),
-          customer,
-        ),
+        service.create(createDto({ scheduledMoveAt: vnDayAt(120, '09:00') }), customer),
+      ).rejects.toMatchObject({ status: 400 });
+      expect(storageUnits.findOne).not.toHaveBeenCalled();
+    });
+
+    it('rejects a move day sooner than the minimum notice', async () => {
+      (settings.getUnitChangeMoveWindow as jest.Mock).mockResolvedValue({
+        minLeadDays: 2,
+        maxDaysAhead: 90,
+      });
+
+      await expect(service.create(createDto(), customer)).rejects.toMatchObject({
+        status: 400,
+        response: {
+          details: {
+            fields: [expect.objectContaining({ field: 'scheduledMoveAt', code: 'outOfRange' })],
+          },
+        },
+      });
+      expect(storageUnits.findOne).not.toHaveBeenCalled();
+    });
+
+    it('rejects a move day past an admin-shortened horizon', async () => {
+      (settings.getUnitChangeMoveWindow as jest.Mock).mockResolvedValue({
+        minLeadDays: 1,
+        maxDaysAhead: 7,
+      });
+
+      await expect(
+        service.create(createDto({ scheduledMoveAt: vnDayAt(8, '09:00') }), customer),
       ).rejects.toMatchObject({ status: 400 });
       expect(storageUnits.findOne).not.toHaveBeenCalled();
     });
@@ -588,12 +614,47 @@ describe('ChangeRequestsService', () => {
 
     it('approve rejects a move day outside the allowed range', async () => {
       await expect(
-        service.decide(
-          'req-1',
-          { decision: 'APPROVED', moveAt: new Date(Date.now() + 200 * 86400_000).toISOString() },
-          manager,
-        ),
+        service.decide('req-1', { decision: 'APPROVED', moveAt: vnDayAt(200, '09:00') }, manager),
       ).rejects.toMatchObject({ status: 400 });
+    });
+
+    it('approve rejects a confirmed time outside the OFFICE shift', async () => {
+      await expect(
+        service.decide('req-1', { decision: 'APPROVED', moveAt: TOMORROW_EVENING() }, manager),
+      ).rejects.toMatchObject({
+        status: 400,
+        response: {
+          details: {
+            fields: [expect.objectContaining({ field: 'moveAt', code: 'moveTimeNotInShift' })],
+          },
+        },
+      });
+    });
+
+    it("approve rejects keeping the customer's pick once that time has passed", async () => {
+      requestRow = buildRequest({ moveAt: new Date(Date.now() - 60_000) });
+
+      await expect(
+        service.decide('req-1', { decision: 'APPROVED' }, manager),
+      ).rejects.toMatchObject({
+        status: 400,
+        response: { details: { fields: [expect.objectContaining({ field: 'moveAt' })] } },
+      });
+    });
+
+    it('approve may confirm a day sooner than the customer notice', async () => {
+      (settings.getUnitChangeMoveWindow as jest.Mock).mockResolvedValue({
+        minLeadDays: 5,
+        maxDaysAhead: 90,
+      });
+
+      const result = await service.decide(
+        'req-1',
+        { decision: 'APPROVED', moveAt: TOMORROW() },
+        manager,
+      );
+
+      expect(result.request.status).toBe(ChangeRequestStatus.AWAITING_PAYMENT);
     });
 
     it('approve issues a deposit top-up invoice due on the move day', async () => {
@@ -632,7 +693,7 @@ describe('ChangeRequestsService', () => {
 
     it('approve defers the top-up no further than a week out', async () => {
       requestRow = buildRequest();
-      const moveAt = new Date(Date.now() + 60 * 86400_000).toISOString();
+      const moveAt = vnDayAt(60, '09:00');
 
       await service.decide('req-1', { decision: 'APPROVED', moveAt }, manager);
 

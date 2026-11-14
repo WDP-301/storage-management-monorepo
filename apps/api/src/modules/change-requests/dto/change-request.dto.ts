@@ -31,7 +31,7 @@ export class CreateChangeRequestDto {
   @ApiProperty({
     format: 'date-time',
     description:
-      'Day and time the customer wants to move — a Vietnam day within today..+90 days, at a time inside an OFFICE work-shift window',
+      'Day and time the customer wants to move — a Vietnam day between contract.unit_change_min_lead_days and contract.unit_change_max_days_ahead days from today, at a future time inside an OFFICE work-shift window (see GET /bookings/receiving-slots)',
   })
   @IsDateString()
   scheduledMoveAt: string;
@@ -51,7 +51,7 @@ export class DecideChangeRequestDto {
   @ApiPropertyOptional({
     format: 'date-time',
     description:
-      'Confirmed move day — defaults to the day the customer proposed. Required when the request carries none (legacy rows).',
+      "Confirmed move day and time — defaults to the customer's pick. Must be in the future, inside an OFFICE work-shift window and within contract.unit_change_max_days_ahead days. Required when the request carries none (legacy rows).",
   })
   @IsOptional()
   @IsDateString()

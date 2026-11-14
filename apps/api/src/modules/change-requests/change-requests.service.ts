@@ -21,10 +21,16 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
-import { addVietnamDays, vietnamDate, vietnamToday } from '@shared/utils/calendar.util';
+import {
+  addVietnamDays,
+  formatVietnamDate,
+  vietnamDate,
+  vietnamToday,
+} from '@shared/utils/calendar.util';
 import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import {
   ChangeRequestStatus,
+  type ClientUnitChangeSettings,
   ContractStatus,
   FacilityStatus,
   InspectionType,
@@ -61,8 +67,6 @@ import { toChangeRequestRecord } from './types/change-request';
 
 const DEFAULT_PAGE_SIZE = 20;
 const OPTIONS_PAGE_SIZE = 50;
-/** How far ahead a move day can be booked, in days. */
-export const MOVE_MAX_DAYS_AHEAD = 90;
 /** A deposit top-up is due the sooner of the move day or this many days after approval. */
 const TOP_UP_DUE_DAYS = 7;
 /** Statuses where the request still occupies the contract's open slot — mirrors UQ_open_change_request. */
@@ -105,6 +109,11 @@ export class ChangeRequestsService {
     private readonly notifications: NotificationsService,
     private readonly handoverAssignment: HandoverAssignmentService,
   ) {}
+
+  /** The active OFFICE shifts — the hours a move can be staffed in. */
+  private officeTemplates(): Promise<ShiftTemplate[]> {
+    return this.shiftTemplates.find({ where: { isActive: true, type: ShiftTemplateType.OFFICE } });
+  }
 
   /** Dependencies the settle step needs; keeps the job inside this module's transaction. */
   private settleDeps(): SettleDeps {
@@ -248,12 +257,14 @@ export class ChangeRequestsService {
   async create(dto: CreateChangeRequestDto, actor: AuthUser): Promise<ChangeRequestResponse> {
     const now = new Date();
     const moveAt = new Date(dto.scheduledMoveAt);
-    assertMoveDayInRange('scheduledMoveAt', moveAt, now);
+    assertMoveDayInRange(
+      'scheduledMoveAt',
+      moveAt,
+      await this.settings.getUnitChangeMoveWindow(),
+      now,
+    );
     // The move is staffed, so it must land inside an OFFICE shift — a day within range is not enough.
-    const officeTemplates = await this.shiftTemplates.find({
-      where: { isActive: true, type: ShiftTemplateType.OFFICE },
-    });
-    assertMoveTimeInOfficeShift('scheduledMoveAt', moveAt, officeTemplates, now);
+    assertMoveTimeInOfficeShift('scheduledMoveAt', moveAt, await this.officeTemplates(), now);
 
     const contract = await this.contracts.findOne({
       where: { id: dto.contractId, deletedAt: IsNull() },
@@ -434,7 +445,11 @@ export class ChangeRequestsService {
     if (!moveAt) {
       throw this.fieldError('moveAt', 'required', 'Chọn ngày chuyển cho yêu cầu này');
     }
-    assertMoveDayInRange('moveAt', moveAt, now);
+    // The approver may confirm a day sooner than the customer's notice allows, never past the
+    // horizon; the time is re-checked since the customer's pick may have gone by meanwhile.
+    const { maxDaysAhead } = await this.settings.getUnitChangeMoveWindow();
+    assertMoveDayInRange('moveAt', moveAt, { minLeadDays: 0, maxDaysAhead }, now);
+    assertMoveTimeInOfficeShift('moveAt', moveAt, await this.officeTemplates(), now);
 
     const contract = await this.contracts.findOne({
       where: { id: request.contractId, deletedAt: IsNull() },
@@ -993,11 +1008,18 @@ export class ChangeRequestsService {
   }
 }
 
-/** 400 unless `at` falls on a Vietnam day from today to MOVE_MAX_DAYS_AHEAD days ahead. */
-export function assertMoveDayInRange(field: string, at: Date, now: Date = new Date()): void {
+/** 400 unless `at` falls on a Vietnam day `minLeadDays`..`maxDaysAhead` days after today. */
+export function assertMoveDayInRange(
+  field: string,
+  at: Date,
+  window: ClientUnitChangeSettings,
+  now: Date = new Date(),
+): void {
   const day = vietnamDate(at);
   const today = vietnamToday(now);
-  if (day < today || day > addVietnamDays(today, MOVE_MAX_DAYS_AHEAD)) {
+  const earliest = addVietnamDays(today, window.minLeadDays);
+  if (day < earliest || day > addVietnamDays(today, window.maxDaysAhead)) {
+    const from = window.minLeadDays === 0 ? 'hôm nay' : formatVietnamDate(earliest);
     throw new DomainException(
       ErrorCode.VALIDATION_FAILED,
       'Validation failed',
@@ -1007,7 +1029,7 @@ export function assertMoveDayInRange(field: string, at: Date, now: Date = new Da
           {
             field,
             code: 'outOfRange',
-            message: `Chọn ngày chuyển trong khoảng từ hôm nay đến ${MOVE_MAX_DAYS_AHEAD} ngày tới`,
+            message: `Chọn ngày chuyển trong khoảng từ ${from} đến ${window.maxDaysAhead} ngày tới`,
           },
         ],
       },

@@ -5,7 +5,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, fieldValidationError } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import type { ClientSettingsResponse } from '@storage/types';
+import type { ClientSettingsResponse, ClientUnitChangeSettings } from '@storage/types';
 import { In, Not, Repository } from 'typeorm';
 import { loadClientSettings } from './client-settings';
 import { validateSettingValue } from './setting-value.validator';
@@ -124,6 +124,18 @@ export class SettingsService {
   /** Days past the contracted start before a manager is nudged about a no-show DRAFT. */
   async getNoShowAfterDays(): Promise<number> {
     return this.getNumber('contract.no_show_after_days');
+  }
+
+  /**
+   * Days from today a unit-change move may land on. Each bound is validated on its own, so a
+   * minimum notice above the horizon is met by stretching the horizon — a day stays bookable.
+   */
+  async getUnitChangeMoveWindow(): Promise<ClientUnitChangeSettings> {
+    const [minLeadDays, maxDaysAhead] = await Promise.all([
+      this.getNumber('contract.unit_change_min_lead_days'),
+      this.getNumber('contract.unit_change_max_days_ahead'),
+    ]);
+    return { minLeadDays, maxDaysAhead: Math.max(maxDaysAhead, minLeadDays) };
   }
 
   /** Go-live of the return rules; a missing or unreadable value is an error, never a guess. */

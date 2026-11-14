@@ -54,7 +54,16 @@ export interface ClientReturnSettings {
   overduePenaltyPercent: number;
 }
 
+/** When a unit-change move may be booked, in Vietnam days from today; mirrors the settings. */
+export interface ClientUnitChangeSettings {
+  /** Earliest move day: this many days after today (0 = today, at a future in-shift time). */
+  minLeadDays: number;
+  /** Furthest move day: this many days after today — never below `minLeadDays`. */
+  maxDaysAhead: number;
+}
+
 export interface ClientSettingsResponse {
   booking: ClientBookingSettings;
   return: ClientReturnSettings;
+  unitChange: ClientUnitChangeSettings;
 }

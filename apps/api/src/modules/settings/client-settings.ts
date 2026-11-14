@@ -14,6 +14,7 @@ export async function loadClientSettings(
     maxUnitsPerBooking,
     noticeDays,
     overduePenaltyPercent,
+    unitChange,
   ] = await Promise.all([
     settings.getBookingRentalMonthsOptions(),
     settings.getBookingDefaultRentalMonths(),
@@ -23,6 +24,7 @@ export async function loadClientSettings(
     settings.getBookingMaxUnitsPerBooking(),
     settings.getReturnNoticeDays(),
     settings.getOverduePenaltyPercent(),
+    settings.getUnitChangeMoveWindow(),
   ]);
   return {
     booking: toClientBookingSettings({
@@ -34,6 +36,7 @@ export async function loadClientSettings(
       maxUnitsPerBooking,
     }),
     return: { noticeDays, overduePenaltyPercent },
+    unitChange,
   };
 }
 

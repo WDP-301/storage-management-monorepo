@@ -3,6 +3,7 @@ import type {
   ClientBookingSettings,
   ClientReturnSettings,
   ClientSettingsResponse,
+  ClientUnitChangeSettings,
 } from '@storage/types';
 
 export class ClientBookingSettingsDto implements ClientBookingSettings {
@@ -43,10 +44,27 @@ export class ClientReturnSettingsDto implements ClientReturnSettings {
   overduePenaltyPercent: number;
 }
 
+export class ClientUnitChangeSettingsDto implements ClientUnitChangeSettings {
+  @ApiProperty({
+    description: 'Earliest move day, in days after today (0 = today, at a future in-shift time)',
+    example: 1,
+  })
+  minLeadDays: number;
+
+  @ApiProperty({
+    description: 'Furthest move day, in days after today — never below minLeadDays',
+    example: 90,
+  })
+  maxDaysAhead: number;
+}
+
 export class ClientSettingsResponseDto implements ClientSettingsResponse {
   @ApiProperty({ type: ClientBookingSettingsDto })
   booking: ClientBookingSettingsDto;
 
   @ApiProperty({ type: ClientReturnSettingsDto })
   return: ClientReturnSettingsDto;
+
+  @ApiProperty({ type: ClientUnitChangeSettingsDto })
+  unitChange: ClientUnitChangeSettingsDto;
 }

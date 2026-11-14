@@ -293,6 +293,8 @@ describe('SettingsService', () => {
       'booking.max_units_per_booking': 4,
       'contract.return_notice_days': 30,
       'billing.overdue_penalty_percent': 100,
+      'contract.unit_change_min_lead_days': 1,
+      'contract.unit_change_max_days_ahead': 90,
     };
 
     const serve = (overrides: Record<string, unknown> = {}) =>
@@ -313,7 +315,19 @@ describe('SettingsService', () => {
           maxUnitsPerBooking: 4,
         },
         return: { noticeDays: 30, overduePenaltyPercent: 100 },
+        unitChange: { minLeadDays: 1, maxDaysAhead: 90 },
       });
+    });
+
+    it('stretches the unit-change horizon to the minimum notice so a day stays bookable', async () => {
+      serve({
+        'contract.unit_change_min_lead_days': 10,
+        'contract.unit_change_max_days_ahead': 5,
+      });
+
+      const result = await service.getClientSettings();
+
+      expect(result.unitChange).toEqual({ minLeadDays: 10, maxDaysAhead: 10 });
     });
 
     it('never exposes the go-live timestamp to clients', async () => {

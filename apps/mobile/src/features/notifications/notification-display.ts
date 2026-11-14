@@ -78,6 +78,74 @@ const FALLBACK_DISPLAY: NotificationDisplay = {
   tone: 'neutral',
 };
 
+/** Coarse buckets for the inbox filter — several event types share one filter chip. */
+export type NotificationGroup =
+  | 'payment'
+  | 'contract'
+  | 'unitChange'
+  | 'storage'
+  | 'schedule'
+  | 'support'
+  | 'other';
+
+export const NOTIFICATION_GROUP_LABEL: Record<NotificationGroup, string> = {
+  payment: 'Thanh toán',
+  contract: 'Hợp đồng',
+  unitChange: 'Đổi kho',
+  storage: 'Gửi / lấy đồ',
+  schedule: 'Lịch hẹn & ca',
+  support: 'Hỗ trợ',
+  other: 'Khác',
+};
+
+const GROUP_BY_TYPE: Partial<Record<NotificationType, NotificationGroup>> = {
+  INVOICE_ISSUED: 'payment',
+  INVOICE_PAID: 'payment',
+  BOOKING_DEPOSIT_PARTIAL: 'payment',
+  REFUND_COMPLETED: 'payment',
+  HANDOVER_ASSIGNED: 'contract',
+  CONTRACT_MAY_BE_ABANDONED: 'contract',
+  CONTRACT_NO_SHOW: 'contract',
+  CONTRACT_CANCELLED: 'contract',
+  RETURN_RESCHEDULED: 'contract',
+  RETURN_FINALIZED: 'contract',
+  SETTLEMENT_APPROVED: 'contract',
+  CONTRACT_TERM_ENDING: 'contract',
+  CONTRACT_OVERDUE: 'contract',
+  UNIT_CHANGE_APPROVED: 'unitChange',
+  UNIT_CHANGE_REJECTED: 'unitChange',
+  UNIT_CHANGE_COMPLETED: 'unitChange',
+  UNIT_CHANGE_CANCELLED: 'unitChange',
+  UNIT_CHANGE_MOVE_TODAY: 'unitChange',
+  SHELF_DROP_OFF: 'storage',
+  SHELF_PICK_UP: 'storage',
+  SHELF_RECEIPT_VOIDED: 'storage',
+  PICKUP_REQUEST_READY: 'storage',
+  PICKUP_REQUEST_CREATED: 'storage',
+  PICKUP_REQUEST_CANCELLED: 'storage',
+  DROP_OFF_REQUEST_CREATED: 'storage',
+  DROP_OFF_REQUEST_CONFIRMED: 'storage',
+  DROP_OFF_REQUEST_CANCELLED: 'storage',
+  CHECK_OUT_MISSED: 'storage',
+  TOUR_APPOINTMENT_CREATED: 'schedule',
+  TOUR_APPOINTMENT_CONFIRMED: 'schedule',
+  TOUR_APPOINTMENT_ASSIGNED: 'schedule',
+  TOUR_APPOINTMENT_CANCELLED: 'schedule',
+  SHIFT_ASSIGNED: 'schedule',
+  SHIFT_UPDATED: 'schedule',
+  SHIFT_CANCELLED: 'schedule',
+  TICKET_CREATED: 'support',
+  TICKET_UPDATED: 'support',
+  TICKET_ASSIGNED: 'support',
+};
+
+const GROUP_LOOKUP = new Map<string, NotificationGroup>(Object.entries(GROUP_BY_TYPE));
+
+/** The filter bucket a type belongs to; newer server types land in `other`. */
+export function notificationGroup(type: string): NotificationGroup {
+  return GROUP_LOOKUP.get(type) ?? 'other';
+}
+
 // A Map, not a plain object lookup: a type string like "constructor" must not hit Object.prototype.
 const DISPLAY_BY_TYPE = new Map<string, NotificationDisplay>(Object.entries(KNOWN_TYPES));
 

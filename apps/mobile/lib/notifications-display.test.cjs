@@ -21,9 +21,13 @@ function load(filename) {
   return mod.exports;
 }
 
-const { notificationDisplay, notificationHref, formatRelativeTime } = load(
-  path.join(__dirname, '../src/features/notifications/notification-display.ts'),
-);
+const {
+  notificationDisplay,
+  notificationHref,
+  formatRelativeTime,
+  notificationGroup,
+  NOTIFICATION_GROUP_LABEL,
+} = load(path.join(__dirname, '../src/features/notifications/notification-display.ts'));
 
 const NOW = Date.parse('2026-10-21T10:00:00.000Z');
 const ago = (ms) => new Date(NOW - ms).toISOString();
@@ -58,6 +62,58 @@ test('every notification type has its own label and a type unknown to this build
   });
   // Inherited object keys must not be mistaken for a known type.
   assert.equal(notificationDisplay('constructor').icon, 'default');
+});
+
+test('every known notification type lands in a labelled filter group, unknowns fall to other', () => {
+  for (const type of [
+    'TICKET_CREATED',
+    'TICKET_UPDATED',
+    'TICKET_ASSIGNED',
+    'INVOICE_ISSUED',
+    'INVOICE_PAID',
+    'BOOKING_DEPOSIT_PARTIAL',
+    'REFUND_COMPLETED',
+    'HANDOVER_ASSIGNED',
+    'CONTRACT_MAY_BE_ABANDONED',
+    'CONTRACT_NO_SHOW',
+    'CONTRACT_CANCELLED',
+    'RETURN_RESCHEDULED',
+    'RETURN_FINALIZED',
+    'SETTLEMENT_APPROVED',
+    'CONTRACT_TERM_ENDING',
+    'CONTRACT_OVERDUE',
+    'CHECK_OUT_MISSED',
+    'SHIFT_ASSIGNED',
+    'SHIFT_UPDATED',
+    'SHIFT_CANCELLED',
+    'SHELF_DROP_OFF',
+    'SHELF_PICK_UP',
+    'SHELF_RECEIPT_VOIDED',
+    'PICKUP_REQUEST_READY',
+    'PICKUP_REQUEST_CREATED',
+    'PICKUP_REQUEST_CANCELLED',
+    'DROP_OFF_REQUEST_CREATED',
+    'DROP_OFF_REQUEST_CONFIRMED',
+    'DROP_OFF_REQUEST_CANCELLED',
+    'TOUR_APPOINTMENT_CREATED',
+    'TOUR_APPOINTMENT_CONFIRMED',
+    'TOUR_APPOINTMENT_ASSIGNED',
+    'TOUR_APPOINTMENT_CANCELLED',
+    'UNIT_CHANGE_APPROVED',
+    'UNIT_CHANGE_REJECTED',
+    'UNIT_CHANGE_COMPLETED',
+    'UNIT_CHANGE_CANCELLED',
+    'UNIT_CHANGE_MOVE_TODAY',
+  ]) {
+    const group = notificationGroup(type);
+    assert.notEqual(group, 'other', type);
+    assert.ok(NOTIFICATION_GROUP_LABEL[group], `${type} -> ${group}`);
+  }
+  assert.equal(notificationGroup('UNIT_CHANGE_APPROVED'), 'unitChange');
+  assert.equal(notificationGroup('INVOICE_PAID'), 'payment');
+  assert.equal(notificationGroup('TICKET_CREATED'), 'support');
+  assert.equal(notificationGroup('SOMETHING_NEW'), 'other');
+  assert.equal(notificationGroup('constructor'), 'other');
 });
 
 test('contract notifications open the contract and ticket notifications open the ticket', () => {

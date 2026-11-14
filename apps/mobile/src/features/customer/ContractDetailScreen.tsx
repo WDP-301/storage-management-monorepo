@@ -1,8 +1,14 @@
-import type { BottomSheetModal } from '@gorhom/bottom-sheet';
-import { Button } from 'heroui-native';
-import { MapPin } from 'phosphor-react-native';
-import { useRef } from 'react';
-import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import {
+  BottomSheetBackdrop,
+  type BottomSheetBackdropProps,
+  BottomSheetModal,
+  BottomSheetView,
+} from '@gorhom/bottom-sheet';
+import { useThemeColor } from 'heroui-native';
+import { Headset, MapPin, SignOut, Swap } from 'phosphor-react-native';
+import { type ReactNode, useCallback, useRef } from 'react';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { openChangeRequest } from '../../../lib/change-requests-api';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import type { ApiContract } from '../../types/contract-api';
@@ -28,6 +34,7 @@ import { type ContractInvoicesState, useContractInvoices } from './use-contract-
 import { useUnitChangeRequests } from './use-unit-change-requests';
 
 const MUTED = 'hsl(215 16% 47%)';
+const ACCENT = 'hsl(203 100% 30%)';
 
 type Props = {
   contract: ApiContract | null;
@@ -113,6 +120,20 @@ function ContractDetail({
 }) {
   const returnSheet = useRef<BottomSheetModal>(null);
   const changeSheet = useRef<BottomSheetModal>(null);
+  const requestSheet = useRef<BottomSheetModal>(null);
+  const insets = useSafeAreaInsets();
+  const [surfaceColor, mutedColor] = useThemeColor(['surface', 'muted']);
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        appearsOnIndex={0}
+        disappearsOnIndex={-1}
+        pressBehavior="close"
+      />
+    ),
+    [],
+  );
   const state = storageState(contract, now);
   const isActive = contract.status === 'ACTIVE';
   const pending = openReturn(contract);
@@ -123,6 +144,21 @@ function ContractDetail({
     openChangeRequest(changeRequests.requests.filter((r) => r.contract_id === contract.id)) ?? null;
   // A pending return already blocks a change request server-side; hide the entry point too.
   const canRequestChange = isActive && !pending && !openChange;
+  const canRequestAny = canRequestChange || canRequestReturn;
+
+  const openRequest = (kind: 'change' | 'return') => {
+    const target = kind === 'change' ? changeSheet : returnSheet;
+    requestSheet.current?.dismiss();
+    // Let the picker sheet finish closing before the form sheet slides up.
+    setTimeout(() => target.current?.present(), 200);
+  };
+
+  /** One tile covers both request kinds: direct when only one is possible, picker when both. */
+  const onRequestPress = () => {
+    if (canRequestChange && canRequestReturn) requestSheet.current?.present();
+    else if (canRequestChange) changeSheet.current?.present();
+    else if (canRequestReturn) returnSheet.current?.present();
+  };
   const changed = () => {
     changeRequests.reload();
     onChanged();
@@ -184,20 +220,26 @@ function ContractDetail({
       ) : null}
 
       {openChange ? <UnitChangeStatusCard request={openChange} onChanged={changed} /> : null}
-      {canRequestChange ? (
-        <Button variant="secondary" onPress={() => changeSheet.current?.present()}>
-          <Button.Label className="font-ui">Yêu cầu đổi kho</Button.Label>
-        </Button>
-      ) : null}
-      {canRequestReturn ? (
-        <Button variant="secondary" onPress={() => returnSheet.current?.present()}>
-          <Button.Label className="font-ui">Yêu cầu trả kho</Button.Label>
-        </Button>
-      ) : null}
-      {canFileTicket ? (
-        <Button onPress={onSupport}>
-          <Button.Label className="font-ui">Báo sự cố / hỗ trợ</Button.Label>
-        </Button>
+
+      {canRequestAny || canFileTicket ? (
+        <View className="flex-row justify-around pt-1">
+          {canRequestAny ? (
+            <QuickAction
+              accessibilityLabel="Yêu cầu đổi kho hoặc trả kho"
+              icon={<Swap color={ACCENT} size={24} weight="bold" />}
+              label="Đổi / trả kho"
+              onPress={onRequestPress}
+            />
+          ) : null}
+          {canFileTicket ? (
+            <QuickAction
+              accessibilityLabel="Báo sự cố hoặc hỗ trợ"
+              icon={<Headset color={ACCENT} size={24} weight="bold" />}
+              label="Hỗ trợ"
+              onPress={onSupport}
+            />
+          ) : null}
+        </View>
       ) : null}
 
       {isActive ? (
@@ -206,6 +248,88 @@ function ContractDetail({
       {isActive ? (
         <UnitChangeRequestSheet sheetRef={changeSheet} contract={contract} onSubmitted={changed} />
       ) : null}
+      {canRequestAny ? (
+        <BottomSheetModal
+          ref={requestSheet}
+          backdropComponent={renderBackdrop}
+          backgroundStyle={{ backgroundColor: surfaceColor }}
+          enablePanDownToClose
+          handleIndicatorStyle={{ backgroundColor: mutedColor }}
+          snapPoints={['34%']}
+        >
+          <BottomSheetView
+            className="gap-3 px-4"
+            style={{ paddingBottom: Math.max(insets.bottom, 16) }}
+          >
+            <Text className="font-strong text-foreground text-title-sm">Tạo yêu cầu</Text>
+            <RequestKindRow
+              icon={<Swap color={ACCENT} size={22} weight="bold" />}
+              title="Đổi kho"
+              subtitle="Chuyển sang kho khác cùng loại, kèm ngày chuyển đồ"
+              onPress={() => openRequest('change')}
+            />
+            <RequestKindRow
+              icon={<SignOut color={ACCENT} size={22} weight="bold" />}
+              title="Trả kho"
+              subtitle="Hẹn ngày dọn đồ và kết thúc hợp đồng"
+              onPress={() => openRequest('return')}
+            />
+          </BottomSheetView>
+        </BottomSheetModal>
+      ) : null}
     </View>
+  );
+}
+
+/** Circle icon with the label under it, the quick-action look used for the two main actions. */
+function QuickAction({
+  icon,
+  label,
+  accessibilityLabel,
+  onPress,
+}: {
+  icon: ReactNode;
+  label: string;
+  accessibilityLabel: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      className="items-center gap-1.5"
+      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+      onPress={onPress}
+    >
+      <View className="size-14 items-center justify-center rounded-full bg-accent/10">{icon}</View>
+      <Text className="font-ui text-body-sm text-foreground">{label}</Text>
+    </Pressable>
+  );
+}
+
+function RequestKindRow({
+  icon,
+  title,
+  subtitle,
+  onPress,
+}: {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      className="flex-row items-center gap-3 rounded-xl border border-border bg-surface-secondary px-3 py-3"
+      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+      onPress={onPress}
+    >
+      <View className="size-10 items-center justify-center rounded-full bg-accent/10">{icon}</View>
+      <View className="flex-1">
+        <Text className="font-strong text-body-sm text-foreground">{title}</Text>
+        <Text className="font-body text-caption text-muted">{subtitle}</Text>
+      </View>
+    </Pressable>
   );
 }

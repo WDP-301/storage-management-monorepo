@@ -18,13 +18,14 @@ export function NotificationsInbox({ area }: { area: NotificationArea }) {
       notifications={inbox.items}
       unread={inbox.unread}
       error={inbox.error}
-      hasMore={inbox.hasMore}
+      page={inbox.page}
+      totalPages={inbox.totalPages}
       isLoading={inbox.isLoading}
       isRefreshing={inbox.isRefreshing}
-      isLoadingMore={inbox.isLoadingMore}
+      isChangingPage={inbox.isChangingPage}
       isMarkingAll={inbox.isMarkingAll}
       onRefresh={inbox.refresh}
-      onLoadMore={inbox.loadMore}
+      onPageChange={inbox.goToPage}
       onMarkAllRead={() => void inbox.markAllRead()}
       onOpen={(notification) => {
         void inbox.markRead(notification.id);

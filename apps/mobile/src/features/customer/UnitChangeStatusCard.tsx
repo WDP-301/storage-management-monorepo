@@ -1,10 +1,11 @@
-import { Button } from 'heroui-native';
-import { useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { useRef, useState } from 'react';
+import { View } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import { ChangeRequestsApi, type UnitChangeRequest } from '../../../lib/change-requests-api';
 import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import { formatVnTime } from '../../../lib/receiving-time';
+import { AlertSheet, Button, Dashed, InlineMessage, Text } from '../../components/ui';
 import { localDayIso, StatusPill, type StatusTone } from './contract-display';
 
 type Display = { label: string; tone: StatusTone };
@@ -37,7 +38,9 @@ export function UnitChangeStatusCard({
   request: UnitChangeRequest;
   onChanged: () => void;
 }) {
+  const confirmRef = useRef<BottomSheetModal>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const display = STATUS_DISPLAY[request.status] ?? { label: request.status, tone: 'neutral' };
   const hint = STATUS_HINT[request.status] ?? null;
   const moveDay = request.move_at ? formatIsoDate(localDayIso(request.move_at)) : null;
@@ -45,62 +48,64 @@ export function UnitChangeStatusCard({
   const depositTopup = Number(request.deposit_difference ?? 0);
   const canCancel = request.status === 'REQUESTED' || request.status === 'AWAITING_PAYMENT';
 
-  const cancel = () => {
-    Alert.alert('Huỷ yêu cầu đổi kho?', 'Yêu cầu của bạn sẽ bị rút lại.', [
-      { text: 'Giữ yêu cầu', style: 'cancel' },
-      {
-        text: 'Huỷ yêu cầu',
-        style: 'destructive',
-        onPress: () => {
-          setIsCancelling(true);
-          ChangeRequestsApi.cancel(request.id)
-            .then(onChanged)
-            .catch((e: unknown) => {
-              setIsCancelling(false);
-              Alert.alert(
-                'Không huỷ được',
-                e instanceof ApiError ? e.message : 'Vui lòng thử lại sau.',
-              );
-            });
-        },
-      },
-    ]);
+  const performCancel = () => {
+    confirmRef.current?.dismiss();
+    setIsCancelling(true);
+    setError(null);
+    ChangeRequestsApi.cancel(request.id)
+      .then(onChanged)
+      .catch((e: unknown) => {
+        setIsCancelling(false);
+        setError(e instanceof ApiError ? e.message : 'Vui lòng thử lại sau.');
+      });
   };
 
   return (
-    <View className="gap-2 rounded-xl border border-border bg-surface p-3">
+    <View className="gap-2.5 rounded-[20px] border border-border-default bg-bg-card p-4">
       <View className="flex-row items-start justify-between gap-3">
-        <Text className="flex-1 font-strong text-foreground text-title-sm">Yêu cầu đổi kho</Text>
+        <Text className="flex-1 text-lead font-bold text-text-primary">Yêu cầu đổi kho</Text>
         <StatusPill label={display.label} tone={display.tone} />
       </View>
+      <Dashed />
       {request.new_unit ? (
-        <Text className="font-body text-body-sm text-muted">Kho mới: {request.new_unit.code}</Text>
+        <Text className="text-body-sm text-text-secondary">Kho mới: {request.new_unit.code}</Text>
       ) : null}
       {moveDay ? (
-        <Text className="font-numeric text-body-sm text-foreground">
+        <Text className="text-body-sm font-medium text-text-primary tabular-nums">
           Ngày chuyển: {moveDay}
           {moveTime ? ` · ${moveTime}` : ''}
         </Text>
       ) : null}
       {request.status === 'AWAITING_PAYMENT' && depositTopup > 0 ? (
-        <Text className="font-body text-caption text-warning">
-          Cần thanh toán bù cọc {formatMoney(depositTopup)} — hoá đơn có mã QR ở mục Hoá đơn bên
-          dưới.
-        </Text>
+        <InlineMessage
+          message={`Cần thanh toán bù cọc ${formatMoney(depositTopup)} — hoá đơn có mã QR ở mục Hoá đơn bên dưới.`}
+          type="warning"
+        />
       ) : null}
-      {hint ? <Text className="font-ui text-body-sm text-accent">{hint}</Text> : null}
+      {hint ? <Text className="text-body-sm font-medium text-text-link">{hint}</Text> : null}
+      {error ? <InlineMessage message={error} type="error" /> : null}
       {canCancel ? (
         <Button
-          variant="secondary"
-          isDisabled={isCancelling}
-          onPress={cancel}
           className="self-start"
-        >
-          <Button.Label className="font-ui">
-            {isCancelling ? 'Đang huỷ…' : 'Huỷ yêu cầu'}
-          </Button.Label>
-        </Button>
+          disabled={isCancelling}
+          label={isCancelling ? 'Đang huỷ…' : 'Huỷ yêu cầu'}
+          loading={isCancelling}
+          onPress={() => confirmRef.current?.present()}
+          size="sm"
+          variant="destructive"
+        />
       ) : null}
+
+      <AlertSheet
+        ref={confirmRef}
+        destructive
+        message="Yêu cầu của bạn sẽ bị rút lại."
+        onPrimary={performCancel}
+        onSecondary={() => confirmRef.current?.dismiss()}
+        primaryLabel="Huỷ yêu cầu"
+        secondaryLabel="Giữ yêu cầu"
+        title="Huỷ yêu cầu đổi kho?"
+      />
     </View>
   );
 }

@@ -11,7 +11,11 @@ export function displayMonthlyPrice(warehouse: Warehouse): number | null {
 }
 
 export function rentalName(warehouse: Warehouse): string {
-  return warehouse.kind === 'SHELF' && warehouse.parent
-    ? `${warehouse.name} · ${warehouse.parent.name}`
-    : warehouse.name;
+  if (warehouse.kind === 'SHELF' && warehouse.parent) {
+    if (warehouse.name.toLowerCase().includes(warehouse.parent.name.toLowerCase())) {
+      return warehouse.name;
+    }
+    return `${warehouse.name} · ${warehouse.parent.name}`;
+  }
+  return warehouse.name;
 }

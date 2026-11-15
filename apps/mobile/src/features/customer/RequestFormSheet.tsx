@@ -1,12 +1,7 @@
-import {
-  BottomSheetBackdrop,
-  type BottomSheetBackdropProps,
-  BottomSheetModal,
-  BottomSheetScrollView,
-} from '@gorhom/bottom-sheet';
-import { useThemeColor } from 'heroui-native';
-import { type ReactNode, type RefObject, useCallback } from 'react';
+import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import type { ReactNode, RefObject } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors, renderCoatBackdrop } from '../../components/ui';
 
 type Props = {
   sheetRef: RefObject<BottomSheetModal | null>;
@@ -18,28 +13,15 @@ type Props = {
 /** Tall bottom sheet hosting one customer request form (pick-up or drop-off). */
 export function RequestFormSheet({ sheetRef, children, onSubmitted }: Props) {
   const insets = useSafeAreaInsets();
-  const [surfaceColor, mutedColor] = useThemeColor(['surface', 'muted']);
-
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        appearsOnIndex={0}
-        disappearsOnIndex={-1}
-        pressBehavior="close"
-      />
-    ),
-    [],
-  );
 
   return (
     <BottomSheetModal
       ref={sheetRef}
-      backdropComponent={renderBackdrop}
-      backgroundStyle={{ backgroundColor: surfaceColor }}
+      backdropComponent={renderCoatBackdrop}
+      backgroundStyle={{ backgroundColor: colors.semantic.bgCard }}
       enableDynamicSizing={false}
       enablePanDownToClose
-      handleIndicatorStyle={{ backgroundColor: mutedColor }}
+      handleIndicatorStyle={{ backgroundColor: colors.neutral[300] }}
       keyboardBlurBehavior="restore"
       snapPoints={['92%']}
     >

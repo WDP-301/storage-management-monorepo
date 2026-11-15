@@ -1,6 +1,8 @@
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, BackHandler } from 'react-native';
+import { BackHandler } from 'react-native';
+import { AlertSheet } from '../../src/components/ui';
 import { registerLeaveGuard } from '../../src/features/staff/leave-guard';
 import { StaffContractScreen } from '../../src/features/staff/StaffContractScreen';
 import { useInspectionDetail } from '../../src/features/staff/use-inspection-detail';
@@ -18,6 +20,7 @@ export default function StaffContractRoute() {
     contract?.permissions.return ? contract.return?.id : undefined,
   );
   const [savingDocuments, setSavingDocuments] = useState(false);
+  const leaveSheetRef = useRef<BottomSheetModal>(null);
   const hasUnsavedWork =
     [handover, returnDetail].some((d) => d.isDirty || d.isUploading) || savingDocuments;
 
@@ -28,10 +31,7 @@ export default function StaffContractRoute() {
       leave();
       return;
     }
-    Alert.alert('Bỏ thay đổi?', 'Có thay đổi chưa lưu hoặc tệp đang tải lên.', [
-      { text: 'Ở lại', style: 'cancel' },
-      { text: 'Bỏ thay đổi', style: 'destructive', onPress: leave },
-    ]);
+    leaveSheetRef.current?.present();
   }, [hasUnsavedWork, leave]);
 
   // The tab bar lives outside this route, so it asks through the shared guard.
@@ -53,16 +53,28 @@ export default function StaffContractRoute() {
   );
 
   return (
-    <StaffContractScreen
-      contract={contract}
-      isLoading={isLoading}
-      error={error}
-      handover={handover}
-      returnDetail={returnDetail}
-      savingDocuments={savingDocuments}
-      onDocumentsBusyChange={setSavingDocuments}
-      onBack={confirmLeave}
-      onReload={() => void reload()}
-    />
+    <>
+      <StaffContractScreen
+        contract={contract}
+        error={error}
+        handover={handover}
+        isLoading={isLoading}
+        onBack={confirmLeave}
+        onDocumentsBusyChange={setSavingDocuments}
+        onReload={() => void reload()}
+        returnDetail={returnDetail}
+        savingDocuments={savingDocuments}
+      />
+      <AlertSheet
+        actionsLayout="row"
+        destructive
+        message="Có thay đổi chưa lưu hoặc tệp đang tải lên."
+        onPrimary={leave}
+        primaryLabel="Bỏ thay đổi"
+        ref={leaveSheetRef}
+        secondaryLabel="Ở lại"
+        title="Bỏ thay đổi?"
+      />
+    </>
   );
 }

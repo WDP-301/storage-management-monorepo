@@ -1,6 +1,6 @@
-import { Pressable, Text, View } from 'react-native';
+import { TabChip } from './ui/tab-chip';
 
-/** Single-choice filter pill: dark when selected, like the area presets on the browse screen. */
+/** Single-choice filter pill styled after Medipay TabChip. */
 export function FilterPill({
   label,
   isSelected,
@@ -10,22 +10,5 @@ export function FilterPill({
   isSelected: boolean;
   onPress: () => void;
 }) {
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ checked: isSelected }}
-      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-      onPress={onPress}
-    >
-      <View
-        className={`rounded-full px-3.5 py-2 ${isSelected ? 'bg-foreground' : 'bg-surface-secondary'}`}
-      >
-        <Text
-          className={`font-ui text-body-sm ${isSelected ? 'text-accent-foreground' : 'text-subtle'}`}
-        >
-          {label}
-        </Text>
-      </View>
-    </Pressable>
-  );
+  return <TabChip label={label} onPress={onPress} selected={isSelected} tone="secondary" />;
 }

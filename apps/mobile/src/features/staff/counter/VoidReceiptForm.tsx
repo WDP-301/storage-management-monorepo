@@ -1,6 +1,7 @@
-import { Button } from 'heroui-native';
-import { useState } from 'react';
-import { Alert, Text, TextInput, View } from 'react-native';
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { useRef, useState } from 'react';
+import { View } from 'react-native';
+import { AlertSheet, Button, InlineMessage, Input, Text } from '../../../components/ui';
 
 /** Manager-only: a saved receipt is never edited, only voided with a reason the customer will read. */
 export function VoidReceiptForm({
@@ -14,56 +15,58 @@ export function VoidReceiptForm({
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
+  const confirmRef = useRef<BottomSheetModal>(null);
   const trimmed = reason.trim();
   const valid = trimmed.length >= 3 && trimmed.length <= 500;
 
   if (!open) {
     return (
-      <Button variant="danger-soft" onPress={() => setOpen(true)}>
-        <Button.Label>Hủy phiếu</Button.Label>
-      </Button>
+      <Button fullWidth label="Hủy phiếu" onPress={() => setOpen(true)} variant="destructive" />
     );
   }
   return (
-    <View className="gap-3 rounded-xl border border-border bg-surface p-4">
-      <Text className="font-strong text-body-md text-foreground">Hủy phiếu</Text>
-      <Text className="font-body text-body-sm text-muted">
+    <View className="gap-3 rounded-[20px] border border-border-default bg-bg-card p-4">
+      <Text className="text-body-lg font-semibold text-text-primary">Hủy phiếu</Text>
+      <Text className="text-body text-text-secondary">
         Số đồ trên kệ sẽ được cập nhật lại và khách sẽ thấy lý do hủy.
       </Text>
-      <TextInput
+      <Input
         accessibilityLabel="Lý do hủy phiếu"
-        className="min-h-20 rounded-xl border border-border bg-background px-3 py-3 font-body text-body-sm text-foreground"
         maxLength={500}
         multiline
-        placeholder="Lý do hủy (từ 3 ký tự)"
-        textAlignVertical="top"
-        value={reason}
         onChangeText={setReason}
+        placeholder="Lý do hủy (từ 3 ký tự)"
+        value={reason}
       />
-      {error ? <Text className="font-body text-body-sm text-danger">{error}</Text> : null}
-      <View className="flex-row gap-2">
+      {error ? <InlineMessage message={error} type="error" /> : null}
+      <View className="flex-row gap-2.5">
         <Button
           className="flex-1"
-          variant="secondary"
-          isDisabled={busy}
+          disabled={busy}
+          label="Đóng"
           onPress={() => setOpen(false)}
-        >
-          <Button.Label>Đóng</Button.Label>
-        </Button>
+          variant="secondary"
+        />
         <Button
           className="flex-1"
-          variant="danger"
-          isDisabled={busy || !valid}
-          onPress={() =>
-            Alert.alert('Hủy phiếu này?', 'Không thể hoàn tác.', [
-              { text: 'Không', style: 'cancel' },
-              { text: 'Hủy phiếu', style: 'destructive', onPress: () => onVoid(trimmed) },
-            ])
-          }
-        >
-          <Button.Label>{busy ? 'Đang hủy…' : 'Xác nhận hủy'}</Button.Label>
-        </Button>
+          disabled={busy || !valid}
+          label={busy ? 'Đang hủy…' : 'Xác nhận hủy'}
+          loading={busy}
+          onPress={() => confirmRef.current?.present()}
+          variant="destructive"
+        />
       </View>
+
+      <AlertSheet
+        actionsLayout="row"
+        destructive
+        message="Số đồ trên kệ sẽ được hoàn tác và không thể khôi phục."
+        onPrimary={() => onVoid(trimmed)}
+        primaryLabel="Hủy phiếu"
+        ref={confirmRef}
+        secondaryLabel="Không"
+        title="Hủy phiếu này?"
+      />
     </View>
   );
 }

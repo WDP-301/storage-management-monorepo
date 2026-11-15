@@ -1,7 +1,7 @@
 import type { TourAppointmentRecord } from '@storage/types';
-import { useThemeColor } from 'heroui-native';
 import { CalendarCheck, Clock, MapPin, Phone, User, Warehouse } from 'phosphor-react-native';
-import { Alert, Linking, Pressable, Text, View } from 'react-native';
+import { Linking, Pressable, View } from 'react-native';
+import { colors, Dashed, Text } from '../../components/ui';
 import { StatusPill } from '../customer/contract-display';
 import { formatTourDate, TOUR_STATUS_LABEL, TOUR_STATUS_TONE } from '../customer/tour-display';
 
@@ -11,34 +11,32 @@ type Props = {
 };
 
 export function StaffTourListItem({ appointment, onPress }: Props) {
-  const [accentColor, mutedColor] = useThemeColor(['accent', 'muted']);
-
   const callPhone = (phone: string) => {
-    Linking.openURL(`tel:${phone}`).catch(() => {
-      Alert.alert('Không thể thực hiện cuộc gọi', `Vui lòng quay số ${phone} thủ công.`);
-    });
+    void Linking.openURL(`tel:${phone}`).catch(() => undefined);
   };
 
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      className="rounded-2xl border border-border bg-surface p-4 gap-3 shadow-xs active:opacity-85"
+      style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
+      className="gap-3 rounded-[20px] border border-border-default bg-bg-card p-4"
     >
-      {/* Header: Customer Name + Status Badge */}
       <View className="flex-row items-start justify-between gap-2">
         <View className="flex-1 gap-0.5">
           <View className="flex-row items-center gap-1.5">
-            <User color={accentColor} size={16} weight="bold" />
-            <Text className="font-strong text-body-md text-foreground flex-1">
+            <User color={colors.semantic.actionPrimary} size={16} weight="bold" />
+            <Text className="flex-1 text-body font-bold text-text-primary">
               {appointment.fullName}
             </Text>
           </View>
-          <Text className="font-numeric text-caption text-muted pl-5">{appointment.phone}</Text>
+          <Text className="pl-5 text-caption text-text-secondary tabular-nums">
+            {appointment.phone}
+          </Text>
         </View>
 
         <View className="flex-row items-center gap-2">
-          {appointment.phone && (
+          {appointment.phone ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Gọi khách hàng ${appointment.fullName}`}
@@ -47,11 +45,11 @@ export function StaffTourListItem({ appointment, onPress }: Props) {
                 e.stopPropagation();
                 callPhone(appointment.phone);
               }}
-              className="size-8 items-center justify-center rounded-full bg-accent/10 active:bg-accent/20"
+              className="size-8 items-center justify-center rounded-full bg-secondary-0"
             >
-              <Phone color={accentColor} size={15} weight="fill" />
+              <Phone color={colors.semantic.actionPrimary} size={15} weight="fill" />
             </Pressable>
-          )}
+          ) : null}
           <StatusPill
             label={TOUR_STATUS_LABEL[appointment.status]}
             tone={TOUR_STATUS_TONE[appointment.status]}
@@ -59,47 +57,46 @@ export function StaffTourListItem({ appointment, onPress }: Props) {
         </View>
       </View>
 
-      {/* Target Warehouse & Facility */}
-      <View className="gap-1 rounded-xl bg-surface-secondary p-2.5">
+      <View className="gap-1.5 rounded-2xl bg-bg-subtle p-3">
         <View className="flex-row items-center gap-1.5">
-          <MapPin color={accentColor} size={14} weight="fill" />
-          <Text className="font-body text-caption text-foreground flex-1">
+          <MapPin color={colors.semantic.iconBrand} size={14} weight="fill" />
+          <Text className="flex-1 text-caption text-text-primary">
             {appointment.facility?.name ?? 'Chi nhánh'}
           </Text>
         </View>
-        {appointment.storageUnit && (
+        {appointment.storageUnit ? (
           <View className="flex-row items-center gap-1.5 pl-4">
-            <Warehouse color={mutedColor} size={14} />
-            <Text className="font-body text-caption text-subtle">
+            <Warehouse color={colors.semantic.textSecondary} size={14} />
+            <Text className="text-caption text-text-secondary">
               Phòng kho mẫu:{' '}
-              <Text className="font-strong">
+              <Text className="font-semibold text-text-primary">
                 {appointment.storageUnit.name} ({appointment.storageUnit.code})
               </Text>
             </Text>
           </View>
-        )}
+        ) : null}
       </View>
 
-      {/* Scheduled Date & Time */}
-      <View className="flex-row items-center justify-between text-xs pt-1 border-t border-border/60">
+      <Dashed />
+
+      <View className="flex-row items-center justify-between">
         <View className="flex-row items-center gap-1.5">
-          <CalendarCheck color={accentColor} size={15} weight="bold" />
-          <Text className="font-numeric text-caption text-foreground">
+          <CalendarCheck color={colors.semantic.actionPrimary} size={15} weight="bold" />
+          <Text className="text-caption font-medium text-text-primary tabular-nums">
             {formatTourDate(appointment.preferredDate)}
           </Text>
         </View>
 
         <View className="flex-row items-center gap-1.5">
-          <Clock color={accentColor} size={15} weight="bold" />
-          <Text className="font-numeric text-caption text-foreground">
+          <Clock color={colors.semantic.actionPrimary} size={15} weight="bold" />
+          <Text className="text-caption font-medium text-text-primary tabular-nums">
             {appointment.preferredTimeSlot || 'Chưa định giờ'}
           </Text>
         </View>
       </View>
 
-      {/* Notes preview */}
       {appointment.customerNotes ? (
-        <Text className="font-body text-[11px] text-muted italic" numberOfLines={1}>
+        <Text className="text-caption italic text-text-secondary" numberOfLines={1}>
           Khách dặn: "{appointment.customerNotes}"
         </Text>
       ) : null}

@@ -1,7 +1,8 @@
-import { Image, Text, View } from 'react-native';
+import { Image, View } from 'react-native';
 import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import { saveRemoteImage } from '../../../lib/save-image-to-library';
 import { invoiceTitle, vietnamDayIso, willBeVoidedOnReturn } from '../../../lib/settlement-format';
+import { Dashed, Text } from '../../components/ui';
 import type { ApiInvoice } from '../../types/invoice-api';
 import { StatusPill } from './contract-display';
 import { InfoRow } from './info-row';
@@ -36,12 +37,11 @@ export function InvoicePayCard({
   const qrUrl = invoice.paymentQrUrl;
 
   return (
-    <View className="gap-2 rounded-xl border border-border bg-background p-3">
+    <View className="gap-2.5 rounded-2xl border border-border-default bg-bg-subtle p-3.5">
       <View className="flex-row items-start justify-between gap-3">
-        <View className="flex-1">
-          <Text className="font-strong text-body-sm text-foreground">{invoiceTitle(invoice)}</Text>
-          <Text className="font-numeric text-caption text-muted">{invoice.invoiceNo}</Text>
-        </View>
+        <Text className="flex-1 text-body font-bold text-text-primary">
+          {invoiceTitle(invoice)}
+        </Text>
         <StatusPill
           label={voided ? 'Sẽ huỷ khi trả kho' : 'Cần thanh toán'}
           tone={voided ? 'neutral' : 'warning'}
@@ -56,26 +56,31 @@ export function InvoicePayCard({
       <InfoRow isNumeric label="Còn phải trả" value={formatMoney(invoice.amountDue)} />
 
       {voided ? (
-        <Text className="font-body text-body-sm text-muted">
+        <Text className="text-body-sm text-text-secondary">
           Nếu trả đúng ngày hẹn{returnDay ? ` ${returnDay.slice(0, 5)}` : ''}.
         </Text>
       ) : qrUrl ? (
-        <View className="items-center gap-2 pt-1">
-          <Image
-            accessibilityLabel={`Mã VietQR thanh toán hoá đơn ${invoice.invoiceNo}`}
-            source={{ uri: qrUrl }}
-            style={{ width: QR_WIDTH, aspectRatio: QR_ASPECT_RATIO }}
-            resizeMode="contain"
-          />
-          <SaveImageButton
-            label="Lưu mã QR"
-            isCompact
-            onSave={() => saveRemoteImage(qrUrl, invoice.invoiceNo)}
-          />
-          <Text className="font-body text-center text-caption text-muted">
-            Nội dung chuyển khoản: {invoice.invoiceNo}
-          </Text>
-        </View>
+        <>
+          <Dashed />
+          <View className="items-center gap-2.5 pt-1">
+            <View className="rounded-2xl bg-secondary-0 p-3">
+              <Image
+                accessibilityLabel={`Mã VietQR thanh toán hoá đơn ${invoice.invoiceNo}`}
+                source={{ uri: qrUrl }}
+                style={{ width: QR_WIDTH, aspectRatio: QR_ASPECT_RATIO }}
+                resizeMode="contain"
+              />
+            </View>
+            <SaveImageButton
+              label="Lưu mã QR"
+              isCompact
+              onSave={() => saveRemoteImage(qrUrl, invoice.invoiceNo)}
+            />
+            <Text className="text-center text-caption text-text-secondary tabular-nums">
+              Nội dung chuyển khoản: {invoice.invoiceNo}
+            </Text>
+          </View>
+        </>
       ) : null}
     </View>
   );

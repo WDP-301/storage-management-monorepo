@@ -1,6 +1,7 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { formatIsoDate } from '../../../lib/format-vi';
 import { addDaysIso } from '../../../lib/settlement-format';
+import { Text } from '../../components/ui';
 import { MonthCalendar } from './MonthCalendar';
 
 /** The API accepts a return day from today (Vietnam) to this many days ahead. */
@@ -22,13 +23,13 @@ type Props = {
 export function ReturnDatePicker({ todayIso, selectedIso, lastDayIso, onSelect }: Props) {
   const maxIso = addDaysIso(todayIso, RETURN_MAX_DAYS_AHEAD);
   return (
-    <View className="rounded-lg border border-border p-3">
+    <View className="rounded-2xl border border-border-default bg-bg-card p-3.5">
       {lastDayIso ? (
-        <Text className="font-body text-body-sm text-muted">
+        <Text className="text-body-sm text-text-secondary">
           Hạn HĐ: đến hết {formatIsoDate(lastDayIso)}
         </Text>
       ) : null}
-      <Text className="font-body mt-1 text-caption text-muted">
+      <Text className="mt-1 text-caption text-text-secondary">
         Có thể chọn đến {formatIsoDate(maxIso)}
       </Text>
       <View className="mt-3">

@@ -1,5 +1,5 @@
-import { Button } from 'heroui-native';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
+import { Button, colors, InlineMessage, Text } from '../../../components/ui';
 
 /** Loading / error / empty placeholder shared by the counter lists; renders nothing once there is data. */
 export function ListState({
@@ -17,20 +17,20 @@ export function ListState({
 }) {
   if (error) {
     return (
-      <View className="gap-2 rounded-xl bg-danger-bg p-3">
-        <Text className="font-body text-body-sm text-danger">{error}</Text>
-        <Button size="sm" variant="secondary" onPress={onRetry}>
-          <Button.Label>Thử lại</Button.Label>
-        </Button>
+      <View className="gap-3 rounded-[20px] border border-border-error/30 bg-danger-0 p-4">
+        <InlineMessage message={error} type="error" />
+        <Button label="Thử lại" onPress={onRetry} size="sm" variant="secondary" />
       </View>
     );
   }
-  if (loading && empty) return <ActivityIndicator />;
+  if (loading && empty) {
+    return <ActivityIndicator className="py-4" color={colors.semantic.actionPrimary} />;
+  }
   if (empty) {
     return (
-      <Text className="rounded-xl bg-surface-secondary p-3 font-body text-body-sm text-muted">
-        {emptyText}
-      </Text>
+      <View className="rounded-[20px] border border-border-default bg-bg-card p-4">
+        <Text className="text-center text-body text-text-secondary">{emptyText}</Text>
+      </View>
     );
   }
   return null;

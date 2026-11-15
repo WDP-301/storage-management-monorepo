@@ -1,6 +1,8 @@
-import { Button } from 'heroui-native';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { primaryRoleLabel } from '../../../lib/app-area';
+import { Button, Icon, Text } from '../../components/ui';
+import colors from '../../components/ui/colors';
 import type { AuthUser } from '../../types/auth';
 
 type Props = {
@@ -11,26 +13,35 @@ type Props = {
 
 /** Shown to accounts whose roles have no mobile area (operations manager, admin, no role). */
 export function UnsupportedRoleScreen({ user, isLoggingOut, onLogout }: Props) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <View className="flex-1 justify-between px-5 pb-8 pt-10">
+    <View
+      className="flex-1 justify-between bg-bg-page px-5 pt-10"
+      style={{ paddingBottom: Math.max(insets.bottom, 24) }}
+    >
       <View>
-        <View className="size-12 items-center justify-center rounded-2xl bg-warning/15">
-          <Text className="font-body text-title-sm font-black text-warning">!</Text>
+        <View className="size-14 items-center justify-center rounded-2xl bg-warning-0">
+          <Icon color={colors.warning[700]} name="warning-amber" size={28} />
         </View>
-        <Text className="mt-7 text-title-md font-display tracking-tight text-foreground">
+        <Text className="mt-6 text-heading font-bold text-text-primary">
           Tài khoản chưa hỗ trợ trên ứng dụng di động
         </Text>
-        <Text className="font-body mt-3 text-body-lg leading-6 text-muted">
-          Tài khoản {user.email} có vai trò {primaryRoleLabel(user.roles)}. Vai trò này làm việc
-          trên trang quản trị web. Vui lòng đăng nhập bằng trình duyệt để tiếp tục.
+        <Text className="mt-3 text-body-lg leading-6 text-text-secondary">
+          Tài khoản <Text className="font-semibold text-text-primary">{user.email}</Text> có vai trò{' '}
+          <Text className="font-semibold text-text-primary">{primaryRoleLabel(user.roles)}</Text>.
+          Vai trò này làm việc trên trang quản trị web. Vui lòng đăng nhập bằng trình duyệt để tiếp
+          tục.
         </Text>
       </View>
 
-      <Button className="w-full" isDisabled={isLoggingOut} size="lg" onPress={onLogout}>
-        <Button.Label className="font-ui">
-          {isLoggingOut ? 'Đang đăng xuất...' : 'Đăng xuất'}
-        </Button.Label>
-      </Button>
+      <Button
+        label={isLoggingOut ? 'Đang đăng xuất...' : 'Đăng xuất'}
+        loading={isLoggingOut}
+        onPress={onLogout}
+        size="lg"
+        variant="destructive"
+      />
     </View>
   );
 }

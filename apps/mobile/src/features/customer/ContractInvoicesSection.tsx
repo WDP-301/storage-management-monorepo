@@ -1,5 +1,5 @@
-import { Text } from 'react-native';
 import { isInvoiceDue } from '../../../lib/settlement-format';
+import { InlineMessage, Text } from '../../components/ui';
 import { SectionCard } from './contract-sections';
 import { InvoicePayCard } from './InvoicePayCard';
 import type { ContractInvoicesState } from './use-contract-invoices';
@@ -26,14 +26,12 @@ export function ContractInvoicesSection({
       badge={badge}
       tone={due.length > 0 ? 'warning' : isFirstLoad ? 'neutral' : 'success'}
     >
-      {state.error ? (
-        <Text className="font-body text-body-sm text-danger">{state.error}</Text>
-      ) : null}
+      {state.error ? <InlineMessage message={state.error} type="error" /> : null}
       {due.map((invoice) => (
         <InvoicePayCard key={invoice.id} invoice={invoice} returnScheduledAt={returnScheduledAt} />
       ))}
       {!isFirstLoad && !state.error && due.length === 0 ? (
-        <Text className="font-body text-body-sm text-muted">Không có hoá đơn cần thanh toán.</Text>
+        <Text className="text-body-sm text-text-secondary">Không có hoá đơn cần thanh toán.</Text>
       ) : null}
     </SectionCard>
   );

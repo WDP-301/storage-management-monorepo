@@ -1,32 +1,24 @@
 import {
-  BeVietnamPro_400Regular,
-  BeVietnamPro_500Medium,
-  BeVietnamPro_600SemiBold,
-  BeVietnamPro_700Bold,
-} from '@expo-google-fonts/be-vietnam-pro';
-import {
-  JetBrainsMono_500Medium,
-  JetBrainsMono_600SemiBold,
-  JetBrainsMono_700Bold,
-} from '@expo-google-fonts/jetbrains-mono';
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
 import { useFonts } from 'expo-font';
 
 /**
- * Loads the four Be Vietnam Pro weights the UI references plus two JetBrains Mono weights.
+ * Loads the Inter family and explicit weights for both native font embedding and Expo Go.
  *
- * Keys match the family names declared in `global.css`. Android ignores `fontWeight` once a custom
- * `fontFamily` is set, so every weight the design uses must be registered here by name — adding a
- * `font-*` token without a matching entry renders as the system font with no error.
+ * `Inter` maps to regular for CSS `font-inter` / `font-sans`, while explicit weight keys let
+ * legacy `font-*` tokens resolve cleanly on Android without native prebuild.
  */
 export function useAppFonts(): boolean {
   const [isLoaded, error] = useFonts({
-    BeVietnamPro_400Regular,
-    BeVietnamPro_500Medium,
-    BeVietnamPro_600SemiBold,
-    BeVietnamPro_700Bold,
-    JetBrainsMono_500Medium,
-    JetBrainsMono_600SemiBold,
-    JetBrainsMono_700Bold,
+    Inter: Inter_400Regular,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
   });
 
   // A failed load falls back to system fonts instead of holding the splash screen forever.

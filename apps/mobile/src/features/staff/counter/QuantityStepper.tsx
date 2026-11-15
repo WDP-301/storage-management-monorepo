@@ -1,4 +1,5 @@
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
+import { Text } from '../../../components/ui';
 
 /** − [qty] + control; the field also takes a typed number, and `max` caps both. */
 export function QuantityStepper({
@@ -10,29 +11,30 @@ export function QuantityStepper({
   max?: number;
   onChange: (quantity: number) => void;
 }) {
-  const button = (label: string, disabled: boolean, next: number) => (
+  const stepButton = (label: string, disabled: boolean, next: number) => (
     <Pressable
-      accessibilityRole="button"
       accessibilityLabel={label === '−' ? 'Giảm' : 'Tăng'}
+      accessibilityRole="button"
       accessibilityState={{ disabled }}
+      className={`size-9 items-center justify-center rounded-xl border border-border-default bg-bg-subtle ${disabled ? 'opacity-40' : ''}`}
       disabled={disabled}
-      className={`h-9 w-9 items-center justify-center rounded-lg bg-surface-secondary ${disabled ? 'opacity-40' : ''}`}
       onPress={() => onChange(next)}
+      style={({ pressed }) => ({ opacity: pressed && !disabled ? 0.7 : disabled ? 0.4 : 1 })}
     >
-      <Text className="font-strong text-body-md text-foreground">{label}</Text>
+      <Text className="text-body-lg font-semibold text-text-primary">{label}</Text>
     </Pressable>
   );
   return (
     <View className="flex-row items-center gap-1.5">
-      {button('−', value <= 0, value - 1)}
+      {stepButton('−', value <= 0, value - 1)}
       <TextInput
         accessibilityLabel="Số lượng"
+        className="h-9 w-14 rounded-xl border border-border-default bg-bg-page text-center font-inter text-body font-semibold text-text-primary"
         keyboardType="number-pad"
-        className="h-9 w-14 rounded-lg border border-border bg-surface text-center font-strong text-body-md text-foreground"
-        value={String(value)}
         onChangeText={(text) => onChange(Number.parseInt(text.replace(/\D/g, ''), 10) || 0)}
+        value={String(value)}
       />
-      {button('+', max !== undefined && value >= max, value + 1)}
+      {stepButton('+', max !== undefined && value >= max, value + 1)}
     </View>
   );
 }

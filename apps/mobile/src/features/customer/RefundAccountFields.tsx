@@ -1,6 +1,6 @@
 import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
-import { Button } from 'heroui-native';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Button, colors, InlineMessage, Text } from '../../components/ui';
 import { BankPicker } from './BankPicker';
 import {
   EMPTY_REFUND_ACCOUNT,
@@ -11,7 +11,7 @@ import { useBankVerification } from './use-bank-verification';
 import { useBanks } from './use-banks';
 
 const INPUT_CLASS =
-  'font-body rounded-lg border border-border bg-surface-secondary px-3 py-2.5 text-body-sm text-foreground';
+  'rounded-xl border border-border-default bg-bg-subtle px-3.5 py-3 font-inter text-body text-text-primary';
 
 type Props = {
   draft: RefundAccountDraft;
@@ -19,7 +19,7 @@ type Props = {
   required: boolean;
   /** Shown under the title, e.g. what leaving the form empty does. */
   hint?: string | null;
-  mutedColor: string;
+  mutedColor?: string;
 };
 
 /**
@@ -31,30 +31,30 @@ export function RefundAccountFields({ draft, onChange, required, hint, mutedColo
   const bankList = useBanks();
   const check = useBankVerification(draft, onChange);
   const holder = verifiedAccount(draft)?.accountName;
+  const placeholderColor = mutedColor ?? colors.semantic.textPlaceholder;
 
   return (
-    <View className="gap-2">
-      <Text className="text-body-sm font-strong text-foreground">
+    <View className="gap-2.5">
+      <Text className="text-body-sm font-semibold text-text-primary">
         Tài khoản nhận hoàn cọc{required ? '' : ' (không bắt buộc)'}
       </Text>
-      {hint ? <Text className="font-body text-caption text-muted">{hint}</Text> : null}
+      {hint ? <Text className="text-caption text-text-secondary">{hint}</Text> : null}
       {draft.bankBin !== null ? (
-        <View className="flex-row items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
-          <Text className="flex-1 font-strong text-body-sm text-foreground" numberOfLines={1}>
+        <View className="flex-row items-center justify-between gap-3 rounded-xl border border-border-default bg-bg-card px-3.5 py-2.5">
+          <Text className="flex-1 text-body-sm font-semibold text-text-primary" numberOfLines={1}>
             {draft.bankName}
           </Text>
           <Button
+            label="Đổi"
+            onPress={() => onChange({ ...draft, bankBin: null, bankName: '', verified: null })}
             size="sm"
             variant="secondary"
-            onPress={() => onChange({ ...draft, bankBin: null, bankName: '', verified: null })}
-          >
-            <Button.Label className="font-ui">Đổi</Button.Label>
-          </Button>
+          />
         </View>
       ) : (
         <BankPicker
           {...bankList}
-          mutedColor={mutedColor}
+          mutedColor={placeholderColor}
           onRetry={bankList.retry}
           onPickBank={(bank) =>
             onChange({ ...draft, bankBin: bank.bin, bankName: bank.shortName, verified: null })
@@ -64,7 +64,7 @@ export function RefundAccountFields({ draft, onChange, required, hint, mutedColo
       <BottomSheetTextInput
         className={INPUT_CLASS}
         placeholder="Số tài khoản"
-        placeholderTextColor={mutedColor}
+        placeholderTextColor={placeholderColor}
         value={draft.accountNo}
         onChangeText={(accountNo) => onChange({ ...draft, accountNo, verified: null })}
         onEndEditing={() => void check.verify()}
@@ -73,29 +73,28 @@ export function RefundAccountFields({ draft, onChange, required, hint, mutedColo
         maxLength={40}
       />
       {holder ? (
-        <View className="gap-0.5 rounded-lg border border-border bg-surface-secondary px-3 py-2.5">
-          <Text className="font-body text-caption text-muted">Chủ tài khoản</Text>
-          <Text className="font-strong text-body-sm text-foreground">{holder}</Text>
+        <View className="gap-0.5 rounded-xl border border-border-default bg-bg-subtle px-3.5 py-2.5">
+          <Text className="text-caption text-text-secondary">Chủ tài khoản</Text>
+          <Text className="text-body-sm font-semibold text-text-primary">{holder}</Text>
         </View>
       ) : (
         <Button
+          disabled={!check.canVerify}
+          label={check.isChecking ? 'Đang kiểm tra…' : 'Kiểm tra tài khoản'}
+          loading={check.isChecking}
+          onPress={() => void check.verify()}
           size="sm"
           variant="secondary"
-          isDisabled={!check.canVerify}
-          onPress={() => void check.verify()}
-        >
-          <Button.Label className="font-ui">
-            {check.isChecking ? 'Đang kiểm tra…' : 'Kiểm tra tài khoản'}
-          </Button.Label>
-        </Button>
+        />
       )}
-      {check.error ? (
-        <Text className="font-body text-caption text-danger">{check.error}</Text>
-      ) : null}
+      {check.error ? <InlineMessage message={check.error} type="error" /> : null}
       {!required && draft.bankBin !== null ? (
-        <Button size="sm" variant="ghost" onPress={() => onChange(EMPTY_REFUND_ACCOUNT)}>
-          <Button.Label className="font-ui">Bỏ tài khoản</Button.Label>
-        </Button>
+        <Button
+          label="Bỏ tài khoản"
+          onPress={() => onChange(EMPTY_REFUND_ACCOUNT)}
+          size="sm"
+          variant="text"
+        />
       ) : null}
     </View>
   );

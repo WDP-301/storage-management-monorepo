@@ -1,5 +1,4 @@
 import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
-import { Button, useThemeColor } from 'heroui-native';
 import {
   CalendarBlank,
   CaretLeft,
@@ -8,7 +7,7 @@ import {
   MagnifyingGlass,
 } from 'phosphor-react-native';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import { ChangeRequestsApi, type UnitChangeOption } from '../../../lib/change-requests-api';
 import { useRefreshBookingSettings, useUnitChangeSettings } from '../../../lib/client-settings';
@@ -16,6 +15,7 @@ import { formatArea, formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import { formatVnTime } from '../../../lib/receiving-time';
 import { fromIsoDate, todayIso, toIsoDate } from '../../../lib/rental-schedule';
 import { unitChangeErrorMessage } from '../../../lib/unit-change-errors';
+import { Button, colors, InlineMessage, Text } from '../../components/ui';
 import type { ApiContract } from '../../types/contract-api';
 import { contractWarehouseName } from './contract-display';
 import { ChipButton } from './FilterChips';
@@ -23,7 +23,6 @@ import { MonthCalendar } from './MonthCalendar';
 import { OfficeTimeChips } from './OfficeTimeChips';
 import { useOfficeTimeSlots } from './use-office-time-slots';
 
-const ACCENT = 'hsl(203 100% 30%)';
 const PAGE_SIZE = 5;
 
 /** Accent-free lowercase match so "di an" finds "Kho Dĩ An". */
@@ -43,7 +42,6 @@ export function UnitChangeRequestForm({
   contract: ApiContract;
   onDone: () => void;
 }) {
-  const [mutedColor] = useThemeColor(['muted']);
   const [options, setOptions] = useState<UnitChangeOption[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [step, setStep] = useState<'details' | 'unit'>('details');
@@ -134,17 +132,17 @@ export function UnitChangeRequestForm({
   };
 
   return (
-    <View className="gap-4 px-4">
+    <View className="gap-4 px-4 pt-2">
       <View>
         <View className="flex-row items-baseline justify-between gap-2">
-          <Text className="text-title-md font-strong tracking-tight text-foreground">
+          <Text className="flex-1 text-title font-bold text-text-primary">
             Đổi kho {contractWarehouseName(contract)}
           </Text>
-          <Text className="font-ui text-caption text-muted">
+          <Text className="text-caption font-semibold text-text-secondary">
             Bước {step === 'details' ? 1 : 2}/2
           </Text>
         </View>
-        <Text className="font-body mt-1 text-caption leading-5 text-muted">
+        <Text className="mt-1 text-caption leading-5 text-text-secondary">
           {step === 'details'
             ? 'Chọn ngày, giờ hành chính bạn sẽ qua chuyển đồ và lý do đổi kho. Kho mới được giữ chỗ sau khi quản lý duyệt.'
             : 'Chọn kho muốn chuyển tới. Kho mới được giữ chỗ sau khi quản lý duyệt.'}
@@ -154,41 +152,43 @@ export function UnitChangeRequestForm({
       {step === 'details' ? (
         <>
           <View className="gap-2">
-            <Text className="text-body-sm font-strong text-foreground">Ngày chuyển đồ</Text>
+            <Text className="text-body-sm font-semibold text-text-primary">Ngày chuyển đồ</Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Chọn ngày chuyển kho"
-              className="flex-row items-center gap-2 rounded-lg border border-border bg-surface-secondary px-3 py-3"
+              className="flex-row items-center gap-2 rounded-xl border border-border-default bg-bg-subtle px-3.5 py-3"
               onPress={() => setCalendarOpen((open) => !open)}
             >
-              <CalendarBlank color={ACCENT} size={18} weight="bold" />
+              <CalendarBlank color={colors.semantic.actionPrimary} size={18} weight="bold" />
               <Text
-                className={`flex-1 text-body-sm ${dayIso ? 'font-numeric text-foreground' : 'font-body text-muted'}`}
+                className={`flex-1 text-body-sm ${dayIso ? 'font-medium text-text-primary tabular-nums' : 'text-text-secondary'}`}
               >
                 {dayIso ? formatIsoDate(dayIso) : 'Chọn ngày'}
               </Text>
             </Pressable>
             {calendarOpen ? (
-              <MonthCalendar
-                minIso={minIso}
-                maxIso={maxIso}
-                selectedIso={dayIso}
-                onSelect={(iso) => {
-                  setDayIso(iso);
-                  setCalendarOpen(false);
-                }}
-              />
+              <View className="rounded-2xl border border-border-default bg-bg-card p-3.5">
+                <MonthCalendar
+                  minIso={minIso}
+                  maxIso={maxIso}
+                  selectedIso={dayIso}
+                  onSelect={(iso) => {
+                    setDayIso(iso);
+                    setCalendarOpen(false);
+                  }}
+                />
+              </View>
             ) : null}
           </View>
 
           <OfficeTimeChips label="Giờ chuyển đồ" slots={slots} />
 
           <View className="gap-2">
-            <Text className="text-body-sm font-strong text-foreground">Lý do đổi kho</Text>
+            <Text className="text-body-sm font-semibold text-text-primary">Lý do đổi kho</Text>
             <BottomSheetTextInput
-              className="font-body min-h-20 rounded-lg border border-border bg-surface-secondary px-3 py-2 text-body-sm text-foreground"
+              className="min-h-20 rounded-xl border border-border-default bg-bg-subtle px-4 py-3 font-inter text-body text-text-primary"
               placeholder="VD: cần kho rộng hơn, muốn chuyển gần nhà…"
-              placeholderTextColor={mutedColor}
+              placeholderTextColor={colors.semantic.textPlaceholder}
               value={reason}
               onChangeText={setReason}
               maxLength={1000}
@@ -197,9 +197,12 @@ export function UnitChangeRequestForm({
             />
           </View>
 
-          <Button isDisabled={!canContinue} onPress={() => setStep('unit')}>
-            <Button.Label>Tiếp tục chọn kho</Button.Label>
-          </Button>
+          <Button
+            disabled={!canContinue}
+            fullWidth
+            label="Tiếp tục chọn kho"
+            onPress={() => setStep('unit')}
+          />
         </>
       ) : (
         <>
@@ -210,22 +213,24 @@ export function UnitChangeRequestForm({
             className="self-start"
             onPress={() => setStep('details')}
           >
-            <Text className="font-ui text-body-sm text-accent">
+            <Text className="text-body-sm font-medium text-text-link">
               ← {dayIso ? formatIsoDate(dayIso) : 'Chọn ngày'}
               {chosenMoveAt ? ` · ${formatVnTime(chosenMoveAt)}` : ''} · đổi lại lựa chọn
             </Text>
           </Pressable>
 
           <View className="gap-2">
-            <Text className="text-body-sm font-strong text-foreground">Kho muốn chuyển tới</Text>
+            <Text className="text-body-sm font-semibold text-text-primary">
+              Kho muốn chuyển tới
+            </Text>
             {options !== null && options.length > 1 ? (
               <>
-                <View className="flex-row items-center gap-2 rounded-lg border border-border bg-surface-secondary px-3">
-                  <MagnifyingGlass color={mutedColor} size={16} weight="bold" />
+                <View className="flex-row items-center gap-2 rounded-xl border border-border-default bg-bg-subtle px-3.5">
+                  <MagnifyingGlass color={colors.semantic.textSecondary} size={16} weight="bold" />
                   <BottomSheetTextInput
-                    className="flex-1 font-body py-2.5 text-body-sm text-foreground"
-                    placeholder="Tìm theo tên, mã kho hoặc chi nhánh…"
-                    placeholderTextColor={mutedColor}
+                    className="flex-1 py-2.5 font-inter text-body text-text-primary"
+                    placeholder="Tìm theo tên hoặc chi nhánh…"
+                    placeholderTextColor={colors.semantic.textPlaceholder}
                     value={query}
                     onChangeText={setQuery}
                     accessibilityLabel="Tìm kho muốn chuyển tới"
@@ -253,15 +258,15 @@ export function UnitChangeRequestForm({
               </>
             ) : null}
             {options === null && loadError === null ? (
-              <ActivityIndicator color={ACCENT} />
+              <ActivityIndicator color={colors.semantic.actionPrimary} />
             ) : loadError !== null || options === null ? (
-              <Text className="font-body text-body-sm text-danger">{loadError}</Text>
+              <InlineMessage message={loadError ?? 'Không tải được danh sách kho.'} type="error" />
             ) : options.length === 0 ? (
-              <Text className="font-body text-body-sm text-muted">
+              <Text className="text-body-sm text-text-secondary">
                 Hiện không còn kho cùng loại nào trống.
               </Text>
             ) : visible.length === 0 ? (
-              <Text className="font-body text-body-sm text-muted">
+              <Text className="text-body-sm text-text-secondary">
                 Không có kho nào khớp tìm kiếm — thử từ khoá hoặc chi nhánh khác.
               </Text>
             ) : (
@@ -273,39 +278,38 @@ export function UnitChangeRequestForm({
                       key={option.unit.id}
                       accessibilityRole="button"
                       accessibilityState={{ selected: isSelected }}
-                      className={`flex-row items-center gap-3 rounded-lg border px-3 py-3 ${
+                      className={`flex-row items-center gap-3 rounded-2xl border px-3.5 py-3 ${
                         isSelected
-                          ? 'border-accent bg-accent/5'
-                          : 'border-border bg-surface-secondary'
+                          ? 'border-border-selected bg-secondary-0'
+                          : 'border-border-default bg-bg-subtle'
                       }`}
                       onPress={() => setSelectedId(option.unit.id)}
                     >
                       <View className="flex-1 gap-0.5">
-                        <Text className="font-strong text-body-sm text-foreground">
+                        <Text className="text-body-sm font-semibold text-text-primary">
                           {option.unit.name}
                         </Text>
-                        <Text className="font-numeric text-caption text-muted">
-                          {option.unit.code}
-                        </Text>
-                        <Text className="font-body text-caption text-muted">
+                        <Text className="text-caption text-text-secondary">
                           {option.unit.facility_name}
                           {option.unit.area_m2 !== null
                             ? ` · ${formatArea(option.unit.area_m2)}`
                             : ''}
                         </Text>
-                        <Text className="font-body text-caption text-muted">
+                        <Text className="text-caption text-text-secondary tabular-nums">
                           {formatMoney(option.unit.monthly_price)}/tháng
                           {option.rent_difference !== 0
                             ? ` (${option.rent_difference > 0 ? '+' : '−'}${formatMoney(Math.abs(option.rent_difference))}/tháng)`
                             : ''}
                         </Text>
                         {option.deposit_difference > 0 ? (
-                          <Text className="font-body text-caption text-warning">
+                          <Text className="text-caption font-medium text-warning-700">
                             Bù cọc thêm {formatMoney(option.deposit_difference)}
                           </Text>
                         ) : null}
                       </View>
-                      {isSelected ? <Check color={ACCENT} size={20} weight="bold" /> : null}
+                      {isSelected ? (
+                        <Check color={colors.semantic.actionPrimary} size={20} weight="bold" />
+                      ) : null}
                     </Pressable>
                   );
                 })}
@@ -322,9 +326,9 @@ export function UnitChangeRequestForm({
                       })}
                       onPress={() => setPage((p) => Math.max(0, p - 1))}
                     >
-                      <CaretLeft color={ACCENT} size={20} weight="bold" />
+                      <CaretLeft color={colors.semantic.actionPrimary} size={20} weight="bold" />
                     </Pressable>
-                    <Text className="font-numeric text-body-sm text-muted">
+                    <Text className="text-body-sm text-text-secondary tabular-nums">
                       Trang {safePage + 1} / {pageCount}
                     </Text>
                     <Pressable
@@ -338,7 +342,7 @@ export function UnitChangeRequestForm({
                       })}
                       onPress={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
                     >
-                      <CaretRight color={ACCENT} size={20} weight="bold" />
+                      <CaretRight color={colors.semantic.actionPrimary} size={20} weight="bold" />
                     </Pressable>
                   </View>
                 ) : null}
@@ -346,10 +350,14 @@ export function UnitChangeRequestForm({
             )}
           </View>
 
-          {error ? <Text className="font-body text-body-sm text-danger">{error}</Text> : null}
-          <Button isDisabled={!canSubmit} onPress={() => void submit()}>
-            <Button.Label>{isSubmitting ? 'Đang gửi…' : 'Gửi yêu cầu đổi kho'}</Button.Label>
-          </Button>
+          {error ? <InlineMessage message={error} type="error" /> : null}
+          <Button
+            disabled={!canSubmit}
+            fullWidth
+            label={isSubmitting ? 'Đang gửi…' : 'Gửi yêu cầu đổi kho'}
+            loading={isSubmitting}
+            onPress={() => void submit()}
+          />
         </>
       )}
     </View>

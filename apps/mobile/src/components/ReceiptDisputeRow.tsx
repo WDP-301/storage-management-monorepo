@@ -1,8 +1,8 @@
 import type { ShelfReceiptView } from '@storage/types';
-import { Button } from 'heroui-native';
-import { Pressable, Text } from 'react-native';
+import { Pressable } from 'react-native';
 import { canReportReceipt } from '../../lib/receipt-dispute';
 import { TICKET_STATUS_LABEL } from '../features/customer/ticket-display';
+import { Button, Text } from './ui';
 
 /** Flag for a reported receipt (opens the ticket when a handler is given) or the report button. */
 export function ReceiptDisputeRow({
@@ -20,18 +20,14 @@ export function ReceiptDisputeRow({
     return (
       <Pressable
         accessibilityRole={onOpenDispute ? 'button' : 'text'}
+        className="rounded-xl bg-warning-0 px-3 py-2"
         disabled={!onOpenDispute}
-        className="rounded-lg bg-warning-bg px-2.5 py-2"
         onPress={() => onOpenDispute?.(dispute.id)}
       >
-        <Text className="font-strong text-body-sm text-warning">{label}</Text>
+        <Text className="text-body-sm font-semibold text-warning-700">{label}</Text>
       </Pressable>
     );
   }
   if (!onReport || !canReportReceipt(receipt)) return null;
-  return (
-    <Button size="sm" variant="secondary" onPress={onReport}>
-      <Button.Label>Báo sai phiếu</Button.Label>
-    </Button>
-  );
+  return <Button label="Báo sai phiếu" onPress={onReport} size="sm" variant="secondary" />;
 }

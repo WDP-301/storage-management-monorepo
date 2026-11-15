@@ -1,6 +1,7 @@
-import { Button } from 'heroui-native';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
-import { ScreenHeader } from '../../components/ScreenHeader';
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { useRef } from 'react';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
+import { AlertSheet, Button, colors, FlowScreen, InlineMessage } from '../../components/ui';
 import type { ServiceTicketRecord } from '../../types/ticket-api';
 import { TicketAttachmentsCard, TicketHistoryCard, TicketSummaryCard } from './ticket-detail-parts';
 import { CANCELLABLE_STATUSES } from './ticket-display';
@@ -27,49 +28,60 @@ export function TicketDetailScreen({
   onRetry,
   onBack,
 }: Props) {
+  const cancelRef = useRef<BottomSheetModal>(null);
+
   return (
-    <View className="flex-1">
-      <ScreenHeader
-        backLabel="Quay lại danh sách yêu cầu"
-        title="Chi tiết yêu cầu"
-        onBack={onBack}
-      />
+    <FlowScreen muted onBack={onBack} title="Chi tiết yêu cầu" titleAlign="left">
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 32 }}
+        className="flex-1 bg-bg-muted"
+        contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 12 }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="gap-3 px-4">
-          {error ? (
-            <View className="rounded-xl border border-danger/30 bg-danger-bg p-3">
-              <Text className="font-body text-body-sm text-danger">{error}</Text>
-              <Button className="mt-3" size="sm" variant="secondary" onPress={onRetry}>
-                <Button.Label className="font-ui">Thử lại</Button.Label>
-              </Button>
-            </View>
-          ) : null}
+        {error ? (
+          <View className="gap-3 rounded-[20px] border border-border-default bg-bg-card p-4">
+            <InlineMessage message={error} type="error" />
+            <Button label="Thử lại" onPress={onRetry} size="sm" variant="secondary" />
+          </View>
+        ) : null}
 
-          {isLoading && !ticket ? <ActivityIndicator /> : null}
+        {isLoading && !ticket ? <ActivityIndicator color={colors.semantic.actionPrimary} /> : null}
 
-          {ticket ? (
-            <>
-              <TicketSummaryCard ticket={ticket} />
-              <TicketAttachmentsCard attachments={ticket.attachments} />
-              <TicketHistoryCard
-                ticket={ticket}
-                describeActor={(userId) => (userId === sessionUserId ? 'Bạn' : 'Nhân viên')}
+        {ticket ? (
+          <>
+            <TicketSummaryCard ticket={ticket} />
+            <TicketAttachmentsCard attachments={ticket.attachments} />
+            <TicketHistoryCard
+              ticket={ticket}
+              describeActor={(userId) => (userId === sessionUserId ? 'Bạn' : 'Nhân viên')}
+            />
+
+            {CANCELLABLE_STATUSES.includes(ticket.status) ? (
+              <Button
+                disabled={isCancelling}
+                fullWidth
+                label={isCancelling ? 'Đang hủy...' : 'Hủy yêu cầu'}
+                loading={isCancelling}
+                onPress={() => cancelRef.current?.present()}
+                variant="destructive"
               />
-
-              {CANCELLABLE_STATUSES.includes(ticket.status) ? (
-                <Button variant="danger-soft" isDisabled={isCancelling} onPress={onCancel}>
-                  <Button.Label className="font-ui">
-                    {isCancelling ? 'Đang hủy...' : 'Hủy yêu cầu'}
-                  </Button.Label>
-                </Button>
-              ) : null}
-            </>
-          ) : null}
-        </View>
+            ) : null}
+          </>
+        ) : null}
       </ScrollView>
-    </View>
+
+      <AlertSheet
+        ref={cancelRef}
+        destructive
+        message="Bạn chắc chắn muốn hủy yêu cầu hỗ trợ này?"
+        onPrimary={() => {
+          cancelRef.current?.dismiss();
+          onCancel();
+        }}
+        onSecondary={() => cancelRef.current?.dismiss()}
+        primaryLabel="Hủy yêu cầu"
+        secondaryLabel="Không"
+        title="Hủy yêu cầu hỗ trợ"
+      />
+    </FlowScreen>
   );
 }

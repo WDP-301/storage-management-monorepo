@@ -1,16 +1,14 @@
 import {
-  BottomSheetBackdrop,
-  type BottomSheetBackdropProps,
   BottomSheetModal,
   BottomSheetScrollView,
   BottomSheetTextInput,
 } from '@gorhom/bottom-sheet';
-import { useThemeColor } from 'heroui-native';
 import { Check, Crosshair, MagnifyingGlass, MapPin } from 'phosphor-react-native';
-import { type ReactNode, type RefObject, useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { type ReactNode, type RefObject, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import { NEARBY_RADIUS_KM, type PlacePrediction, PlacesApi } from '../../../lib/places-api';
+import { colors, InlineMessage, renderCoatBackdrop, Text } from '../../components/ui';
 import type { LocationOption } from './location-options';
 
 type Props = {
@@ -23,8 +21,6 @@ type Props = {
   onChoosePlace: (place: PlacePrediction) => Promise<void>;
   onChooseProvince: (code: string | null) => void;
 };
-
-const ACCENT = 'hsl(203 100% 30%)';
 
 /**
  * The single "where to look" picker: the customer's position, a searched place, or a province.
@@ -39,7 +35,6 @@ export function LocationPickerSheet({
   onChoosePlace,
   onChooseProvince,
 }: Props) {
-  const [surface, muted] = useThemeColor(['surface', 'muted']);
   const [query, setQuery] = useState('');
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -81,18 +76,6 @@ export function LocationPickerSheet({
     };
   }, [query]);
 
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        appearsOnIndex={0}
-        disappearsOnIndex={-1}
-        pressBehavior="close"
-      />
-    ),
-    [],
-  );
-
   const choosePlace = async (place: PlacePrediction) => {
     if (isChoosing) return;
     setIsChoosing(true);
@@ -122,27 +105,31 @@ export function LocationPickerSheet({
   return (
     <BottomSheetModal
       ref={sheetRef}
-      backdropComponent={renderBackdrop}
-      backgroundStyle={{ backgroundColor: surface }}
+      backdropComponent={renderCoatBackdrop}
+      backgroundStyle={{
+        backgroundColor: colors.surface,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+      }}
       enableDynamicSizing={false}
       enablePanDownToClose
-      handleIndicatorStyle={{ backgroundColor: muted }}
+      handleIndicatorStyle={{ backgroundColor: colors.neutral[200], width: 40 }}
       snapPoints={['75%']}
       onChange={(index) => {
         if (index >= 0) setQuery('');
       }}
     >
       <View className="px-4 pb-3">
-        <Text className="font-display text-title-md text-foreground">Tìm kho ở đâu?</Text>
-        <View className="mt-3 flex-row items-center gap-2 rounded-xl border border-border bg-surface-secondary px-3">
-          <MagnifyingGlass color={ACCENT} size={20} />
+        <Text className="text-title font-bold text-text-primary">Tìm kho ở đâu?</Text>
+        <View className="mt-3 h-[44px] flex-row items-center gap-2 rounded-full border border-border-default bg-bg-subtle px-3.5">
+          <MagnifyingGlass color={colors.semantic.iconBrand} size={18} />
           <BottomSheetTextInput
             accessibilityLabel="Tìm địa điểm"
             autoCapitalize="none"
             autoCorrect={false}
-            className="h-12 flex-1 font-body text-body-md text-foreground"
+            className="flex-1 font-sans text-body text-text-primary"
             placeholder="Nhập địa chỉ hoặc tên địa điểm"
-            placeholderTextColor={muted}
+            placeholderTextColor={colors.semantic.textPlaceholder}
             value={query}
             onChangeText={setQuery}
           />
@@ -152,13 +139,19 @@ export function LocationPickerSheet({
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 36 }}
       >
-        {isLoading || isChoosing ? <ActivityIndicator className="my-6" color={ACCENT} /> : null}
-        {error ? <Text className="font-body py-3 text-body-sm text-danger">{error}</Text> : null}
+        {isLoading || isChoosing ? (
+          <ActivityIndicator className="my-6" color={colors.semantic.actionPrimary} />
+        ) : null}
+        {error ? (
+          <View className="py-2">
+            <InlineMessage message={error} type="error" />
+          </View>
+        ) : null}
 
         {isSearching ? (
           <>
             {!isLoading && !error && predictions.length === 0 ? (
-              <Text className="font-body py-4 text-body-sm text-muted">
+              <Text className="py-4 text-body-sm text-text-secondary">
                 Không có địa điểm phù hợp.
               </Text>
             ) : null}
@@ -166,7 +159,7 @@ export function LocationPickerSheet({
               <Row
                 key={place.place_id}
                 disabled={isChoosing}
-                icon={<MapPin color={ACCENT} size={18} weight="fill" />}
+                icon={<MapPin color={colors.semantic.iconBrand} size={18} weight="fill" />}
                 title={place.structured_formatting?.main_text ?? place.description}
                 subtitle={place.structured_formatting?.secondary_text}
                 onPress={() => void choosePlace(place)}
@@ -176,14 +169,14 @@ export function LocationPickerSheet({
         ) : (
           <>
             <Row
-              icon={<Crosshair color={ACCENT} size={18} weight="bold" />}
+              icon={<Crosshair color={colors.semantic.iconBrand} size={18} weight="bold" />}
               title="Gần tôi"
               subtitle={`Dùng vị trí hiện tại, kho trong ${NEARBY_RADIUS_KM} km`}
               onPress={nearMe}
             />
             {provinceOptions.length > 0 ? (
               <>
-                <Text className="mt-5 mb-1 font-ui text-caption text-muted uppercase">
+                <Text className="mt-5 mb-1 text-caption font-medium text-text-secondary uppercase">
                   Hoặc chọn tỉnh / thành phố
                 </Text>
                 <Row
@@ -230,19 +223,21 @@ function Row({
       accessibilityRole="button"
       accessibilityState={{ selected: isSelected }}
       disabled={disabled}
-      className="min-h-14 flex-row items-center gap-3 border-separator border-b py-3"
+      className="min-h-14 flex-row items-center gap-3 border-border-default border-b py-3"
       onPress={onPress}
     >
       {icon ? (
-        <View className="size-9 items-center justify-center rounded-full bg-accent/10">{icon}</View>
+        <View className="size-9 items-center justify-center rounded-full bg-secondary-0">
+          {icon}
+        </View>
       ) : null}
       <View className="flex-1">
-        <Text className="font-strong text-body-md text-foreground">{title}</Text>
+        <Text className="text-body-md font-semibold text-text-primary">{title}</Text>
         {subtitle ? (
-          <Text className="font-body mt-0.5 text-body-sm text-muted">{subtitle}</Text>
+          <Text className="mt-0.5 text-body-sm text-text-secondary">{subtitle}</Text>
         ) : null}
       </View>
-      {isSelected ? <Check color={ACCENT} size={18} weight="bold" /> : null}
+      {isSelected ? <Check color={colors.semantic.iconBrand} size={18} weight="bold" /> : null}
     </Pressable>
   );
 }

@@ -1,8 +1,8 @@
-import { Button } from 'heroui-native';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import { type ScanWarehouse, ShelfStorageApi } from '../../../lib/shelf-storage-api';
+import { Button, colors, InlineMessage, TabChip, Text } from '../../components/ui';
 
 // Kept for the app session so staff switching tabs do not pick the warehouse again.
 let lastWarehouseId: string | null = null;
@@ -45,48 +45,39 @@ export function ScanWarehousePicker({
 
   if (error) {
     return (
-      <View className="gap-2 rounded-xl bg-danger-bg p-3">
-        <Text className="font-body text-body-sm text-danger">{error}</Text>
-        <Button size="sm" variant="secondary" onPress={() => void load()}>
-          <Button.Label>Thử lại</Button.Label>
-        </Button>
+      <View className="gap-3 rounded-[20px] border border-border-error/30 bg-danger-0 p-4">
+        <InlineMessage message={error} type="error" />
+        <Button label="Thử lại" onPress={() => void load()} size="sm" variant="secondary" />
       </View>
     );
   }
-  if (!warehouses) return <ActivityIndicator />;
+  if (!warehouses) {
+    return <ActivityIndicator className="py-2" color={colors.semantic.actionPrimary} />;
+  }
   if (warehouses.length === 0) {
     return (
-      <Text className="rounded-xl bg-surface-secondary p-3 font-body text-body-sm text-muted">
-        Bạn chưa được phân công tại kho kệ nào.
-      </Text>
+      <View className="rounded-[20px] border border-border-default bg-bg-card p-4">
+        <InlineMessage message="Bạn chưa được phân công tại kho kệ nào." type="info" />
+      </View>
     );
   }
   return (
-    <View className="gap-2">
-      <Text className="font-ui text-body-sm text-foreground">Kho đang phục vụ</Text>
+    <View className="gap-2 rounded-[20px] border border-border-default bg-bg-card p-4">
+      <Text className="text-caption font-semibold text-text-secondary">Kho đang phục vụ</Text>
       <ScrollView
+        contentContainerStyle={{ gap: 8 }}
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 8 }}
       >
-        {warehouses.map((warehouse) => {
-          const selected = value?.id === warehouse.id;
-          return (
-            <Pressable
-              key={warehouse.id}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              className={`rounded-full px-3.5 py-2.5 ${selected ? 'bg-foreground' : 'bg-surface-secondary'}`}
-              onPress={() => choose(warehouse)}
-            >
-              <Text
-                className={`font-ui text-body-sm ${selected ? 'text-background' : 'text-muted'}`}
-              >
-                {warehouse.name}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {warehouses.map((warehouse) => (
+          <TabChip
+            key={warehouse.id}
+            label={warehouse.name}
+            onPress={() => choose(warehouse)}
+            selected={value?.id === warehouse.id}
+            tone="primary"
+          />
+        ))}
       </ScrollView>
     </View>
   );

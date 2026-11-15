@@ -1,10 +1,10 @@
 import type { PickupRequestView } from '@storage/types';
-import { Button } from 'heroui-native';
 import { useCallback, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { formatIsoDateTime } from '../../../../lib/format-vi';
 import { ShelfStorageApi } from '../../../../lib/shelf-storage-api';
 import { pickupStatusLabel, unitLabel } from '../../../../lib/shelf-storage-format';
+import { Button, DashedDivider, InlineMessage, Text } from '../../../components/ui';
 import { StatusPill } from '../../customer/contract-display';
 import { shelfApiError } from '../staff-errors';
 import { ListState } from './ListState';
@@ -40,21 +40,24 @@ export function WarehousePickupRequests({ warehouseId }: { warehouseId: string }
   return (
     <View className="gap-3">
       <ListState
-        loading={loading}
-        error={error}
         empty={!data || data.length === 0}
         emptyText="Chưa có yêu cầu lấy đồ nào."
+        error={error}
+        loading={loading}
         onRetry={() => void reload()}
       />
       {actionError ? (
-        <Text className="rounded-xl bg-danger-bg p-3 font-body text-body-sm text-danger">
-          {actionError}
-        </Text>
+        <View className="rounded-[20px] border border-border-error/30 bg-danger-0 p-4">
+          <InlineMessage message={actionError} type="error" />
+        </View>
       ) : null}
       {data?.map((request) => (
-        <View key={request.id} className="gap-2 rounded-xl border border-border bg-surface p-4">
+        <View
+          key={request.id}
+          className="gap-2.5 rounded-[20px] border border-border-default bg-bg-card p-4"
+        >
           <View className="flex-row items-center justify-between gap-2">
-            <Text className="flex-1 font-strong text-body-md text-foreground">
+            <Text className="flex-1 text-body-lg font-semibold text-text-primary">
               {request.customer.fullName ?? request.customer.phone ?? '—'}
             </Text>
             <StatusPill
@@ -62,30 +65,34 @@ export function WarehousePickupRequests({ warehouseId }: { warehouseId: string }
               tone={request.status === 'READY' ? 'success' : 'accent'}
             />
           </View>
-          <Text className="font-body text-caption text-muted">
+          <Text className="text-caption text-text-secondary">
             Kệ {request.shelf.code} · hẹn lấy {formatIsoDateTime(String(request.requestedFor))}
           </Text>
+          <DashedDivider />
           {request.lines.map((line) => (
             <View key={line.itemId} className="flex-row justify-between gap-3">
-              <Text className="flex-1 font-body text-body-sm text-foreground">{line.name}</Text>
+              <Text className="flex-1 text-body text-text-primary">{line.name}</Text>
               <Text
-                className={`font-strong text-body-sm ${line.quantity > line.available ? 'text-danger' : 'text-foreground'}`}
+                className={`font-semibold text-body tabular-nums ${
+                  line.quantity > line.available ? 'text-status-danger' : 'text-text-primary'
+                }`}
               >
                 {line.quantity} / còn {line.available} {unitLabel(line.unit)}
               </Text>
             </View>
           ))}
           {request.note ? (
-            <Text className="font-body text-body-sm text-muted">Ghi chú: {request.note}</Text>
+            <Text className="text-body text-text-secondary">Ghi chú: {request.note}</Text>
           ) : null}
           {request.status === 'PENDING' ? (
             <Button
-              size="sm"
-              isDisabled={busyId === request.id}
+              disabled={busyId === request.id}
+              fullWidth
+              label={busyId === request.id ? 'Đang lưu…' : 'Đã chuẩn bị'}
+              loading={busyId === request.id}
               onPress={() => void markReady(request)}
-            >
-              <Button.Label>{busyId === request.id ? 'Đang lưu…' : 'Đã chuẩn bị'}</Button.Label>
-            </Button>
+              size="sm"
+            />
           ) : null}
         </View>
       ))}

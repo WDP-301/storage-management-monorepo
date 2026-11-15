@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { formatIsoDate, formatIsoDateTime, formatMoney } from '../../../lib/format-vi';
 import { returnSourceNote } from '../../../lib/settlement-format';
+import { Dashed, Text } from '../../components/ui';
 import type { ApiContract, ApiInspection } from '../../types/contract-api';
 import {
   contractEndIso,
@@ -27,12 +28,12 @@ export function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <View className="gap-2.5 rounded-xl border border-border bg-surface p-3">
+    <View className="gap-3 rounded-[20px] border border-border-default bg-bg-card p-4">
       <View className="flex-row items-center justify-between gap-3">
-        <Text className="font-strong text-body-lg text-foreground">{title}</Text>
+        <Text className="text-lead font-bold text-text-primary">{title}</Text>
         <StatusPill label={badge} tone={tone} />
       </View>
-      <View className="h-px bg-separator" />
+      <Dashed />
       {children}
     </View>
   );
@@ -67,8 +68,8 @@ export function ContractSection({
         <InfoRow isNumeric label="Ngày ký" value={dayOf(contract.signedAt) ?? ''} />
       ) : null}
       {children ? (
-        <View className="gap-2">
-          <Text className="font-body text-body-sm text-muted">File hợp đồng đã ký</Text>
+        <View className="gap-2 pt-1">
+          <Text className="text-body-sm font-medium text-text-secondary">File hợp đồng đã ký</Text>
           {children}
         </View>
       ) : null}
@@ -98,7 +99,7 @@ export function HandoverSection({
           viewer={viewer}
         />
       ) : (
-        <Text className="font-body text-body-sm text-muted">
+        <Text className="text-body-sm text-text-secondary">
           {viewer === 'staff' ? 'Chưa có biên nhận.' : 'Biên nhận sẽ có sau khi bạn cọc xong.'}
         </Text>
       )}
@@ -130,7 +131,9 @@ export function ReturnSection({
       badge={badge}
       tone={returned ? 'neutral' : inspection ? 'accent' : 'neutral'}
     >
-      {sourceNote ? <Text className="font-ui text-body-sm text-accent">{sourceNote}</Text> : null}
+      {sourceNote ? (
+        <Text className="text-body-sm font-medium text-text-link">{sourceNote}</Text>
+      ) : null}
       {inspection ? (
         <InspectionBody
           inspection={inspection}
@@ -139,10 +142,10 @@ export function ReturnSection({
           viewer={viewer}
         />
       ) : (
-        <Text className="font-body text-body-sm text-muted">
+        <Text className="text-body-sm text-text-secondary">
           {viewer === 'staff'
             ? 'Chưa có — khách chưa yêu cầu trả kho.'
-            : 'Khi muốn dọn đi, bấm "Yêu cầu trả kho" để hẹn ngày với nhân viên.'}
+            : 'Khi muốn dọn đi, bấm "Đổi / trả kho" để hẹn ngày với nhân viên.'}
         </Text>
       )}
       {children}

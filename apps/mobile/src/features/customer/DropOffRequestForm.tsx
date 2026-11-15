@@ -1,9 +1,8 @@
 import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import type { ShelfItemUnit, ShelfItemView } from '@storage/types';
-import { Button, useThemeColor } from 'heroui-native';
 import { CalendarBlank, Plus, X } from 'phosphor-react-native';
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import {
   addNewLine,
@@ -27,10 +26,9 @@ import {
   unitLabel,
 } from '../../../lib/shelf-storage-format';
 import { UnitPicker } from '../../components/UnitPicker';
+import { Button, colors, InlineMessage, TabChip, Text } from '../../components/ui';
 import { MonthCalendar } from './MonthCalendar';
 import { Stepper } from './PickupRequestForm';
-
-const ACCENT = 'hsl(203 100% 30%)';
 
 /** What the customer will bring (more of an item on the shelf, or new items), and when. */
 export function DropOffRequestForm({
@@ -42,7 +40,6 @@ export function DropOffRequestForm({
   items: ShelfItemView[];
   onDone: () => void;
 }) {
-  const [mutedColor] = useThemeColor(['muted']);
   const [today] = useState(() => vietnamToday(Date.now()));
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [newLines, setNewLines] = useState<NewItemLine[]>([]);
@@ -107,12 +104,10 @@ export function DropOffRequestForm({
   };
 
   return (
-    <View className="gap-4 px-4">
+    <View className="gap-4 px-4 pt-2">
       <View>
-        <Text className="text-title-md font-strong tracking-tight text-foreground">
-          Yêu cầu gửi đồ
-        </Text>
-        <Text className="font-body mt-1 text-caption leading-5 text-muted">
+        <Text className="text-title font-bold text-text-primary">Yêu cầu gửi đồ</Text>
+        <Text className="mt-1 text-caption leading-5 text-text-secondary">
           Báo trước món bạn sẽ mang tới và thời gian tới. Kho xác nhận rồi bạn đưa mã gửi / lấy đồ
           cho nhân viên khi tới.
         </Text>
@@ -120,12 +115,14 @@ export function DropOffRequestForm({
 
       {items.length > 0 ? (
         <View className="gap-2">
-          <Text className="text-body-sm font-strong text-foreground">Thêm vào món đang gửi</Text>
+          <Text className="text-body-sm font-semibold text-text-primary">
+            Thêm vào món đang gửi
+          </Text>
           {items.map((item) => (
             <View key={item.id} className="flex-row items-center justify-between gap-3">
               <View className="flex-1">
-                <Text className="font-body text-body-md text-foreground">{item.name}</Text>
-                <Text className="font-body text-caption text-muted">
+                <Text className="text-body text-text-primary">{item.name}</Text>
+                <Text className="text-caption text-text-secondary">
                   Trên kệ: {quantityWithUnit(item.quantity, item.unit)}
                 </Text>
               </View>
@@ -140,13 +137,13 @@ export function DropOffRequestForm({
       ) : null}
 
       <View className="gap-2">
-        <Text className="text-body-sm font-strong text-foreground">Món mới</Text>
+        <Text className="text-body-sm font-semibold text-text-primary">Món mới</Text>
         <View className="flex-row items-center gap-2">
           <BottomSheetTextInput
             accessibilityLabel="Tên món mới"
-            className="font-body flex-1 rounded-lg border border-border bg-surface-secondary px-3 py-2.5 text-body-sm text-foreground"
+            className="flex-1 rounded-xl border border-border-default bg-bg-subtle px-3.5 py-2.5 font-inter text-body text-text-primary"
             placeholder="VD: Thùng quần áo"
-            placeholderTextColor={mutedColor}
+            placeholderTextColor={colors.semantic.textPlaceholder}
             value={newName}
             onChangeText={setNewName}
             maxLength={120}
@@ -156,11 +153,11 @@ export function DropOffRequestForm({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Thêm món mới"
-            className={`size-10 items-center justify-center rounded-lg bg-accent ${newName.trim() ? '' : 'opacity-40'}`}
+            className={`size-11 items-center justify-center rounded-xl bg-action-primary ${newName.trim() ? '' : 'opacity-40'}`}
             disabled={!newName.trim()}
             onPress={addTyped}
           >
-            <Plus color="white" size={18} weight="bold" />
+            <Plus color={colors.semantic.textInverse} size={18} weight="bold" />
           </Pressable>
         </View>
         <UnitPicker value={newUnit} onChange={setNewUnit} />
@@ -172,8 +169,8 @@ export function DropOffRequestForm({
               className="flex-1 flex-row items-center gap-2"
               onPress={() => setNewQuantity(line.key, 0)}
             >
-              <X color={mutedColor} size={14} weight="bold" />
-              <Text className="flex-1 font-body text-body-md text-foreground">
+              <X color={colors.semantic.textSecondary} size={14} weight="bold" />
+              <Text className="flex-1 text-body text-text-primary">
                 {line.name} · {unitLabel(line.unit)}
               </Text>
             </Pressable>
@@ -187,22 +184,22 @@ export function DropOffRequestForm({
       </View>
 
       <View className="gap-2">
-        <Text className="text-body-sm font-strong text-foreground">Ngày gửi đồ</Text>
+        <Text className="text-body-sm font-semibold text-text-primary">Ngày gửi đồ</Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Chọn ngày gửi đồ"
-          className="flex-row items-center gap-2 rounded-lg border border-border bg-surface-secondary px-3 py-3"
+          className="flex-row items-center gap-2 rounded-xl border border-border-default bg-bg-subtle px-3.5 py-3"
           onPress={() => setCalendarOpen((open) => !open)}
         >
-          <CalendarBlank color={ACCENT} size={18} weight="bold" />
+          <CalendarBlank color={colors.semantic.actionPrimary} size={18} weight="bold" />
           <Text
-            className={`flex-1 text-body-sm ${dayIso ? 'font-numeric text-foreground' : 'font-body text-muted'}`}
+            className={`flex-1 text-body-sm ${dayIso ? 'font-medium text-text-primary tabular-nums' : 'text-text-secondary'}`}
           >
             {dayIso ? formatIsoDate(dayIso) : 'Chọn ngày'}
           </Text>
         </Pressable>
         {calendarOpen ? (
-          <View className="rounded-lg border border-border p-3">
+          <View className="rounded-2xl border border-border-default bg-bg-card p-3.5">
             <MonthCalendar
               minIso={today}
               maxIso={lastRequestDay(today)}
@@ -215,27 +212,21 @@ export function DropOffRequestForm({
 
       {dayIso ? (
         <View className="gap-2">
-          <Text className="text-body-sm font-strong text-foreground">Giờ gửi đồ</Text>
+          <Text className="text-body-sm font-semibold text-text-primary">Giờ gửi đồ</Text>
           {hours.length === 0 ? (
-            <Text className="font-body text-body-sm text-muted">
+            <Text className="text-body-sm text-text-secondary">
               Hôm nay đã hết giờ nhận yêu cầu, hãy chọn ngày khác.
             </Text>
           ) : (
             <View className="flex-row flex-wrap gap-2">
               {hours.map((value) => (
-                <Pressable
+                <TabChip
                   key={value}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: hour === value }}
-                  className={`rounded-full border px-3 py-1.5 ${hour === value ? 'border-accent bg-accent' : 'border-border bg-surface-secondary'}`}
+                  label={hourLabel(value)}
                   onPress={() => setHour(value)}
-                >
-                  <Text
-                    className={`font-numeric text-body-sm ${hour === value ? 'text-white' : 'text-foreground'}`}
-                  >
-                    {hourLabel(value)}
-                  </Text>
-                </Pressable>
+                  selected={hour === value}
+                  tone="primary"
+                />
               ))}
             </View>
           )}
@@ -243,11 +234,13 @@ export function DropOffRequestForm({
       ) : null}
 
       <View className="gap-2">
-        <Text className="text-body-sm font-strong text-foreground">Ghi chú (không bắt buộc)</Text>
+        <Text className="text-body-sm font-semibold text-text-primary">
+          Ghi chú (không bắt buộc)
+        </Text>
         <BottomSheetTextInput
-          className="font-body min-h-20 rounded-lg border border-border bg-surface-secondary px-3 py-2 text-body-sm text-foreground"
+          className="min-h-20 rounded-xl border border-border-default bg-bg-subtle px-4 py-3 font-inter text-body text-text-primary"
           placeholder="VD: mình mang tới bằng xe máy, cần người phụ bê…"
-          placeholderTextColor={mutedColor}
+          placeholderTextColor={colors.semantic.textPlaceholder}
           value={note}
           onChangeText={setNote}
           maxLength={NOTE_MAX}
@@ -256,10 +249,14 @@ export function DropOffRequestForm({
         />
       </View>
 
-      {error ? <Text className="font-body text-body-sm text-danger">{error}</Text> : null}
-      <Button isDisabled={busy} onPress={() => void submit()}>
-        <Button.Label>{busy ? 'Đang gửi…' : 'Gửi yêu cầu'}</Button.Label>
-      </Button>
+      {error ? <InlineMessage message={error} type="error" /> : null}
+      <Button
+        disabled={busy}
+        fullWidth
+        label={busy ? 'Đang gửi…' : 'Gửi yêu cầu'}
+        loading={busy}
+        onPress={() => void submit()}
+      />
     </View>
   );
 }

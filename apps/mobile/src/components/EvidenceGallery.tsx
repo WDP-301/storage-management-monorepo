@@ -1,16 +1,8 @@
 import { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Linking,
-  Modal,
-  Pressable,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, Image, Linking, Modal, Pressable, View } from 'react-native';
 import { UploadsApi } from '../../lib/uploads-api';
 import type { EvidenceFile } from '../types/contract-api';
+import { Text } from './ui';
 
 type Props = {
   files: readonly EvidenceFile[];
@@ -58,11 +50,11 @@ export function EvidenceGallery({ files, onRemove }: Props) {
           {onRemove ? (
             <Pressable
               accessibilityLabel={`Xoá ${file.name}`}
-              className="absolute -right-1.5 -top-1.5 size-6 items-center justify-center rounded-full bg-danger"
+              className="absolute -right-1.5 -top-1.5 size-6 items-center justify-center rounded-full bg-status-danger"
               hitSlop={6}
               onPress={() => onRemove(file)}
             >
-              <Text className="text-caption font-strong text-white">✕</Text>
+              <Text className="text-caption font-bold text-text-inverse">✕</Text>
             </Pressable>
           ) : null}
         </View>
@@ -108,22 +100,22 @@ function EvidenceThumb({
       {isImage && url && !failed ? (
         <Image
           source={{ uri: url }}
-          className="size-20 rounded-lg"
+          className="size-20 rounded-xl"
           resizeMode="cover"
           onError={() => setFailed(true)}
         />
       ) : (
-        <View className="size-20 items-center justify-center rounded-lg border border-border bg-background p-1">
+        <View className="size-20 items-center justify-center rounded-xl border border-border-default bg-bg-subtle p-1.5">
           {file.mimeType === 'application/pdf' ? (
-            <Text className="font-strong text-body-sm text-foreground">PDF</Text>
+            <Text className="text-body-sm font-bold text-text-primary">PDF</Text>
           ) : null}
-          <Text className="font-body text-center text-caption text-muted" numberOfLines={2}>
+          <Text className="text-center text-caption text-text-secondary" numberOfLines={2}>
             {file.name}
           </Text>
         </View>
       )}
       {isOpening ? (
-        <View className="absolute inset-0 items-center justify-center rounded-lg bg-black/40">
+        <View className="absolute inset-0 items-center justify-center rounded-xl bg-black/40">
           <ActivityIndicator color="#fff" />
         </View>
       ) : null}
@@ -140,7 +132,7 @@ function EvidenceViewer({ file, onClose }: { file: EvidenceFile | null; onClose:
     <Modal visible={file !== null} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable className="flex-1 items-center justify-center bg-black/90" onPress={onClose}>
         {failed ? (
-          <Text className="font-body text-body-sm text-white">Không mở được tệp này.</Text>
+          <Text className="text-body-sm text-text-inverse">Không mở được tệp này.</Text>
         ) : url ? (
           <Image
             source={{ uri: url }}
@@ -151,8 +143,8 @@ function EvidenceViewer({ file, onClose }: { file: EvidenceFile | null; onClose:
         ) : (
           <ActivityIndicator color="#fff" />
         )}
-        <Text className="font-body mt-4 text-body-sm text-white">{file?.name}</Text>
-        <Text className="font-body mt-1 text-caption text-white/70">Chạm để đóng</Text>
+        <Text className="mt-4 text-body-sm text-text-inverse">{file?.name}</Text>
+        <Text className="mt-1 text-caption text-white/70">Chạm để đóng</Text>
       </Pressable>
     </Modal>
   );

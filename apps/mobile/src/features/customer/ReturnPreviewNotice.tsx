@@ -1,5 +1,6 @@
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
+import { colors, InlineMessage, Text } from '../../components/ui';
 import type { ReturnPreviewRecord } from '../../types/contract-api';
 
 type Props = {
@@ -13,12 +14,12 @@ export function ReturnPreviewNotice({ preview, isLoading, error }: Props) {
   if (isLoading) {
     return (
       <View className="flex-row items-center gap-2 py-1">
-        <ActivityIndicator size="small" />
-        <Text className="font-body text-body-sm text-muted">Đang kiểm tra ngày trả…</Text>
+        <ActivityIndicator color={colors.semantic.actionPrimary} size="small" />
+        <Text className="text-body-sm text-text-secondary">Đang kiểm tra ngày trả…</Text>
       </View>
     );
   }
-  if (error) return <Text className="font-body text-body-sm text-danger">{error}</Text>;
+  if (error) return <InlineMessage message={error} type="error" />;
   if (!preview) return null;
 
   const warnings: string[] = [];
@@ -38,17 +39,17 @@ export function ReturnPreviewNotice({ preview, isLoading, error }: Props) {
   }
 
   return (
-    <View className="gap-2">
+    <View className="gap-2 pt-1">
       {warnings.map((warning) => (
-        <View key={warning} className="rounded-lg bg-warning-bg px-3 py-2.5">
-          <Text className="font-body text-body-sm leading-5 text-warning">{warning}</Text>
+        <View key={warning} className="rounded-xl bg-warning-0 px-3 py-2.5">
+          <Text className="text-body-sm leading-5 text-warning-700">{warning}</Text>
         </View>
       ))}
-      <Text className="font-body text-body-sm text-muted">
+      <Text className="text-caption leading-5 text-text-secondary">
         Số tiền trên tính cho trường hợp trả đúng ngày này; khi quyết toán, tiền tính tới ngày nhân
         viên chốt biên bản trả kho.
       </Text>
-      <Text className="font-body text-body-sm text-muted">
+      <Text className="text-caption font-medium text-text-secondary">
         {preview.deposit_held === null
           ? 'Tiền cọc đang được xác minh.'
           : `Tiền cọc đang giữ: ${formatMoney(preview.deposit_held)}`}

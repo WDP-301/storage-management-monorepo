@@ -1,19 +1,24 @@
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
-import { Button, useThemeColor } from 'heroui-native';
-import { ArrowLeft, CalendarCheck, Check, MapPin, Plus } from 'phosphor-react-native';
+import { MapPin } from 'phosphor-react-native';
 import { useRef } from 'react';
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
-import { SafeAreaView as RNSafeAreaView } from 'react-native-safe-area-context';
-import { withUniwind } from 'uniwind';
+import { Modal, ScrollView, View } from 'react-native';
 import { formatMoney, formatNumber } from '../../../lib/format-vi';
 import { displayMonthlyPrice, isShelfWarehouse } from '../../../lib/shelf-rental';
+import {
+  BottomBar,
+  Button,
+  colors,
+  Dashed,
+  FlowScreen,
+  InlineMessage,
+  StatusPill,
+  Text,
+} from '../../components/ui';
 import { WarehouseGallery } from '../../components/WarehousePhotos';
 import type { Warehouse } from '../../types/storage-api';
 import { TourAppointmentSheet } from './TourAppointmentSheet';
 import { WarehouseAmenityList } from './WarehouseAmenityList';
 import { WarehouseSpecs } from './WarehouseCard';
-
-const SafeAreaView = withUniwind(RNSafeAreaView);
 
 type Props = {
   /** The warehouse shown; null keeps the page closed. */
@@ -39,8 +44,8 @@ export function WarehouseDetailScreen({
   onToggle,
   onClose,
 }: Props) {
-  const [accent, muted, onAccent] = useThemeColor(['accent', 'muted', 'accent-foreground']);
   const tourSheetRef = useRef<BottomSheetModal>(null);
+  const isShelf = warehouse ? isShelfWarehouse(warehouse) : false;
 
   return (
     <Modal
@@ -50,119 +55,117 @@ export function WarehouseDetailScreen({
       onRequestClose={onClose}
     >
       {warehouse ? (
-        <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
-          <View className="flex-row items-center gap-1 px-2 py-2">
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Quay lại danh sách kho"
-              hitSlop={8}
-              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-              onPress={onClose}
-            >
-              <View className="size-10 items-center justify-center rounded-full">
-                <ArrowLeft color={accent} size={22} weight="bold" />
-              </View>
-            </Pressable>
-            <Text className="flex-1 font-strong text-foreground text-title-md" numberOfLines={1}>
-              Chi tiết kho
-            </Text>
-          </View>
-
-          <ScrollView contentContainerClassName="pb-6" showsVerticalScrollIndicator={false}>
+        <FlowScreen muted title="Chi tiết kho" titleAlign="left" withTopInset onBack={onClose}>
+          <ScrollView
+            className="flex-1 bg-bg-muted"
+            contentContainerClassName="pb-6"
+            showsVerticalScrollIndicator={false}
+          >
             <WarehouseGallery images={warehouse.images ?? []} />
 
-            <View className="gap-4 px-4 pt-4">
-              <View className="gap-1.5">
-                <Text className="font-numeric text-caption text-muted">{warehouse.code}</Text>
-                <Text className="font-strong text-foreground text-title-md">{warehouse.name}</Text>
-                <Text className="font-body text-caption text-muted">
-                  Thuộc {warehouse.facility.name}
-                </Text>
+            <View className="gap-4 p-4">
+              <View className="gap-3 rounded-[20px] border border-border-default bg-bg-card p-4">
+                <View className="gap-1.5">
+                  <Text className="text-title-sm font-bold text-text-primary">
+                    {warehouse.name}
+                  </Text>
+                  <Text className="text-caption text-text-secondary">
+                    Thuộc {warehouse.facility.name}
+                  </Text>
+                </View>
+
                 <View className="flex-row items-start gap-1.5">
-                  <MapPin color={accent} size={16} weight="fill" />
-                  <Text className="flex-1 font-body text-body-sm text-subtle">
+                  <MapPin color={colors.semantic.iconBrand} size={16} weight="fill" />
+                  <Text className="flex-1 text-body-sm text-text-secondary">
                     {warehouse.addressLine}
                   </Text>
                 </View>
-                {distanceKm !== undefined ? (
-                  <Text className="self-start rounded-full bg-accent/10 px-2 py-0.5 font-ui text-caption text-accent">
-                    Cách {formatNumber(Math.round(distanceKm * 10) / 10)} km
-                  </Text>
-                ) : null}
-                <View className="flex-row items-baseline gap-1">
-                  <Text className="font-numeric-strong text-accent text-num-lg">
-                    {isShelfWarehouse(warehouse) ? 'Từ ' : ''}
-                    {displayMonthlyPrice(warehouse) === null
-                      ? 'Liên hệ'
-                      : formatMoney(displayMonthlyPrice(warehouse) ?? 0)}
-                  </Text>
-                  <Text className="font-body text-caption text-muted">/tháng</Text>
-                </View>
-              </View>
 
-              {!isShelfWarehouse(warehouse) ? (
-                <View className="rounded-xl bg-surface-secondary p-3">
-                  <WarehouseSpecs warehouse={warehouse} />
+                {distanceKm !== undefined ? (
+                  <StatusPill
+                    label={`Cách ${formatNumber(Math.round(distanceKm * 10) / 10)} km`}
+                    tone="info"
+                  />
+                ) : null}
+
+                <Dashed />
+
+                <View className="flex-row items-baseline justify-between gap-2">
+                  <Text className="text-caption text-text-secondary">Giá thuê hàng tháng</Text>
+                  <View className="flex-row items-baseline gap-1">
+                    <Text className="text-title font-bold text-text-brand tabular-nums">
+                      {isShelf ? 'Từ ' : ''}
+                      {displayMonthlyPrice(warehouse) === null
+                        ? 'Liên hệ'
+                        : formatMoney(displayMonthlyPrice(warehouse) ?? 0)}
+                    </Text>
+                    <Text className="text-caption text-text-secondary">/tháng</Text>
+                  </View>
                 </View>
-              ) : null}
+
+                {!isShelf ? (
+                  <View className="rounded-xl border border-border-default bg-bg-subtle p-3">
+                    <WarehouseSpecs warehouse={warehouse} />
+                  </View>
+                ) : null}
+              </View>
 
               <WarehouseAmenityList
                 amenities={warehouse.amenities ?? []}
                 // A shelf building's amenities are shared by every shelf in it, not owned by one tenant.
-                title={
-                  isShelfWarehouse(warehouse) ? 'Tiện ích chung của toà nhà' : 'Tiện ích có sẵn'
-                }
+                title={isShelf ? 'Tiện ích chung của toà nhà' : 'Tiện ích có sẵn'}
               />
 
               {warehouse.notes ? (
-                <View className="gap-1">
-                  <Text className="font-strong text-body-sm text-foreground">Mô tả</Text>
-                  <Text className="font-body text-body-sm text-subtle">{warehouse.notes}</Text>
+                <View className="gap-2 rounded-[20px] border border-border-default bg-bg-card p-4">
+                  <Text className="text-body-md font-semibold text-text-primary">Mô tả</Text>
+                  <Text className="text-body-sm text-text-secondary">{warehouse.notes}</Text>
                 </View>
               ) : null}
             </View>
           </ScrollView>
 
-          {!isShelfWarehouse(warehouse) ? (
-            <View className="gap-2 border-t border-border bg-surface px-4 pt-3 pb-2">
+          {!isShelf ? (
+            <View className="bg-bg-card">
               {hasHolding ? (
-                <Text className="font-body text-caption text-warning">
-                  Bạn đang có đơn giữ kho. Hoàn tất hoặc hủy đơn trong Kho của tôi để chọn thêm.
-                </Text>
+                <View className="border-t border-border-default bg-warning-0 px-4 py-2.5">
+                  <InlineMessage
+                    message="Bạn đang có đơn giữ kho. Hoàn tất hoặc hủy đơn trong Kho của tôi để chọn thêm."
+                    type="warning"
+                  />
+                </View>
               ) : null}
-              <View className="flex-row gap-2">
-                <Button
-                  variant="secondary"
-                  onPress={() => tourSheetRef.current?.present()}
-                  className="flex-1"
-                >
-                  <CalendarCheck color={accent} size={16} weight="bold" />
-                  <Button.Label className="font-ui">Xem thực tế</Button.Label>
-                </Button>
-                <Button
-                  isDisabled={isDisabled}
-                  variant={isSelected ? 'secondary' : 'primary'}
-                  onPress={() => onToggle(warehouse)}
-                  className="flex-1"
-                >
-                  {isSelected ? (
-                    <Check color={accent} size={16} weight="bold" />
-                  ) : (
-                    <Plus color={isDisabled ? muted : onAccent} size={16} weight="bold" />
-                  )}
-                  <Button.Label className="font-ui">
-                    {isSelected ? 'Bỏ chọn' : 'Chọn kho này'}
-                  </Button.Label>
-                </Button>
-              </View>
+              <BottomBar insetBottom>
+                <View className="flex-1">
+                  <Button
+                    label="Xem thực tế"
+                    leftIcon="event"
+                    variant="secondary"
+                    onPress={() => tourSheetRef.current?.present()}
+                  />
+                </View>
+                <View className="flex-1">
+                  <Button
+                    disabled={isDisabled}
+                    label={isSelected ? 'Bỏ chọn' : 'Chọn kho này'}
+                    leftIcon={isSelected ? 'check' : 'add'}
+                    variant={isSelected ? 'outline' : 'primary'}
+                    onPress={() => onToggle(warehouse)}
+                  />
+                </View>
+              </BottomBar>
             </View>
           ) : (
-            <View className="gap-2 border-t border-border bg-surface px-4 pt-3 pb-2">
-              <Button variant="secondary" onPress={() => tourSheetRef.current?.present()}>
-                <CalendarCheck color={accent} size={16} weight="bold" />
-                <Button.Label className="font-ui">Đặt lịch xem kho thực tế</Button.Label>
-              </Button>
-            </View>
+            <BottomBar insetBottom>
+              <View className="flex-1">
+                <Button
+                  label="Đặt lịch xem kho thực tế"
+                  leftIcon="event"
+                  variant="secondary"
+                  onPress={() => tourSheetRef.current?.present()}
+                />
+              </View>
+            </BottomBar>
           )}
 
           <TourAppointmentSheet
@@ -178,7 +181,7 @@ export function WarehouseDetailScreen({
                 : null
             }
           />
-        </SafeAreaView>
+        </FlowScreen>
       ) : null}
     </Modal>
   );

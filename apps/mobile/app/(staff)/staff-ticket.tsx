@@ -1,8 +1,10 @@
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { TicketStatus } from '@storage/types';
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, BackHandler } from 'react-native';
+import { BackHandler } from 'react-native';
 import { useSession } from '../../lib/session';
+import { AlertSheet } from '../../src/components/ui';
 import { registerLeaveGuard } from '../../src/features/staff/leave-guard';
 import { pickImages } from '../../src/features/staff/pick-files';
 import {
@@ -19,6 +21,7 @@ export default function StaffTicketRoute() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { ticket, isLoading, isSaving, error, reload, update } = useStaffTicket(id);
   const [draft, setDraft] = useState<FinishDraft | null>(null);
+  const leaveSheetRef = useRef<BottomSheetModal>(null);
 
   // A typed note or picked photos would be lost by leaving — the tab bar and back button ask first.
   const hasUnsavedWork =
@@ -40,10 +43,7 @@ export default function StaffTicketRoute() {
   const goBack = useCallback(() => router.navigate('/(staff)/requests'), [router]);
   const confirmLeave = useCallback(() => {
     if (!unsavedRef.current) return goBack();
-    Alert.alert('Bỏ thay đổi?', 'Ghi chú hoặc ảnh chưa gửi sẽ không được giữ lại.', [
-      { text: 'Ở lại', style: 'cancel' },
-      { text: 'Bỏ thay đổi', style: 'destructive', onPress: goBack },
-    ]);
+    leaveSheetRef.current?.present();
   }, [goBack]);
 
   useFocusEffect(
@@ -89,22 +89,34 @@ export default function StaffTicketRoute() {
   };
 
   return (
-    <StaffTicketDetailScreen
-      ticket={ticket}
-      actions={actions}
-      sessionUserId={user?.id}
-      isLoading={isLoading}
-      isSaving={isSaving}
-      error={error}
-      draft={draft}
-      onStart={() => void update({ status: TicketStatus.IN_PROGRESS })}
-      onOpenFinish={(mode) => setDraft({ mode, note: ticket?.resolution ?? '', photos: [] })}
-      onChangeDraft={(patch) => setDraft((prev) => (prev ? { ...prev, ...patch } : prev))}
-      onAddPhotos={(source) => void addPhotos(source)}
-      onSubmitFinish={() => void submitFinish()}
-      onCancelFinish={() => setDraft(null)}
-      onRetry={() => void reload()}
-      onBack={confirmLeave}
-    />
+    <>
+      <StaffTicketDetailScreen
+        actions={actions}
+        draft={draft}
+        error={error}
+        isLoading={isLoading}
+        isSaving={isSaving}
+        onAddPhotos={(source) => void addPhotos(source)}
+        onBack={confirmLeave}
+        onCancelFinish={() => setDraft(null)}
+        onChangeDraft={(patch) => setDraft((prev) => (prev ? { ...prev, ...patch } : prev))}
+        onOpenFinish={(mode) => setDraft({ mode, note: ticket?.resolution ?? '', photos: [] })}
+        onRetry={() => void reload()}
+        onStart={() => void update({ status: TicketStatus.IN_PROGRESS })}
+        onSubmitFinish={() => void submitFinish()}
+        sessionUserId={user?.id}
+        ticket={ticket}
+      />
+      <AlertSheet
+        actionsLayout="row"
+        destructive
+        message="Ghi chú hoặc ảnh chưa gửi sẽ không được giữ lại."
+        onPrimary={goBack}
+        primaryLabel="Bỏ thay đổi"
+        ref={leaveSheetRef}
+        secondaryLabel="Ở lại"
+        title="Bỏ thay đổi?"
+      />
+    </>
   );
 }

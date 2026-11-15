@@ -1,12 +1,12 @@
 import type { ShelfReceiptView as Receipt } from '@storage/types';
 import { useRouter } from 'expo-router';
-import { Button } from 'heroui-native';
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { formatIsoDateTime } from '../../../lib/format-vi';
 import { newOpenNonce } from '../../../lib/open-nonce';
 import { linesSummary, receiptTypeLabel } from '../../../lib/shelf-storage-format';
 import { ShelfReceiptView } from '../../components/ShelfReceiptView';
+import { Button, Text } from '../../components/ui';
 import { StatusPill } from './contract-display';
 
 /**
@@ -27,10 +27,10 @@ export function ShelfReceiptHistory({
   const router = useRouter();
   const [openId, setOpenId] = useState<string | null>(null);
   return (
-    <View className="gap-1">
-      <Text className="font-strong text-body-sm text-foreground">Lịch sử phiếu</Text>
+    <View className="gap-1.5">
+      <Text className="text-body-sm font-semibold text-text-primary">Lịch sử phiếu</Text>
       {receipts.length === 0 ? (
-        <Text className="font-body text-body-sm text-muted">Chưa có phiếu.</Text>
+        <Text className="text-body-sm text-text-secondary">Chưa có phiếu.</Text>
       ) : (
         receipts.map((receipt) =>
           openId === receipt.id ? (
@@ -57,27 +57,32 @@ export function ShelfReceiptHistory({
               key={receipt.id}
               accessibilityRole="button"
               accessibilityState={{ expanded: false }}
-              className="flex-row items-center gap-2 border-b border-border py-2"
+              className="flex-row items-center gap-2 border-b border-border-divider py-2.5"
               onPress={() => setOpenId(receipt.id)}
             >
               <View className="flex-1">
-                <Text className="font-body text-body-sm text-foreground" numberOfLines={1}>
+                <Text className="text-body-sm text-text-primary" numberOfLines={1}>
                   {receiptTypeLabel(receipt.type)} · {linesSummary(receipt.lines, 2)}
                 </Text>
-                <Text className="font-body text-caption text-muted">
+                <Text className="text-caption text-text-secondary tabular-nums">
                   {receipt.code} · {formatIsoDateTime(String(receipt.createdAt))}
                 </Text>
               </View>
               {receipt.status === 'VOIDED' ? <StatusPill label="Đã hủy" tone="neutral" /> : null}
-              <Text className="font-body text-body-sm text-muted">›</Text>
+              <Text className="text-body-sm text-text-secondary">›</Text>
             </Pressable>
           ),
         )
       )}
       {hasMore ? (
-        <Button isDisabled={isLoadingMore} size="sm" variant="ghost" onPress={onLoadMore}>
-          <Button.Label>{isLoadingMore ? 'Đang tải…' : 'Xem thêm'}</Button.Label>
-        </Button>
+        <Button
+          disabled={isLoadingMore}
+          label={isLoadingMore ? 'Đang tải…' : 'Xem thêm'}
+          loading={isLoadingMore}
+          onPress={onLoadMore}
+          size="sm"
+          variant="text"
+        />
       ) : null}
     </View>
   );

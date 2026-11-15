@@ -1,9 +1,8 @@
 import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import type { ShelfItemView } from '@storage/types';
-import { Button, useThemeColor } from 'heroui-native';
 import { CalendarBlank, Minus, Plus } from 'phosphor-react-native';
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import { formatIsoDate } from '../../../lib/format-vi';
 import {
@@ -16,9 +15,8 @@ import {
 } from '../../../lib/pickup-request-draft';
 import { ShelfStorageApi } from '../../../lib/shelf-storage-api';
 import { quantityWithUnit, shelfErrorMessage } from '../../../lib/shelf-storage-format';
+import { Button, colors, InlineMessage, TabChip, Text } from '../../components/ui';
 import { MonthCalendar } from './MonthCalendar';
-
-const ACCENT = 'hsl(203 100% 30%)';
 
 /** − value + control for a request form inside a bottom sheet (no typed input, no keyboard). */
 export function Stepper({
@@ -35,21 +33,23 @@ export function Stepper({
       <Pressable
         accessibilityLabel="Giảm số lượng"
         accessibilityRole="button"
-        className="size-9 items-center justify-center rounded-full border border-border"
+        className={`size-9 items-center justify-center rounded-full border border-border-default bg-bg-card ${value <= 0 ? 'opacity-40' : ''}`}
         disabled={value <= 0}
         onPress={() => onChange(value - 1)}
       >
-        <Minus color={ACCENT} size={16} weight="bold" />
+        <Minus color={colors.semantic.actionPrimary} size={16} weight="bold" />
       </Pressable>
-      <Text className="min-w-6 text-center font-numeric text-body-md text-foreground">{value}</Text>
+      <Text className="min-w-6 text-center text-body font-semibold text-text-primary tabular-nums">
+        {value}
+      </Text>
       <Pressable
         accessibilityLabel="Tăng số lượng"
         accessibilityRole="button"
-        className="size-9 items-center justify-center rounded-full border border-border"
+        className={`size-9 items-center justify-center rounded-full border border-border-default bg-bg-card ${value >= max ? 'opacity-40' : ''}`}
         disabled={value >= max}
         onPress={() => onChange(value + 1)}
       >
-        <Plus color={ACCENT} size={16} weight="bold" />
+        <Plus color={colors.semantic.actionPrimary} size={16} weight="bold" />
       </Pressable>
     </View>
   );
@@ -65,7 +65,6 @@ export function PickupRequestForm({
   items: ShelfItemView[];
   onDone: () => void;
 }) {
-  const [mutedColor] = useThemeColor(['muted']);
   const [today] = useState(() => vietnamToday(Date.now()));
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [dayIso, setDayIso] = useState<string | null>(null);
@@ -106,23 +105,21 @@ export function PickupRequestForm({
   };
 
   return (
-    <View className="gap-4 px-4">
+    <View className="gap-4 px-4 pt-2">
       <View>
-        <Text className="text-title-md font-strong tracking-tight text-foreground">
-          Yêu cầu lấy đồ
-        </Text>
-        <Text className="font-body mt-1 text-caption leading-5 text-muted">
+        <Text className="text-title font-bold text-text-primary">Yêu cầu lấy đồ</Text>
+        <Text className="mt-1 text-caption leading-5 text-text-secondary">
           Chọn món cần lấy và thời gian bạn tới. Nhân viên sẽ chuẩn bị sẵn và báo cho bạn.
         </Text>
       </View>
 
       <View className="gap-2">
-        <Text className="text-body-sm font-strong text-foreground">Đồ cần lấy</Text>
+        <Text className="text-body-sm font-semibold text-text-primary">Đồ cần lấy</Text>
         {items.map((item) => (
           <View key={item.id} className="flex-row items-center justify-between gap-3">
             <View className="flex-1">
-              <Text className="font-body text-body-md text-foreground">{item.name}</Text>
-              <Text className="font-body text-caption text-muted">
+              <Text className="text-body text-text-primary">{item.name}</Text>
+              <Text className="text-caption text-text-secondary">
                 Trên kệ: {quantityWithUnit(item.quantity, item.unit)}
               </Text>
             </View>
@@ -136,22 +133,22 @@ export function PickupRequestForm({
       </View>
 
       <View className="gap-2">
-        <Text className="text-body-sm font-strong text-foreground">Ngày lấy đồ</Text>
+        <Text className="text-body-sm font-semibold text-text-primary">Ngày lấy đồ</Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Chọn ngày lấy đồ"
-          className="flex-row items-center gap-2 rounded-lg border border-border bg-surface-secondary px-3 py-3"
+          className="flex-row items-center gap-2 rounded-xl border border-border-default bg-bg-subtle px-3.5 py-3"
           onPress={() => setCalendarOpen((open) => !open)}
         >
-          <CalendarBlank color={ACCENT} size={18} weight="bold" />
+          <CalendarBlank color={colors.semantic.actionPrimary} size={18} weight="bold" />
           <Text
-            className={`flex-1 text-body-sm ${dayIso ? 'font-numeric text-foreground' : 'font-body text-muted'}`}
+            className={`flex-1 text-body-sm ${dayIso ? 'font-medium text-text-primary tabular-nums' : 'text-text-secondary'}`}
           >
             {dayIso ? formatIsoDate(dayIso) : 'Chọn ngày'}
           </Text>
         </Pressable>
         {calendarOpen ? (
-          <View className="rounded-lg border border-border p-3">
+          <View className="rounded-2xl border border-border-default bg-bg-card p-3.5">
             <MonthCalendar
               minIso={today}
               maxIso={lastRequestDay(today)}
@@ -164,27 +161,21 @@ export function PickupRequestForm({
 
       {dayIso ? (
         <View className="gap-2">
-          <Text className="text-body-sm font-strong text-foreground">Giờ lấy đồ</Text>
+          <Text className="text-body-sm font-semibold text-text-primary">Giờ lấy đồ</Text>
           {hours.length === 0 ? (
-            <Text className="font-body text-body-sm text-muted">
+            <Text className="text-body-sm text-text-secondary">
               Hôm nay đã hết giờ nhận yêu cầu, hãy chọn ngày khác.
             </Text>
           ) : (
             <View className="flex-row flex-wrap gap-2">
               {hours.map((value) => (
-                <Pressable
+                <TabChip
                   key={value}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: hour === value }}
-                  className={`rounded-full border px-3 py-1.5 ${hour === value ? 'border-accent bg-accent' : 'border-border bg-surface-secondary'}`}
+                  label={hourLabel(value)}
                   onPress={() => setHour(value)}
-                >
-                  <Text
-                    className={`font-numeric text-body-sm ${hour === value ? 'text-white' : 'text-foreground'}`}
-                  >
-                    {hourLabel(value)}
-                  </Text>
-                </Pressable>
+                  selected={hour === value}
+                  tone="primary"
+                />
               ))}
             </View>
           )}
@@ -192,11 +183,13 @@ export function PickupRequestForm({
       ) : null}
 
       <View className="gap-2">
-        <Text className="text-body-sm font-strong text-foreground">Ghi chú (không bắt buộc)</Text>
+        <Text className="text-body-sm font-semibold text-text-primary">
+          Ghi chú (không bắt buộc)
+        </Text>
         <BottomSheetTextInput
-          className="font-body min-h-20 rounded-lg border border-border bg-surface-secondary px-3 py-2 text-body-sm text-foreground"
+          className="min-h-20 rounded-xl border border-border-default bg-bg-subtle px-4 py-3 font-inter text-body text-text-primary"
           placeholder="VD: mình cần lấy sớm trong giờ nghỉ trưa…"
-          placeholderTextColor={mutedColor}
+          placeholderTextColor={colors.semantic.textPlaceholder}
           value={note}
           onChangeText={setNote}
           maxLength={NOTE_MAX}
@@ -205,10 +198,14 @@ export function PickupRequestForm({
         />
       </View>
 
-      {error ? <Text className="font-body text-body-sm text-danger">{error}</Text> : null}
-      <Button isDisabled={busy} onPress={() => void submit()}>
-        <Button.Label>{busy ? 'Đang gửi…' : 'Gửi yêu cầu'}</Button.Label>
-      </Button>
+      {error ? <InlineMessage message={error} type="error" /> : null}
+      <Button
+        disabled={busy}
+        fullWidth
+        label={busy ? 'Đang gửi…' : 'Gửi yêu cầu'}
+        loading={busy}
+        onPress={() => void submit()}
+      />
     </View>
   );
 }

@@ -1,6 +1,6 @@
-import { Button } from 'heroui-native';
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Text, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import { ContractDocumentsApi } from '../../../lib/contract-documents-api';
 import {
@@ -10,6 +10,7 @@ import {
 } from '../../../lib/contract-files';
 import { type PickedFile, UploadsApi } from '../../../lib/uploads-api';
 import { EvidenceGallery } from '../../components/EvidenceGallery';
+import { AlertSheet, Button, colors, InlineMessage, Text } from '../../components/ui';
 import type { EvidenceFile } from '../../types/contract-api';
 import { pickImages, pickPdfs } from './pick-files';
 
@@ -30,8 +31,9 @@ const errorText = (error: unknown) => {
   if (error.code === 'CONTRACT_DOCUMENTS_REQUIRED') return error.message;
   if (error.statusCode === 403) return 'Bạn không còn quyền sửa file hợp đồng này.';
   if (error.statusCode === 409) return 'Hợp đồng đã đổi trạng thái — màn hình đã tải lại.';
-  if (error.statusCode === 400)
+  if (error.statusCode === 400) {
     return 'Tệp không hợp lệ — chỉ nhận ảnh JPG, PNG, WEBP, HEIC hoặc PDF, tối đa 10 tệp.';
+  }
   return error.message || 'Thử lại sau.';
 };
 
@@ -51,6 +53,11 @@ export function ContractDocumentsEditor({
   onStale,
 }: Props) {
   const [status, setStatus] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'error' | 'warning'; message: string } | null>(
+    null,
+  );
+  const [pendingDelete, setPendingDelete] = useState<EvidenceFile | null>(null);
+  const deleteSheetRef = useRef<BottomSheetModal>(null);
   // The last list the server is known to hold. The parent's `files` only catch up once its
   // reload lands (or never, if that reload fails), so building the next PUT from the prop
   // could silently drop files that were just stored.
@@ -88,21 +95,25 @@ export function ContractDocumentsEditor({
 
   const add = (pick: (slots: number) => Promise<PickedFile[]>) =>
     run(async () => {
+      setFeedback(null);
       let picked: PickedFile[];
       try {
         picked = await pick(MAX_CONTRACT_FILES - storedRef.current.length);
       } catch {
-        Alert.alert('Không mở được trình chọn', 'Cập nhật ứng dụng rồi thử lại.');
+        setFeedback({
+          type: 'error',
+          message: 'Không mở được trình chọn tệp. Cập nhật ứng dụng rồi thử lại.',
+        });
         return;
       }
       const { accepted, tooLarge } = splitBySize(picked);
       if (tooLarge.length > 0) {
-        Alert.alert(
-          'Tệp quá lớn',
-          `Mỗi tệp tối đa ${MAX_CONTRACT_FILE_BYTES / 1024 / 1024}MB: ${tooLarge
+        setFeedback({
+          type: 'warning',
+          message: `Tệp vượt quá ${MAX_CONTRACT_FILE_BYTES / 1024 / 1024}MB: ${tooLarge
             .map((f) => f.name)
             .join(', ')}`,
-        );
+        });
       }
       if (accepted.length === 0) return;
 
@@ -119,71 +130,92 @@ export function ContractDocumentsEditor({
       }
       try {
         if (added.length > 0) await store([...storedRef.current, ...added]);
-        if (failure) Alert.alert('Tải tệp thất bại', errorText(failure));
+        if (failure) {
+          setFeedback({ type: 'error', message: `Tải tệp thất bại: ${errorText(failure)}` });
+        }
       } catch (error) {
-        Alert.alert('Không lưu được hợp đồng', errorText(error));
+        setFeedback({ type: 'error', message: `Không lưu được hợp đồng: ${errorText(error)}` });
         if (isStale(error)) onStale();
       }
     });
 
-  const remove = (file: EvidenceFile) =>
-    Alert.alert('Xoá tệp?', `Xoá "${file.name}" khỏi hợp đồng?`, [
-      { text: 'Huỷ', style: 'cancel' },
-      {
-        text: 'Xoá',
-        style: 'destructive',
-        onPress: () =>
-          void run(async () => {
-            try {
-              await store(storedRef.current.filter((f) => f.fileKey !== file.fileKey));
-            } catch (error) {
-              Alert.alert('Không xoá được tệp', errorText(error));
-              if (isStale(error)) onStale();
-            }
-          }),
-      },
-    ]);
+  const confirmRemove = () => {
+    if (!pendingDelete) return;
+    const target = pendingDelete;
+    setPendingDelete(null);
+    void run(async () => {
+      setFeedback(null);
+      try {
+        await store(storedRef.current.filter((f) => f.fileKey !== target.fileKey));
+      } catch (error) {
+        setFeedback({ type: 'error', message: `Không xoá được tệp: ${errorText(error)}` });
+        if (isStale(error)) onStale();
+      }
+    });
+  };
 
   return (
     <View className="gap-3">
-      <EvidenceGallery files={stored} onRemove={busy ? undefined : remove} />
-      <Text className="font-body text-body-sm text-muted">
+      <EvidenceGallery
+        files={stored}
+        onRemove={
+          busy
+            ? undefined
+            : (file) => {
+                setPendingDelete(file);
+                deleteSheetRef.current?.present();
+              }
+        }
+      />
+      <Text className="text-caption text-text-secondary">
         {stored.length}/{MAX_CONTRACT_FILES} tệp · chụp từng trang hợp đồng đã ký
       </Text>
       {busy ? (
         <View className="flex-row items-center gap-2">
-          <ActivityIndicator size="small" />
-          <Text className="font-body text-body-sm text-muted">{status}</Text>
+          <ActivityIndicator color={colors.semantic.actionPrimary} size="small" />
+          <Text className="text-body text-text-secondary">{status}</Text>
         </View>
       ) : null}
+      {feedback ? <InlineMessage message={feedback.message} type={feedback.type} /> : null}
       <Button
-        isDisabled={busy || remaining <= 0}
+        disabled={busy || remaining <= 0}
+        fullWidth
+        label={remaining <= 0 ? `Tối đa ${MAX_CONTRACT_FILES} tệp` : 'Chụp ảnh'}
+        leftIcon={remaining <= 0 ? undefined : 'photo-camera'}
         onPress={() => void add((n) => pickImages('camera', n))}
-      >
-        <Button.Label>
-          {remaining <= 0 ? `Tối đa ${MAX_CONTRACT_FILES} tệp` : 'Chụp ảnh'}
-        </Button.Label>
-      </Button>
-      <View className="flex-row gap-2">
+      />
+      <View className="flex-row gap-2.5">
         <Button
-          size="sm"
-          variant="secondary"
           className="flex-1"
-          isDisabled={busy || remaining <= 0}
+          disabled={busy || remaining <= 0}
+          label="Chọn ảnh"
+          leftIcon="photo-library"
           onPress={() => void add((n) => pickImages('library', n))}
-        >
-          <Button.Label>Chọn ảnh</Button.Label>
-        </Button>
-        <Button
           size="sm"
           variant="secondary"
+        />
+        <Button
           className="flex-1"
-          isDisabled={busy || remaining <= 0}
+          disabled={busy || remaining <= 0}
+          label="Chọn PDF"
+          leftIcon="picture-as-pdf"
           onPress={() => void add(pickPdfs)}
-        >
-          <Button.Label>Chọn PDF</Button.Label>
-        </Button>
+          size="sm"
+          variant="secondary"
+        />
       </View>
+
+      <AlertSheet
+        actionsLayout="row"
+        destructive
+        message={pendingDelete ? `Xoá "${pendingDelete.name}" khỏi hợp đồng?` : ''}
+        onDismiss={() => setPendingDelete(null)}
+        onPrimary={confirmRemove}
+        primaryLabel="Xoá"
+        ref={deleteSheetRef}
+        secondaryLabel="Huỷ"
+        title="Xoá tệp?"
+      />
     </View>
   );
 }

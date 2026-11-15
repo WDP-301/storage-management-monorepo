@@ -129,6 +129,7 @@ export function useReturnRequestForm(
     slots,
     isSubmitting,
     error,
+    accountProblem: payload().problem,
     // An account that is filled in but not yet verified at the bank cannot be sent.
     canSubmit:
       dayIso !== null &&

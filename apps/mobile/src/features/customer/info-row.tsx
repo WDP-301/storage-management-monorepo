@@ -1,6 +1,7 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '../../components/ui';
 
-/** `isNumeric` sets money, dates and codes in the tabular figure font, like the rest of the app. */
+/** `isNumeric` sets money, dates and codes in tabular figures, matching Medipay key-value rows. */
 export function InfoRow({
   label,
   value,
@@ -12,10 +13,10 @@ export function InfoRow({
 }) {
   return (
     <View className="flex-row items-center justify-between gap-3">
-      <Text className="font-body shrink-0 text-body-sm text-muted">{label}</Text>
+      <Text className="shrink-0 text-body-sm text-text-secondary">{label}</Text>
       <Text
-        className={`flex-1 text-right text-foreground ${
-          isNumeric ? 'font-numeric text-num-md' : 'font-strong text-body-sm'
+        className={`flex-1 text-right text-body-sm font-semibold text-text-primary ${
+          isNumeric ? 'tabular-nums' : ''
         }`}
         // Long codes keep both ends visible; the tail is what staff read back over the phone.
         ellipsizeMode="middle"

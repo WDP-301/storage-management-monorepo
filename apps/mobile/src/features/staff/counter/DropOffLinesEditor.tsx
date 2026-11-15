@@ -1,7 +1,6 @@
 import type { ShelfItemUnit, ShelfItemView } from '@storage/types';
-import { Button } from 'heroui-native';
 import { useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import {
   addNewItem,
   addTopUp,
@@ -13,6 +12,7 @@ import {
 } from '../../../../lib/shelf-receipt-draft';
 import { DEFAULT_UNIT, quantityWithUnit, unitLabel } from '../../../../lib/shelf-storage-format';
 import { UnitPicker } from '../../../components/UnitPicker';
+import { Button, DashedDivider, Input, Text } from '../../../components/ui';
 import { QuantityStepper } from './QuantityStepper';
 
 /** Receiving goods: tap an item already on the shelf to add more, or type a new item. */
@@ -28,24 +28,28 @@ export function DropOffLinesEditor({
   const [name, setName] = useState('');
   const [unit, setNewUnit] = useState<ShelfItemUnit>(DEFAULT_UNIT);
   const add = () => {
+    if (!name.trim()) return;
     onChange(addNewItem(draft, name, unit));
     setName('');
     setNewUnit(DEFAULT_UNIT);
   };
   return (
-    <View className="gap-3">
+    <View className="gap-3 rounded-[20px] border border-border-default bg-bg-card p-4">
+      <Text className="text-body font-semibold text-text-primary">Danh sách món đồ nhận</Text>
+
       {existing.length > 0 ? (
-        <View className="gap-1.5">
-          <Text className="font-ui text-body-sm text-muted">Đồ đã có trên kệ, chạm để thêm</Text>
+        <View className="gap-2">
+          <Text className="text-caption text-text-secondary">Đồ đã có trên kệ, chạm để thêm</Text>
           <View className="flex-row flex-wrap gap-2">
             {existing.map((item) => (
               <Pressable
                 key={item.id}
                 accessibilityRole="button"
-                className="rounded-full bg-surface-secondary px-3 py-2"
+                className="rounded-full border border-border-default bg-bg-subtle px-3.5 py-1.5"
                 onPress={() => onChange(addTopUp(draft, item))}
+                style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
               >
-                <Text className="font-ui text-body-sm text-foreground">
+                <Text className="text-caption font-medium text-text-primary">
                   + {item.name} ({quantityWithUnit(item.quantity, item.unit)})
                 </Text>
               </Pressable>
@@ -55,25 +59,26 @@ export function DropOffLinesEditor({
       ) : null}
 
       <View className="flex-row items-center gap-2">
-        <TextInput
+        <Input
           accessibilityLabel="Tên món đồ mới"
-          className="flex-1 rounded-xl border border-border bg-surface px-3 py-3 font-body text-body-sm text-foreground"
+          clearable
+          containerClassName="flex-1"
           maxLength={MAX_ITEM_NAME}
-          placeholder="Tên món đồ mới"
-          value={name}
           onChangeText={setName}
           onSubmitEditing={add}
+          placeholder="Tên món đồ mới"
+          value={name}
         />
-        <Button size="sm" variant="secondary" isDisabled={!name.trim()} onPress={add}>
-          <Button.Label>Thêm</Button.Label>
-        </Button>
+        <Button disabled={!name.trim()} label="Thêm" onPress={add} size="sm" variant="secondary" />
       </View>
       <UnitPicker label="Đơn vị món mới" value={unit} onChange={setNewUnit} />
+
+      {draft.lines.length > 0 ? <DashedDivider /> : null}
 
       {draft.lines.map((line) => (
         <View key={line.key} className="flex-row items-center justify-between gap-3">
           <View className="flex-1 gap-1">
-            <Text className="font-body text-body-md text-foreground">
+            <Text className="text-body-lg text-text-primary">
               {line.name}
               {line.itemId ? ` · ${unitLabel(line.unit)}` : ''}
             </Text>
@@ -86,13 +91,14 @@ export function DropOffLinesEditor({
             <Pressable
               accessibilityRole="button"
               onPress={() => onChange(removeLine(draft, line.key))}
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
             >
-              <Text className="font-ui text-caption text-danger">Bỏ dòng</Text>
+              <Text className="text-caption font-medium text-status-danger">Bỏ dòng</Text>
             </Pressable>
           </View>
           <QuantityStepper
-            value={line.quantity}
             onChange={(quantity) => onChange(setQuantity(draft, line.key, quantity))}
+            value={line.quantity}
           />
         </View>
       ))}

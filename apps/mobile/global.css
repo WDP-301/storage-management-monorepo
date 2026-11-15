@@ -5,44 +5,223 @@
 @source "./node_modules/heroui-native/lib";
 
 /*
- * Design tokens from the "Kho Bãi Tối Giản" system generated in Stitch.
- *
- * Token NAMES stay as they were: heroui-native resolves its own component styling against
- * `accent`, `surface`, `muted`, `border` and friends, so renaming them would restyle every Button
- * and Chip in the app. Only the VALUES move.
- *
- * Font families are declared per weight, not per weight utility. React Native on Android does NOT
- * synthesize weights: once `fontFamily` is set, `fontWeight` is ignored and everything renders at
- * the family's own weight. So `font-bold` alone would silently flatten to regular. UI code picks
- * the family (`font-display`, `font-strong`, `font-ui`, `font-body`) instead of a weight.
- *
- * Be Vietnam Pro is drawn for Vietnamese: its diacritics are designed into the glyph rather than
- * stacked on top, so "ờ" and "ễ" keep their shape at small sizes. JetBrains Mono carries every
- * figure — money, areas, unit codes, countdowns — because tabular digits keep columns aligned
- * while the customer scans near-identical rooms.
+ * Techvera / Medipay design system tokens for @storage/mobile.
+ * Preserves legacy aliases (--color-background, --color-accent, --font-*, etc.)
+ * mapped to Techvera values so heroui-native and incremental screens stay cohesive.
  */
 @theme {
-  --font-body: "BeVietnamPro_400Regular";
-  --font-ui: "BeVietnamPro_500Medium";
-  --font-strong: "BeVietnamPro_600SemiBold";
-  --font-display: "BeVietnamPro_700Bold";
-  --font-mono: "JetBrainsMono_500Medium";
-  --font-numeric: "JetBrainsMono_600SemiBold";
-  --font-numeric-strong: "JetBrainsMono_700Bold";
+  /* Font families */
+  --font-inter: "Inter";
+  --font-sans: "Inter";
+  --font-body: "Inter_400Regular";
+  --font-ui: "Inter_500Medium";
+  --font-strong: "Inter_600SemiBold";
+  --font-display: "Inter_700Bold";
+  --font-mono: "Inter_500Medium";
+  --font-numeric: "Inter_600SemiBold";
+  --font-numeric-strong: "Inter_700Bold";
 
-  /*
-   * Type scale. Sizes are deliberately odd (13/15/17) rather than the Tailwind defaults: Vietnamese
-   * sets taller than Latin because of stacked diacritics, so the steps are tighter and every line
-   * height is set explicitly instead of inherited.
-   */
-  --text-caption: 11px;
+  /* Techvera base colors */
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-surface: #fdfdff;
+  --color-ink: #06090f;
+
+  /* Charcoal palette */
+  --color-charcoal-50: #f2f2f2;
+  --color-charcoal-100: #e5e5e5;
+  --color-charcoal-200: #c9c9c9;
+  --color-charcoal-300: #b0b0b0;
+  --color-charcoal-400: #969696;
+  --color-charcoal-500: #7d7d7d;
+  --color-charcoal-600: #616161;
+  --color-charcoal-700: #474747;
+  --color-charcoal-800: #383838;
+  --color-charcoal-850: #2e2e2e;
+  --color-charcoal-900: #1e1e1e;
+  --color-charcoal-950: #121212;
+
+  /* Primary palette */
+  --color-primary-0: #f7fcff;
+  --color-primary-50: #ebf5ff;
+  --color-primary-100: #d6e6fb;
+  --color-primary-200: #b0caea;
+  --color-primary-300: #7fa1cd;
+  --color-primary-400: #3f6594;
+  --color-primary-500: #062d58;
+  --color-primary-600: #001c41;
+  --color-primary-700: #000f2c;
+  --color-primary-800: #00061c;
+  --color-primary-900: #00020b;
+
+  /* Secondary palette */
+  --color-secondary-0: #ecf7fe;
+  --color-secondary-50: #d6ecfa;
+  --color-secondary-100: #b6daf1;
+  --color-secondary-200: #85c0e4;
+  --color-secondary-300: #56acdd;
+  --color-secondary-400: #269bd4;
+  --color-secondary-500: #159bd8;
+  --color-secondary-600: #007bb5;
+  --color-secondary-700: #00639b;
+  --color-secondary-800: #004067;
+  --color-secondary-900: #001e32;
+
+  /* Success palette */
+  --color-success-0: #ecf9ef;
+  --color-success-50: #d5f0db;
+  --color-success-100: #b8e0c1;
+  --color-success-200: #8bc89b;
+  --color-success-300: #5fb479;
+  --color-success-400: #259f56;
+  --color-success-500: #32a85f;
+  --color-success-600: #088845;
+  --color-success-700: #00682e;
+  --color-success-800: #00491c;
+  --color-success-900: #002c0b;
+
+  /* Warning palette */
+  --color-warning-0: #fbf4e6;
+  --color-warning-50: #f4e6ca;
+  --color-warning-100: #e6d2a8;
+  --color-warning-200: #d2b373;
+  --color-warning-300: #c1983a;
+  --color-warning-400: #af7c00;
+  --color-warning-500: #dca400;
+  --color-warning-600: #b98500;
+  --color-warning-700: #956900;
+  --color-warning-800: #714e00;
+  --color-warning-900: #4f3500;
+
+  /* Danger palette */
+  --color-danger-0: #fff0ee;
+  --color-danger-50: #ffdedb;
+  --color-danger-100: #fac6c1;
+  --color-danger-200: #eca19a;
+  --color-danger-300: #df7f78;
+  --color-danger-400: #d15c56;
+  --color-danger-500: #d73337;
+  --color-danger-600: #b00a1d;
+  --color-danger-700: #860006;
+  --color-danger-800: #5c0000;
+  --color-danger-900: #340000;
+
+  /* Info palette */
+  --color-info-0: #e8f8ff;
+  --color-info-50: #ceeefe;
+  --color-info-100: #acdcf5;
+  --color-info-200: #78c2e6;
+  --color-info-300: #3bacda;
+  --color-info-400: #0094ce;
+  --color-info-500: #008dc3;
+  --color-info-600: #006ea0;
+  --color-info-700: #00517b;
+  --color-info-800: #003455;
+  --color-info-900: #001a31;
+
+  /* Neutral palette */
+  --color-neutral-0: #fcfcfc;
+  --color-neutral-50: #f2f2f2;
+  --color-neutral-100: #e4e4e4;
+  --color-neutral-200: #d1d1d1;
+  --color-neutral-300: #bebebe;
+  --color-neutral-400: #aeaeae;
+  --color-neutral-500: #9e9e9e;
+  --color-neutral-600: #717171;
+  --color-neutral-700: #424242;
+  --color-neutral-800: #1b1b1b;
+  --color-neutral-900: #030303;
+
+  /* Techvera semantic tokens */
+  --color-action-primary: #159bd8;
+  --color-action-primary-pressed: #00639b;
+  --color-action-neutral: #f2f5f6;
+  --color-action-neutral-pressed: #d1d1d1;
+  --color-action-disabled: #f2f5f6;
+
+  --color-text-primary: #06090f;
+  --color-text-secondary: #667783;
+  --color-text-placeholder: #8796a1;
+  --color-text-disabled: #aab6be;
+  --color-text-inverse: #fdfdff;
+  --color-text-link: #007bb5;
+  --color-text-brand: #062d58;
+  --color-text-label: #0f150f;
+
+  --color-bg-page: #fdfdff;
+  --color-bg-card: #fdfdff;
+  --color-bg-subtle: #f2f5f6;
+  --color-bg-muted: #eef1f3;
+  --color-bg-inverse: #394852;
+
+  --color-border-default: #eef1f3;
+  --color-border-divider: #eef1f3;
+  --color-border-strong: #bebebe;
+  --color-border-focus: #062d58;
+  --color-border-error: #d73337;
+  --color-border-selected: #007bb5;
+
+  --color-status-danger: #b00a1d;
+  --color-status-success: #088845;
+  --color-status-info: #00517b;
+  --color-status-success-solid: #32a85f;
+
+  --color-icon-primary: #06090f;
+  --color-icon-brand: #007bb5;
+  --color-coat: rgba(6, 9, 15, 0.7);
+
+  /* Backward-compatible semantic aliases (HeroUI Native & existing screens) */
+  --color-background: #fdfdff;
+  --color-foreground: #06090f;
+  --color-surface-secondary: #f2f5f6;
+  --color-muted: #667783;
+  --color-subtle: #424242;
+  --color-border: #eef1f3;
+  --color-separator: #eef1f3;
+  --color-accent: #159bd8;
+  --color-accent-foreground: #fdfdff;
+  --color-success: #088845;
+  --color-success-bg: #ecf9ef;
+  --color-warning: #956900;
+  --color-warning-bg: #fbf4e6;
+  --color-danger: #b00a1d;
+  --color-danger-bg: #fff0ee;
+  --color-card: #fdfdff;
+  --color-card-foreground: #06090f;
+  --color-input: #e4e4e4;
+  --color-ring: #062d58;
+  --color-destructive: #d73337;
+  --color-destructive-foreground: #fdfdff;
+
+  /* Techvera type scale */
+  --text-display: 28px;
+  --text-display--line-height: 36px;
+  --text-heading: 24px;
+  --text-heading--line-height: 36px;
+  --text-title: 20px;
+  --text-title--line-height: 30px;
+  --text-subtitle: 18px;
+  --text-subtitle--line-height: 27px;
+  --text-lead: 16px;
+  --text-lead--line-height: 24px;
+  --text-body-xl: 20px;
+  --text-body-xl--line-height: 30px;
+  --text-body-lg: 15px;
+  --text-body-lg--line-height: 22px;
+  --text-body: 14px;
+  --text-body--line-height: 20px;
+  --text-caption: 12px;
   --text-caption--line-height: 16px;
+  --text-overline: 11px;
+  --text-overline--line-height: 16px;
+  --text-micro: 10px;
+  --text-micro--line-height: 14px;
+
+  /* Legacy type scale aliases */
   --text-body-sm: 13px;
   --text-body-sm--line-height: 18px;
   --text-body-md: 14px;
   --text-body-md--line-height: 20px;
-  --text-body-lg: 15px;
-  --text-body-lg--line-height: 22px;
   --text-title-sm: 17px;
   --text-title-sm--line-height: 24px;
   --text-title-md: 20px;
@@ -55,36 +234,4 @@
   --text-num-md--line-height: 18px;
   --text-num-lg: 16px;
   --text-num-lg--line-height: 22px;
-
-  /*
-   * Cool cement neutrals. The warm off-white of the previous pass fought the blue accent; this
-   * palette reads as an architectural ledger, which is what someone paying a deposit on an unseen
-   * room needs to feel.
-   */
-  --color-background: hsl(210 33% 98%);
-  --color-foreground: hsl(222 47% 11%);
-  --color-surface: hsl(0 0% 100%);
-  --color-surface-secondary: hsl(210 40% 96%);
-  --color-muted: hsl(215 16% 47%);
-  /* Between `foreground` and `muted`: body copy that must stay readable but not compete. */
-  --color-subtle: hsl(215 25% 31%);
-  --color-border: hsl(213 27% 84%);
-  --color-separator: hsl(213 27% 84%);
-  /* Only for dividers that must survive on top of `surface-secondary`. */
-  --color-border-strong: hsl(213 20% 65%);
-
-  /* Reserved for availability and the booking action. Nothing decorative uses it. */
-  --color-accent: hsl(203 100% 30%);
-  --color-accent-foreground: hsl(0 0% 100%);
-
-  /*
-   * Status colours always travel in pairs: a text colour and the tint it sits on. Never use the
-   * text colour as a fill or the tint as a text colour — contrast fails both ways round.
-   */
-  --color-success: hsl(160 84% 31%);
-  --color-success-bg: hsl(152 81% 96%);
-  --color-warning: hsl(32 95% 44%);
-  --color-warning-bg: hsl(48 100% 96%);
-  --color-danger: hsl(0 72% 51%);
-  --color-danger-bg: hsl(0 86% 97%);
 }

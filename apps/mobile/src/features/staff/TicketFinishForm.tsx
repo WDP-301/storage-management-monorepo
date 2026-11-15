@@ -1,6 +1,6 @@
-import { Button, Label, TextArea, TextField } from 'heroui-native';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
 import type { PickedFile } from '../../../lib/uploads-api';
+import { Button, FieldLabel, Input, Text } from '../../components/ui';
 
 export const MAX_FINISH_PHOTOS = 5;
 
@@ -50,23 +50,22 @@ export function TicketFinishForm({
   const canAddPhotos = photos.length < MAX_FINISH_PHOTOS && !isSaving;
 
   return (
-    <View className="gap-3 rounded-xl border border-border bg-surface p-3">
-      <Text className="font-strong text-body-lg text-foreground">{copy.title}</Text>
-      <TextField isRequired>
-        <Label className="font-ui">{copy.label}</Label>
-        <TextArea
-          placeholder={copy.placeholder}
-          value={note}
-          onChangeText={onChangeNote}
-          maxLength={5000}
-          editable={!isSaving}
-        />
-      </TextField>
+    <View className="gap-4 rounded-[20px] border border-border-default bg-bg-card p-4">
+      <Text className="text-subtitle font-semibold text-text-primary">{copy.title}</Text>
+      <Input
+        disabled={isSaving}
+        editable={!isSaving}
+        label={copy.label}
+        maxLength={5000}
+        multiline
+        onChangeText={onChangeNote}
+        placeholder={copy.placeholder}
+        required
+        value={note}
+      />
 
       <View className="gap-2">
-        <Label className="font-ui">
-          Ảnh sau xử lý ({photos.length}/{MAX_FINISH_PHOTOS})
-        </Label>
+        <FieldLabel>{`Ảnh sau xử lý (${photos.length}/${MAX_FINISH_PHOTOS})`}</FieldLabel>
         {photos.length > 0 ? (
           <View className="flex-row flex-wrap gap-3">
             {photos.map((photo) => (
@@ -75,45 +74,54 @@ export function TicketFinishForm({
                 accessibilityLabel="Bỏ ảnh"
                 disabled={isSaving}
                 onPress={() => onRemovePhoto(photo.uri)}
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
               >
-                <Image source={{ uri: photo.uri }} className="size-20 rounded-lg" />
-                <Text className="font-body mt-1 text-center text-caption text-muted">Bỏ</Text>
+                <Image className="size-20 rounded-xl" source={{ uri: photo.uri }} />
+                <Text className="mt-1 text-center text-caption font-medium text-status-danger">
+                  Bỏ
+                </Text>
               </Pressable>
             ))}
           </View>
         ) : null}
-        <View className="flex-row gap-2">
+        <View className="flex-row gap-2.5">
           <Button
-            size="sm"
-            variant="secondary"
-            isDisabled={!canAddPhotos}
+            className="flex-1"
+            disabled={!canAddPhotos}
+            label="Chụp ảnh"
+            leftIcon="photo-camera"
             onPress={() => onAddPhotos('camera')}
-          >
-            <Button.Label className="font-ui">Chụp ảnh</Button.Label>
-          </Button>
-          <Button
             size="sm"
             variant="secondary"
-            isDisabled={!canAddPhotos}
+          />
+          <Button
+            className="flex-1"
+            disabled={!canAddPhotos}
+            label="Chọn từ thư viện"
+            leftIcon="photo-library"
             onPress={() => onAddPhotos('library')}
-          >
-            <Button.Label className="font-ui">Chọn từ thư viện</Button.Label>
-          </Button>
+            size="sm"
+            variant="secondary"
+          />
         </View>
       </View>
 
-      <View className="flex-row gap-2">
-        <Button className="flex-1" variant="tertiary" isDisabled={isSaving} onPress={onCancel}>
-          <Button.Label className="font-ui">Để sau</Button.Label>
-        </Button>
+      <View className="flex-row gap-2.5">
         <Button
           className="flex-1"
-          variant={mode === 'close' ? 'danger' : 'primary'}
-          isDisabled={isSaving || note.trim().length === 0}
+          disabled={isSaving}
+          label="Để sau"
+          onPress={onCancel}
+          variant="secondary"
+        />
+        <Button
+          className="flex-1"
+          disabled={isSaving || note.trim().length === 0}
+          label={isSaving ? 'Đang lưu...' : copy.cta}
+          loading={isSaving}
           onPress={onSubmit}
-        >
-          <Button.Label className="font-ui">{isSaving ? 'Đang lưu...' : copy.cta}</Button.Label>
-        </Button>
+          variant={mode === 'close' ? 'destructive' : 'primary'}
+        />
       </View>
     </View>
   );

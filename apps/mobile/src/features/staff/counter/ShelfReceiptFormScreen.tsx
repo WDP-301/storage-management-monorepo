@@ -1,9 +1,9 @@
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import type { ShelfReceiptType } from '@storage/types';
 import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
-import { Button } from 'heroui-native';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { newOpenNonce } from '../../../../lib/open-nonce';
 import {
   newDraft,
@@ -14,7 +14,16 @@ import {
   toRecoveryInput,
 } from '../../../../lib/shelf-receipt-draft';
 import { ShelfStorageApi } from '../../../../lib/shelf-storage-api';
-import { ScreenHeader } from '../../../components/ScreenHeader';
+import {
+  AlertSheet,
+  Button,
+  colors,
+  FieldLabel,
+  FlowScreen,
+  InlineMessage,
+  Input,
+  Text,
+} from '../../../components/ui';
 import type { EvidenceFile } from '../../../types/contract-api';
 import { EvidenceEditor } from '../EvidenceEditor';
 import { shelfApiError } from '../staff-errors';
@@ -47,6 +56,7 @@ export function ShelfReceiptFormScreen({ params }: { params: ReceiptFormParams }
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
+  const recoverySheetRef = useRef<BottomSheetModal>(null);
   // One id per form: a retry after a timeout replays on the server instead of saving twice.
   const clientRequestId = useRef(Crypto.randomUUID()).current;
 
@@ -111,54 +121,55 @@ export function ShelfReceiptFormScreen({ params }: { params: ReceiptFormParams }
 
   const confirmSave = () => {
     if (!recovery) return void save();
-    Alert.alert(
-      'Thu hồi đồ?',
-      `Thu hồi đồ của ${source?.customerName || 'khách'} trên kệ ${source?.shelfCode}. Khách sẽ được thông báo.`,
-      [
-        { text: 'Hủy', style: 'cancel' },
-        { text: 'Thu hồi', style: 'destructive', onPress: () => void save() },
-      ],
-    );
+    recoverySheetRef.current?.present();
   };
 
   const title = recovery ? 'Thu hồi đồ' : type === 'DROP_OFF' ? 'Nhận đồ gửi' : 'Trả đồ cho khách';
   const needsPhoto = type === 'DROP_OFF' || recovery;
   return (
-    <View className="flex-1 bg-background">
-      <ScreenHeader title={title} backLabel="Quay lại Gửi / lấy đồ" onBack={confirmLeave} />
-      <ScrollView contentContainerClassName="gap-4 px-4 pb-10" keyboardShouldPersistTaps="handled">
+    <FlowScreen backLabel="Quay lại Gửi / lấy đồ" muted onBack={confirmLeave} title={title}>
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="gap-4 px-4 py-4 pb-10"
+        keyboardShouldPersistTaps="handled"
+      >
         {loadError ? (
-          <View className="gap-2 rounded-xl bg-danger-bg p-3">
-            <Text className="font-body text-body-sm text-danger">{loadError}</Text>
-            <Button size="sm" variant="secondary" onPress={() => void reload()}>
-              <Button.Label>Thử lại</Button.Label>
-            </Button>
+          <View className="gap-3 rounded-[20px] border border-border-error/30 bg-danger-0 p-4">
+            <InlineMessage message={loadError} type="error" />
+            <Button label="Thử lại" onPress={() => void reload()} size="sm" variant="secondary" />
           </View>
         ) : !source || !draft ? (
-          <ActivityIndicator />
+          <ActivityIndicator className="py-6" color={colors.semantic.actionPrimary} />
         ) : (
           <>
-            <Text className="font-body text-body-sm text-muted">
-              {source.customerName ? `${source.customerName} · ` : ''}Kệ {source.shelfCode} ·{' '}
-              {source.contractNo}
-            </Text>
-            {recovery ? (
-              <Text className="rounded-xl bg-warning-bg p-3 font-body text-body-sm text-warning">
-                Thu hồi đồ của khách bỏ kệ — khách sẽ được thông báo.
+            <View className="gap-1 rounded-[20px] border border-border-default bg-bg-card p-4">
+              <Text className="text-body-lg font-semibold text-text-primary">
+                {source.customerName || 'Khách hàng'}
               </Text>
+              <Text className="text-caption text-text-secondary">
+                Kệ {source.shelfCode} · {source.contractNo}
+              </Text>
+            </View>
+
+            {recovery ? (
+              <View className="rounded-[20px] border border-warning-200 bg-warning-0 p-4">
+                <InlineMessage
+                  message="Thu hồi đồ của khách bỏ kệ — khách sẽ được thông báo."
+                  type="warning"
+                />
+              </View>
             ) : null}
+
             {type === 'DROP_OFF' ? (
               <DropOffLinesEditor draft={draft} existing={source.items} onChange={edit} />
             ) : (
               <PickUpLinesEditor draft={draft} onChange={edit} />
             )}
 
-            <View className="gap-1.5">
-              <Text className="font-ui text-body-sm text-foreground">
-                Ảnh{needsPhoto ? ' (bắt buộc)' : ''}
-              </Text>
+            <View className="gap-2 rounded-[20px] border border-border-default bg-bg-card p-4">
+              <FieldLabel required={needsPhoto}>Ảnh</FieldLabel>
               {needsPhoto && photos.length === 0 ? (
-                <Text className="font-body text-caption text-muted">
+                <Text className="text-caption text-text-secondary">
                   {recovery ? 'Cần ít nhất 1 ảnh đồ thu hồi' : 'Cần ít nhất 1 ảnh đồ nhận'}
                 </Text>
               ) : null}
@@ -176,35 +187,51 @@ export function ShelfReceiptFormScreen({ params }: { params: ReceiptFormParams }
               />
             </View>
 
-            <TextInput
-              accessibilityLabel="Ghi chú"
-              className="min-h-20 rounded-xl border border-border bg-surface px-3 py-3 font-body text-body-sm text-foreground"
-              maxLength={1000}
-              multiline
-              placeholder={
-                recovery ? 'Ghi chú lý do thu hồi (bắt buộc)' : 'Ghi chú (không bắt buộc)'
-              }
-              textAlignVertical="top"
-              value={note}
-              onChangeText={(text) => {
-                setTouched(true);
-                setNote(text);
-              }}
-            />
+            <View className="rounded-[20px] border border-border-default bg-bg-card p-4">
+              <Input
+                accessibilityLabel="Ghi chú"
+                label="Ghi chú"
+                maxLength={1000}
+                multiline
+                onChangeText={(text) => {
+                  setTouched(true);
+                  setNote(text);
+                }}
+                placeholder={
+                  recovery ? 'Ghi chú lý do thu hồi (bắt buộc)' : 'Ghi chú (không bắt buộc)'
+                }
+                required={recovery}
+                value={note}
+              />
+            </View>
 
             {error ? (
-              <Text className="rounded-xl bg-danger-bg p-3 font-body text-body-sm text-danger">
-                {error}
-              </Text>
+              <View className="rounded-[20px] border border-border-error/30 bg-danger-0 p-4">
+                <InlineMessage message={error} type="error" />
+              </View>
             ) : null}
-            <Button isDisabled={saving || uploading || saved} onPress={confirmSave}>
-              <Button.Label>
-                {saving ? 'Đang lưu…' : uploading ? 'Đang tải ảnh…' : 'Lưu phiếu'}
-              </Button.Label>
-            </Button>
+
+            <Button
+              disabled={saving || uploading || saved}
+              fullWidth
+              label={saving ? 'Đang lưu…' : uploading ? 'Đang tải ảnh…' : 'Lưu phiếu'}
+              loading={saving || uploading}
+              onPress={confirmSave}
+            />
           </>
         )}
       </ScrollView>
-    </View>
+
+      <AlertSheet
+        actionsLayout="row"
+        destructive
+        message={`Thu hồi đồ của ${source?.customerName || 'khách'} trên kệ ${source?.shelfCode}. Khách sẽ được thông báo.`}
+        onPrimary={() => void save()}
+        primaryLabel="Thu hồi"
+        ref={recoverySheetRef}
+        secondaryLabel="Hủy"
+        title="Thu hồi đồ?"
+      />
+    </FlowScreen>
   );
 }

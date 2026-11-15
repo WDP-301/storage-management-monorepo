@@ -1,12 +1,12 @@
 import * as Clipboard from 'expo-clipboard';
 import { useFocusEffect } from 'expo-router';
-import { Button, useThemeColor } from 'heroui-native';
 import { Copy } from 'phosphor-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { AccessApi, type AccessPass } from '../../../lib/access-api';
 import { ApiError } from '../../../lib/api';
+import { Button, colors, InlineMessage, Text } from '../../components/ui';
 import type { ApiContract } from '../../types/contract-api';
 
 function vietnamDayIso(time: number): string {
@@ -15,9 +15,7 @@ function vietnamDayIso(time: number): string {
 
 /**
  * The customer's single code for every shelf warehouse they rent in, shown to counter staff when
- * dropping off or picking up goods; staff pick the warehouse when scanning. It is issued when the
- * screen gains focus, replaced as soon as it expires, and dropped when the screen loses focus.
- * Staff scanning consumes a code, so "Đổi mã" gives the customer a fresh one on demand.
+ * dropping off or picking up goods; staff pick the warehouse when scanning.
  */
 export function ShelfAccessCard({ contracts }: { contracts: ApiContract[] }) {
   const shelves = contracts.filter(
@@ -87,33 +85,51 @@ export function ShelfAccessCard({ contracts }: { contracts: ApiContract[] }) {
   if (shelves.length === 0) return null;
 
   return (
-    <View className="mt-4 items-center gap-3 rounded-xl border border-border bg-surface p-4">
-      <Text className="self-start font-strong text-body-md text-foreground">Mã gửi / lấy đồ</Text>
-      <Text className="self-start font-body text-body-sm text-muted">
-        {eligible
-          ? 'Đưa mã cho nhân viên quầy khi gửi hoặc lấy đồ. Một mã dùng cho mọi kho bạn đang thuê kệ.'
-          : 'Có thể dùng mã từ ngày bắt đầu thuê kệ.'}
-      </Text>
+    <View className="items-center gap-3.5 rounded-[20px] border border-border-default bg-bg-card p-4">
+      <View className="w-full gap-1">
+        <Text className="text-body-lg font-bold text-text-primary">Mã gửi / lấy đồ tại quầy</Text>
+        <Text className="text-body-sm text-text-secondary">
+          {eligible
+            ? 'Đưa mã cho nhân viên quầy khi gửi hoặc lấy đồ. Một mã dùng cho mọi kho bạn đang thuê kệ.'
+            : 'Có thể dùng mã từ ngày bắt đầu thuê kệ.'}
+        </Text>
+      </View>
+
       {eligible && pass && seconds > 0 ? (
         <>
-          <View className="rounded-xl bg-white p-3">
-            <QRCode value={pass.qrPayload} size={210} />
+          <View className="rounded-2xl bg-secondary-0 p-4">
+            <View className="rounded-xl bg-white p-3">
+              <QRCode value={pass.qrPayload} size={196} />
+            </View>
           </View>
           <PassCode value={pass.qrPayload} />
-          <Text className="font-ui text-body-sm text-foreground">
-            Mã tự đổi sau {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
-          </Text>
-          <Text className="font-body text-caption text-muted">
-            Mỗi mã chỉ dùng một lần và tự hết hạn, không nên chia sẻ ảnh chụp mã.
-          </Text>
+          <View className="items-center gap-0.5">
+            <Text className="text-body-sm font-semibold text-text-brand tabular-nums">
+              Mã tự đổi sau {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
+            </Text>
+            <Text className="text-center text-caption text-text-secondary">
+              Mỗi mã chỉ dùng một lần và tự hết hạn, không chia sẻ ảnh chụp mã.
+            </Text>
+          </View>
         </>
       ) : null}
-      {eligible && busy && !pass ? <ActivityIndicator /> : null}
-      {error ? <Text className="font-body text-body-sm text-danger">{error}</Text> : null}
+
+      {eligible && busy && !pass ? (
+        <ActivityIndicator className="my-4" color={colors.semantic.actionPrimary} />
+      ) : null}
+
+      {error ? <InlineMessage message={error} type="error" /> : null}
+
       {eligible ? (
-        <Button isDisabled={busy} variant="secondary" onPress={() => void create()}>
-          <Button.Label>{busy ? 'Đang tạo mã…' : error ? 'Thử lại' : 'Đổi mã'}</Button.Label>
-        </Button>
+        <Button
+          disabled={busy}
+          label={busy ? 'Đang tạo mã…' : error ? 'Thử lại' : 'Đổi mã'}
+          leftIcon="refresh"
+          loading={busy}
+          size="sm"
+          variant="secondary"
+          onPress={() => void create()}
+        />
       ) : null}
     </View>
   );
@@ -121,7 +137,6 @@ export function ShelfAccessCard({ contracts }: { contracts: ApiContract[] }) {
 
 /** The code as text, for counters that type it into the manual field instead of scanning. */
 function PassCode({ value }: { value: string }) {
-  const [mutedColor] = useThemeColor(['muted']);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) return;
@@ -130,8 +145,8 @@ function PassCode({ value }: { value: string }) {
   }, [copied]);
 
   return (
-    <View className="w-full flex-row items-center gap-2 rounded-xl bg-surface-secondary px-3 py-2">
-      <Text selectable className="flex-1 font-numeric text-caption text-foreground">
+    <View className="w-full flex-row items-center gap-2 rounded-xl border border-border-default bg-bg-subtle px-3 py-2">
+      <Text selectable className="flex-1 text-caption font-medium text-text-primary tabular-nums">
         {value}
       </Text>
       <Pressable
@@ -144,9 +159,11 @@ function PassCode({ value }: { value: string }) {
           setCopied(true);
         }}
       >
-        <View className="flex-row items-center gap-1 rounded-full bg-surface px-2.5 py-1.5">
-          <Copy color={mutedColor} size={13} weight="bold" />
-          <Text className="font-ui text-caption text-subtle">{copied ? 'Đã chép' : 'Chép'}</Text>
+        <View className="flex-row items-center gap-1 rounded-full border border-border-default bg-bg-card px-2.5 py-1.5">
+          <Copy color={colors.semantic.textSecondary} size={13} weight="bold" />
+          <Text className="text-caption font-medium text-text-primary">
+            {copied ? 'Đã chép' : 'Chép'}
+          </Text>
         </View>
       </Pressable>
     </View>

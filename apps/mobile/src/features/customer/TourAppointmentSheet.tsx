@@ -1,29 +1,34 @@
 import {
-  BottomSheetBackdrop,
-  type BottomSheetBackdropProps,
   BottomSheetModal,
   BottomSheetScrollView,
   BottomSheetTextInput,
 } from '@gorhom/bottom-sheet';
 import type { TourAppointmentRecord } from '@storage/types';
 import { VIETNAMESE_PHONE_PATTERN } from '@storage/types';
-import { Button, useThemeColor } from 'heroui-native';
 import {
   CalendarBlank,
-  Check,
+  CheckCircle,
   Clock,
   MapPin,
   Warehouse as WarehouseIcon,
   X,
 } from 'phosphor-react-native';
 import { type RefObject, useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError } from '../../../lib/api';
 import { formatIsoDate } from '../../../lib/format-vi';
 import { toIsoDate } from '../../../lib/rental-schedule';
 import { useSession } from '../../../lib/session';
 import { TourAppointmentsApi } from '../../../lib/tour-appointments-api';
+import {
+  Button,
+  colors,
+  InlineMessage,
+  renderCoatBackdrop,
+  TabChip,
+  Text,
+} from '../../components/ui';
 import { MonthCalendar } from './MonthCalendar';
 
 const TIME_SLOTS = [
@@ -44,7 +49,6 @@ type Props = {
 export function TourAppointmentSheet({ sheetRef, facility, storageUnit, onSuccess }: Props) {
   const insets = useSafeAreaInsets();
   const { user } = useSession();
-  const [accentColor, mutedColor] = useThemeColor(['accent', 'muted']);
 
   const todayIso = useMemo(() => toIsoDate(new Date()), []);
   const maxIso = useMemo(() => {
@@ -61,6 +65,8 @@ export function TourAppointmentSheet({ sheetRef, facility, storageUnit, onSucces
   const [customerNotes, setCustomerNotes] = useState('');
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [createdApt, setCreatedApt] = useState<TourAppointmentRecord | null>(null);
 
   // Autofill user profile when available
   useEffect(() => {
@@ -70,18 +76,6 @@ export function TourAppointmentSheet({ sheetRef, facility, storageUnit, onSucces
       if (user.email) setEmail(user.email);
     }
   }, [user]);
-
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        appearsOnIndex={0}
-        disappearsOnIndex={-1}
-        pressBehavior="close"
-      />
-    ),
-    [],
-  );
 
   const isSlotPast = useCallback(
     (slot: string) => {
@@ -101,6 +95,7 @@ export function TourAppointmentSheet({ sheetRef, facility, storageUnit, onSucces
   const handlePickDate = (iso: string) => {
     setPreferredDate(iso);
     setIsCalendarOpen(false);
+    setError(null);
   };
 
   const validate = (): string | null => {
@@ -128,12 +123,13 @@ export function TourAppointmentSheet({ sheetRef, facility, storageUnit, onSucces
   const handleSubmit = async () => {
     const errorMsg = validate();
     if (errorMsg) {
-      Alert.alert('Thông tin chưa hợp lệ', errorMsg);
+      setError(errorMsg);
       return;
     }
     if (!facility) return;
 
     setIsSubmitting(true);
+    setError(null);
     try {
       const created = await TourAppointmentsApi.create({
         facilityId: facility.id,
@@ -145,26 +141,19 @@ export function TourAppointmentSheet({ sheetRef, facility, storageUnit, onSucces
         preferredTimeSlot,
         customerNotes: customerNotes.trim() || undefined,
       });
-
-      Alert.alert(
-        'Đặt lịch thành công!',
-        'Nhân viên chi nhánh sẽ sớm liên hệ để xác nhận và đón tiếp bạn.',
-        [
-          {
-            text: 'Đồng ý',
-            onPress: () => {
-              sheetRef.current?.dismiss();
-              onSuccess?.(created);
-            },
-          },
-        ],
-      );
+      setCreatedApt(created);
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Có lỗi xảy ra khi gửi yêu cầu.';
-      Alert.alert('Không thể đặt lịch', msg);
+      setError(err instanceof ApiError ? err.message : 'Có lỗi xảy ra khi gửi yêu cầu.');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const closeAfterSuccess = () => {
+    const apt = createdApt;
+    setCreatedApt(null);
+    sheetRef.current?.dismiss();
+    if (apt) onSuccess?.(apt);
   };
 
   if (!facility) return null;
@@ -172,18 +161,20 @@ export function TourAppointmentSheet({ sheetRef, facility, storageUnit, onSucces
   return (
     <BottomSheetModal
       ref={sheetRef}
-      snapPoints={['85%']}
-      backdropComponent={renderBackdrop}
+      snapPoints={['88%']}
+      backdropComponent={renderCoatBackdrop}
       enablePanDownToClose
-      backgroundStyle={{ backgroundColor: 'hsl(var(--surface))' }}
-      handleIndicatorStyle={{ backgroundColor: 'hsl(var(--border))' }}
+      backgroundStyle={{ backgroundColor: colors.semantic.bgCard }}
+      handleIndicatorStyle={{ backgroundColor: colors.neutral[300] }}
+      onDismiss={() => {
+        setError(null);
+        setCreatedApt(null);
+      }}
     >
-      <View className="flex-row items-center justify-between border-b border-border px-4 py-3">
+      <View className="flex-row items-center justify-between border-b border-border-default px-4 py-3">
         <View className="flex-1">
-          <Text className="font-strong text-foreground text-title-md">
-            Đặt lịch xem kho thực tế
-          </Text>
-          <Text className="font-body text-caption text-muted">
+          <Text className="text-title font-bold text-text-primary">Đặt lịch xem kho thực tế</Text>
+          <Text className="text-caption text-text-secondary">
             Trải nghiệm trực tiếp không gian kho và tiện ích
           </Text>
         </View>
@@ -191,182 +182,197 @@ export function TourAppointmentSheet({ sheetRef, facility, storageUnit, onSucces
           accessibilityRole="button"
           accessibilityLabel="Đóng"
           onPress={() => sheetRef.current?.dismiss()}
-          className="size-8 items-center justify-center rounded-full bg-surface-secondary"
+          className="size-8 items-center justify-center rounded-full bg-bg-subtle"
         >
-          <X color={mutedColor} size={18} weight="bold" />
+          <X color={colors.semantic.textSecondary} size={18} weight="bold" />
         </Pressable>
       </View>
 
-      <BottomSheetScrollView
-        contentContainerStyle={{ padding: 16, paddingBottom: Math.max(insets.bottom, 24) + 60 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Facility & Target Warehouse Card */}
-        <View className="mb-4 rounded-xl border border-border bg-surface-secondary p-3 gap-1.5">
-          <View className="flex-row items-center gap-1.5">
-            <MapPin color={accentColor} size={16} weight="fill" />
-            <Text className="font-strong text-body-sm text-foreground flex-1">{facility.name}</Text>
+      {createdApt ? (
+        <View
+          className="flex-1 items-center justify-center gap-4 px-6"
+          style={{ paddingBottom: Math.max(insets.bottom, 24) }}
+        >
+          <View className="size-16 items-center justify-center rounded-full bg-success-0">
+            <CheckCircle color={colors.semantic.statusSuccess} size={36} weight="fill" />
           </View>
-          {facility.addressLine && (
-            <Text className="font-body text-caption text-muted pl-5">{facility.addressLine}</Text>
-          )}
-          {storageUnit && (
-            <View className="flex-row items-center gap-1.5 pt-1 border-t border-border/50">
-              <WarehouseIcon color={accentColor} size={15} weight="bold" />
-              <Text className="font-body text-caption text-foreground">
-                Phòng kho mẫu:{' '}
-                <Text className="font-strong">
-                  {storageUnit.name} ({storageUnit.code})
-                </Text>
+          <Text className="text-center text-title-sm font-bold text-text-primary">
+            Đặt lịch thành công!
+          </Text>
+          <Text className="text-center text-body text-text-secondary">
+            Nhân viên chi nhánh sẽ sớm liên hệ để xác nhận và đón tiếp bạn.
+          </Text>
+          <Button fullWidth label="Đồng ý" onPress={closeAfterSuccess} variant="primary" />
+        </View>
+      ) : (
+        <BottomSheetScrollView
+          contentContainerStyle={{
+            padding: 16,
+            paddingBottom: Math.max(insets.bottom, 24) + 60,
+            gap: 16,
+          }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View className="gap-1.5 rounded-2xl border border-border-default bg-bg-subtle p-3.5">
+            <View className="flex-row items-center gap-1.5">
+              <MapPin color={colors.semantic.iconBrand} size={16} weight="fill" />
+              <Text className="flex-1 text-body-sm font-semibold text-text-primary">
+                {facility.name}
               </Text>
             </View>
-          )}
-        </View>
+            {facility.addressLine ? (
+              <Text className="pl-5 text-caption text-text-secondary">{facility.addressLine}</Text>
+            ) : null}
+            {storageUnit ? (
+              <View className="flex-row items-center gap-1.5 border-t border-border-divider pt-2">
+                <WarehouseIcon color={colors.semantic.actionPrimary} size={15} weight="bold" />
+                <Text className="text-caption text-text-primary">
+                  Phòng kho mẫu: <Text className="font-semibold">{storageUnit.name}</Text>
+                </Text>
+              </View>
+            ) : null}
+          </View>
 
-        {/* Date Selection */}
-        <View className="mb-4 gap-1.5">
-          <Text className="font-strong text-body-sm text-foreground">
-            Ngày muốn đến xem kho <Text className="text-warning">*</Text>
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            className="flex-row items-center gap-2 rounded-lg border border-border bg-surface-secondary px-3 py-2.5"
-            onPress={() => setIsCalendarOpen((prev) => !prev)}
-          >
-            <CalendarBlank color={accentColor} size={18} weight="bold" />
-            <Text className="flex-1 font-numeric text-body-sm text-foreground">
-              {formatIsoDate(preferredDate)}
+          <View className="gap-2">
+            <Text className="text-body-sm font-semibold text-text-primary">
+              Ngày muốn đến xem kho <Text className="text-status-danger">*</Text>
             </Text>
-            <Text className="font-body text-caption text-accent">
-              {isCalendarOpen ? 'Đóng lịch' : 'Đổi ngày'}
-            </Text>
-          </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              className="flex-row items-center gap-2 rounded-xl border border-border-default bg-bg-subtle px-3.5 py-3"
+              onPress={() => setIsCalendarOpen((prev) => !prev)}
+            >
+              <CalendarBlank color={colors.semantic.actionPrimary} size={18} weight="bold" />
+              <Text className="flex-1 text-body-sm font-medium text-text-primary tabular-nums">
+                {formatIsoDate(preferredDate)}
+              </Text>
+              <Text className="text-caption font-medium text-text-link">
+                {isCalendarOpen ? 'Đóng lịch' : 'Đổi ngày'}
+              </Text>
+            </Pressable>
 
-          {isCalendarOpen && (
-            <View className="mt-2 rounded-xl border border-border bg-surface p-3">
-              <MonthCalendar
-                minIso={todayIso}
-                maxIso={maxIso}
-                selectedIso={preferredDate}
-                onSelect={handlePickDate}
+            {isCalendarOpen ? (
+              <View className="rounded-2xl border border-border-default bg-bg-card p-3.5">
+                <MonthCalendar
+                  minIso={todayIso}
+                  maxIso={maxIso}
+                  selectedIso={preferredDate}
+                  onSelect={handlePickDate}
+                />
+              </View>
+            ) : null}
+          </View>
+
+          <View className="gap-2">
+            <View className="flex-row items-center gap-1.5">
+              <Clock color={colors.semantic.actionPrimary} size={16} weight="bold" />
+              <Text className="text-body-sm font-semibold text-text-primary">
+                Khung giờ hẹn phù hợp <Text className="text-status-danger">*</Text>
+              </Text>
+            </View>
+            <View className="flex-row flex-wrap gap-2">
+              {TIME_SLOTS.map((slot) => {
+                const isSelected = preferredTimeSlot === slot;
+                const isPast = isSlotPast(slot);
+                if (isPast) {
+                  return (
+                    <View
+                      key={slot}
+                      className="rounded-full border border-border-default bg-bg-subtle px-3.5 py-1.5 opacity-40"
+                    >
+                      <Text className="text-caption text-text-secondary line-through tabular-nums">
+                        {slot}
+                      </Text>
+                    </View>
+                  );
+                }
+                return (
+                  <TabChip
+                    key={slot}
+                    label={slot}
+                    onPress={() => setPreferredTimeSlot(slot)}
+                    selected={isSelected}
+                    tone="primary"
+                  />
+                );
+              })}
+            </View>
+          </View>
+
+          <View className="gap-3">
+            <Text className="text-body-sm font-semibold text-text-primary">
+              Thông tin liên hệ của bạn
+            </Text>
+
+            <View className="gap-1">
+              <Text className="text-caption text-text-secondary">
+                Họ và tên <Text className="text-status-danger">*</Text>
+              </Text>
+              <BottomSheetTextInput
+                className="rounded-xl border border-border-default bg-bg-subtle px-3.5 py-3 font-inter text-body text-text-primary"
+                placeholder="Nhập họ và tên của bạn"
+                placeholderTextColor={colors.semantic.textPlaceholder}
+                value={fullName}
+                onChangeText={setFullName}
               />
             </View>
-          )}
-        </View>
 
-        {/* Time Slot Selection */}
-        <View className="mb-4 gap-1.5">
-          <View className="flex-row items-center gap-1">
-            <Clock color={accentColor} size={16} weight="bold" />
-            <Text className="font-strong text-body-sm text-foreground">
-              Khung giờ hẹn phù hợp <Text className="text-warning">*</Text>
-            </Text>
-          </View>
-          <View className="flex-row flex-wrap gap-2 pt-1">
-            {TIME_SLOTS.map((slot) => {
-              const isSelected = preferredTimeSlot === slot;
-              const isPast = isSlotPast(slot);
-              return (
-                <Pressable
-                  key={slot}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isSelected, disabled: isPast }}
-                  disabled={isPast}
-                  onPress={() => setPreferredTimeSlot(slot)}
-                  className={`rounded-full border px-3 py-1.5 flex-row items-center gap-1 ${
-                    isPast
-                      ? 'border-border/40 bg-surface-secondary/40 opacity-40'
-                      : isSelected
-                        ? 'border-accent bg-accent'
-                        : 'border-border bg-surface-secondary'
-                  }`}
-                >
-                  {isSelected && <Check color="#fff" size={12} weight="bold" />}
-                  <Text
-                    className={`font-numeric text-caption ${
-                      isPast
-                        ? 'text-muted line-through'
-                        : isSelected
-                          ? 'font-strong text-white'
-                          : 'text-foreground'
-                    }`}
-                  >
-                    {slot}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
+            <View className="gap-1">
+              <Text className="text-caption text-text-secondary">
+                Số điện thoại <Text className="text-status-danger">*</Text>
+              </Text>
+              <BottomSheetTextInput
+                className="rounded-xl border border-border-default bg-bg-subtle px-3.5 py-3 font-inter text-body text-text-primary tabular-nums"
+                placeholder="VD: 0901234567"
+                placeholderTextColor={colors.semantic.textPlaceholder}
+                keyboardType="phone-pad"
+                value={phone}
+                onChangeText={setPhone}
+              />
+            </View>
 
-        {/* Customer Information */}
-        <View className="mb-4 gap-3">
-          <Text className="font-strong text-body-sm text-foreground">
-            Thông tin liên hệ của bạn
-          </Text>
+            <View className="gap-1">
+              <Text className="text-caption text-text-secondary">
+                Email <Text className="text-status-danger">*</Text>
+              </Text>
+              <BottomSheetTextInput
+                className="rounded-xl border border-border-default bg-bg-subtle px-3.5 py-3 font-inter text-body text-text-primary"
+                placeholder="VD: email@example.com"
+                placeholderTextColor={colors.semantic.textPlaceholder}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
+              />
+            </View>
 
-          <View className="gap-1">
-            <Text className="font-body text-caption text-muted">
-              Họ và tên <Text className="text-warning">*</Text>
-            </Text>
-            <BottomSheetTextInput
-              className="rounded-lg border border-border bg-surface-secondary px-3 py-2 text-body-sm text-foreground font-body"
-              placeholder="Nhập họ và tên của bạn"
-              placeholderTextColor={mutedColor}
-              value={fullName}
-              onChangeText={setFullName}
-            />
+            <View className="gap-1">
+              <Text className="text-caption text-text-secondary">
+                Ghi chú thêm (không bắt buộc)
+              </Text>
+              <BottomSheetTextInput
+                className="min-h-16 rounded-xl border border-border-default bg-bg-subtle px-3.5 py-3 font-inter text-body text-text-primary"
+                placeholder="Ví dụ: Cần kho lưu trữ đồ gia đình 3 tháng, muốn xem vị trí tầng 1..."
+                placeholderTextColor={colors.semantic.textPlaceholder}
+                multiline
+                value={customerNotes}
+                onChangeText={setCustomerNotes}
+              />
+            </View>
           </View>
 
-          <View className="gap-1">
-            <Text className="font-body text-caption text-muted">
-              Số điện thoại <Text className="text-warning">*</Text>
-            </Text>
-            <BottomSheetTextInput
-              className="rounded-lg border border-border bg-surface-secondary px-3 py-2 text-body-sm text-foreground font-numeric"
-              placeholder="VD: 0901234567"
-              placeholderTextColor={mutedColor}
-              keyboardType="phone-pad"
-              value={phone}
-              onChangeText={setPhone}
-            />
-          </View>
+          {error ? <InlineMessage message={error} type="error" /> : null}
 
-          <View className="gap-1">
-            <Text className="font-body text-caption text-muted">
-              Email <Text className="text-warning">*</Text>
-            </Text>
-            <BottomSheetTextInput
-              className="rounded-lg border border-border bg-surface-secondary px-3 py-2 text-body-sm text-foreground font-body"
-              placeholder="VD: email@example.com"
-              placeholderTextColor={mutedColor}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-            />
-          </View>
-
-          <View className="gap-1">
-            <Text className="font-body text-caption text-muted">Ghi chú thêm (không bắt buộc)</Text>
-            <BottomSheetTextInput
-              className="min-h-16 rounded-lg border border-border bg-surface-secondary px-3 py-2 text-body-sm text-foreground font-body"
-              placeholder="Ví dụ: Cần kho lưu trữ đồ gia đình 3 tháng, muốn xem vị trí tầng 1..."
-              placeholderTextColor={mutedColor}
-              multiline
-              value={customerNotes}
-              onChangeText={setCustomerNotes}
-            />
-          </View>
-        </View>
-
-        {/* Action Button */}
-        <Button variant="primary" isDisabled={isSubmitting} onPress={handleSubmit} className="mt-2">
-          <Button.Label className="font-ui">
-            {isSubmitting ? 'Đang gửi yêu cầu...' : 'Gửi yêu cầu đặt lịch hẹn'}
-          </Button.Label>
-        </Button>
-      </BottomSheetScrollView>
+          <Button
+            disabled={isSubmitting}
+            fullWidth
+            label={isSubmitting ? 'Đang gửi yêu cầu...' : 'Gửi yêu cầu đặt lịch hẹn'}
+            loading={isSubmitting}
+            onPress={() => void handleSubmit()}
+          />
+        </BottomSheetScrollView>
+      )}
     </BottomSheetModal>
   );
 }

@@ -10,7 +10,7 @@ import {
 } from '@maplibre/maplibre-react-native';
 import { MapPin as PinIcon } from 'phosphor-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import {
   circlePolygon,
   DEFAULT_ZOOM,
@@ -23,6 +23,8 @@ import {
   toLngLat,
   toLngLatBounds,
 } from '../../../lib/goong-map-config';
+import { displayMonthlyPrice, isShelfWarehouse } from '../../../lib/shelf-rental';
+import { colors, Text } from '../../components/ui';
 import { WarehousePin } from '../../components/WarehousePin';
 import type { Warehouse } from '../../types/storage-api';
 
@@ -48,7 +50,7 @@ const FIT_INSETS = {
   bottom: FIT_PADDING,
   left: FIT_PADDING,
 };
-const ACCENT = '#006398';
+const ACCENT = colors.semantic.actionPrimary;
 
 export function BrowseMapView({
   warehouses,
@@ -159,7 +161,8 @@ export function BrowseMapView({
             <WarehousePin
               isPicked={pickedIds.includes(warehouse.id)}
               isSelected={selectedWarehouseId === warehouse.id}
-              monthlyPrice={warehouse.monthlyPrice}
+              isShelf={isShelfWarehouse(warehouse)}
+              monthlyPrice={displayMonthlyPrice(warehouse)}
             />
           </Marker>
         ))}
@@ -184,8 +187,8 @@ export function BrowseMapView({
       {/* Confirmed in validation: say how many pins are missing AND where to find them, so the
           map's warehouse count never silently disagrees with the list's. */}
       {missingCount > 0 ? (
-        <Text className="font-body absolute top-2 left-3 right-3 rounded-lg bg-surface/90 px-2 py-1 text-caption text-muted">
-          {missingCount} kho chưa có toạ độ, xem ở danh sách
+        <Text className="absolute top-2 left-3 right-3 rounded-xl bg-bg-card/95 px-3 py-1.5 text-caption text-text-secondary shadow-sm">
+          {missingCount} kho chưa có tọa độ, xem ở danh sách
         </Text>
       ) : null}
     </View>
@@ -195,10 +198,10 @@ export function BrowseMapView({
 /** Shown instead of a blank grey map when the build has no Goong map-tiles key. */
 function MapUnavailable() {
   return (
-    <View className="m-4 flex-1 items-center justify-center rounded-2xl border border-border border-dashed px-6">
-      <Text className="font-strong text-foreground">Chưa cấu hình bản đồ</Text>
-      <Text className="font-body mt-1 text-center text-muted text-body-sm leading-5">
-        Thiếu khoá bản đồ Goong. Hãy dùng chế độ danh sách, hoặc liên hệ quản trị viên để bổ sung
+    <View className="m-4 flex-1 items-center justify-center rounded-2xl border border-dashed border-border-default bg-bg-card px-6">
+      <Text className="text-lead font-semibold text-text-primary">Chưa cấu hình bản đồ</Text>
+      <Text className="mt-1 text-center text-body leading-5 text-text-secondary">
+        Thiếu khóa bản đồ Goong. Hãy dùng chế độ danh sách, hoặc liên hệ quản trị viên để bổ sung
         cấu hình.
       </Text>
     </View>

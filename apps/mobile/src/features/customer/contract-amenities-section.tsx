@@ -1,4 +1,4 @@
-import { Text } from 'react-native';
+import { Text } from '../../components/ui';
 import type { ApiContract } from '../../types/contract-api';
 import { SectionCard } from './contract-sections';
 import { AmenityItems } from './WarehouseAmenityList';
@@ -13,7 +13,7 @@ export function ContractAmenitiesSection({ contract }: { contract: ApiContract }
   if (amenities === null) {
     return (
       <SectionCard title={title} badge="Chưa ghi nhận" tone="neutral">
-        <Text className="font-body text-body-sm text-muted">
+        <Text className="text-body-sm text-text-secondary">
           Hệ thống không có danh sách tiện ích tại thời điểm bắt đầu thuê. Liên hệ chi nhánh nếu
           cần.
         </Text>
@@ -21,15 +21,7 @@ export function ContractAmenitiesSection({ contract }: { contract: ApiContract }
     );
   }
 
-  if (amenities.length === 0) {
-    return (
-      <SectionCard title={title} badge="Không có" tone="neutral">
-        <Text className="font-body text-body-sm text-muted">
-          Kho không có tiện ích nào khi lập hợp đồng.
-        </Text>
-      </SectionCard>
-    );
-  }
+  if (amenities.length === 0) return null;
 
   return (
     <SectionCard title={title} badge={`${amenities.length} mục`} tone="accent">

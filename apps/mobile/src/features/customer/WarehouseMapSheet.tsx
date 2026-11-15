@@ -1,16 +1,19 @@
-import {
-  BottomSheetBackdrop,
-  type BottomSheetBackdropProps,
-  BottomSheetModal,
-  BottomSheetScrollView,
-} from '@gorhom/bottom-sheet';
-import { Button, useThemeColor } from 'heroui-native';
-import { ArrowRight, Check, MapPin, Plus } from 'phosphor-react-native';
-import { type RefObject, useCallback } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { MapPin } from 'phosphor-react-native';
+import type { RefObject } from 'react';
+import { Pressable, View } from 'react-native';
 import { useBookingSettings } from '../../../lib/client-settings';
 import { formatMoney, formatNumber } from '../../../lib/format-vi';
 import { displayMonthlyPrice, isShelfWarehouse } from '../../../lib/shelf-rental';
+import {
+  Button,
+  colors,
+  Dashed,
+  InlineMessage,
+  renderCoatBackdrop,
+  StatusPill,
+  Text,
+} from '../../components/ui';
 import { WarehousePhotoStrip } from '../../components/WarehousePhotos';
 import type { Warehouse } from '../../types/storage-api';
 import { WarehouseSpecs } from './WarehouseCard';
@@ -38,147 +41,173 @@ export function WarehouseMapSheet({
   onOpenDetail,
 }: Props) {
   const { maxUnitsPerBooking } = useBookingSettings();
-  const [surface, muted, accent, onAccent] = useThemeColor([
-    'surface',
-    'muted',
-    'accent',
-    'accent-foreground',
-  ]);
   const isSelected = warehouse ? selected.some((item) => item.id === warehouse.id) : false;
   const isDisabled = hasHolding || (!isSelected && selected.length >= maxUnitsPerBooking);
   const totalArea = selected.reduce((sum, item) => sum + item.areaM2, 0);
   const totalRent = selected.reduce((sum, item) => sum + item.monthlyPrice, 0);
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        appearsOnIndex={0}
-        disappearsOnIndex={-1}
-        pressBehavior="close"
-      />
-    ),
-    [],
-  );
+  const isShelf = warehouse ? isShelfWarehouse(warehouse) : false;
 
   return (
     <BottomSheetModal
       ref={sheetRef}
-      backdropComponent={renderBackdrop}
+      backdropComponent={renderCoatBackdrop}
       backgroundStyle={{
-        backgroundColor: surface,
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
+        backgroundColor: colors.surface,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
       }}
       enableDynamicSizing={false}
       enablePanDownToClose
-      handleIndicatorStyle={{ backgroundColor: muted, width: 40 }}
-      snapPoints={['55%', '92%']}
+      handleIndicatorStyle={{ backgroundColor: colors.neutral[200], width: 40 }}
+      snapPoints={['58%', '92%']}
       onDismiss={onDismiss}
     >
-      <BottomSheetScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20 }}>
+      <BottomSheetScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}>
         {warehouse ? (
-          <View className="gap-3">
+          <View className="gap-3.5">
             {hasHolding ? (
-              <Text className="rounded-lg bg-warning-bg p-3 font-body text-body-sm text-warning">
-                Bạn đang có đơn giữ kho. Hoàn tất hoặc hủy đơn trong Kho của tôi để chọn thêm.
-              </Text>
+              <InlineMessage
+                message="Bạn đang có đơn giữ kho. Hoàn tất hoặc hủy đơn trong Kho của tôi để chọn thêm."
+                type="warning"
+              />
             ) : null}
+
             <WarehousePhotoStrip images={warehouse.images ?? []} />
-            <Pressable
-              accessibilityRole="button"
-              className="self-start"
-              hitSlop={8}
-              onPress={() => onOpenDetail(warehouse)}
-            >
-              <Text className="font-ui text-body-sm text-accent">Xem chi tiết kho ›</Text>
-            </Pressable>
+
+            <View className="flex-row items-center justify-between gap-2">
+              {isShelf ? <StatusPill label="Thuê theo kệ" tone="info" /> : <View />}
+              <Pressable
+                accessibilityRole="button"
+                hitSlop={8}
+                onPress={() => onOpenDetail(warehouse)}
+              >
+                <Text className="text-body-sm font-medium text-text-link">Xem chi tiết ›</Text>
+              </Pressable>
+            </View>
+
             <View className="gap-1.5">
-              <Text className="font-numeric text-caption text-muted">{warehouse.code}</Text>
-              <Text className="font-strong text-foreground text-title-sm">{warehouse.name}</Text>
-              <Text className="font-body text-caption text-muted" numberOfLines={1}>
+              <Text className="text-title-sm font-bold text-text-primary">{warehouse.name}</Text>
+              <Text className="text-caption text-text-secondary" numberOfLines={1}>
                 Thuộc {warehouse.facility.name}
               </Text>
               <View className="flex-row items-start gap-1.5">
-                <MapPin color={accent} size={16} weight="fill" />
-                <Text className="flex-1 font-body text-body-sm text-subtle">
+                <MapPin color={colors.semantic.iconBrand} size={16} weight="fill" />
+                <Text className="flex-1 text-body-sm text-text-secondary">
                   {warehouse.addressLine}
                 </Text>
               </View>
-              <View className="flex-row items-baseline gap-1">
-                <Text className="font-numeric-strong text-accent text-num-lg">
-                  {isShelfWarehouse(warehouse) ? 'Từ ' : ''}
+              <View className="mt-1 flex-row items-baseline gap-1">
+                <Text className="text-subtitle font-bold text-text-brand tabular-nums">
+                  {isShelf ? 'Từ ' : ''}
                   {displayMonthlyPrice(warehouse) === null
                     ? 'Liên hệ'
                     : formatMoney(displayMonthlyPrice(warehouse) ?? 0)}
                 </Text>
-                <Text className="font-body text-caption text-muted">/tháng</Text>
+                <Text className="text-caption text-text-secondary">/tháng</Text>
               </View>
             </View>
-            <View className="gap-2 rounded-xl bg-surface-secondary p-3">
+
+            <View className="gap-2 rounded-2xl border border-border-default bg-bg-subtle p-3.5">
               <WarehouseSpecs warehouse={warehouse} />
               {warehouse.notes ? (
-                <Text className="font-body text-body-sm text-muted">{warehouse.notes}</Text>
+                <Text className="text-body-sm text-text-secondary">{warehouse.notes}</Text>
               ) : null}
             </View>
-            {!isShelfWarehouse(warehouse) ? (
-              <Pressable
-                accessibilityRole="checkbox"
-                accessibilityLabel={`${isSelected ? 'Bỏ chọn' : 'Chọn'} kho ${warehouse.name}`}
-                accessibilityState={{ checked: isSelected, disabled: isDisabled }}
-                disabled={isDisabled}
-                style={({ pressed }) => ({ opacity: isDisabled ? 0.4 : pressed ? 0.7 : 1 })}
-                onPress={() => onToggle(warehouse)}
-              >
-                <View
-                  className={`min-h-11 flex-row items-center justify-center gap-1.5 rounded-full px-3 py-2 ${isSelected ? 'bg-foreground' : 'bg-surface-secondary'}`}
-                >
-                  {isSelected ? (
-                    <Check color={onAccent} size={14} weight="bold" />
-                  ) : (
-                    <Plus color={muted} size={14} />
-                  )}
-                  <Text
-                    className={`font-ui text-body-sm ${isSelected ? 'text-accent-foreground' : 'text-foreground'}`}
-                  >
-                    {isSelected ? 'Đã chọn kho này' : 'Chọn kho này'}
-                  </Text>
-                </View>
-              </Pressable>
-            ) : null}
-            {selected.length > 0 ? (
-              <View className="flex-row flex-wrap items-center justify-between gap-2 rounded-xl bg-surface-secondary p-3">
-                <View className="gap-1">
-                  <Text className="font-body text-caption text-muted">
-                    Đã chọn {selected.length}/{maxUnitsPerBooking} kho
-                  </Text>
-                  <Text className="font-strong text-body-sm text-foreground">
-                    Tổng {formatNumber(totalArea)} m²
-                  </Text>
-                </View>
-                <View className="gap-1">
-                  <Text className="font-body text-caption text-muted">Tổng tiền thuê / tháng</Text>
-                  <Text className="font-numeric-strong text-accent text-num-lg">
-                    {formatMoney(totalRent)}
-                  </Text>
-                </View>
+
+            {isShelf ? (
+              <View className="gap-2.5">
+                <Button
+                  disabled={hasHolding}
+                  label="Chọn kệ trong kho này"
+                  rightIcon="arrow-forward"
+                  onPress={() => onOpenDetail(warehouse)}
+                />
+                {selected.length > 0 ? (
+                  <>
+                    <Dashed />
+                    <SelectedSummaryBar
+                      count={selected.length}
+                      max={maxUnitsPerBooking}
+                      totalArea={totalArea}
+                      totalRent={totalRent}
+                    />
+                    <Button
+                      disabled={hasHolding}
+                      label={`Tiếp tục đặt ${selected.length} kho`}
+                      variant="secondary"
+                      onPress={onContinue}
+                    />
+                  </>
+                ) : null}
               </View>
-            ) : null}
-            <Button isDisabled={hasHolding || selected.length === 0} onPress={onContinue}>
-              <Button.Label className="font-ui">Tiếp tục đặt {selected.length} kho</Button.Label>
-              <ArrowRight color={onAccent} size={18} weight="bold" />
-            </Button>
+            ) : (
+              <View className="gap-2.5">
+                <Button
+                  disabled={isDisabled}
+                  label={isSelected ? 'Đã chọn kho này' : 'Chọn kho này'}
+                  leftIcon={isSelected ? 'check' : 'add'}
+                  variant={isSelected ? 'secondary' : 'outline'}
+                  onPress={() => onToggle(warehouse)}
+                />
+                {selected.length > 0 ? (
+                  <SelectedSummaryBar
+                    count={selected.length}
+                    max={maxUnitsPerBooking}
+                    totalArea={totalArea}
+                    totalRent={totalRent}
+                  />
+                ) : null}
+                <Button
+                  disabled={hasHolding || selected.length === 0}
+                  label={`Tiếp tục đặt ${selected.length} kho`}
+                  rightIcon="arrow-forward"
+                  onPress={onContinue}
+                />
+              </View>
+            )}
           </View>
         ) : (
-          <View className="gap-2 py-3">
-            <Text className="font-strong text-body-lg text-foreground">
+          <View className="gap-2 py-4">
+            <Text className="text-body-lg font-bold text-text-primary">
               Chưa có kho trên bản đồ
             </Text>
-            <Text className="font-body text-body-sm text-muted">
+            <Text className="text-body-sm text-text-secondary">
               Thử đổi bộ lọc hoặc xem các kho ở chế độ danh sách.
             </Text>
           </View>
         )}
       </BottomSheetScrollView>
     </BottomSheetModal>
+  );
+}
+
+function SelectedSummaryBar({
+  count,
+  max,
+  totalArea,
+  totalRent,
+}: {
+  count: number;
+  max: number;
+  totalArea: number;
+  totalRent: number;
+}) {
+  return (
+    <View className="flex-row flex-wrap items-center justify-between gap-2 rounded-2xl border border-border-default bg-bg-subtle p-3.5">
+      <View className="gap-0.5">
+        <Text className="text-caption text-text-secondary tabular-nums">
+          Đã chọn {count}/{max} kho
+        </Text>
+        <Text className="text-body-sm font-semibold text-text-primary tabular-nums">
+          Tổng {formatNumber(totalArea)} m²
+        </Text>
+      </View>
+      <View className="items-end gap-0.5">
+        <Text className="text-caption text-text-secondary">Tổng tiền thuê / tháng</Text>
+        <Text className="text-subtitle font-bold text-text-brand tabular-nums">
+          {formatMoney(totalRent)}
+        </Text>
+      </View>
+    </View>
   );
 }

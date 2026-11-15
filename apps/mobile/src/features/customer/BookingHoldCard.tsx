@@ -1,19 +1,12 @@
-import * as Clipboard from 'expo-clipboard';
-import { Button } from 'heroui-native';
-import { Copy, Timer } from 'phosphor-react-native';
-import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Timer } from 'phosphor-react-native';
+import { View } from 'react-native';
 import { formatRemaining, holdDeadline } from '../../../lib/booking-hold-state';
 import { depositStage } from '../../../lib/booking-payment-state';
 import { formatIsoDate, formatMoney, formatNumber } from '../../../lib/format-vi';
 import { EXPIRING_SOON_MS } from '../../../lib/hold';
+import { Button, colors, Dashed, StatusPill, Text } from '../../components/ui';
 import type { ApiBooking } from '../../types/booking-api';
 import { useBookingWarehouses } from './use-booking-warehouses';
-
-/** Mirror the colour tokens in global.css; SVG icons cannot read a Tailwind class. */
-const WARNING = 'hsl(32 95% 44%)';
-const DANGER = 'hsl(0 72% 51%)';
-const MUTED = 'hsl(215 16% 47%)';
 
 /**
  * A booking that never became a rental: still awaiting its deposit, or lapsed/cancelled. Paid
@@ -36,16 +29,20 @@ export function BookingHoldCard({
   const isPayable = depositStage(booking, now) === 'awaiting';
 
   return (
-    <View className="overflow-hidden rounded-xl border border-warning/40 bg-surface">
-      <View className="flex-row items-center justify-between gap-3 bg-warning-bg px-3 py-2">
-        <Text className="font-strong text-caption text-warning uppercase tracking-wide">
-          Chờ thanh toán cọc
-        </Text>
+    <View className="overflow-hidden rounded-[20px] border border-warning-200 bg-bg-card">
+      <View className="flex-row items-center justify-between gap-3 bg-warning-0 px-4 py-2.5">
+        <StatusPill label="Chờ thanh toán cọc" tone={isExpiringSoon ? 'danger' : 'warning'} />
         {booking.expiresAt ? (
           <View className="flex-row items-center gap-1">
-            <Timer color={isExpiringSoon ? DANGER : WARNING} size={14} weight="fill" />
+            <Timer
+              color={isExpiringSoon ? colors.semantic.statusDanger : colors.warning[700]}
+              size={14}
+              weight="fill"
+            />
             <Text
-              className={`font-numeric-strong text-num-sm ${isExpiringSoon ? 'text-danger' : 'text-warning'}`}
+              className={`text-body-sm font-bold tabular-nums ${
+                isExpiringSoon ? 'text-status-danger' : 'text-warning-700'
+              }`}
             >
               {formatRemaining(msLeft)}
             </Text>
@@ -53,20 +50,14 @@ export function BookingHoldCard({
         ) : null}
       </View>
 
-      <View className="gap-2.5 px-3 py-3">
-        <View className="flex-row items-center justify-between gap-2">
-          <View className="flex-1">
-            <Text className="font-body text-caption text-muted">Mã đặt chỗ</Text>
-            <Text className="font-numeric text-foreground text-num-md" numberOfLines={1}>
-              {booking.bookingNo}
-            </Text>
-          </View>
-          <CopyChip value={booking.bookingNo} />
-        </View>
+      <View className="gap-3 p-4">
+        <Text className="text-body-md font-semibold text-text-primary" numberOfLines={2}>
+          {warehouseNames}
+        </Text>
 
-        <View className="h-px bg-separator" />
+        <Dashed />
 
-        <LedgerRow label="Kho giữ" value={`${booking.items.length} kho (${warehouseNames})`} />
+        <LedgerRow label="Số lượng kho" value={`${booking.items.length} kho`} />
         <LedgerRow label="Tổng diện tích" value={`${formatNumber(totalArea)} m²`} />
         {firstDate && first ? (
           <LedgerRow
@@ -75,22 +66,18 @@ export function BookingHoldCard({
           />
         ) : null}
 
-        <View className="mt-1 flex-row items-end justify-between gap-3 rounded-lg bg-warning-bg px-2.5 py-2">
+        <View className="flex-row items-center justify-between gap-3 rounded-xl bg-warning-0 px-3.5 py-2.5">
           <View className="flex-1">
-            <Text className="font-strong text-body-sm text-warning">Tiền cọc giữ chỗ</Text>
-            <Text className="font-body text-caption text-warning">
-              Cần nộp trước khi hết thời gian
-            </Text>
+            <Text className="text-body-sm font-semibold text-warning-700">Tiền cọc giữ chỗ</Text>
+            <Text className="text-caption text-warning-700">Cần nộp trước khi hết thời gian</Text>
           </View>
-          <Text className="font-numeric-strong text-num-md text-warning">
+          <Text className="text-subtitle font-bold text-warning-700 tabular-nums">
             {formatMoney(Number(booking.depositTotal))}
           </Text>
         </View>
 
         {isPayable ? (
-          <Button className="mt-1" onPress={onPay}>
-            <Button.Label className="font-ui">Thanh toán ngay</Button.Label>
-          </Button>
+          <Button label="Thanh toán ngay" rightIcon="qr-code-2" onPress={onPay} />
         ) : null}
       </View>
     </View>
@@ -100,19 +87,18 @@ export function BookingHoldCard({
 /** One line in the history list for a hold that lapsed or was cancelled. */
 export function ClosedBookingRow({ booking }: { booking: ApiBooking }) {
   const { names } = useBookingWarehouses(booking);
+  const isCancelled = booking.status === 'CANCELLED';
   return (
-    <View className="flex-row items-center justify-between gap-3 rounded-xl border border-border bg-surface px-3 py-3">
-      <View className="flex-1">
-        <Text className="font-strong text-body-sm text-foreground" numberOfLines={1}>
+    <View className="flex-row items-center justify-between gap-3 rounded-[20px] border border-border-default bg-bg-card p-4">
+      <View className="flex-1 gap-0.5">
+        <Text className="text-body-md font-semibold text-text-primary" numberOfLines={1}>
           {names}
         </Text>
-        <Text className="font-numeric text-caption text-muted" numberOfLines={1}>
-          {booking.bookingNo}
+        <Text className="text-caption text-text-secondary tabular-nums" numberOfLines={1}>
+          {booking.items.length} kho · {formatIsoDate(booking.createdAt.slice(0, 10))}
         </Text>
       </View>
-      <Text className="rounded-full bg-surface-secondary px-2.5 py-1 font-ui text-caption text-muted">
-        {booking.status === 'CANCELLED' ? 'Đã hủy' : 'Hết hạn giữ chỗ'}
-      </Text>
+      <StatusPill label={isCancelled ? 'Đã hủy' : 'Hết hạn giữ chỗ'} tone="neutral" />
     </View>
   );
 }
@@ -120,35 +106,13 @@ export function ClosedBookingRow({ booking }: { booking: ApiBooking }) {
 function LedgerRow({ label, value }: { label: string; value: string }) {
   return (
     <View className="flex-row items-center justify-between gap-3">
-      <Text className="font-body text-body-sm text-muted">{label}</Text>
+      <Text className="text-body-sm text-text-secondary">{label}</Text>
       <Text
-        className="flex-1 text-right font-strong text-body-sm text-foreground"
+        className="flex-1 text-right text-body-sm font-semibold text-text-primary tabular-nums"
         numberOfLines={1}
       >
         {value}
       </Text>
     </View>
-  );
-}
-
-function CopyChip({ value }: { value: string }) {
-  const [isCopied, setIsCopied] = useState(false);
-
-  return (
-    <Pressable
-      accessibilityLabel="Sao chép mã đặt chỗ"
-      accessibilityRole="button"
-      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-      onPress={() => {
-        Clipboard.setStringAsync(value);
-        setIsCopied(true);
-        setTimeout(() => setIsCopied(false), 1500);
-      }}
-    >
-      <View className="flex-row items-center gap-1 rounded-full bg-surface-secondary px-2.5 py-1.5">
-        <Copy color={MUTED} size={13} weight="bold" />
-        <Text className="font-ui text-caption text-subtle">{isCopied ? 'Đã chép' : 'Chép'}</Text>
-      </View>
-    </Pressable>
   );
 }

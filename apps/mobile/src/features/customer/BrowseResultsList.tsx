@@ -1,16 +1,14 @@
-import { Button } from 'heroui-native';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { useBookingSettings } from '../../../lib/client-settings';
 import { isShelfWarehouse } from '../../../lib/shelf-rental';
+import { Button, colors, Text } from '../../components/ui';
 import type { NearbyWarehouse, Warehouse } from '../../types/storage-api';
 import { EmptyState } from './BrowseStates';
 import { WarehouseCard } from './WarehouseCard';
 
 type Props = {
-  /** Nearby results carry `distanceKm`, which each card shows. */
   warehouses: readonly (Warehouse | NearbyWarehouse)[];
-  /** Replaces the "N kho đang trống" line, e.g. while showing nearby results. */
   summary?: string;
   total: number;
   hasMore: boolean;
@@ -43,9 +41,9 @@ export function BrowseResultsList({
 
   return (
     <>
-      <Text className="mx-4 mt-3 mb-3 font-body text-body-sm text-muted">
-        {summary ?? `${total} kho đang trống`}. Chọn tối đa {maxUnitsPerBooking} kho cho một lần
-        đặt.
+      <Text className="mx-4 mt-3 mb-3 text-caption font-medium text-text-secondary">
+        {summary ?? `${total} kho đang trống`} • Chọn tối đa {maxUnitsPerBooking} vị trí cho một lần
+        đặt
       </Text>
 
       {warehouses.length === 0 ? (
@@ -55,7 +53,6 @@ export function BrowseResultsList({
           {warehouses.map((warehouse, index) => {
             const isSelected = selectedIds.includes(warehouse.id);
             return (
-              // Staggered fade tells the customer the list changed after a filter edit.
               <Animated.View
                 key={warehouse.id}
                 entering={
@@ -68,11 +65,11 @@ export function BrowseResultsList({
                   distanceKm={'distanceKm' in warehouse ? warehouse.distanceKm : undefined}
                   isDisabled={hasHolding || (selectionFull && !isSelected)}
                   isSelected={isSelected}
-                  warehouse={warehouse}
+                  onOpen={() => onOpen(warehouse)}
                   onToggle={() =>
                     isShelfWarehouse(warehouse) ? onOpen(warehouse) : onToggle(warehouse)
                   }
-                  onOpen={() => onOpen(warehouse)}
+                  warehouse={warehouse}
                 />
               </Animated.View>
             );
@@ -82,14 +79,18 @@ export function BrowseResultsList({
 
       {warehouses.length > 0 ? (
         <View className="items-center gap-3 px-4 pt-5">
-          <Text className="font-body text-center text-muted text-caption">
+          <Text className="text-center text-caption text-text-secondary">
             Hiển thị {warehouses.length} / {total} kho
           </Text>
-          {isLoadingMore ? <ActivityIndicator /> : null}
+          {isLoadingMore ? <ActivityIndicator color={colors.semantic.actionPrimary} /> : null}
           {hasMore && !isLoadingMore ? (
-            <Button size="sm" variant="secondary" onPress={onLoadMore}>
-              <Button.Label className="font-ui">Xem thêm</Button.Label>
-            </Button>
+            <Button
+              fullWidth={false}
+              label="Xem thêm kho"
+              onPress={onLoadMore}
+              size="sm"
+              variant="secondary"
+            />
           ) : null}
         </View>
       ) : null}

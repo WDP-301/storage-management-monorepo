@@ -1,5 +1,6 @@
-import { ActivityIndicator, Text } from 'react-native';
+import { ActivityIndicator } from 'react-native';
 import { formatIsoDate } from '../../../lib/format-vi';
+import { colors, InlineMessage, Text } from '../../components/ui';
 import { SectionCard } from '../customer/contract-sections';
 import { InspectionEditor } from './InspectionEditor';
 import { requestSourceLabel, scheduledLabel } from './inspection-display';
@@ -26,23 +27,23 @@ export function StaffInspectionSection({
   const sourceLabel = inspection ? requestSourceLabel(inspection) : null;
   return (
     <SectionCard
-      title={TITLE[kind]}
       badge={finalized ? 'Đã chốt' : 'Đang lập'}
+      title={TITLE[kind]}
       tone={finalized ? 'neutral' : 'success'}
     >
       {inspection ? (
         <>
-          <Text className="font-body text-body-sm text-muted">{scheduledLabel(inspection)}</Text>
+          <Text className="text-body text-text-secondary">{scheduledLabel(inspection)}</Text>
           {sourceLabel ? (
-            <Text className="font-body text-body-sm text-muted">{sourceLabel}</Text>
+            <Text className="text-body text-text-secondary">{sourceLabel}</Text>
           ) : null}
           {inspection.returnedOn ? (
-            <Text className="font-body text-body-sm text-muted">
+            <Text className="text-body text-text-secondary">
               Ngày chốt trả: {formatIsoDate(inspection.returnedOn)}
             </Text>
           ) : null}
           {inspection.requestNote ? (
-            <Text className="font-body text-body-sm leading-5 text-muted">
+            <Text className="text-body leading-5 text-text-secondary">
               {sourceLabel ? 'Ghi chú yêu cầu' : 'Ghi chú của khách'}: {inspection.requestNote}
             </Text>
           ) : null}
@@ -53,9 +54,9 @@ export function StaffInspectionSection({
           />
         </>
       ) : detail.error ? (
-        <Text className="font-body text-body-sm text-danger">{detail.error}</Text>
+        <InlineMessage message={detail.error} type="error" />
       ) : (
-        <ActivityIndicator />
+        <ActivityIndicator className="py-4" color={colors.semantic.actionPrimary} />
       )}
     </SectionCard>
   );

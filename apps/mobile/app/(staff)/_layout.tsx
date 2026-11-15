@@ -1,16 +1,15 @@
 import { Tabs as RouterTabs, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useThemeColor } from 'heroui-native';
 import { Bell } from 'phosphor-react-native';
-import { Alert, View } from 'react-native';
+import { Alert } from 'react-native';
 import { SafeAreaView as RNSafeAreaView } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
 import {
   NotificationsUnreadProvider,
   useUnreadNotifications,
 } from '../../lib/notifications-unread';
-import { BottomTabButton } from '../../src/components/BottomTabButton';
 import { CalendarIcon, RequestIcon, ScanIcon, SettingsIcon } from '../../src/components/TabIcons';
+import { Navbar, type NavbarTab } from '../../src/components/ui';
 import { shouldConfirmLeave } from '../../src/features/staff/leave-guard';
 import type { StaffTab } from '../../src/types/staff';
 
@@ -30,10 +29,10 @@ export default function StaffTabsLayout() {
 
   return (
     <NotificationsUnreadProvider>
-      <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
+      <SafeAreaView className="flex-1 bg-bg-page" edges={['top']}>
         <StatusBar style="dark" />
         <RouterTabs
-          screenOptions={{ headerShown: false }}
+          screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: '#FDFDFF' } }}
           tabBar={({ state }) => (
             <StaffTabBar
               activeTab={toStaffTab(state.routes[state.index]?.name)}
@@ -56,7 +55,7 @@ export default function StaffTabsLayout() {
           <RouterTabs.Screen name="scan" options={{ title: 'Gửi / lấy đồ' }} />
           <RouterTabs.Screen name="requests" options={{ title: 'Yêu cầu' }} />
           <RouterTabs.Screen name="notifications" options={{ title: 'Thông báo' }} />
-          <RouterTabs.Screen name="settings" options={{ title: 'Cài đặt' }} />
+          <RouterTabs.Screen name="settings" options={{ title: 'Tài khoản' }} />
           <RouterTabs.Screen name="staff-contract" options={{ title: 'Hợp đồng' }} />
           <RouterTabs.Screen name="staff-ticket" options={{ title: 'Chi tiết yêu cầu' }} />
           <RouterTabs.Screen name="shelf-receipt-form" options={{ title: 'Phiếu gửi / lấy đồ' }} />
@@ -77,43 +76,38 @@ function StaffTabBar({
   onSelect: (tab: StaffTab) => void;
 }) {
   const { unread } = useUnreadNotifications();
-  const [accentColor, mutedColor] = useThemeColor(['accent', 'muted']);
-  const iconColor = (tab: StaffTab) => (activeTab === tab ? accentColor : mutedColor);
+
+  const tabs: NavbarTab[] = [
+    {
+      key: 'today',
+      label: 'Hôm nay',
+      renderIcon: (color) => <CalendarIcon color={color} />,
+    },
+    {
+      key: 'scan',
+      label: 'Gửi / lấy đồ',
+      renderIcon: (color) => <ScanIcon color={color} />,
+    },
+    {
+      key: 'requests',
+      label: 'Yêu cầu',
+      renderIcon: (color) => <RequestIcon color={color} />,
+    },
+    {
+      key: 'notifications',
+      label: 'Thông báo',
+      badge: unread > 0 ? unread : undefined,
+      renderIcon: (color) => <Bell color={color} size={22} />,
+    },
+    {
+      key: 'settings',
+      label: 'Tài khoản',
+      renderIcon: (color) => <SettingsIcon color={color} />,
+    },
+  ];
 
   return (
-    <View className="flex-row border-t border-border bg-surface px-3 pb-1 pt-1.5">
-      <BottomTabButton
-        icon={<CalendarIcon color={iconColor('today')} />}
-        isSelected={activeTab === 'today'}
-        label="Hôm nay"
-        onPress={() => onSelect('today')}
-      />
-      <BottomTabButton
-        icon={<ScanIcon color={iconColor('scan')} />}
-        isSelected={activeTab === 'scan'}
-        label="Gửi / lấy đồ"
-        onPress={() => onSelect('scan')}
-      />
-      <BottomTabButton
-        icon={<RequestIcon color={iconColor('requests')} />}
-        isSelected={activeTab === 'requests'}
-        label="Yêu cầu"
-        onPress={() => onSelect('requests')}
-      />
-      <BottomTabButton
-        badge={unread > 0 ? unread : undefined}
-        icon={<Bell color={iconColor('notifications')} size={24} />}
-        isSelected={activeTab === 'notifications'}
-        label="Thông báo"
-        onPress={() => onSelect('notifications')}
-      />
-      <BottomTabButton
-        icon={<SettingsIcon color={iconColor('settings')} />}
-        isSelected={activeTab === 'settings'}
-        label="Cài đặt"
-        onPress={() => onSelect('settings')}
-      />
-    </View>
+    <Navbar activeKey={activeTab} onTabPress={(key) => onSelect(key as StaffTab)} tabs={tabs} />
   );
 }
 

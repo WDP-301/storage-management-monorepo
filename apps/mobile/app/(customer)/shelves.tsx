@@ -1,14 +1,13 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Button } from 'heroui-native';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { ApiError } from '../../lib/api';
 import { useBrowseSelection } from '../../lib/browse-selection';
 import { useBookingSettings } from '../../lib/client-settings';
 import { formatMoney } from '../../lib/format-vi';
 import { useHold } from '../../lib/hold';
 import { WarehousesApi } from '../../lib/warehouses-api';
-import { ScreenHeader } from '../../src/components/ScreenHeader';
+import { Button, colors, FlowScreen, InlineMessage, PayBar, Text } from '../../src/components/ui';
 import { ShelfPicker } from '../../src/features/customer/ShelfPicker';
 import type { Warehouse } from '../../src/types/storage-api';
 
@@ -62,21 +61,31 @@ export default function ShelvesRoute() {
   };
 
   return (
-    <View className="flex-1 bg-background">
-      <ScreenHeader title="Chọn kệ" backLabel="Quay lại Tìm kho" onBack={() => router.back()} />
+    <FlowScreen
+      muted
+      backLabel="Quay lại Tìm kho"
+      title="Chọn kệ"
+      titleAlign="left"
+      onBack={() => (router.canGoBack() ? router.back() : router.replace('/(customer)/browse'))}
+    >
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 20 }}
+        className="flex-1 bg-bg-muted"
+        contentContainerStyle={{ paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
       >
-        {loading ? <ActivityIndicator className="mt-12" /> : null}
+        {loading ? (
+          <ActivityIndicator className="mt-12" color={colors.semantic.actionPrimary} />
+        ) : null}
         {error ? (
-          <Text className="mx-4 mt-6 font-body text-body-sm text-danger">{error}</Text>
+          <View className="mx-4 mt-4 rounded-[20px] border border-border-default bg-bg-card p-4">
+            <InlineMessage message={error} type="error" />
+          </View>
         ) : null}
         {warehouse ? (
-          <View className="gap-4 px-4">
-            <View className="gap-1">
-              <Text className="font-strong text-title-sm text-foreground">{warehouse.name}</Text>
-              <Text className="font-body text-body-sm text-muted">
+          <View className="gap-4 p-4">
+            <View className="gap-1 rounded-[20px] border border-border-default bg-bg-card p-4">
+              <Text className="text-title-sm font-bold text-text-primary">{warehouse.name}</Text>
+              <Text className="text-body-sm text-text-secondary">
                 {warehouse.facility.name} · {warehouse.addressLine}
               </Text>
             </View>
@@ -92,26 +101,20 @@ export default function ShelvesRoute() {
         ) : null}
       </ScrollView>
       {warehouse ? (
-        <View className="gap-2 border-t border-border bg-surface px-4 pt-3 pb-2">
-          <View className="flex-row items-center justify-between gap-3">
-            <Text className="font-ui text-body-sm text-foreground">
-              Đã chọn {selected.length}/{maxUnitsPerBooking} vị trí
-            </Text>
-            <Text className="font-numeric text-body-sm text-accent">
-              {formatMoney(totalRent)}/tháng
-            </Text>
-          </View>
-          {/* heroui's disabled style washes the label out. A blocked step stays a readable neutral
-              button that says what is missing; continueBooking ignores the press. */}
+        <PayBar
+          amount={`${formatMoney(totalRent)}/tháng`}
+          insetBottom
+          label={`Đã chọn ${selected.length}/${maxUnitsPerBooking} vị trí`}
+        >
           <Button
+            disabled={blockedReason !== null}
+            label={blockedReason ?? 'Tiếp tục đặt lịch'}
+            rightIcon={blockedReason ? undefined : 'arrow-forward'}
             variant={blockedReason ? 'secondary' : 'primary'}
-            accessibilityState={{ disabled: blockedReason !== null }}
             onPress={continueBooking}
-          >
-            <Button.Label className="font-ui">{blockedReason ?? 'Tiếp tục đặt lịch'}</Button.Label>
-          </Button>
-        </View>
+          />
+        </PayBar>
       ) : null}
-    </View>
+    </FlowScreen>
   );
 }

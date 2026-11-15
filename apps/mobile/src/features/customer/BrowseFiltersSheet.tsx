@@ -1,23 +1,21 @@
 import {
-  BottomSheetBackdrop,
-  type BottomSheetBackdropProps,
   BottomSheetFooter,
   type BottomSheetFooterProps,
   BottomSheetModal,
   BottomSheetScrollView,
 } from '@gorhom/bottom-sheet';
-import { Button, useThemeColor } from 'heroui-native';
 import { type RefObject, useCallback } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { clearFilters, countActiveFilters } from '../../../lib/warehouse-query';
+import { Button, colors, renderCoatBackdrop, Text } from '../../components/ui';
 import type { BrowseCriteria } from '../../types/customer';
 import type { Amenity } from '../../types/storage-api';
 import { BrowseFiltersContent } from './BrowseFiltersContent';
 import type { LocationOption } from './location-options';
 
 /** Space reserved under the scroll content so the pinned footer never covers the last row. */
-const FOOTER_HEIGHT = 92;
+const FOOTER_HEIGHT = 96;
 
 type Props = {
   sheetRef: RefObject<BottomSheetModal | null>;
@@ -47,39 +45,26 @@ export function BrowseFiltersSheet({
   resultCount,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const [surfaceColor, mutedColor] = useThemeColor(['surface', 'muted']);
   const activeCount = countActiveFilters(criteria);
-
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        appearsOnIndex={0}
-        disappearsOnIndex={-1}
-        pressBehavior="close"
-      />
-    ),
-    [],
-  );
 
   const renderFooter = useCallback(
     (props: BottomSheetFooterProps) => (
       <BottomSheetFooter {...props}>
         <View
-          className="flex-row gap-3 border-t border-border bg-surface px-4 pt-3"
-          style={{ paddingBottom: Math.max(insets.bottom, 12) }}
+          className="flex-row gap-3 border-border-default border-t bg-bg-card px-4 pt-3"
+          style={{ paddingBottom: Math.max(insets.bottom, 16) }}
         >
-          <Button
-            className="flex-1"
-            isDisabled={activeCount === 0}
-            variant="tertiary"
-            onPress={() => onChange(clearFilters(criteria))}
-          >
-            <Button.Label className="font-ui">Đặt lại</Button.Label>
-          </Button>
-          <Button className="flex-[2]" onPress={() => sheetRef.current?.dismiss()}>
-            <Button.Label className="font-ui">Xem {resultCount} kho</Button.Label>
-          </Button>
+          <View className="flex-1">
+            <Button
+              disabled={activeCount === 0}
+              label="Đặt lại"
+              variant="secondary"
+              onPress={() => onChange(clearFilters(criteria))}
+            />
+          </View>
+          <View className="flex-[2]">
+            <Button label={`Xem ${resultCount} kho`} onPress={() => sheetRef.current?.dismiss()} />
+          </View>
         </View>
       </BottomSheetFooter>
     ),
@@ -89,20 +74,24 @@ export function BrowseFiltersSheet({
   return (
     <BottomSheetModal
       ref={sheetRef}
-      backdropComponent={renderBackdrop}
-      backgroundStyle={{ backgroundColor: surfaceColor }}
+      backdropComponent={renderCoatBackdrop}
+      backgroundStyle={{
+        backgroundColor: colors.surface,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+      }}
       enableDynamicSizing={false}
       enablePanDownToClose
       footerComponent={renderFooter}
-      handleIndicatorStyle={{ backgroundColor: mutedColor }}
+      handleIndicatorStyle={{ backgroundColor: colors.neutral[200], width: 40 }}
       snapPoints={['75%']}
     >
       <BottomSheetScrollView
         contentContainerStyle={{ paddingBottom: FOOTER_HEIGHT + insets.bottom }}
       >
         <View className="mb-4 px-4">
-          <Text className="text-title-md font-display tracking-tight text-foreground">Bộ lọc</Text>
-          <Text className="font-body mt-1 text-caption leading-5 text-muted">
+          <Text className="text-title font-bold text-text-primary">Bộ lọc</Text>
+          <Text className="mt-1 text-caption text-text-secondary">
             Thay đổi được áp dụng ngay, số kho khớp hiện ở nút bên dưới.
           </Text>
         </View>

@@ -1,7 +1,8 @@
-import { Button, Card, useThemeColor } from 'heroui-native';
-import type { ReactNode } from 'react';
-import { Alert, Text, TextInput, View } from 'react-native';
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { type ReactNode, useRef } from 'react';
+import { View } from 'react-native';
 import { formatIsoDate } from '../../../lib/format-vi';
+import { AlertSheet, Button, InlineMessage, Input, Text } from '../../components/ui';
 import { DamageEditor } from './DamageEditor';
 import { EvidenceEditor } from './EvidenceEditor';
 import { finalizeConsequence } from './inspection-display';
@@ -19,50 +20,35 @@ type Props = {
 
 /** Condition notes, photos, damages and Save/Finalize for one inspection (handover or return). */
 export function InspectionEditor({ detail, finalizeBlockedReason, onFinalized }: Props) {
-  const [mutedColor] = useThemeColor(['muted']);
   const { inspection, form, updateForm, error, busy, isDirty, isUploading, trackUpload } = detail;
+  const finalizeSheetRef = useRef<BottomSheetModal>(null);
   if (!inspection || !form) return null;
 
   const readOnly = inspection.finalizedAt !== null;
   const isReturn = inspection.type === 'RETURN';
+  const consequence = finalizeConsequence(inspection, form.damages);
+  const today = formatIsoDate(vietnamDayIso(new Date()));
   // A return is recorded on the day it is finalized; staff see that day before confirming.
-  const confirmFinalize = () => {
-    const consequence = finalizeConsequence(inspection, form.damages);
-    const today = formatIsoDate(vietnamDayIso(new Date()));
-    const message = isReturn
-      ? `${consequence}\n\nNgày trả ghi nhận là hôm nay (${today}) — tiền thuê, thời hạn báo trước và phí quá hạn tính tới ngày này.`
-      : consequence;
-    Alert.alert(isReturn ? 'Chốt biên bản trả kho?' : 'Chốt biên bản?', message, [
-      { text: 'Huỷ', style: 'cancel' },
-      {
-        text: 'Chốt',
-        style: 'destructive',
-        onPress: async () => {
-          if (await detail.finalize()) onFinalized();
-        },
-      },
-    ]);
-  };
+  const finalizeMessage = isReturn
+    ? `${consequence}\n\nNgày trả ghi nhận là hôm nay (${today}) — tiền thuê, thời hạn báo trước và phí quá hạn tính tới ngày này.`
+    : consequence;
 
   return (
-    <View className="gap-4">
+    <View className="gap-3.5">
       <Section title="Ghi chú tình trạng">
         {readOnly ? (
-          <Text className="font-body text-body-sm leading-5 text-foreground">
+          <Text className="text-body leading-5 text-text-primary">
             {form.conditionNotes || '—'}
           </Text>
         ) : (
-          <TextInput
-            className="font-body min-h-24 rounded-lg border border-border bg-background px-3 py-2 text-body-sm text-foreground"
-            placeholder="Tình trạng kho, chìa khoá, đồng hồ điện…"
-            placeholderTextColor={mutedColor}
-            value={form.conditionNotes}
+          <Input
+            maxLength={5000}
+            multiline
             onChangeText={(conditionNotes) =>
               updateForm((current) => ({ ...current, conditionNotes }))
             }
-            maxLength={5000}
-            multiline
-            textAlignVertical="top"
+            placeholder="Tình trạng kho, chìa khoá, đồng hồ điện…"
+            value={form.conditionNotes}
           />
         )}
       </Section>
@@ -70,6 +56,7 @@ export function InspectionEditor({ detail, finalizeBlockedReason, onFinalized }:
       <Section title="Ảnh hiện trạng">
         <EvidenceEditor
           files={form.evidence}
+          max={MAX_PHOTOS}
           onAdd={(added) =>
             updateForm((current) => ({
               ...current,
@@ -83,7 +70,6 @@ export function InspectionEditor({ detail, finalizeBlockedReason, onFinalized }:
             }))
           }
           onUploadingChange={trackUpload}
-          max={MAX_PHOTOS}
           readOnly={readOnly}
         />
       </Section>
@@ -101,45 +87,54 @@ export function InspectionEditor({ detail, finalizeBlockedReason, onFinalized }:
         />
       </Section>
 
-      {error ? <Text className="font-body text-body-sm text-danger">{error}</Text> : null}
+      {error ? <InlineMessage message={error} type="error" /> : null}
 
       {readOnly ? null : (
-        <View className="gap-3">
+        <View className="gap-2.5">
           <Button
-            variant="secondary"
-            isDisabled={!isDirty || busy !== null || isUploading}
+            disabled={!isDirty || busy !== null || isUploading}
+            fullWidth
+            label={busy === 'saving' ? 'Đang lưu…' : 'Lưu'}
+            loading={busy === 'saving'}
             onPress={() => void detail.save()}
-          >
-            <Button.Label>{busy === 'saving' ? 'Đang lưu…' : 'Lưu'}</Button.Label>
-          </Button>
+            variant="secondary"
+          />
           <Button
-            isDisabled={busy !== null || isUploading || Boolean(finalizeBlockedReason)}
-            onPress={confirmFinalize}
-          >
-            <Button.Label>
-              {busy === 'finalizing'
-                ? 'Đang chốt…'
-                : isUploading
-                  ? 'Đang tải ảnh…'
-                  : 'Chốt biên bản'}
-            </Button.Label>
-          </Button>
+            disabled={busy !== null || isUploading || Boolean(finalizeBlockedReason)}
+            fullWidth
+            label={
+              busy === 'finalizing' ? 'Đang chốt…' : isUploading ? 'Đang tải ảnh…' : 'Chốt biên bản'
+            }
+            loading={busy === 'finalizing'}
+            onPress={() => finalizeSheetRef.current?.present()}
+          />
           {finalizeBlockedReason ? (
-            <Text className="font-body text-body-sm text-muted">{finalizeBlockedReason}</Text>
+            <InlineMessage message={finalizeBlockedReason} type="warning" />
           ) : null}
         </View>
       )}
+
+      <AlertSheet
+        actionsLayout="row"
+        destructive
+        message={finalizeMessage}
+        onPrimary={async () => {
+          if (await detail.finalize()) onFinalized();
+        }}
+        primaryLabel="Chốt"
+        ref={finalizeSheetRef}
+        secondaryLabel="Huỷ"
+        title={isReturn ? 'Chốt biên bản trả kho?' : 'Chốt biên bản?'}
+      />
     </View>
   );
 }
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <Card className="border border-border bg-surface">
-      <Card.Body className="gap-3">
-        <Text className="text-body-lg font-strong text-foreground">{title}</Text>
-        {children}
-      </Card.Body>
-    </Card>
+    <View className="gap-3 rounded-[20px] border border-border-default bg-bg-card p-4">
+      <Text className="text-body-lg font-semibold text-text-primary">{title}</Text>
+      {children}
+    </View>
   );
 }

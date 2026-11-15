@@ -1,5 +1,5 @@
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
-import { ScreenHeader } from '../../components/ScreenHeader';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
+import { colors, Dashed, FlowScreen, InlineMessage } from '../../components/ui';
 import { SectionCard } from '../customer/contract-sections';
 import { InfoRow } from '../customer/info-row';
 import { InspectionEditor } from './InspectionEditor';
@@ -18,50 +18,46 @@ export function StaffMaintenanceScreen({ detail, onBack, onFinalized }: Props) {
   const finalized = inspection?.finalizedAt != null;
 
   return (
-    <View className="flex-1 bg-background">
-      <ScreenHeader title="Biên bản bảo trì" backLabel="Hôm nay" onBack={onBack} />
+    <FlowScreen muted onBack={onBack} title="Biên bản bảo trì" titleAlign="left">
       {inspection ? (
         <ScrollView
-          contentContainerStyle={{ paddingBottom: 32 }}
+          className="flex-1 bg-bg-muted"
+          contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View className="px-4 pb-4">
-            <SectionCard
-              title="Biên bản bảo trì"
-              badge={finalized ? 'Đã chốt' : 'Đang lập'}
-              tone={finalized ? 'neutral' : 'warning'}
-            >
-              <InfoRow isNumeric label="Kho cũ" value={inspection.unitCode} />
-              <InfoRow label="Chi nhánh" value={inspection.facilityName || '—'} />
-              <Text className="font-body text-body-sm text-muted">
-                {scheduledLabel(inspection)}
-              </Text>
-              <InfoRow
-                label="Khách hàng"
-                value={
-                  inspection.customerPhone
-                    ? `${inspection.customerName} · ${inspection.customerPhone}`
-                    : inspection.customerName
-                }
-              />
-              {inspection.contract ? (
-                <InfoRow isNumeric label="Hợp đồng cũ" value={inspection.contract.contractNo} />
-              ) : null}
-              <View className="h-px bg-separator" />
-              <InspectionEditor detail={detail} onFinalized={onFinalized} />
-            </SectionCard>
-          </View>
+          <SectionCard
+            title="Biên bản bảo trì"
+            badge={finalized ? 'Đã chốt' : 'Đang lập'}
+            tone={finalized ? 'neutral' : 'warning'}
+          >
+            <InfoRow isNumeric label="Kho cũ" value={inspection.unitCode} />
+            <InfoRow label="Chi nhánh" value={inspection.facilityName || '—'} />
+            <InfoRow label="Lịch kiểm tra" value={scheduledLabel(inspection)} />
+            <InfoRow
+              label="Khách hàng"
+              value={
+                inspection.customerPhone
+                  ? `${inspection.customerName} · ${inspection.customerPhone}`
+                  : inspection.customerName
+              }
+            />
+            {inspection.contract ? (
+              <InfoRow isNumeric label="Hợp đồng cũ" value={inspection.contract.contractNo} />
+            ) : null}
+            <Dashed />
+            <InspectionEditor detail={detail} onFinalized={onFinalized} />
+          </SectionCard>
         </ScrollView>
       ) : (
-        <View className="flex-1 items-center justify-center px-6">
+        <View className="flex-1 items-center justify-center bg-bg-muted px-6">
           {error ? (
-            <Text className="font-body text-center text-body-sm text-danger">{error}</Text>
+            <InlineMessage message={error} type="error" />
           ) : (
-            <ActivityIndicator />
+            <ActivityIndicator color={colors.semantic.actionPrimary} />
           )}
         </View>
       )}
-    </View>
+    </FlowScreen>
   );
 }

@@ -1,7 +1,6 @@
-import { Button } from 'heroui-native';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
 import type { PickedFile } from '../../../lib/uploads-api';
-import { ScreenHeader } from '../../components/ScreenHeader';
+import { Button, colors, FlowScreen, InlineMessage } from '../../components/ui';
 import type { ServiceTicketRecord } from '../../types/ticket-api';
 import {
   DetailRow,
@@ -59,28 +58,29 @@ export function StaffTicketDetailScreen({
   };
 
   return (
-    <View className="flex-1">
-      <ScreenHeader
-        backLabel="Quay lại danh sách yêu cầu"
-        title="Chi tiết yêu cầu"
-        onBack={onBack}
-      />
+    <FlowScreen
+      backLabel="Quay lại danh sách yêu cầu"
+      muted
+      onBack={onBack}
+      title="Chi tiết yêu cầu"
+    >
       <ScrollView
+        className="flex-1"
         contentContainerStyle={{ paddingBottom: draft ? 240 : 32 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View className="gap-3 px-4">
+        <View className="gap-3 px-4 pt-4">
           {error ? (
-            <View className="rounded-xl border border-danger/30 bg-danger-bg p-3">
-              <Text className="font-body text-body-sm text-danger">{error}</Text>
-              <Button className="mt-3" size="sm" variant="secondary" onPress={onRetry}>
-                <Button.Label className="font-ui">Tải lại</Button.Label>
-              </Button>
+            <View className="gap-3 rounded-[20px] border border-border-error/30 bg-danger-0 p-4">
+              <InlineMessage message={error} type="error" />
+              <Button label="Tải lại" onPress={onRetry} size="sm" variant="secondary" />
             </View>
           ) : null}
 
-          {isLoading && !ticket ? <ActivityIndicator /> : null}
+          {isLoading && !ticket ? (
+            <ActivityIndicator className="py-6" color={colors.semantic.actionPrimary} />
+          ) : null}
 
           {ticket ? (
             <>
@@ -95,41 +95,41 @@ export function StaffTicketDetailScreen({
               <TicketReceiptLink receipt={ticket.shelf_receipt} ticketId={ticket.id} />
 
               {actions.hint ? (
-                <View className="rounded-xl border border-border bg-surface p-3">
-                  <Text className="font-body text-body-sm text-muted">{actions.hint}</Text>
+                <View className="rounded-[20px] border border-border-default bg-bg-card p-4">
+                  <InlineMessage message={actions.hint} type="info" />
                 </View>
               ) : null}
 
               {draft ? (
                 <TicketFinishForm
+                  isSaving={isSaving}
                   mode={draft.mode}
                   note={draft.note}
-                  photos={draft.photos}
-                  isSaving={isSaving}
-                  onChangeNote={(note) => onChangeDraft({ note })}
                   onAddPhotos={onAddPhotos}
+                  onCancel={onCancelFinish}
+                  onChangeNote={(note) => onChangeDraft({ note })}
                   onRemovePhoto={(uri) =>
                     onChangeDraft({ photos: draft.photos.filter((photo) => photo.uri !== uri) })
                   }
                   onSubmit={onSubmitFinish}
-                  onCancel={onCancelFinish}
+                  photos={draft.photos}
                 />
               ) : (
                 <ActionButtons
                   actions={actions}
                   isSaving={isSaving}
-                  onStart={onStart}
                   onOpenFinish={onOpenFinish}
+                  onStart={onStart}
                 />
               )}
 
               <TicketAttachmentsCard attachments={ticket.attachments} />
-              <TicketHistoryCard ticket={ticket} describeActor={describeActor} />
+              <TicketHistoryCard describeActor={describeActor} ticket={ticket} />
             </>
           ) : null}
         </View>
       </ScrollView>
-    </View>
+    </FlowScreen>
   );
 }
 
@@ -146,23 +146,32 @@ function ActionButtons({
 }) {
   if (!actions.canStart && !actions.canResolve && !actions.canClose) return null;
   return (
-    <View className="gap-2">
+    <View className="gap-2.5">
       {actions.canStart ? (
-        <Button isDisabled={isSaving} onPress={onStart}>
-          <Button.Label className="font-ui">
-            {isSaving ? 'Đang cập nhật...' : 'Bắt đầu xử lý'}
-          </Button.Label>
-        </Button>
+        <Button
+          disabled={isSaving}
+          fullWidth
+          label={isSaving ? 'Đang cập nhật...' : 'Bắt đầu xử lý'}
+          loading={isSaving}
+          onPress={onStart}
+        />
       ) : null}
       {actions.canResolve ? (
-        <Button isDisabled={isSaving} onPress={() => onOpenFinish('resolve')}>
-          <Button.Label className="font-ui">Hoàn tất xử lý</Button.Label>
-        </Button>
+        <Button
+          disabled={isSaving}
+          fullWidth
+          label="Hoàn tất xử lý"
+          onPress={() => onOpenFinish('resolve')}
+        />
       ) : null}
       {actions.canClose ? (
-        <Button variant="danger-soft" isDisabled={isSaving} onPress={() => onOpenFinish('close')}>
-          <Button.Label className="font-ui">Đóng yêu cầu</Button.Label>
-        </Button>
+        <Button
+          disabled={isSaving}
+          fullWidth
+          label="Đóng yêu cầu"
+          onPress={() => onOpenFinish('close')}
+          variant="destructive"
+        />
       ) : null}
     </View>
   );

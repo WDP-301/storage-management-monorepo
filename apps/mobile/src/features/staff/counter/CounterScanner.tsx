@@ -1,7 +1,7 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { Button } from 'heroui-native';
 import { useRef, useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { View } from 'react-native';
+import { Button, colors, Icon, InlineMessage, Input, Text } from '../../../components/ui';
 
 type Props = {
   busy: boolean;
@@ -35,43 +35,51 @@ export function CounterScanner({ busy, error, onSubmit, onDismissError }: Props)
   };
 
   return (
-    <View className="gap-4">
+    <View className="gap-3">
       {permission?.granted ? (
-        <CameraView
-          style={{ height: 280, borderRadius: 16, overflow: 'hidden' }}
-          facing="back"
-          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-          onBarcodeScanned={busy || paused ? undefined : ({ data }) => void submit(data)}
-        />
+        <View className="overflow-hidden rounded-[20px] border border-border-default bg-bg-card">
+          <CameraView
+            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+            facing="back"
+            onBarcodeScanned={busy || paused ? undefined : ({ data }) => void submit(data)}
+            style={{ height: 280 }}
+          />
+        </View>
       ) : (
-        <View className="items-center gap-3 rounded-xl bg-surface-secondary p-5">
-          <Text className="font-body text-body-sm text-foreground">
+        <View className="items-center gap-3 rounded-[20px] border border-border-default bg-bg-card p-6">
+          <View className="size-12 items-center justify-center rounded-full bg-secondary-0">
+            <Icon color={colors.semantic.actionPrimary} name="qr-code-scanner" size={24} />
+          </View>
+          <Text className="text-center text-body text-text-secondary">
             Cần quyền camera để quét mã.
           </Text>
-          <Button onPress={() => void requestPermission()}>
-            <Button.Label>Cho phép camera</Button.Label>
-          </Button>
+          <Button label="Cho phép camera" onPress={() => void requestPermission()} />
         </View>
       )}
-      <TextInput
-        accessibilityLabel="Nhập mã QR thủ công"
-        autoCapitalize="none"
-        className="rounded-xl border border-border bg-surface px-3 py-3 font-body text-body-sm text-foreground"
-        placeholder="Hoặc nhập mã QR thủ công"
-        value={payload}
-        onChangeText={setPayload}
-      />
-      <Button isDisabled={busy || !payload.trim()} onPress={() => void submit(payload)}>
-        <Button.Label>{busy ? 'Đang kiểm tra…' : 'Xác thực mã'}</Button.Label>
-      </Button>
+
+      <View className="gap-3 rounded-[20px] border border-border-default bg-bg-card p-4">
+        <Input
+          accessibilityLabel="Nhập mã QR thủ công"
+          autoCapitalize="none"
+          clearable
+          leftIcon="qr-code-2"
+          onChangeText={setPayload}
+          placeholder="Hoặc nhập mã QR thủ công"
+          value={payload}
+        />
+        <Button
+          disabled={busy || !payload.trim()}
+          fullWidth
+          label={busy ? 'Đang kiểm tra…' : 'Xác thực mã'}
+          loading={busy}
+          onPress={() => void submit(payload)}
+        />
+      </View>
+
       {error ? (
-        <View className="gap-3">
-          <Text className="rounded-xl bg-danger-bg p-3 font-body text-body-sm text-danger">
-            {error}
-          </Text>
-          <Button variant="secondary" onPress={retry}>
-            <Button.Label>Quét lại</Button.Label>
-          </Button>
+        <View className="gap-3 rounded-[20px] border border-border-error/30 bg-danger-0 p-4">
+          <InlineMessage message={error} type="error" />
+          <Button fullWidth label="Quét lại" onPress={retry} variant="secondary" />
         </View>
       ) : null}
     </View>

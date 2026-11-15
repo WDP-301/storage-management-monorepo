@@ -1,9 +1,17 @@
-import { Button } from 'heroui-native';
 import { CaretLeft, CaretRight } from 'phosphor-react-native';
 import { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, View } from 'react-native';
+import {
+  Button,
+  type CardTabItem,
+  CardTabs,
+  colors,
+  FlowScreen,
+  InlineMessage,
+  TabChip,
+  Text,
+} from '../../components/ui';
 import type { NotificationRecord } from '../../types/notification-api';
-import { ChipButton } from '../customer/FilterChips';
 import { NotificationRow } from './NotificationRow';
 import {
   NOTIFICATION_GROUP_LABEL,
@@ -28,10 +36,6 @@ type Props = {
   onMarkAllRead: () => void;
 };
 
-/**
- * Pager slots: every page number when they fit, otherwise first/last page plus the current page's
- * neighbours with `…` filling the gaps.
- */
 function pageSlots(page: number, totalPages: number): (number | 'gap')[] {
   if (totalPages <= 7) {
     return Array.from({ length: totalPages }, (_, index) => index + 1);
@@ -71,14 +75,21 @@ export function NotificationsScreen({
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
   };
 
-  // Chips only cover the page currently loaded; other pages can hold different groups.
-  const groups = useMemo(() => {
+  const tabs = useMemo(() => {
     const counts = new Map<NotificationGroup, number>();
     for (const item of notifications) {
       const key = notificationGroup(item.type);
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
-    return [...counts.entries()];
+    const items: CardTabItem<NotificationGroup | 'all'>[] = [
+      { key: 'all', label: 'Tất cả', count: notifications.length },
+      ...[...counts.entries()].map(([key, count]) => ({
+        key,
+        label: NOTIFICATION_GROUP_LABEL[key],
+        count,
+      })),
+    ];
+    return items;
   }, [notifications]);
 
   const filtered = useMemo(
@@ -90,131 +101,139 @@ export function NotificationsScreen({
   );
 
   return (
-    <FlatList
-      ref={listRef}
-      data={filtered}
-      keyExtractor={(notification) => notification.id}
-      renderItem={({ item }) => (
-        <NotificationRow notification={item} onPress={() => onOpen(item)} />
-      )}
-      contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingBottom: 32 }}
-      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
-      showsVerticalScrollIndicator={false}
-      ListHeaderComponent={
-        <View className="gap-3 pb-1 pt-5">
-          <View>
-            <Text className="font-strong text-foreground text-title-md">Thông báo</Text>
-            <Text className="font-body mt-1 text-body-sm text-muted">{subtitle}</Text>
-          </View>
-
-          {error ? (
-            <View className="rounded-xl border border-danger/30 bg-danger-bg p-3">
-              <Text className="font-body text-body-sm text-danger">{error}</Text>
-              <Button className="mt-3" size="sm" variant="secondary" onPress={onRefresh}>
-                <Button.Label className="font-ui">Thử lại</Button.Label>
-              </Button>
-            </View>
-          ) : null}
-
-          {unread > 0 ? (
-            <View className="flex-row items-center justify-between gap-3">
-              <Text className="font-ui text-body-sm text-foreground">{unread} chưa đọc</Text>
-              <Button
-                size="sm"
-                variant="secondary"
-                isDisabled={isMarkingAll}
-                onPress={onMarkAllRead}
-              >
-                <Button.Label className="font-ui">Đánh dấu tất cả đã đọc</Button.Label>
-              </Button>
-            </View>
-          ) : null}
-
-          {notifications.length > 0 ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              className="-mx-4"
-              contentContainerClassName="gap-2 px-4"
-            >
-              <ChipButton
-                label={`Tất cả (${notifications.length})`}
-                isSelected={group === 'all'}
-                onPress={() => setGroup('all')}
-              />
-              {groups.map(([key, count]) => (
-                <ChipButton
-                  key={key}
-                  label={`${NOTIFICATION_GROUP_LABEL[key]} (${count})`}
-                  isSelected={group === key}
-                  onPress={() => setGroup(group === key ? 'all' : key)}
-                />
-              ))}
-            </ScrollView>
-          ) : null}
-        </View>
-      }
-      ListEmptyComponent={
-        isLoading ? (
-          <ActivityIndicator className="py-10" />
-        ) : error ? null : notifications.length > 0 ? (
-          <View className="items-center gap-2 rounded-2xl border border-border border-dashed px-5 py-10">
-            <Text className="font-strong text-body-md text-foreground">
-              Không có thông báo thuộc nhóm này
+    <FlowScreen
+      headerRight={
+        unread > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={isMarkingAll}
+            hitSlop={10}
+            onPress={onMarkAllRead}
+          >
+            <Text className="font-semibold text-text-link">
+              {isMarkingAll ? 'Đang xử lý...' : 'Đọc tất cả'}
             </Text>
-            <Text className="font-body text-center text-body-sm text-muted">
-              Thử nhóm khác hoặc kéo xuống để tải thêm thông báo.
-            </Text>
-          </View>
-        ) : (
-          <View className="items-center gap-2 rounded-2xl border border-border border-dashed px-5 py-10">
-            <Text className="font-strong text-body-md text-foreground">Chưa có thông báo</Text>
-            <Text className="font-body text-center text-body-sm text-muted">
-              Thông báo về hợp đồng, hóa đơn và hoàn tiền sẽ xuất hiện ở đây.
-            </Text>
-          </View>
-        )
-      }
-      ListFooterComponent={
-        isChangingPage ? (
-          <ActivityIndicator className="py-3" />
-        ) : totalPages > 1 ? (
-          <View className="mt-2 flex-row items-center justify-center gap-1.5">
-            <Button
-              size="sm"
-              variant="secondary"
-              isDisabled={page <= 1}
-              accessibilityLabel="Trang trước"
-              onPress={() => changePage(page - 1)}
-            >
-              <CaretLeft size={16} />
-            </Button>
-            {pageSlots(page, totalPages).map((slot, index) =>
-              slot === 'gap' ? (
-                <Text key={`gap-${index}`} className="px-1 font-numeric text-body-sm text-muted">
-                  …
-                </Text>
-              ) : (
-                <ChipButton
-                  key={slot}
-                  label={String(slot)}
-                  isSelected={slot === page}
-                  onPress={() => changePage(slot)}
-                />
-              ),
-            )}
-            <Button
-              size="sm"
-              variant="secondary"
-              isDisabled={page >= totalPages}
-              accessibilityLabel="Trang sau"
-              onPress={() => changePage(page + 1)}
-            >
-              <CaretRight size={16} />
-            </Button>
-          </View>
+          </Pressable>
         ) : null
       }
-    />
+      muted
+      showBack={false}
+      title="Thông báo"
+    >
+      <FlatList
+        ref={listRef}
+        contentContainerStyle={{
+          gap: 10,
+          paddingHorizontal: 16,
+          paddingBottom: 32,
+          paddingTop: 12,
+        }}
+        data={filtered}
+        keyExtractor={(notification) => notification.id}
+        ListEmptyComponent={
+          isLoading ? (
+            <ActivityIndicator className="py-10" color={colors.semantic.actionPrimary} />
+          ) : error ? null : notifications.length > 0 ? (
+            <View className="items-center gap-2 rounded-2xl bg-bg-card px-5 py-10">
+              <Text className="text-lead font-semibold text-text-primary">
+                Không có thông báo thuộc nhóm này
+              </Text>
+              <Text className="text-center text-body text-text-secondary">
+                Thử chọn nhóm khác hoặc kéo xuống để tải lại.
+              </Text>
+            </View>
+          ) : (
+            <View className="items-center gap-2 rounded-2xl bg-bg-card px-5 py-10">
+              <Text className="text-lead font-semibold text-text-primary">Chưa có thông báo</Text>
+              <Text className="text-center text-body text-text-secondary">
+                Thông báo về hợp đồng, hóa đơn và hoàn tiền sẽ xuất hiện ở đây.
+              </Text>
+            </View>
+          )
+        }
+        ListFooterComponent={
+          isChangingPage ? (
+            <ActivityIndicator className="py-3" color={colors.semantic.actionPrimary} />
+          ) : totalPages > 1 ? (
+            <View className="mt-2 flex-row items-center justify-center gap-1.5">
+              <Button
+                accessibilityLabel="Trang trước"
+                disabled={page <= 1}
+                fullWidth={false}
+                onPress={() => changePage(page - 1)}
+                size="sm"
+                variant="secondary"
+              >
+                <CaretLeft color={colors.semantic.textPrimary} size={16} />
+              </Button>
+              {pageSlots(page, totalPages).map((slot, index) =>
+                slot === 'gap' ? (
+                  <Text key={`gap-${index}`} className="px-1 text-body text-text-secondary">
+                    …
+                  </Text>
+                ) : (
+                  <TabChip
+                    key={slot}
+                    label={String(slot)}
+                    onPress={() => changePage(slot)}
+                    selected={slot === page}
+                    tone="surface"
+                  />
+                ),
+              )}
+              <Button
+                accessibilityLabel="Trang sau"
+                disabled={page >= totalPages}
+                fullWidth={false}
+                onPress={() => changePage(page + 1)}
+                size="sm"
+                variant="secondary"
+              >
+                <CaretRight color={colors.semantic.textPrimary} size={16} />
+              </Button>
+            </View>
+          ) : null
+        }
+        ListHeaderComponent={
+          <View className="gap-3 pb-1">
+            <Text className="text-caption text-text-secondary">{subtitle}</Text>
+
+            {error ? (
+              <View className="gap-3 rounded-2xl bg-bg-card p-4">
+                <InlineMessage message={error} type="error" />
+                <Button
+                  fullWidth={false}
+                  label="Thử lại"
+                  onPress={onRefresh}
+                  size="sm"
+                  variant="secondary"
+                />
+              </View>
+            ) : null}
+
+            {notifications.length > 0 ? (
+              <CardTabs
+                onChange={(next) => setGroup(next)}
+                tabs={tabs}
+                testID="notifications-tabs"
+                tone="surface"
+                value={group}
+              />
+            ) : null}
+          </View>
+        }
+        refreshControl={
+          <RefreshControl
+            onRefresh={onRefresh}
+            refreshing={isRefreshing}
+            tintColor={colors.semantic.actionPrimary}
+          />
+        }
+        renderItem={({ item }) => (
+          <NotificationRow notification={item} onPress={() => onOpen(item)} />
+        )}
+        showsVerticalScrollIndicator={false}
+      />
+    </FlowScreen>
   );
 }

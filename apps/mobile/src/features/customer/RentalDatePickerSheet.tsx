@@ -1,13 +1,7 @@
-import {
-  BottomSheetBackdrop,
-  type BottomSheetBackdropProps,
-  BottomSheetModal,
-  BottomSheetScrollView,
-} from '@gorhom/bottom-sheet';
-import { useThemeColor } from 'heroui-native';
+import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { CaretDown, CaretLeft, CaretRight } from 'phosphor-react-native';
-import { type RefObject, useCallback, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { type RefObject, useState } from 'react';
+import { Pressable, View } from 'react-native';
 import { useBookingSettings } from '../../../lib/client-settings';
 import { formatIsoDate } from '../../../lib/format-vi';
 import {
@@ -17,6 +11,7 @@ import {
   todayIso,
   toIsoDate,
 } from '../../../lib/rental-schedule';
+import { Button, colors, renderCoatBackdrop, Text } from '../../components/ui';
 
 type Props = {
   sheetRef: RefObject<BottomSheetModal | null>;
@@ -25,10 +20,8 @@ type Props = {
 };
 
 const WEEKDAYS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-const ACCENT = 'hsl(203 100% 30%)';
 
 export function RentalDatePickerSheet({ sheetRef, selectedDate, onSelect }: Props) {
-  const [surfaceColor, mutedColor] = useThemeColor(['surface', 'muted']);
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const date = fromIsoDate(selectedDate);
     return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -50,18 +43,6 @@ export function RentalDatePickerSheet({ sheetRef, selectedDate, onSelect }: Prop
   const canGoNext = monthStart < maxMonthStart;
   const availableMonths = monthStartsBetween(today, maxIso);
 
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        appearsOnIndex={0}
-        disappearsOnIndex={-1}
-        pressBehavior="close"
-      />
-    ),
-    [],
-  );
-
   const chooseDate = (iso: string) => {
     onSelect(iso);
     sheetRef.current?.dismiss();
@@ -70,12 +51,16 @@ export function RentalDatePickerSheet({ sheetRef, selectedDate, onSelect }: Prop
   return (
     <BottomSheetModal
       ref={sheetRef}
-      backdropComponent={renderBackdrop}
-      backgroundStyle={{ backgroundColor: surfaceColor }}
+      backdropComponent={renderCoatBackdrop}
+      backgroundStyle={{
+        backgroundColor: colors.surface,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+      }}
       enableDynamicSizing={false}
       enablePanDownToClose
-      handleIndicatorStyle={{ backgroundColor: mutedColor }}
-      snapPoints={['62%']}
+      handleIndicatorStyle={{ backgroundColor: colors.neutral[200], width: 40 }}
+      snapPoints={['65%']}
       onChange={(index) => {
         if (index >= 0) {
           const validDate =
@@ -88,13 +73,11 @@ export function RentalDatePickerSheet({ sheetRef, selectedDate, onSelect }: Prop
       }}
     >
       <BottomSheetScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}>
-        <Text className="font-display text-title-md text-foreground">
-          Chọn ngày bắt đầu dọn vào
-        </Text>
-        <Text className="font-body mt-1 text-body-sm text-muted">
+        <Text className="text-title font-bold text-text-primary">Chọn ngày bắt đầu dọn vào</Text>
+        <Text className="mt-1 text-body-sm text-text-secondary tabular-nums">
           Ngày đã chọn: {formatIsoDate(selectedDate)}
         </Text>
-        <Text className="font-body mt-1 text-caption text-muted">
+        <Text className="mt-0.5 text-caption text-text-secondary tabular-nums">
           Có thể chọn đến {formatIsoDate(maxIso)}
         </Text>
 
@@ -103,13 +86,13 @@ export function RentalDatePickerSheet({ sheetRef, selectedDate, onSelect }: Prop
             accessibilityLabel="Tháng trước"
             accessibilityRole="button"
             disabled={!canGoPrevious}
-            className="size-11 items-center justify-center rounded-full border border-border"
+            className="size-10 items-center justify-center rounded-full border border-border-default bg-bg-card"
             style={{ opacity: canGoPrevious ? 1 : 0.35 }}
             onPress={() =>
               setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))
             }
           >
-            <CaretLeft color={ACCENT} size={20} weight="bold" />
+            <CaretLeft color={colors.semantic.iconBrand} size={20} weight="bold" />
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -118,27 +101,27 @@ export function RentalDatePickerSheet({ sheetRef, selectedDate, onSelect }: Prop
             className="flex-row items-center gap-1.5 rounded-lg px-3 py-2"
             onPress={() => setMonthPickerOpen((open) => !open)}
           >
-            <Text className="font-strong text-body-md text-foreground">
+            <Text className="text-body-md font-semibold text-text-primary tabular-nums">
               Tháng {visibleMonth.getMonth() + 1}/{visibleMonth.getFullYear()}
             </Text>
-            <CaretDown color={ACCENT} size={16} weight="bold" />
+            <CaretDown color={colors.semantic.iconBrand} size={16} weight="bold" />
           </Pressable>
           <Pressable
             accessibilityLabel="Tháng sau"
             accessibilityRole="button"
             disabled={!canGoNext}
-            className="size-11 items-center justify-center rounded-full border border-border"
+            className="size-10 items-center justify-center rounded-full border border-border-default bg-bg-card"
             style={{ opacity: canGoNext ? 1 : 0.35 }}
             onPress={() =>
               setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))
             }
           >
-            <CaretRight color={ACCENT} size={20} weight="bold" />
+            <CaretRight color={colors.semantic.iconBrand} size={20} weight="bold" />
           </Pressable>
         </View>
 
         {monthPickerOpen ? (
-          <View className="mt-3 flex-row flex-wrap gap-2 rounded-xl bg-surface-secondary p-2">
+          <View className="mt-3 flex-row flex-wrap gap-2 rounded-2xl border border-border-default bg-bg-subtle p-2.5">
             {availableMonths.map((monthIso) => {
               const month = fromIsoDate(monthIso);
               const selected = monthIso === monthStart;
@@ -148,7 +131,9 @@ export function RentalDatePickerSheet({ sheetRef, selectedDate, onSelect }: Prop
                   accessibilityRole="button"
                   accessibilityLabel={`Tháng ${month.getMonth() + 1}/${month.getFullYear()}`}
                   accessibilityState={{ selected }}
-                  className={`flex-1 items-center rounded-lg px-2 py-3 ${selected ? 'bg-accent' : 'bg-surface'}`}
+                  className={`flex-1 items-center rounded-xl px-2 py-2.5 ${
+                    selected ? 'bg-action-primary' : 'bg-bg-card'
+                  }`}
                   // A long lead window lists many months; wrap three to a row instead of squeezing.
                   style={{ minWidth: '30%' }}
                   onPress={() => {
@@ -157,7 +142,9 @@ export function RentalDatePickerSheet({ sheetRef, selectedDate, onSelect }: Prop
                   }}
                 >
                   <Text
-                    className={`font-ui text-body-sm ${selected ? 'text-accent-foreground' : 'text-foreground'}`}
+                    className={`text-body-sm font-medium tabular-nums ${
+                      selected ? 'text-text-inverse' : 'text-text-primary'
+                    }`}
                   >
                     Tháng {month.getMonth() + 1}/{month.getFullYear()}
                   </Text>
@@ -174,7 +161,7 @@ export function RentalDatePickerSheet({ sheetRef, selectedDate, onSelect }: Prop
               className="h-8 items-center justify-center"
               style={{ width: '14.2857%' }}
             >
-              <Text className="font-ui text-caption text-muted">{weekday}</Text>
+              <Text className="text-caption font-medium text-text-secondary">{weekday}</Text>
             </View>
           ))}
         </View>
@@ -189,6 +176,7 @@ export function RentalDatePickerSheet({ sheetRef, selectedDate, onSelect }: Prop
             );
             const enabled = iso >= today && iso <= maxIso;
             const selected = iso === selectedDate;
+            const isToday = iso === today;
             return (
               <View
                 key={iso}
@@ -201,17 +189,19 @@ export function RentalDatePickerSheet({ sheetRef, selectedDate, onSelect }: Prop
                   accessibilityState={{ disabled: !enabled, selected }}
                   disabled={!enabled}
                   className={`size-10 items-center justify-center rounded-full ${
-                    selected ? 'bg-accent' : iso === today ? 'border border-accent' : ''
+                    selected ? 'bg-action-primary' : isToday ? 'border border-action-primary' : ''
                   }`}
                   onPress={() => chooseDate(iso)}
                 >
                   <Text
-                    className={`font-ui text-body-sm ${
+                    className={`text-body-sm tabular-nums ${
                       selected
-                        ? 'text-accent-foreground'
-                        : enabled
-                          ? 'text-foreground'
-                          : 'text-muted/40'
+                        ? 'font-semibold text-text-inverse'
+                        : !enabled
+                          ? 'text-text-disabled'
+                          : isToday
+                            ? 'font-semibold text-action-primary'
+                            : 'font-medium text-text-primary'
                     }`}
                   >
                     {day}
@@ -221,13 +211,15 @@ export function RentalDatePickerSheet({ sheetRef, selectedDate, onSelect }: Prop
             );
           })}
         </View>
-        <Pressable
-          accessibilityRole="button"
-          className="mt-4 self-center rounded-full bg-accent/10 px-4 py-2"
-          onPress={() => chooseDate(today)}
-        >
-          <Text className="font-ui text-body-sm text-accent">Chọn hôm nay</Text>
-        </Pressable>
+        <View className="mt-4 items-center">
+          <Button
+            fullWidth={false}
+            label="Chọn hôm nay"
+            size="sm"
+            variant="secondary"
+            onPress={() => chooseDate(today)}
+          />
+        </View>
       </BottomSheetScrollView>
     </BottomSheetModal>
   );

@@ -1,6 +1,5 @@
 import type { CounterContractView } from '@storage/types';
-import { Button } from 'heroui-native';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { formatIsoDateTime } from '../../../../lib/format-vi';
 import {
   dropOffBlockLabel,
@@ -11,6 +10,7 @@ import {
   quantityWithUnit,
   receiptTypeLabel,
 } from '../../../../lib/shelf-storage-format';
+import { Button, colors, DashedDivider, Icon, InlineMessage, Text } from '../../../components/ui';
 import { StatusPill } from '../../customer/contract-display';
 
 type Props = {
@@ -24,24 +24,28 @@ type Props = {
 export function CounterContractCard({ contract, onDropOff, onPickUp, onOpenReceipt }: Props) {
   const { items, openRequest, openDropOffRequest, recentReceipts } = contract;
   return (
-    <View className="gap-3 rounded-xl border border-border bg-surface p-4">
+    <View className="gap-3.5 rounded-[20px] border border-border-default bg-bg-card p-4">
       <View className="flex-row items-center justify-between gap-2">
         <View className="flex-1">
-          <Text className="font-strong text-body-md text-foreground">Kệ {contract.shelf.code}</Text>
-          <Text className="font-body text-caption text-muted">{contract.contractNo}</Text>
+          <Text className="text-body-lg font-semibold text-text-primary">
+            Kệ {contract.shelf.code}
+          </Text>
+          <Text className="text-caption text-text-secondary">{contract.contractNo}</Text>
         </View>
         {contract.returnOpen ? <StatusPill label="Đang trả kệ" tone="warning" /> : null}
       </View>
 
-      <View className="gap-1">
-        <Text className="font-ui text-body-sm text-foreground">Đồ đang trên kệ</Text>
+      <DashedDivider />
+
+      <View className="gap-1.5">
+        <Text className="text-body font-semibold text-text-primary">Đồ đang trên kệ</Text>
         {items.length === 0 ? (
-          <Text className="font-body text-body-sm text-muted">Kệ đang trống.</Text>
+          <Text className="text-body text-text-secondary">Kệ đang trống.</Text>
         ) : (
           items.map((item) => (
             <View key={item.id} className="flex-row justify-between gap-3">
-              <Text className="flex-1 font-body text-body-sm text-foreground">{item.name}</Text>
-              <Text className="font-strong text-body-sm text-foreground">
+              <Text className="flex-1 text-body text-text-primary">{item.name}</Text>
+              <Text className="font-semibold text-body text-text-primary tabular-nums">
                 ×{quantityWithUnit(item.quantity, item.unit)}
               </Text>
             </View>
@@ -50,99 +54,101 @@ export function CounterContractCard({ contract, onDropOff, onPickUp, onOpenRecei
       </View>
 
       {contract.dropOff ? (
-        <Text className="font-body text-caption text-danger">
-          Chưa nhận đồ: {dropOffBlockLabel(contract.dropOff)}
-        </Text>
+        <InlineMessage
+          message={`Chưa nhận đồ: ${dropOffBlockLabel(contract.dropOff)}`}
+          type="error"
+        />
       ) : null}
       {contract.pickUp ? (
-        <Text className="font-body text-caption text-danger">
-          Chưa trả đồ: {pickUpBlockLabel(contract.pickUp)}
-        </Text>
+        <InlineMessage message={`Chưa trả đồ: ${pickUpBlockLabel(contract.pickUp)}`} type="error" />
       ) : null}
 
-      <View className="flex-row gap-2">
+      <View className="flex-row gap-2.5">
         <Button
           className="flex-1"
-          isDisabled={!!contract.dropOff}
+          disabled={!!contract.dropOff}
+          label="Nhận đồ"
           onPress={() => onDropOff(openDropOffRequest?.id)}
-        >
-          <Button.Label>Nhận đồ</Button.Label>
-        </Button>
+        />
         <Button
           className="flex-1"
-          variant="secondary"
-          isDisabled={!!contract.pickUp}
+          disabled={!!contract.pickUp}
+          label="Trả đồ"
           onPress={() => onPickUp(openRequest?.id)}
-        >
-          <Button.Label>Trả đồ</Button.Label>
-        </Button>
+          variant="secondary"
+        />
       </View>
 
       {openDropOffRequest ? (
-        <View className="gap-1.5 rounded-lg bg-surface-secondary p-3">
+        <View className="gap-2 rounded-2xl bg-bg-subtle p-3.5">
           <View className="flex-row items-center justify-between gap-2">
-            <Text className="font-ui text-body-sm text-foreground">Khách yêu cầu gửi đồ</Text>
+            <Text className="text-body font-semibold text-text-primary">Khách yêu cầu gửi đồ</Text>
             <StatusPill
               label={dropOffStatusLabel(openDropOffRequest.status)}
               tone={openDropOffRequest.status === 'CONFIRMED' ? 'success' : 'accent'}
             />
           </View>
-          <Text className="font-body text-body-sm text-foreground">
+          <Text className="text-body text-text-primary">
             {linesSummary(openDropOffRequest.lines)}
           </Text>
-          <Text className="font-body text-caption text-muted">
+          <Text className="text-caption text-text-secondary">
             Hẹn gửi {formatIsoDateTime(String(openDropOffRequest.requestedFor))}
           </Text>
           <Button
-            size="sm"
-            isDisabled={!!contract.dropOff}
+            disabled={!!contract.dropOff}
+            fullWidth
+            label="Nhận đồ theo yêu cầu"
             onPress={() => onDropOff(openDropOffRequest.id)}
-          >
-            <Button.Label>Nhận đồ theo yêu cầu</Button.Label>
-          </Button>
+            size="sm"
+          />
         </View>
       ) : null}
 
       {openRequest ? (
-        <View className="gap-1.5 rounded-lg bg-surface-secondary p-3">
+        <View className="gap-2 rounded-2xl bg-bg-subtle p-3.5">
           <View className="flex-row items-center justify-between gap-2">
-            <Text className="font-ui text-body-sm text-foreground">Khách yêu cầu lấy đồ</Text>
+            <Text className="text-body font-semibold text-text-primary">Khách yêu cầu lấy đồ</Text>
             <StatusPill
               label={pickupStatusLabel(openRequest.status)}
               tone={openRequest.status === 'READY' ? 'success' : 'accent'}
             />
           </View>
-          <Text className="font-body text-body-sm text-foreground">
-            {linesSummary(openRequest.lines)}
-          </Text>
-          <Text className="font-body text-caption text-muted">
+          <Text className="text-body text-text-primary">{linesSummary(openRequest.lines)}</Text>
+          <Text className="text-caption text-text-secondary">
             Hẹn lấy {formatIsoDateTime(String(openRequest.requestedFor))}
           </Text>
-          <Button size="sm" isDisabled={!!contract.pickUp} onPress={() => onPickUp(openRequest.id)}>
-            <Button.Label>Hoàn tất yêu cầu</Button.Label>
-          </Button>
+          <Button
+            disabled={!!contract.pickUp}
+            fullWidth
+            label="Hoàn tất yêu cầu"
+            onPress={() => onPickUp(openRequest.id)}
+            size="sm"
+          />
         </View>
       ) : null}
 
       {recentReceipts.length > 0 ? (
-        <View className="gap-1">
-          <Text className="font-ui text-body-sm text-foreground">Phiếu gần đây</Text>
+        <View className="gap-1.5">
+          <DashedDivider />
+          <Text className="pt-1 text-body font-semibold text-text-primary">Phiếu gần đây</Text>
           {recentReceipts.map((receipt) => (
             <Pressable
               key={receipt.id}
               accessibilityRole="button"
-              className="flex-row items-center justify-between gap-2 py-1.5"
+              className="flex-row items-center justify-between gap-2 rounded-xl px-2 py-2"
               onPress={() => onOpenReceipt(receipt.id)}
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
             >
-              <View className="flex-1">
-                <Text className="font-body text-body-sm text-foreground" numberOfLines={1}>
+              <View className="flex-1 gap-0.5">
+                <Text className="text-body text-text-primary" numberOfLines={1}>
                   {receiptTypeLabel(receipt.type)} · {linesSummary(receipt.lines, 2)}
                 </Text>
-                <Text className="font-body text-caption text-muted">
+                <Text className="text-caption text-text-secondary">
                   {receipt.code} · {formatIsoDateTime(String(receipt.createdAt))}
                 </Text>
               </View>
               {receipt.status === 'VOIDED' ? <StatusPill label="Đã hủy" tone="neutral" /> : null}
+              <Icon color={colors.semantic.textSecondary} name="chevron-right" size={18} />
             </Pressable>
           ))}
         </View>

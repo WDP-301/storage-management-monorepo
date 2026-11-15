@@ -1,10 +1,8 @@
-import { ArrowLeft } from 'phosphor-react-native';
 import type { ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
 
-const ACCENT = 'hsl(203 100% 30%)';
+import { AppBar } from './ui/app-bar';
 
-/** Back arrow + title for screens pushed on top of a tab, matching the booking flow headers. */
+/** Top bar with back button and title, delegating to Medipay-style AppBar. */
 export function ScreenHeader({
   title,
   backLabel,
@@ -18,24 +16,12 @@ export function ScreenHeader({
   right?: ReactNode;
 }) {
   return (
-    <View className="flex-row items-center justify-between gap-3 px-4 pt-5 pb-3">
-      <View className="flex-1 flex-row items-center gap-1">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={backLabel}
-          hitSlop={8}
-          style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-          onPress={onBack}
-        >
-          <View className="size-10 items-center justify-center rounded-full">
-            <ArrowLeft color={ACCENT} size={22} weight="bold" />
-          </View>
-        </Pressable>
-        <Text className="flex-1 font-strong text-foreground text-title-md" numberOfLines={1}>
-          {title}
-        </Text>
-      </View>
-      {right}
-    </View>
+    <AppBar
+      backLabel={backLabel}
+      onBack={onBack}
+      rightSlot={right}
+      title={title}
+      titleAlign="center"
+    />
   );
 }

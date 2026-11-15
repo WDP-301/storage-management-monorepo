@@ -5,7 +5,6 @@ import {
   Platform,
   Pressable,
   StatusBar,
-  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -14,6 +13,7 @@ import { ApiError } from '../../../lib/api';
 import { useBookingSettings } from '../../../lib/client-settings';
 import { formatMoney, formatNumber } from '../../../lib/format-vi';
 import { WarehousesApi } from '../../../lib/warehouses-api';
+import { colors, Dashed, InlineMessage, StatusPill, Text } from '../../components/ui';
 import type { ShelfLayout, Warehouse } from '../../types/storage-api';
 import { ShelfUnplacedList } from './ShelfUnplacedList';
 import {
@@ -36,19 +36,19 @@ const GAP = 5;
 const MAX_ZOOM = 3;
 
 const LEGEND = [
-  ['bg-success-bg border-success', 'Còn trống'],
-  ['bg-accent border-accent', 'Đã chọn'],
-  ['bg-surface-secondary border-border', 'Không khả dụng'],
+  ['bg-success-0 border-success-600', 'Còn trống'],
+  ['bg-action-primary border-border-selected', 'Đã chọn'],
+  ['bg-bg-subtle border-border-strong', 'Không khả dụng'],
 ] as const;
 
 /** Colour key, kept in the map toolbar so it is on screen whenever the plan is. */
 function ShelfLegend() {
   return (
     <View className="flex-1 flex-row flex-wrap gap-x-3 gap-y-1">
-      {LEGEND.map(([colors, label]) => (
+      {LEGEND.map(([swatch, label]) => (
         <View key={label} className="flex-row items-center gap-1.5">
-          <View className={`size-3 rounded border ${colors}`} />
-          <Text className="font-body text-caption text-muted">{label}</Text>
+          <View className={`size-3 rounded border ${swatch}`} />
+          <Text className="text-caption text-text-secondary">{label}</Text>
         </View>
       ))}
     </View>
@@ -212,38 +212,38 @@ function ShelfMap({
 
   return (
     <>
-      <View className="flex-row items-center justify-between gap-2 border-b border-border px-3 py-2">
+      <View className="flex-row items-center justify-between gap-2 border-b border-border-default px-3.5 py-2.5">
         <ShelfLegend />
-        <View className="flex-row items-center gap-2">
+        <View className="flex-row items-center gap-1.5">
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Thu nhỏ sơ đồ"
             onPress={() => changeZoom(1 / 1.35)}
-            className="size-8 items-center justify-center rounded-full bg-surface-secondary"
+            className="size-8 items-center justify-center rounded-full bg-bg-subtle"
           >
-            <Text className="font-strong text-body-lg text-accent">−</Text>
+            <Text className="text-body-lg font-bold text-text-link">−</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Xem toàn bộ sơ đồ"
             onPress={resetZoom}
-            className="min-h-8 items-center justify-center rounded-full bg-surface-secondary px-2"
+            className="min-h-8 items-center justify-center rounded-full bg-bg-subtle px-2.5"
           >
-            <Text className="font-ui text-caption text-accent">Toàn cảnh</Text>
+            <Text className="text-caption font-medium text-text-link">Toàn cảnh</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Phóng to sơ đồ"
             onPress={() => changeZoom(1.35)}
-            className="size-8 items-center justify-center rounded-full bg-surface-secondary"
+            className="size-8 items-center justify-center rounded-full bg-bg-subtle"
           >
-            <Text className="font-strong text-body-lg text-accent">+</Text>
+            <Text className="text-body-lg font-bold text-text-link">+</Text>
           </Pressable>
         </View>
       </View>
       <View
         ref={viewportRef}
-        className="overflow-hidden bg-surface"
+        className="overflow-hidden bg-bg-card"
         style={{ height: viewportHeight }}
         onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)}
         {...pan.panHandlers}
@@ -273,10 +273,10 @@ function ShelfMap({
                 <View
                   key={`element-${index}`}
                   style={bounds}
-                  className="items-center justify-center border-y border-dashed border-border"
+                  className="items-center justify-center border-y border-dashed border-border-default"
                 >
                   {element.colSpan > 2 ? (
-                    <Text style={{ fontSize: 15 }} className="font-ui text-muted">
+                    <Text style={{ fontSize: 15 }} className="font-medium text-text-secondary">
                       LỐI ĐI
                     </Text>
                   ) : null}
@@ -288,9 +288,13 @@ function ShelfMap({
                 <View
                   key={`element-${index}`}
                   style={bounds}
-                  className="items-center justify-center rounded-md bg-accent/10"
+                  className="items-center justify-center rounded-md bg-secondary-0"
                 >
-                  <Text style={{ fontSize: 15 }} className="font-ui text-accent" numberOfLines={1}>
+                  <Text
+                    style={{ fontSize: 15 }}
+                    className="font-medium text-text-link"
+                    numberOfLines={1}
+                  >
                     Cửa
                   </Text>
                 </View>
@@ -298,18 +302,14 @@ function ShelfMap({
             }
             if (element.type === 'OBSTACLE') {
               return (
-                <View
-                  key={`element-${index}`}
-                  style={bounds}
-                  className="rounded-md bg-surface-secondary"
-                />
+                <View key={`element-${index}`} style={bounds} className="rounded-md bg-bg-subtle" />
               );
             }
             return (
               <View key={`element-${index}`} style={bounds} className="items-center justify-center">
                 <Text
                   style={{ fontSize: 14 }}
-                  className="text-center font-ui text-muted"
+                  className="text-center font-medium text-text-secondary"
                   numberOfLines={2}
                 >
                   {element.text}
@@ -344,12 +344,12 @@ function ShelfMap({
                 }}
                 className={`items-center justify-center rounded-lg border-2 px-1 ${
                   selected
-                    ? 'border-accent bg-accent'
+                    ? 'border-border-selected bg-action-primary'
                     : focusedCell
-                      ? 'border-accent bg-accent/10'
+                      ? 'border-border-selected bg-secondary-0'
                       : available
-                        ? 'border-success bg-success-bg'
-                        : 'border-border bg-surface-secondary'
+                        ? 'border-success-600 bg-success-0'
+                        : 'border-border-default bg-bg-subtle'
                 }`}
               >
                 <Text
@@ -357,7 +357,13 @@ function ShelfMap({
                   minimumFontScale={0.7}
                   numberOfLines={1}
                   style={{ fontSize: 16 }}
-                  className={`text-center font-numeric ${selected ? 'text-white' : available || focusedCell ? 'text-foreground' : 'text-muted'}`}
+                  className={`text-center font-semibold tabular-nums ${
+                    selected
+                      ? 'text-text-inverse'
+                      : available || focusedCell
+                        ? 'text-text-primary'
+                        : 'text-text-secondary'
+                  }`}
                 >
                   {shortCode(shelf.code, warehouseCode)}
                 </Text>
@@ -367,7 +373,7 @@ function ShelfMap({
         </Animated.View>
       </View>
       {/* Sits under the plan instead of over it, so the bottom row of shelves stays visible. */}
-      <Text className="border-t border-border px-3 py-2 font-body text-caption text-muted">
+      <Text className="border-t border-border-default px-3.5 py-2 text-caption text-text-secondary">
         {overview
           ? 'Chạm vào vùng muốn xem để phóng to'
           : 'Chụm hai ngón để thu phóng · Kéo để xem khi phóng to'}
@@ -446,11 +452,11 @@ export function ShelfPicker({
   };
 
   return (
-    <View className="gap-3">
+    <View className="gap-3.5">
       <View className="flex-row items-start justify-between gap-3">
-        <View className="flex-1 gap-1">
-          <Text className="font-strong text-title-sm text-foreground">Sơ đồ kệ</Text>
-          <Text className="font-body text-body-sm text-muted">
+        <View className="flex-1 gap-0.5">
+          <Text className="text-title-sm font-bold text-text-primary">Sơ đồ kệ</Text>
+          <Text className="text-body-sm text-text-secondary tabular-nums">
             {availableCount} kệ trống · Chạm để chọn/bỏ chọn
           </Text>
         </View>
@@ -459,22 +465,24 @@ export function ShelfPicker({
           onPress={() => setReload((value) => value + 1)}
           hitSlop={8}
         >
-          <Text className="font-ui text-body-sm text-accent">Làm mới</Text>
+          <Text className="text-body-sm font-semibold text-text-link">Làm mới</Text>
         </Pressable>
       </View>
 
-      {loading ? <ActivityIndicator className="py-8" /> : null}
-      {error ? <Text className="font-body text-body-sm text-danger">{error}</Text> : null}
+      {loading ? (
+        <ActivityIndicator className="py-8" color={colors.semantic.actionPrimary} />
+      ) : null}
+      {error ? <InlineMessage message={error} type="error" /> : null}
       {!loading && !error && !hasMap && unplaced.length === 0 ? (
-        <View className="rounded-xl bg-surface-secondary px-4 py-6">
-          <Text className="text-center font-body text-body-sm text-muted">
+        <View className="rounded-[20px] border border-border-default bg-bg-card px-4 py-6">
+          <Text className="text-center text-body-sm text-text-secondary">
             {shelves.length === 0 ? 'Kho này chưa có kệ.' : 'Kho này chưa có sơ đồ kệ.'}
           </Text>
         </View>
       ) : null}
 
       {!loading && !error && grid && hasMap ? (
-        <View className="overflow-hidden rounded-xl border border-border bg-surface">
+        <View className="overflow-hidden rounded-[20px] border border-border-default bg-bg-card">
           <ShelfMap
             grid={grid}
             placed={placed}
@@ -500,64 +508,72 @@ export function ShelfPicker({
       ) : null}
 
       {focused ? (
-        <View className="gap-3 rounded-xl border border-border bg-surface p-4">
+        <View className="gap-3.5 rounded-[20px] border border-border-default bg-bg-card p-4">
           <View className="flex-row items-start justify-between gap-3">
-            <View className="flex-1 gap-1">
-              <Text className="font-strong text-body-lg text-foreground">
+            <View className="flex-1 gap-0.5">
+              <Text className="text-body-lg font-bold text-text-primary">
                 Kệ {shortCode(focused.code, warehouse.code)}
               </Text>
-              <Text className="font-numeric text-caption text-muted">{focused.code}</Text>
             </View>
-            <Text
-              className={`rounded-full px-2.5 py-1 font-ui text-caption ${selectedIds.includes(focused.id) ? 'bg-accent/10 text-accent' : focused.status === 'AVAILABLE' ? 'bg-success-bg text-success' : 'bg-surface-secondary text-muted'}`}
-            >
-              {selectedIds.includes(focused.id)
-                ? 'Đã chọn'
-                : (statusLabel[focused.status] ?? focused.status)}
-            </Text>
+            <StatusPill
+              label={
+                selectedIds.includes(focused.id)
+                  ? 'Đã chọn'
+                  : (statusLabel[focused.status] ?? focused.status)
+              }
+              tone={
+                selectedIds.includes(focused.id)
+                  ? 'info'
+                  : focused.status === 'AVAILABLE'
+                    ? 'success'
+                    : 'neutral'
+              }
+            />
           </View>
-          <View className="flex-row flex-wrap gap-x-5 gap-y-2 border-y border-border py-3">
+          <Dashed />
+          <View className="flex-row flex-wrap gap-x-6 gap-y-2">
             <View className="gap-0.5">
-              <Text className="font-body text-caption text-muted">Diện tích</Text>
-              <Text className="font-numeric text-body-sm text-foreground">
+              <Text className="text-caption text-text-secondary">Diện tích</Text>
+              <Text className="text-body-sm font-semibold text-text-primary tabular-nums">
                 {formatNumber(focused.areaM2)} m²
               </Text>
             </View>
             <View className="gap-0.5">
-              <Text className="font-body text-caption text-muted">Kích thước (R × D × C)</Text>
-              <Text className="font-numeric text-body-sm text-foreground">
+              <Text className="text-caption text-text-secondary">Kích thước (R × D × C)</Text>
+              <Text className="text-body-sm font-semibold text-text-primary tabular-nums">
                 {formatNumber(focused.widthM)} × {formatNumber(focused.lengthM)} ×{' '}
                 {focused.heightM == null ? '—' : formatNumber(focused.heightM)} m
               </Text>
             </View>
           </View>
+          <Dashed />
           <View className="gap-1">
-            <Text className="font-body text-caption text-muted">Giá thuê</Text>
-            <Text className="font-numeric-strong text-num-lg text-accent">
+            <Text className="text-caption text-text-secondary">Giá thuê</Text>
+            <Text className="text-subtitle font-bold text-text-brand tabular-nums">
               {formatMoney(focused.monthlyPrice)}/tháng
             </Text>
-            <Text className="font-body text-caption text-muted">
+            <Text className="text-caption text-text-secondary tabular-nums">
               Cọc {formatMoney(focused.monthlyPrice * focused.effectiveDepositMonths)} (
               {focused.effectiveDepositMonths} tháng)
             </Text>
           </View>
           {selectedIds.includes(focused.id) ? (
-            <Text className="font-body text-caption text-accent">
-              Kệ đã được chọn. Chạm lại kệ để bỏ chọn.
-            </Text>
+            <InlineMessage message="Kệ đã được chọn. Chạm lại kệ để bỏ chọn." type="info" />
           ) : null}
           {hasHolding && focused.status === 'AVAILABLE' ? (
-            <Text className="font-body text-caption text-warning">
-              Hoàn tất hoặc hủy đơn giữ chỗ hiện tại để chọn thêm kệ.
-            </Text>
+            <InlineMessage
+              message="Hoàn tất hoặc hủy đơn giữ chỗ hiện tại để chọn thêm kệ."
+              type="warning"
+            />
           ) : null}
           {selectionFull &&
           !selectedIds.includes(focused.id) &&
           !hasHolding &&
           focused.status === 'AVAILABLE' ? (
-            <Text className="font-body text-caption text-muted">
-              Bạn đã chọn tối đa {maxUnitsPerBooking} kho hoặc kệ.
-            </Text>
+            <InlineMessage
+              message={`Bạn đã chọn tối đa ${maxUnitsPerBooking} kho hoặc kệ.`}
+              type="info"
+            />
           ) : null}
         </View>
       ) : null}

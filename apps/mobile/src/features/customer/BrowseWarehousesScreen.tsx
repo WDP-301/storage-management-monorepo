@@ -1,14 +1,14 @@
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
-import { Button } from 'heroui-native';
 import { useEffect, useRef, useState } from 'react';
-import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, View } from 'react-native';
 import { useBrowseSelection } from '../../../lib/browse-selection';
 import { useBookingSettings } from '../../../lib/client-settings';
 import { hasPlottableCoords } from '../../../lib/goong-map-config';
 import { type PlacePrediction, WIDE_NEARBY_RADIUS_KM } from '../../../lib/places-api';
 import { isShelfWarehouse } from '../../../lib/shelf-rental';
 import { countActiveFilters, matchesNearbyCriteria } from '../../../lib/warehouse-query';
+import { Button, Text } from '../../components/ui';
 import type { BrowseView } from '../../types/customer';
 import type { NearbyWarehouse, Warehouse } from '../../types/storage-api';
 import { BrowseFiltersSheet } from './BrowseFiltersSheet';
@@ -147,25 +147,26 @@ export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHol
   };
 
   const header = (
-    <View className="bg-surface">
+    <View className="border-b border-border-default bg-bg-page">
       <BrowseLocationControls
-        location={location}
+        activeFilterCount={activeFilterCount}
         criteria={criteria}
-        wards={wardOptions}
-        view={view}
-        plottableCount={mapWarehouses.filter(hasPlottableCoords).length}
-        onView={setView}
-        onOpenFilters={openFilters}
-        nearby={nearbySearch}
         isLocating={nearby.isBusy && !nearbySearch}
-        onOpenLocation={openLocation}
+        location={location}
+        nearby={nearbySearch}
+        plottableCount={mapWarehouses.filter(hasPlottableCoords).length}
+        view={view}
+        wards={wardOptions}
         onClearNearby={clearNearby}
+        onOpenFilters={openFilters}
+        onOpenLocation={openLocation}
+        onView={setView}
       />
     </View>
   );
 
   return (
-    <View className="flex-1">
+    <View className="flex-1 bg-bg-muted">
       <BrowseBrandHeader />
       {view === 'map' ? (
         // Outside the ScrollView on purpose: a ScrollView swallows the map's pan and zoom gestures.
@@ -173,18 +174,17 @@ export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHol
           {header}
           {isInitialLoading ? <LoadingState /> : null}
           {error ? <ErrorState message={error} onRetry={refetch} /> : null}
-          <View className="mt-3 flex-1">
+          <View className="flex-1">
             <BrowseMapView
               pickedIds={selectedIds}
               searchCenter={nearbySearch?.center ?? null}
-              searchSource={nearbySearch?.source ?? null}
               searchRadiusKm={nearbySearch?.radiusKm ?? null}
+              searchSource={nearbySearch?.source ?? null}
               selectedWarehouseId={mapWarehouse?.id ?? null}
               warehouses={mapWarehouses}
               onSelect={(warehouse) => setMapWarehouseId(warehouse.id)}
             />
             <BrowseMapOverlay
-              activeFilterCount={activeFilterCount}
               error={nearby.error}
               isLocating={nearby.isBusy}
               nearbyCount={nearbyWarehouses?.length ?? null}
@@ -193,27 +193,30 @@ export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHol
               selectedCount={selected.length}
               onClearSearch={clearNearby}
               onNearMe={searchNearMe}
-              onOpenFilters={openFilters}
               onSearch={openLocation}
             />
             {nearbySearch && nearbyWarehouses?.length === 0 ? (
-              <View className="absolute right-4 bottom-4 left-4 gap-2 rounded-xl bg-surface p-3 shadow-sm">
-                <Text className="font-body text-body-sm text-foreground">
+              <View className="absolute right-4 bottom-4 left-4 gap-3 rounded-[20px] border border-border-default bg-bg-card p-4">
+                <Text className="text-body-sm text-text-primary">
                   Không có kho trống phù hợp trong {nearbySearch.radiusKm} km.
                 </Text>
                 {nearby.canWiden ? (
-                  <Button isDisabled={nearby.isBusy} size="sm" onPress={nearby.widenRadius}>
-                    <Button.Label className="font-ui">
-                      Mở rộng {WIDE_NEARBY_RADIUS_KM} km
-                    </Button.Label>
-                  </Button>
+                  <Button
+                    disabled={nearby.isBusy}
+                    fullWidth={false}
+                    label={`Mở rộng ${WIDE_NEARBY_RADIUS_KM} km`}
+                    size="sm"
+                    onPress={nearby.widenRadius}
+                  />
                 ) : null}
               </View>
             ) : null}
-            {!nearbySearch && hasMore ? (
-              <Text className="absolute right-4 bottom-3 left-4 rounded-lg bg-surface/90 px-2 py-1 text-center font-body text-caption text-muted">
-                Bản đồ hiển thị {warehouses.length}/{total} kho. Thu hẹp bộ lọc để xem đủ.
-              </Text>
+            {!nearbySearch && hasMore && selected.length === 0 ? (
+              <View className="absolute right-4 bottom-3 left-4 rounded-xl border border-border-default bg-bg-card/95 px-3 py-1.5">
+                <Text className="text-center text-caption text-text-secondary tabular-nums">
+                  Bản đồ hiển thị {warehouses.length}/{total} kho. Thu hẹp bộ lọc để xem đủ.
+                </Text>
+              </View>
             ) : null}
             <WarehouseMapSheet
               hasHolding={hasHolding}
@@ -222,14 +225,14 @@ export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHol
               warehouse={mapWarehouse}
               onContinue={continueFromMap}
               onDismiss={dismissWarehouse}
-              onToggle={toggleWarehouse}
               onOpenDetail={openWarehouseFromMap}
+              onToggle={toggleWarehouse}
             />
           </View>
         </>
       ) : (
         <ScrollView
-          className="flex-1"
+          className="flex-1 bg-bg-muted"
           contentContainerStyle={{ paddingBottom: contentBottomPadding }}
           refreshControl={
             <RefreshControl refreshing={nearbySearch ? false : isRefreshing} onRefresh={refresh} />
@@ -288,7 +291,7 @@ export function BrowseWarehousesScreen({ hasHolding, contentBottomPadding, onHol
         </ScrollView>
       )}
 
-      {view === 'list' && selected.length > 0 && (nearbySearch || !isInitialLoading) ? (
+      {selected.length > 0 && (nearbySearch || !isInitialLoading) ? (
         <BrowseSelectionBar
           hasHolding={hasHolding}
           selected={selected}

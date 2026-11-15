@@ -1,11 +1,11 @@
 import type { ShelfReceiptView } from '@storage/types';
 import { useFocusEffect } from 'expo-router';
-import { Button } from 'heroui-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { formatIsoDateTime } from '../../../../lib/format-vi';
 import { ShelfStorageApi } from '../../../../lib/shelf-storage-api';
 import { linesSummary, receiptTypeLabel } from '../../../../lib/shelf-storage-format';
+import { Button, colors, Icon, Input, Text } from '../../../components/ui';
 import { StatusPill } from '../../customer/contract-display';
 import { shelfApiError } from '../staff-errors';
 import { ListState } from './ListState';
@@ -52,8 +52,9 @@ export function WarehouseReceiptsList({
         setPage(result.meta.page);
         setHasMore(result.meta.page < result.meta.totalPages);
       } catch (cause) {
-        if (call === latest.current)
+        if (call === latest.current) {
           setError(shelfApiError(cause, 'Không tải được danh sách phiếu.'));
+        }
       } finally {
         if (call === latest.current) setLoading(false);
       }
@@ -70,30 +71,34 @@ export function WarehouseReceiptsList({
 
   return (
     <View className="gap-3">
-      <TextInput
-        accessibilityLabel="Tìm phiếu"
-        autoCapitalize="none"
-        className="rounded-xl border border-border bg-surface px-3 py-3 font-body text-body-sm text-foreground"
-        placeholder="Tìm theo mã phiếu, tên hoặc số điện thoại khách"
-        value={search}
-        onChangeText={setSearch}
-      />
+      <View className="rounded-[20px] border border-border-default bg-bg-card p-3">
+        <Input
+          accessibilityLabel="Tìm phiếu"
+          autoCapitalize="none"
+          clearable
+          leftIcon="search"
+          onChangeText={setSearch}
+          placeholder="Tìm theo mã phiếu, tên hoặc SĐT khách"
+          value={search}
+        />
+      </View>
       <ListState
-        loading={loading}
-        error={error}
         empty={receipts.length === 0}
         emptyText="Chưa có phiếu nào."
+        error={error}
+        loading={loading}
         onRetry={() => void load(1)}
       />
       {receipts.map((receipt) => (
         <Pressable
           key={receipt.id}
           accessibilityRole="button"
-          className="gap-1 rounded-xl border border-border bg-surface p-3"
+          className="gap-1.5 rounded-[20px] border border-border-default bg-bg-card p-4"
           onPress={() => onOpen(receipt.id)}
+          style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
         >
           <View className="flex-row items-center justify-between gap-2">
-            <Text className="flex-1 font-strong text-body-sm text-foreground">{receipt.code}</Text>
+            <Text className="flex-1 text-body font-semibold text-text-primary">{receipt.code}</Text>
             <StatusPill
               label={receipt.status === 'VOIDED' ? 'Đã hủy' : receiptTypeLabel(receipt.type)}
               tone={
@@ -105,19 +110,29 @@ export function WarehouseReceiptsList({
               }
             />
           </View>
-          <Text className="font-body text-body-sm text-foreground" numberOfLines={1}>
-            {receipt.customer.fullName ?? receipt.customer.phone ?? '—'} ·{' '}
-            {linesSummary(receipt.lines, 2)}
-          </Text>
-          <Text className="font-body text-caption text-muted">
-            Kệ {receipt.shelf.code} · {formatIsoDateTime(String(receipt.createdAt))}
-          </Text>
+          <View className="flex-row items-center justify-between gap-2">
+            <View className="flex-1 gap-0.5">
+              <Text className="text-body text-text-primary" numberOfLines={1}>
+                {receipt.customer.fullName ?? receipt.customer.phone ?? '—'} ·{' '}
+                {linesSummary(receipt.lines, 2)}
+              </Text>
+              <Text className="text-caption text-text-secondary">
+                Kệ {receipt.shelf.code} · {formatIsoDateTime(String(receipt.createdAt))}
+              </Text>
+            </View>
+            <Icon color={colors.semantic.textSecondary} name="chevron-right" size={18} />
+          </View>
         </Pressable>
       ))}
       {hasMore && !error ? (
-        <Button variant="secondary" isDisabled={loading} onPress={() => void load(page + 1)}>
-          <Button.Label>{loading ? 'Đang tải…' : 'Xem thêm'}</Button.Label>
-        </Button>
+        <Button
+          disabled={loading}
+          fullWidth
+          label={loading ? 'Đang tải…' : 'Xem thêm'}
+          loading={loading}
+          onPress={() => void load(page + 1)}
+          variant="secondary"
+        />
       ) : null}
     </View>
   );

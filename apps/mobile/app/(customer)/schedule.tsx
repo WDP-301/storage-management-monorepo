@@ -23,7 +23,7 @@ export default function ScheduleRoute() {
       warehouses={selectedWarehouses}
       isCreating={isCreating}
       error={error}
-      onBack={() => router.navigate('/(customer)/browse')}
+      onBack={() => (router.canGoBack() ? router.back() : router.replace('/(customer)/browse'))}
       onConfirm={async (schedule) => {
         setError(null);
         try {

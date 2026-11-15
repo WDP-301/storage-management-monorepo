@@ -1,18 +1,11 @@
-import { Button } from 'heroui-native';
 import type { ReactNode } from 'react';
-import { Text, View } from 'react-native';
-
-/**
- * Chip-style controls for the browse filters.
- *
- * Built on `Button` rather than `Chip` because the toggle states (`primary` / `secondary`) come
- * for free and match the mode switch already used elsewhere on the screen.
- */
+import { View } from 'react-native';
+import { TabChip, Text } from '../../components/ui';
 
 export function FilterRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <View>
-      <Text className="text-caption font-ui text-muted">{label}</Text>
+      <Text className="text-caption font-semibold text-text-secondary uppercase">{label}</Text>
       <View className="mt-2 flex-row flex-wrap gap-2">{children}</View>
     </View>
   );
@@ -27,9 +20,5 @@ export function ChipButton({
   isSelected: boolean;
   onPress: () => void;
 }) {
-  return (
-    <Button size="sm" variant={isSelected ? 'primary' : 'secondary'} onPress={onPress}>
-      <Button.Label className="font-ui">{label}</Button.Label>
-    </Button>
-  );
+  return <TabChip label={label} onPress={onPress} selected={isSelected} tone="primary" />;
 }

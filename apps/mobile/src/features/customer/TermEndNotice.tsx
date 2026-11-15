@@ -1,13 +1,12 @@
 import { Warning } from 'phosphor-react-native';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { useReturnSettings } from '../../../lib/client-settings';
 import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import { todayIso } from '../../../lib/rental-schedule';
 import { vietnamDayIso } from '../../../lib/settlement-format';
+import { colors, Text } from '../../components/ui';
 import type { ApiContract } from '../../types/contract-api';
 import { termEndState } from './term-end';
-
-const WARNING = 'hsl(32 95% 44%)';
 
 /** Ending-soon or overdue banner of an ACTIVE contract; the per-day charge is the server's. */
 export function TermEndNotice({ contract }: { contract: ApiContract }) {
@@ -23,25 +22,25 @@ export function TermEndNotice({ contract }: { contract: ApiContract }) {
       : `Hợp đồng đã quá hạn ${state.daysOverdue} ngày`;
   const body =
     state.kind === 'ending'
-      ? `Hợp đồng hết hạn ngày ${lastDay}.` +
+      ? `Hợp đồng hết hạn hết ngày ${lastDay}.` +
         (perDay !== null
           ? ` Từ ngày ${formatIsoDate(state.penaltyFromDay)}, phí quá hạn ${formatMoney(perDay)}/ngày sẽ trừ vào tiền cọc.`
           : '') +
         ' Nếu không thuê tiếp, hãy đặt lịch trả kho.'
-      : `Hợp đồng đã hết hạn ngày ${lastDay}.` +
+      : `Kỳ thuê đã kết thúc hết ngày ${lastDay} (hiện quá ${state.daysOverdue} ngày so với hạn hợp đồng).` +
         (perDay !== null
-          ? ` Phí quá hạn ${formatMoney(perDay)}/ngày trừ vào tiền cọc khi quyết toán.`
+          ? ` Phí phát sinh ${formatMoney(perDay)}/ngày được tính từ ngày kế tiếp đến khi chốt biên bản trả kho và trừ vào tiền cọc.`
           : '') +
         (contract.return && !contract.return.finalizedAt
-          ? ' Ngày hẹn trả đã qua — hãy đổi lịch trả kho.'
-          : ' Hãy đặt lịch trả kho.');
+          ? ' Lịch hẹn trả cũ đã qua — hãy chọn lại ngày trả kho mới.'
+          : ' Hãy đặt lịch trả kho sớm nhất.');
 
   return (
-    <View className="flex-row items-start gap-2 rounded-xl bg-warning-bg px-3 py-3">
-      <Warning color={WARNING} size={18} weight="fill" />
+    <View className="flex-row items-start gap-2.5 rounded-[16px] border border-warning-500/30 bg-warning-0 px-3.5 py-3">
+      <Warning color={colors.warning[700]} size={18} weight="fill" />
       <View className="flex-1 gap-1">
-        <Text className="font-strong text-body-sm text-warning">{title}</Text>
-        <Text className="font-body text-body-sm leading-5 text-warning">{body}</Text>
+        <Text className="text-body-sm font-semibold text-warning-700">{title}</Text>
+        <Text className="text-body-sm leading-5 text-warning-700">{body}</Text>
       </View>
     </View>
   );

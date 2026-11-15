@@ -1,7 +1,8 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { formatIsoDateTime } from '../../../lib/format-vi';
 import { formatVnTime } from '../../../lib/receiving-time';
 import { EvidenceGallery } from '../../components/EvidenceGallery';
+import { Text } from '../../components/ui';
 import type { ApiInspection, InspectionDamage } from '../../types/contract-api';
 import { dayOf, StatusPill } from './contract-display';
 import { InfoRow } from './info-row';
@@ -42,13 +43,13 @@ export function InspectionBody({
         />
       ) : null}
       {inspection.requestNote ? (
-        <Text className="font-body text-body-sm leading-5 text-foreground">
+        <Text className="text-body-sm leading-5 text-text-primary">
           {viewer === 'staff' ? 'Ghi chú của khách' : 'Ghi chú của bạn'}: {inspection.requestNote}
         </Text>
       ) : null}
       {/* Staff notes are a draft until the record is signed off. */}
       {finalized && inspection.conditionNotes ? (
-        <Text className="font-body text-body-sm leading-5 text-muted">
+        <Text className="text-body-sm leading-5 text-text-secondary">
           {inspection.conditionNotes}
         </Text>
       ) : null}
@@ -62,12 +63,12 @@ export function InspectionBody({
 
 function DamageRow({ damage }: { damage: InspectionDamage }) {
   return (
-    <View className="gap-2 rounded-xl border border-border bg-background p-3">
+    <View className="gap-2 rounded-2xl border border-border-default bg-bg-subtle p-3">
       <View className="flex-row items-start justify-between gap-3">
-        <Text className="font-body flex-1 text-body-sm text-foreground">{damage.description}</Text>
+        <Text className="flex-1 text-body-sm text-text-primary">{damage.description}</Text>
         <StatusPill
           label={damage.severity === 'MAJOR' ? 'Nghiêm trọng' : 'Nhẹ'}
-          tone={damage.severity === 'MAJOR' ? 'accent' : 'neutral'}
+          tone={damage.severity === 'MAJOR' ? 'warning' : 'neutral'}
         />
       </View>
       <EvidenceGallery files={damage.evidence ?? []} />

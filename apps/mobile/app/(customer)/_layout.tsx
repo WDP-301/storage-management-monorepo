@@ -1,8 +1,7 @@
 import { Tabs as RouterTabs, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Button, useThemeColor } from 'heroui-native';
 import { Bell, Buildings, UserCircle } from 'phosphor-react-native';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { SafeAreaView as RNSafeAreaView } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
 import { BrowseSelectionProvider } from '../../lib/browse-selection';
@@ -12,8 +11,8 @@ import {
   NotificationsUnreadProvider,
   useUnreadNotifications,
 } from '../../lib/notifications-unread';
-import { BottomTabButton } from '../../src/components/BottomTabButton';
 import { StorageIcon } from '../../src/components/TabIcons';
+import { Button, Navbar, type NavbarTab, Text } from '../../src/components/ui';
 import type { CustomerTab } from '../../src/types/customer';
 
 const SafeAreaView = withUniwind(RNSafeAreaView);
@@ -27,22 +26,29 @@ const TAB_HREFS = {
 
 export default function CustomerTabsLayout() {
   const router = useRouter();
-  const backgroundColor = useThemeColor('background');
 
   return (
     <ClientSettingsProvider>
       <HoldProvider>
         <NotificationsUnreadProvider>
           <BrowseSelectionProvider>
-            <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
+            <SafeAreaView className="flex-1 bg-bg-page" edges={['top']}>
               <StatusBar style="dark" />
               <RouterTabs
                 backBehavior="history"
-                screenOptions={{ headerShown: false, sceneStyle: { backgroundColor } }}
+                screenOptions={{
+                  headerShown: false,
+                  sceneStyle: { backgroundColor: '#FDFDFF' },
+                }}
                 tabBar={({ state }) =>
-                  state.routes[state.index]?.name === 'shelves' ? null : (
+                  ['shelves', 'schedule', 'payment'].includes(
+                    state.routes[state.index]?.name ?? '',
+                  ) ? null : (
                     <CustomerTabBar
                       activeTab={toCustomerTab(state.routes[state.index]?.name)}
+                      onPaySingleHold={(id) =>
+                        router.navigate(`/(customer)/payment?id=${encodeURIComponent(id)}`)
+                      }
                       onSelect={(tab) => router.navigate(TAB_HREFS[tab])}
                     />
                   )
@@ -57,9 +63,7 @@ export default function CustomerTabsLayout() {
                 />
                 <RouterTabs.Screen name="notifications" options={{ title: 'Thông báo' }} />
                 <RouterTabs.Screen name="settings" options={{ title: 'Tài khoản' }} />
-                {/* Scheduling is reached after selecting units; it has no tab button. */}
                 <RouterTabs.Screen name="schedule" options={{ title: 'Đặt lịch thuê' }} />
-                {/* Deposit payment is reached from a booking, so it has no tab button either. */}
                 <RouterTabs.Screen name="payment" options={{ title: 'Thanh toán tiền cọc' }} />
                 <RouterTabs.Screen name="tickets" options={{ title: 'Yêu cầu hỗ trợ' }} />
                 <RouterTabs.Screen name="ticket-detail" options={{ title: 'Chi tiết yêu cầu' }} />
@@ -77,82 +81,89 @@ export default function CustomerTabsLayout() {
 function CustomerTabBar({
   activeTab,
   onSelect,
+  onPaySingleHold,
 }: {
   activeTab: CustomerTab;
   onSelect: (tab: CustomerTab) => void;
+  onPaySingleHold: (bookingId: string) => void;
 }) {
   const { activeHolds, heldBooking, heldUnitCount, remaining, isExpiringSoon } = useHold();
   const { unread } = useUnreadNotifications();
-  const [accentColor, mutedColor] = useThemeColor(['accent', 'muted']);
-  const iconColor = (tab: CustomerTab) => (activeTab === tab ? accentColor : mutedColor);
-  // Several bookings can hold units at once, so the bar summarises all of them and counts down the
-  // one expiring first; naming a single booking number would hide the rest.
   const hasManyHolds = activeHolds.length > 1;
-  // "Kho của tôi" (and payment, which maps to it) already shows each hold with its own countdown.
   const showHoldBar = heldBooking !== null && activeTab !== 'storage';
+
+  const tabs: NavbarTab[] = [
+    {
+      key: 'browse',
+      label: 'Tìm kho',
+      renderIcon: (color) => <Buildings color={color} size={22} />,
+    },
+    {
+      key: 'storage',
+      label: 'Kho của tôi',
+      badge: heldUnitCount > 0 ? heldUnitCount : undefined,
+      renderIcon: (color) => <StorageIcon color={color} />,
+    },
+    {
+      key: 'notifications',
+      label: 'Thông báo',
+      badge: unread > 0 ? unread : undefined,
+      renderIcon: (color) => <Bell color={color} size={22} />,
+    },
+    {
+      key: 'settings',
+      label: 'Tài khoản',
+      renderIcon: (color) => <UserCircle color={color} size={22} />,
+    },
+  ];
 
   return (
     <View>
       {showHoldBar && heldBooking ? (
-        <View className="border-t border-border bg-surface px-4 py-3">
+        <View className="border-t border-warning-500/30 bg-warning-0 px-4 py-2.5">
           <View className="flex-row items-center justify-between gap-3">
-            {/* Countdown leads: it is the only part of this bar that is running out. */}
             <View className="flex-1">
               <View className="flex-row items-baseline gap-2">
                 <Text
-                  className={`font-numeric text-num-lg ${
-                    isExpiringSoon ? 'text-danger' : 'text-accent'
+                  className={`font-inter text-lead font-bold ${
+                    isExpiringSoon ? 'text-status-danger' : 'text-text-link'
                   }`}
                 >
                   {remaining}
                 </Text>
-                <Text className="font-ui text-foreground text-caption">
+                <Text className="text-caption font-semibold text-text-primary">
                   {isExpiringSoon
                     ? `Sắp hết giữ ${heldUnitCount} kho`
                     : `Đang giữ ${heldUnitCount} kho`}
                 </Text>
               </View>
-              <Text className="font-body mt-0.5 text-caption text-muted" numberOfLines={1}>
+              <Text className="mt-0.5 text-caption text-text-secondary" numberOfLines={1}>
                 {hasManyHolds
-                  ? `${activeHolds.length} booking, sắp hết hạn: ${heldBooking.bookingNo}`
-                  : heldBooking.bookingNo}
+                  ? `Bạn có ${activeHolds.length} đơn đang chờ thanh toán cọc`
+                  : 'Hoàn tất đặt cọc để giữ kho đã chọn'}
               </Text>
             </View>
-            <Button size="sm" onPress={() => onSelect('storage')}>
-              <Button.Label className="font-ui">Thanh toán cọc</Button.Label>
-            </Button>
+            <Button
+              fullWidth={false}
+              label="Thanh toán cọc"
+              onPress={() => {
+                if (activeHolds.length === 1) {
+                  onPaySingleHold(heldBooking.id);
+                } else {
+                  onSelect('storage');
+                }
+              }}
+              size="sm"
+            />
           </View>
         </View>
       ) : null}
 
-      <View className="flex-row border-t border-border bg-surface px-3 pb-1 pt-1.5">
-        <BottomTabButton
-          icon={<Buildings color={iconColor('browse')} size={24} />}
-          isSelected={activeTab === 'browse'}
-          label="Tìm kho"
-          onPress={() => onSelect('browse')}
-        />
-        <BottomTabButton
-          badge={heldUnitCount > 0 ? heldUnitCount : undefined}
-          icon={<StorageIcon color={iconColor('storage')} />}
-          isSelected={activeTab === 'storage'}
-          label="Kho của tôi"
-          onPress={() => onSelect('storage')}
-        />
-        <BottomTabButton
-          badge={unread > 0 ? unread : undefined}
-          icon={<Bell color={iconColor('notifications')} size={24} />}
-          isSelected={activeTab === 'notifications'}
-          label="Thông báo"
-          onPress={() => onSelect('notifications')}
-        />
-        <BottomTabButton
-          icon={<UserCircle color={iconColor('settings')} size={24} />}
-          isSelected={activeTab === 'settings'}
-          label="Tài khoản"
-          onPress={() => onSelect('settings')}
-        />
-      </View>
+      <Navbar
+        activeKey={activeTab}
+        onTabPress={(key) => onSelect(key as CustomerTab)}
+        tabs={tabs}
+      />
     </View>
   );
 }
@@ -163,7 +174,6 @@ function toCustomerTab(routeName: string | undefined): CustomerTab {
   }
   if (routeName === 'contract-detail') return 'storage';
   if (routeName === 'schedule') return 'browse';
-  // Paying a deposit belongs to the hold listed under "Kho của tôi", not to browsing.
   if (routeName === 'payment') return 'storage';
   if (
     routeName === 'tickets' ||

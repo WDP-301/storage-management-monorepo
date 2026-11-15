@@ -1,7 +1,8 @@
-import { Button } from 'heroui-native';
-import { useState } from 'react';
-import { Alert, View } from 'react-native';
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { useRef, useState } from 'react';
+import { View } from 'react-native';
 import { ContractsApi } from '../../../lib/contracts-api';
+import { AlertSheet, Button, InlineMessage } from '../../components/ui';
 import type { ApiInspection } from '../../types/contract-api';
 import { returnErrorMessage } from './return-errors';
 
@@ -18,59 +19,64 @@ type Props = {
  * recorded nothing on it; the server still decides and explains a refusal.
  */
 export function ReturnRequestActions({ contractId, inspection, onReschedule, onChanged }: Props) {
+  const confirmRef = useRef<BottomSheetModal>(null);
   const [isCancelling, setCancelling] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const canCancel =
     inspection.evidence.length === 0 &&
     inspection.damages.length === 0 &&
     !inspection.conditionNotes;
 
   const cancel = async () => {
+    confirmRef.current?.dismiss();
     setCancelling(true);
+    setError(null);
     try {
       await ContractsApi.cancelReturn(contractId);
-    } catch (error) {
-      Alert.alert(
-        'Không huỷ được yêu cầu',
-        returnErrorMessage(error, 'Không huỷ được yêu cầu trả kho. Vui lòng thử lại.'),
-      );
+      onChanged();
+    } catch (cause) {
+      setError(returnErrorMessage(cause, 'Không huỷ được yêu cầu trả kho. Vui lòng thử lại.'));
+      onChanged();
     } finally {
       setCancelling(false);
-      onChanged();
     }
   };
 
-  const confirmCancel = () =>
-    Alert.alert(
-      'Huỷ yêu cầu trả kho?',
-      'Hợp đồng tiếp tục như cũ. Khi muốn dọn đi, bạn có thể yêu cầu trả kho lại.',
-      [
-        { text: 'Không', style: 'cancel' },
-        { text: 'Huỷ yêu cầu', style: 'destructive', onPress: () => void cancel() },
-      ],
-    );
-
   return (
-    <View className="flex-row gap-2">
-      <Button
-        className="flex-1"
-        variant="secondary"
-        isDisabled={isCancelling}
-        onPress={onReschedule}
-      >
-        <Button.Label className="font-ui">Đổi lịch</Button.Label>
-      </Button>
-      {canCancel ? (
+    <View className="gap-2">
+      {error ? <InlineMessage message={error} type="error" /> : null}
+      <View className="flex-row gap-2">
         <Button
           className="flex-1"
-          variant="danger-soft"
-          isDisabled={isCancelling}
-          onPress={confirmCancel}
-        >
-          <Button.Label className="font-ui">
-            {isCancelling ? 'Đang huỷ…' : 'Huỷ yêu cầu'}
-          </Button.Label>
-        </Button>
-      ) : null}
+          disabled={isCancelling}
+          label="Đổi lịch"
+          onPress={onReschedule}
+          size="sm"
+          variant="secondary"
+        />
+        {canCancel ? (
+          <Button
+            className="flex-1"
+            disabled={isCancelling}
+            label={isCancelling ? 'Đang huỷ…' : 'Huỷ yêu cầu'}
+            loading={isCancelling}
+            onPress={() => confirmRef.current?.present()}
+            size="sm"
+            variant="destructive"
+          />
+        ) : null}
+      </View>
+
+      <AlertSheet
+        ref={confirmRef}
+        destructive
+        message="Hợp đồng tiếp tục như cũ. Khi muốn dọn đi, bạn có thể yêu cầu trả kho lại."
+        onPrimary={() => void cancel()}
+        onSecondary={() => confirmRef.current?.dismiss()}
+        primaryLabel="Huỷ yêu cầu"
+        secondaryLabel="Không"
+        title="Huỷ yêu cầu trả kho?"
+      />
     </View>
   );
 }

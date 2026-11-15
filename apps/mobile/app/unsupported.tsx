@@ -12,7 +12,7 @@ export default function UnsupportedRoute() {
   if (!user) return null;
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
+    <SafeAreaView className="flex-1 bg-bg-page" edges={['top']}>
       <StatusBar style="dark" />
       <UnsupportedRoleScreen user={user} isLoggingOut={isLoggingOut} onLogout={logout} />
     </SafeAreaView>

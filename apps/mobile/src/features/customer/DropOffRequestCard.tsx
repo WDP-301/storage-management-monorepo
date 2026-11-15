@@ -1,7 +1,7 @@
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import type { DropOffRequestView } from '@storage/types';
-import { Button } from 'heroui-native';
-import { useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { View } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import { formatIsoDateTime } from '../../../lib/format-vi';
 import { ShelfStorageApi } from '../../../lib/shelf-storage-api';
@@ -10,6 +10,7 @@ import {
   quantityWithUnit,
   shelfErrorMessage,
 } from '../../../lib/shelf-storage-format';
+import { AlertSheet, Button, InlineMessage, Text } from '../../components/ui';
 import { StatusPill, type StatusTone } from './contract-display';
 
 const TONE: Record<DropOffRequestView['status'], StatusTone> = {
@@ -27,10 +28,12 @@ export function DropOffRequestCard({
   request: DropOffRequestView;
   onCancelled?: () => void;
 }) {
+  const confirmRef = useRef<BottomSheetModal>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const cancel = async () => {
+    confirmRef.current?.dismiss();
     setBusy(true);
     setError(null);
     try {
@@ -46,16 +49,11 @@ export function DropOffRequestCard({
       setBusy(false);
     }
   };
-  const confirmCancel = () =>
-    Alert.alert('Hủy yêu cầu gửi đồ?', 'Kho sẽ được báo là bạn không mang đồ tới nữa.', [
-      { text: 'Giữ lại', style: 'cancel' },
-      { text: 'Hủy yêu cầu', style: 'destructive', onPress: () => void cancel() },
-    ]);
 
   return (
-    <View className="gap-2 rounded-lg border border-border bg-surface-secondary p-3">
+    <View className="gap-2 rounded-2xl border border-border-default bg-bg-subtle p-3.5">
       <View className="flex-row items-center justify-between gap-2">
-        <Text className="flex-1 font-strong text-body-sm text-foreground">
+        <Text className="flex-1 text-body-sm font-semibold text-text-primary tabular-nums">
           Gửi lúc {formatIsoDateTime(String(request.requestedFor))}
         </Text>
         <StatusPill label={dropOffStatusLabel(request.status)} tone={TONE[request.status]} />
@@ -65,27 +63,43 @@ export function DropOffRequestCard({
           key={line.itemId ?? `new:${line.name}`}
           className="flex-row items-center justify-between gap-3"
         >
-          <Text className="flex-1 font-body text-body-sm text-foreground">
+          <Text className="flex-1 text-body-sm text-text-primary">
             {line.name}
             {line.itemId ? '' : ' (mới)'}
           </Text>
-          <Text className="font-strong text-body-sm text-foreground">
+          <Text className="text-body-sm font-semibold text-text-primary tabular-nums">
             ×{quantityWithUnit(line.quantity, line.unit)}
           </Text>
         </View>
       ))}
       {request.note ? (
-        <Text className="font-body text-body-sm text-muted">Ghi chú: {request.note}</Text>
+        <Text className="text-body-sm text-text-secondary">Ghi chú: {request.note}</Text>
       ) : null}
       {request.status === 'CONFIRMED' ? (
-        <Text className="font-body text-caption text-muted">Tới quầy, đưa mã gửi / lấy đồ.</Text>
+        <Text className="text-caption text-text-secondary">Tới quầy, đưa mã gửi / lấy đồ.</Text>
       ) : null}
-      {error ? <Text className="font-body text-body-sm text-danger">{error}</Text> : null}
+      {error ? <InlineMessage message={error} type="error" /> : null}
       {onCancelled ? (
-        <Button isDisabled={busy} variant="danger-soft" onPress={confirmCancel}>
-          <Button.Label>{busy ? 'Đang hủy…' : 'Hủy yêu cầu'}</Button.Label>
-        </Button>
+        <Button
+          disabled={busy}
+          label={busy ? 'Đang hủy…' : 'Hủy yêu cầu'}
+          loading={busy}
+          onPress={() => confirmRef.current?.present()}
+          size="sm"
+          variant="destructive"
+        />
       ) : null}
+
+      <AlertSheet
+        ref={confirmRef}
+        destructive
+        message="Kho sẽ được báo là bạn không mang đồ tới nữa."
+        onPrimary={() => void cancel()}
+        onSecondary={() => confirmRef.current?.dismiss()}
+        primaryLabel="Hủy yêu cầu"
+        secondaryLabel="Giữ lại"
+        title="Hủy yêu cầu gửi đồ?"
+      />
     </View>
   );
 }

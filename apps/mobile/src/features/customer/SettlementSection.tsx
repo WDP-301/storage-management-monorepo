@@ -1,4 +1,4 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { formatMoney } from '../../../lib/format-vi';
 import {
   settlementBadge,
@@ -6,6 +6,7 @@ import {
   settlementLineAmount,
 } from '../../../lib/settlement-format';
 import { EvidenceGallery } from '../../components/EvidenceGallery';
+import { Dashed, Text } from '../../components/ui';
 import type { SettlementLine, SettlementSummaryRecord } from '../../types/contract-api';
 import { SectionCard } from './contract-sections';
 import { InfoRow } from './info-row';
@@ -20,11 +21,11 @@ export function SettlementSection({ settlement }: { settlement: SettlementSummar
 
   return (
     <SectionCard title="Quyết toán cọc" badge={badge.label} tone={badge.tone}>
-      <Text className="font-strong text-body-md text-foreground">
+      <Text className="text-body font-bold text-text-primary">
         {settlementHeadline(settlement)}
       </Text>
       {settlement.status === 'PENDING' ? (
-        <Text className="font-body text-body-sm leading-5 text-muted">
+        <Text className="text-body-sm leading-5 text-text-secondary">
           Chi nhánh đang đối chiếu biên trả và công nợ. Số tiền hoàn sẽ hiện ở đây sau khi duyệt.
         </Text>
       ) : null}
@@ -38,7 +39,7 @@ export function SettlementSection({ settlement }: { settlement: SettlementSummar
       ))}
       {totals ? (
         <>
-          <View className="h-px bg-separator" />
+          <Dashed />
           <InfoRow isNumeric label="Hoàn lại" value={formatMoney(totals.refund_amount)} />
           {totals.shortfall_amount > 0 ? (
             <>
@@ -47,7 +48,7 @@ export function SettlementSection({ settlement }: { settlement: SettlementSummar
                 label="Còn phải trả"
                 value={formatMoney(totals.shortfall_amount)}
               />
-              <Text className="font-body text-body-sm leading-5 text-warning">
+              <Text className="text-body-sm leading-5 text-warning-700">
                 Tiền cọc không đủ bù các khoản trên — thanh toán phần còn thiếu ở mục Hoá đơn.
               </Text>
             </>
@@ -70,21 +71,21 @@ function LineRow({ line }: { line: SettlementLine }) {
   return (
     <View className="gap-0.5">
       <View className="flex-row items-start justify-between gap-3">
-        <Text className="font-body flex-1 text-body-sm text-foreground">{line.description}</Text>
+        <Text className="flex-1 text-body-sm text-text-primary">{line.description}</Text>
         <Text
-          className={`font-numeric text-num-md ${
+          className={`text-body-sm font-semibold tabular-nums ${
             line.waived
-              ? 'text-muted'
+              ? 'text-text-secondary line-through'
               : line.direction === 'CREDIT'
-                ? 'text-success'
-                : 'text-foreground'
+                ? 'text-status-success'
+                : 'text-text-primary'
           }`}
         >
           {settlementLineAmount(line)}
         </Text>
       </View>
       {line.waived && line.waive_reason ? (
-        <Text className="font-body text-caption text-muted">{line.waive_reason}</Text>
+        <Text className="text-caption text-text-secondary">{line.waive_reason}</Text>
       ) : null}
     </View>
   );
@@ -96,7 +97,7 @@ function RefundProof({ settlement }: { settlement: SettlementSummaryRecord }) {
   if (settlement.status !== 'COMPLETED' || (!transferRef && evidence.length === 0)) return null;
   return (
     <View className="gap-2">
-      <Text className="font-strong text-body-sm text-foreground">Chứng từ hoàn cọc</Text>
+      <Text className="text-body-sm font-semibold text-text-primary">Chứng từ hoàn cọc</Text>
       {transferRef ? <InfoRow isNumeric label="Mã giao dịch" value={transferRef} /> : null}
       {evidence.length > 0 ? <EvidenceGallery files={evidence} /> : null}
     </View>

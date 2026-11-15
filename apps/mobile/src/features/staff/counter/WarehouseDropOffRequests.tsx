@@ -1,10 +1,10 @@
 import type { DropOffRequestView } from '@storage/types';
-import { Button } from 'heroui-native';
 import { useCallback, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { formatIsoDateTime } from '../../../../lib/format-vi';
 import { ShelfStorageApi } from '../../../../lib/shelf-storage-api';
 import { dropOffStatusLabel, quantityWithUnit } from '../../../../lib/shelf-storage-format';
+import { Button, DashedDivider, InlineMessage, Text } from '../../../components/ui';
 import { StatusPill } from '../../customer/contract-display';
 import { shelfApiError } from '../staff-errors';
 import { ListState } from './ListState';
@@ -40,21 +40,24 @@ export function WarehouseDropOffRequests({ warehouseId }: { warehouseId: string 
   return (
     <View className="gap-3">
       <ListState
-        loading={loading}
-        error={error}
         empty={!data || data.length === 0}
         emptyText="Chưa có yêu cầu gửi đồ nào."
+        error={error}
+        loading={loading}
         onRetry={() => void reload()}
       />
       {actionError ? (
-        <Text className="rounded-xl bg-danger-bg p-3 font-body text-body-sm text-danger">
-          {actionError}
-        </Text>
+        <View className="rounded-[20px] border border-border-error/30 bg-danger-0 p-4">
+          <InlineMessage message={actionError} type="error" />
+        </View>
       ) : null}
       {data?.map((request) => (
-        <View key={request.id} className="gap-2 rounded-xl border border-border bg-surface p-4">
+        <View
+          key={request.id}
+          className="gap-2.5 rounded-[20px] border border-border-default bg-bg-card p-4"
+        >
           <View className="flex-row items-center justify-between gap-2">
-            <Text className="flex-1 font-strong text-body-md text-foreground">
+            <Text className="flex-1 text-body-lg font-semibold text-text-primary">
               {request.customer.fullName ?? request.customer.phone ?? '—'}
             </Text>
             <StatusPill
@@ -62,34 +65,36 @@ export function WarehouseDropOffRequests({ warehouseId }: { warehouseId: string 
               tone={request.status === 'CONFIRMED' ? 'success' : 'accent'}
             />
           </View>
-          <Text className="font-body text-caption text-muted">
+          <Text className="text-caption text-text-secondary">
             Kệ {request.shelf.code} · hẹn gửi {formatIsoDateTime(String(request.requestedFor))}
           </Text>
+          <DashedDivider />
           {request.lines.map((line) => (
             <View
               key={line.itemId ?? `new:${line.name}`}
               className="flex-row justify-between gap-3"
             >
-              <Text className="flex-1 font-body text-body-sm text-foreground">
+              <Text className="flex-1 text-body text-text-primary">
                 {line.name}
                 {line.itemId ? '' : ' (món mới)'}
               </Text>
-              <Text className="font-strong text-body-sm text-foreground">
+              <Text className="font-semibold text-body text-text-primary tabular-nums">
                 ×{quantityWithUnit(line.quantity, line.unit)}
               </Text>
             </View>
           ))}
           {request.note ? (
-            <Text className="font-body text-body-sm text-muted">Ghi chú: {request.note}</Text>
+            <Text className="text-body text-text-secondary">Ghi chú: {request.note}</Text>
           ) : null}
           {request.status === 'PENDING' ? (
             <Button
-              size="sm"
-              isDisabled={busyId === request.id}
+              disabled={busyId === request.id}
+              fullWidth
+              label={busyId === request.id ? 'Đang lưu…' : 'Xác nhận'}
+              loading={busyId === request.id}
               onPress={() => void confirm(request)}
-            >
-              <Button.Label>{busyId === request.id ? 'Đang lưu…' : 'Xác nhận'}</Button.Label>
-            </Button>
+              size="sm"
+            />
           ) : null}
         </View>
       ))}

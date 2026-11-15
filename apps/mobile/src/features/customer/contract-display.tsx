@@ -1,8 +1,12 @@
-import { Text, View } from 'react-native';
 import { formatArea, formatDimensions, formatIsoDate } from '../../../lib/format-vi';
 import { formatVnTime } from '../../../lib/receiving-time';
 import { rentalEndIso, toIsoDate } from '../../../lib/rental-schedule';
 import { endedContractHint, lastDayIso } from '../../../lib/settlement-format';
+import {
+  Text,
+  StatusPill as UiStatusPill,
+  type StatusTone as UiStatusTone,
+} from '../../components/ui';
 import type { ApiContract, ApiInspection } from '../../types/contract-api';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -64,38 +68,19 @@ export function handoverCountdownLabel(dayIso: string, now: number): string {
 
 export type StatusTone = 'success' | 'accent' | 'warning' | 'neutral';
 
-const STATUS_TONES = {
-  success: {
-    box: 'shrink-0 rounded-full bg-success-bg px-3 py-1',
-    label: 'font-ui text-caption text-success',
-  },
-  accent: {
-    box: 'shrink-0 rounded-full bg-accent/10 px-3 py-1',
-    label: 'font-ui text-caption text-accent',
-  },
-  warning: {
-    box: 'shrink-0 rounded-full bg-warning-bg px-3 py-1',
-    label: 'font-ui text-caption text-warning',
-  },
-  neutral: {
-    box: 'shrink-0 rounded-full bg-surface-secondary px-3 py-1',
-    label: 'font-ui text-caption text-muted',
-  },
-} as const;
+const UI_TONE: Record<StatusTone, UiStatusTone> = {
+  success: 'success',
+  accent: 'info',
+  warning: 'warning',
+  neutral: 'neutral',
+};
 
 /**
  * Replaces heroui-native's Chip here: the Chip caps its own width, so a long unit code beside it
  * would squeeze the label out of sight. This pill hugs its label and never wraps.
  */
 export function StatusPill({ label, tone }: { label: string; tone: StatusTone }) {
-  const tokens = STATUS_TONES[tone];
-  return (
-    <View className={tokens.box}>
-      <Text className={tokens.label} numberOfLines={1}>
-        {label}
-      </Text>
-    </View>
-  );
+  return <UiStatusPill label={label} tone={UI_TONE[tone]} />;
 }
 
 export type StorageState = { label: string; tone: StatusTone; hint: string | null };
@@ -196,10 +181,6 @@ export function contractUnitSize(contract: ApiContract): string {
 export function ContractUnitLines({ contract }: { contract: ApiContract }) {
   if (!contract.unit) return null;
   const size = contractUnitSize(contract);
-  return (
-    <View className="gap-0.5">
-      <Text className="font-numeric text-caption text-muted">{contract.unit.code}</Text>
-      {size ? <Text className="font-body text-body-sm text-muted">{size}</Text> : null}
-    </View>
-  );
+  if (!size) return null;
+  return <Text className="text-body-sm text-text-secondary">{size}</Text>;
 }

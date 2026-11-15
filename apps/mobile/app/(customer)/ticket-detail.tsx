@@ -1,6 +1,5 @@
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert } from 'react-native';
 import { ApiError } from '../../lib/api';
 import { useSession } from '../../lib/session';
 import { TicketsApi } from '../../lib/tickets-api';
@@ -40,22 +39,14 @@ export default function TicketDetailRoute() {
 
   const cancel = () => {
     if (!ticket) return;
-    Alert.alert('Hủy yêu cầu hỗ trợ', 'Bạn chắc chắn muốn hủy yêu cầu này?', [
-      { text: 'Không', style: 'cancel' },
-      {
-        text: 'Hủy yêu cầu',
-        style: 'destructive',
-        onPress: () => {
-          setIsCancelling(true);
-          TicketsApi.cancel(ticket.id)
-            .then(setTicket)
-            .catch((e: unknown) =>
-              setError(e instanceof ApiError ? e.message : 'Không hủy được yêu cầu.'),
-            )
-            .finally(() => setIsCancelling(false));
-        },
-      },
-    ]);
+    setIsCancelling(true);
+    setError(null);
+    TicketsApi.cancel(ticket.id)
+      .then(setTicket)
+      .catch((e: unknown) =>
+        setError(e instanceof ApiError ? e.message : 'Không hủy được yêu cầu.'),
+      )
+      .finally(() => setIsCancelling(false));
   };
 
   return (

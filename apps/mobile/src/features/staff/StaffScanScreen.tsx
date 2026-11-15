@@ -1,10 +1,10 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { newOpenNonce } from '../../../lib/open-nonce';
 import { useSession } from '../../../lib/session';
 import type { ScanWarehouse } from '../../../lib/shelf-storage-api';
-import { FilterPill } from '../../components/FilterPill';
+import { FlowScreen, TabChip, Text } from '../../components/ui';
 import { AbandonedShelvesList } from './counter/AbandonedShelvesList';
 import { CounterCustomerPanel } from './counter/CounterCustomerPanel';
 import { CounterScanner } from './counter/CounterScanner';
@@ -51,74 +51,77 @@ export function StaffScanScreen() {
   ];
 
   return (
-    <ScrollView
-      className="flex-1 bg-background"
-      contentContainerClassName="gap-4 px-4 pt-6 pb-10"
-      keyboardShouldPersistTaps="handled"
-    >
-      <Text className="font-strong text-title-md text-foreground">Gửi / lấy đồ</Text>
-      <ScanWarehousePicker value={warehouse} onChange={setWarehouse} />
+    <FlowScreen muted showBack={false} title="Gửi / lấy đồ" titleAlign="left">
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 8 }}
+        className="flex-1"
+        contentContainerClassName="gap-4 px-4 py-4 pb-10"
+        keyboardShouldPersistTaps="handled"
       >
-        {segments.map(([id, label]) => (
-          <FilterPill
-            key={id}
-            label={label}
-            isSelected={segment === id}
-            onPress={() => setSegment(id)}
-          />
-        ))}
-      </ScrollView>
-
-      {!warehouse ? null : segment === 'COUNTER' ? (
-        session && counter.status === 'open' ? (
-          <CounterCustomerPanel
-            session={session}
-            secondsLeft={counter.secondsLeft}
-            onDropOff={(contractId, requestId) => openForm(contractId, 'DROP_OFF', requestId)}
-            onPickUp={(contractId, requestId) => openForm(contractId, 'PICK_UP', requestId)}
-            onOpenReceipt={openReceipt}
-            onNextCustomer={counter.end}
-          />
-        ) : (
-          <View className="gap-3">
-            <Text className="font-body text-body-sm text-muted">
-              Quét mã “Gửi / lấy đồ” trên điện thoại khách. Mỗi mã chỉ dùng một lần.
-            </Text>
-            <CounterScanner
-              busy={counter.status === 'opening'}
-              error={counter.error}
-              onSubmit={counter.open}
-              onDismissError={counter.end}
+        <ScanWarehousePicker onChange={setWarehouse} value={warehouse} />
+        <ScrollView
+          className="-mx-4"
+          contentContainerClassName="gap-2 px-4"
+          horizontal
+          showsHorizontalScrollIndicator={false}
+        >
+          {segments.map(([id, label]) => (
+            <TabChip
+              key={id}
+              label={label}
+              onPress={() => setSegment(id)}
+              selected={segment === id}
+              tone="primary"
             />
-          </View>
-        )
-      ) : segment === 'DROP_OFF_REQUESTS' ? (
-        <WarehouseDropOffRequests warehouseId={warehouse.id} />
-      ) : segment === 'REQUESTS' ? (
-        <WarehousePickupRequests warehouseId={warehouse.id} />
-      ) : segment === 'RECEIPTS' ? (
-        <WarehouseReceiptsList warehouseId={warehouse.id} onOpen={openReceipt} />
-      ) : (
-        <AbandonedShelvesList
-          warehouseId={warehouse.id}
-          onOpen={(contract) =>
-            router.push({
-              pathname: '/(staff)/shelf-receipt-form',
-              params: {
-                mode: 'RECOVERY',
-                contractId: contract.contractId,
-                type: 'PICK_UP',
-                nonce: newOpenNonce(),
-                customerName: contract.customer.fullName ?? contract.customer.phone ?? '',
-              },
-            })
-          }
-        />
-      )}
-    </ScrollView>
+          ))}
+        </ScrollView>
+
+        {!warehouse ? null : segment === 'COUNTER' ? (
+          session && counter.status === 'open' ? (
+            <CounterCustomerPanel
+              onDropOff={(contractId, requestId) => openForm(contractId, 'DROP_OFF', requestId)}
+              onNextCustomer={counter.end}
+              onOpenReceipt={openReceipt}
+              onPickUp={(contractId, requestId) => openForm(contractId, 'PICK_UP', requestId)}
+              secondsLeft={counter.secondsLeft}
+              session={session}
+            />
+          ) : (
+            <View className="gap-3">
+              <Text className="text-body text-text-secondary">
+                Quét mã “Gửi / lấy đồ” trên điện thoại khách. Mỗi mã chỉ dùng một lần.
+              </Text>
+              <CounterScanner
+                busy={counter.status === 'opening'}
+                error={counter.error}
+                onDismissError={counter.end}
+                onSubmit={counter.open}
+              />
+            </View>
+          )
+        ) : segment === 'DROP_OFF_REQUESTS' ? (
+          <WarehouseDropOffRequests warehouseId={warehouse.id} />
+        ) : segment === 'REQUESTS' ? (
+          <WarehousePickupRequests warehouseId={warehouse.id} />
+        ) : segment === 'RECEIPTS' ? (
+          <WarehouseReceiptsList onOpen={openReceipt} warehouseId={warehouse.id} />
+        ) : (
+          <AbandonedShelvesList
+            onOpen={(contract) =>
+              router.push({
+                pathname: '/(staff)/shelf-receipt-form',
+                params: {
+                  mode: 'RECOVERY',
+                  contractId: contract.contractId,
+                  type: 'PICK_UP',
+                  nonce: newOpenNonce(),
+                  customerName: contract.customer.fullName ?? contract.customer.phone ?? '',
+                },
+              })
+            }
+            warehouseId={warehouse.id}
+          />
+        )}
+      </ScrollView>
+    </FlowScreen>
   );
 }

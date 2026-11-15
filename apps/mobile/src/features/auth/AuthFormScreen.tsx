@@ -1,17 +1,6 @@
-import { Button } from 'heroui-native';
-import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  Envelope,
-  Eye,
-  EyeSlash,
-  Lock,
-  User,
-  UserCircle,
-} from 'phosphor-react-native';
-import { type ReactNode, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, type TextInputProps, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
+import { Button, FlowScreen, Icon, InlineMessage, Input, Text } from '../../components/ui';
+import colors from '../../components/ui/colors';
 
 export type AuthMode = 'login' | 'register';
 export type AuthValues = { email: string; password: string; fullName: string; phone: string };
@@ -29,8 +18,6 @@ type Props = {
   onSubmit: () => void;
 };
 
-const ICON_COLOR = '#64748b';
-
 export function AuthFormScreen({
   mode,
   values,
@@ -42,196 +29,164 @@ export function AuthFormScreen({
   onSwitch,
   onSubmit,
 }: Props) {
-  const [showPassword, setShowPassword] = useState(false);
   const isRegister = mode === 'register';
 
   return (
-    <ScrollView
-      className="flex-1"
-      contentContainerClassName="flex-grow px-4 pb-6"
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
+    <FlowScreen
+      backLabel="Quay lại trang giới thiệu"
+      onBack={onBack}
+      title={isRegister ? 'Đăng ký tài khoản' : 'Đăng nhập'}
     >
-      <View className="-mx-4 flex-row items-center justify-between bg-background px-4 py-2">
-        <View className="flex-row items-center gap-1">
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="flex-grow px-4 pt-5 pb-8"
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View className="gap-1.5">
+          <Text className="text-heading font-bold text-text-primary">
+            {isRegister ? 'Tạo tài khoản thuê kho' : 'Chào mừng trở lại'}
+          </Text>
+          <Text className="text-body text-text-secondary">
+            {isRegister
+              ? 'Đăng ký bằng số điện thoại để quản lý đặt chỗ và nhận thông tin kho.'
+              : 'Nhập email và mật khẩu để quản lý kho thuê và các đặt chỗ của bạn.'}
+          </Text>
+        </View>
+
+        <View className="mt-6 gap-4">
+          {isRegister ? (
+            <>
+              <Input
+                autoCapitalize="words"
+                autoComplete="name"
+                clearable
+                error={errors.fullName}
+                label="Họ và tên"
+                leftIcon="person-outline"
+                onChangeText={(value) => onChange('fullName', value)}
+                placeholder="Nguyễn Văn An"
+                required
+                value={values.fullName}
+              />
+              <Input
+                autoComplete="tel"
+                clearable
+                error={errors.phone}
+                keyboardType="phone-pad"
+                label="Số điện thoại"
+                leftSlot={
+                  <View className="mr-1 border-r border-border-default pr-2.5">
+                    <Text className="text-caption font-semibold text-text-brand">VN +84</Text>
+                  </View>
+                }
+                maxLength={16}
+                onChangeText={(value) => onChange('phone', value)}
+                placeholder="908 123 456"
+                required
+                value={values.phone}
+              />
+            </>
+          ) : null}
+
+          <Input
+            autoCapitalize="none"
+            autoComplete="email"
+            clearable
+            error={errors.email}
+            keyboardType="email-address"
+            label="Email"
+            leftIcon="mail-outline"
+            onChangeText={(value) => onChange('email', value)}
+            placeholder="customer@example.com"
+            required
+            value={values.email}
+          />
+
+          <Input
+            autoCapitalize="none"
+            autoComplete={isRegister ? 'new-password' : 'current-password'}
+            error={errors.password}
+            label="Mật khẩu"
+            leftIcon="lock-outline"
+            onChangeText={(value) => onChange('password', value)}
+            onSubmitEditing={onSubmit}
+            passwordToggle
+            placeholder={isRegister ? 'Tối thiểu 8 ký tự' : 'Nhập mật khẩu'}
+            required
+            returnKeyType="go"
+            value={values.password}
+          />
+
+          {isRegister ? <PasswordHint isValid={values.password.length >= 8} /> : null}
+
+          {submitError ? (
+            <View className="rounded-xl bg-danger-0 px-3.5 py-3">
+              <InlineMessage message={submitError} type="error" />
+            </View>
+          ) : null}
+
+          <View className="mt-2">
+            <Button
+              label={
+                isSubmitting
+                  ? isRegister
+                    ? 'Đang tạo tài khoản...'
+                    : 'Đang đăng nhập...'
+                  : isRegister
+                    ? 'Đăng ký tài khoản'
+                    : 'Đăng nhập'
+              }
+              loading={isSubmitting}
+              onPress={onSubmit}
+              rightIcon={isSubmitting ? undefined : 'arrow-forward'}
+              size="lg"
+            />
+          </View>
+        </View>
+
+        <View className="mt-8 flex-row flex-wrap items-center justify-center gap-1">
+          <Text className="text-body text-text-secondary">
+            {isRegister ? 'Đã có tài khoản?' : 'Chưa có tài khoản thuê kho?'}
+          </Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Quay lại trang giới thiệu"
-            className="size-11 items-center justify-center rounded-full"
-            onPress={onBack}
+            className="rounded-full px-2 py-1"
+            onPress={onSwitch}
           >
-            <ArrowLeft color="#0f172a" size={22} weight="bold" />
+            <Text className="text-body font-semibold text-text-link">
+              {isRegister ? 'Đăng nhập ngay' : 'Đăng ký ngay'}
+            </Text>
           </Pressable>
-          <Text className="font-strong text-title-sm text-foreground">
-            {isRegister ? 'Đăng ký' : 'Đăng nhập'}
-          </Text>
         </View>
-        <View className="size-8 items-center justify-center rounded-full bg-foreground">
-          <UserCircle color="white" size={20} weight="fill" />
-        </View>
-      </View>
-
-      <View className="pt-6">
-        <Text className="font-display text-title-lg text-foreground">
-          {isRegister ? 'Tạo tài khoản thuê kho' : 'Đăng nhập tài khoản'}
-        </Text>
-        <Text className="font-body mt-1 text-body-md text-muted">
-          {isRegister
-            ? 'Đăng ký bằng số điện thoại để quản lý đặt chỗ và nhận thông tin kho.'
-            : 'Nhập email và mật khẩu để quản lý kho thuê và các đặt chỗ của bạn.'}
-        </Text>
-      </View>
-
-      <View className="mt-6 gap-4">
-        {isRegister ? (
-          <>
-            <AuthInput
-              label="Họ và tên"
-              icon={<User color={ICON_COLOR} size={19} />}
-              error={errors.fullName}
-              value={values.fullName}
-              placeholder="Nguyễn Văn An"
-              autoCapitalize="words"
-              autoComplete="name"
-              onChangeText={(value) => onChange('fullName', value)}
-            />
-            <AuthInput
-              label="Số điện thoại"
-              prefix="VN +84"
-              error={errors.phone}
-              value={values.phone}
-              placeholder="908 123 456"
-              keyboardType="phone-pad"
-              autoComplete="tel"
-              maxLength={16}
-              onChangeText={(value) => onChange('phone', value)}
-            />
-          </>
-        ) : null}
-        <AuthInput
-          label="Email"
-          icon={<Envelope color={ICON_COLOR} size={19} />}
-          error={errors.email}
-          value={values.email}
-          placeholder="customer@example.com"
-          autoCapitalize="none"
-          autoComplete="email"
-          keyboardType="email-address"
-          onChangeText={(value) => onChange('email', value)}
-        />
-        <AuthInput
-          label="Mật khẩu"
-          icon={<Lock color={ICON_COLOR} size={19} />}
-          error={errors.password}
-          value={values.password}
-          placeholder={isRegister ? 'Tối thiểu 8 ký tự' : 'Nhập mật khẩu'}
-          autoCapitalize="none"
-          autoComplete={isRegister ? 'new-password' : 'current-password'}
-          secureTextEntry={!showPassword}
-          returnKeyType="go"
-          onSubmitEditing={onSubmit}
-          onChangeText={(value) => onChange('password', value)}
-          right={
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-              className="size-11 items-center justify-center"
-              onPress={() => setShowPassword((current) => !current)}
-            >
-              {showPassword ? (
-                <EyeSlash color={ICON_COLOR} size={20} />
-              ) : (
-                <Eye color={ICON_COLOR} size={20} />
-              )}
-            </Pressable>
-          }
-        />
-        {isRegister ? <PasswordHint isValid={values.password.length >= 8} /> : null}
-
-        {submitError ? (
-          <View className="rounded-xl border border-danger/25 bg-danger-bg px-3 py-3">
-            <Text className="font-body text-body-sm text-danger">{submitError}</Text>
-          </View>
-        ) : null}
-
-        <Button className="mt-2 w-full" isDisabled={isSubmitting} size="lg" onPress={onSubmit}>
-          <Button.Label className="font-ui">
-            {isSubmitting
-              ? isRegister
-                ? 'Đang tạo tài khoản...'
-                : 'Đang đăng nhập...'
-              : isRegister
-                ? 'Đăng ký tài khoản'
-                : 'Đăng nhập'}
-          </Button.Label>
-          {!isSubmitting ? <ArrowRight color="white" size={19} weight="bold" /> : null}
-        </Button>
-      </View>
-
-      <View className="mt-8 flex-row flex-wrap items-center justify-center gap-1">
-        <Text className="font-body text-body-sm text-muted">
-          {isRegister ? 'Đã có tài khoản?' : 'Chưa có tài khoản thuê kho?'}
-        </Text>
-        <Pressable accessibilityRole="button" className="rounded-full px-2 py-1" onPress={onSwitch}>
-          <Text className="font-strong text-body-sm text-foreground underline">
-            {isRegister ? 'Đăng nhập ngay' : 'Đăng ký ngay'}
-          </Text>
-        </Pressable>
-      </View>
-    </ScrollView>
-  );
-}
-
-function AuthInput({
-  label,
-  error,
-  icon,
-  prefix,
-  right,
-  ...inputProps
-}: TextInputProps & {
-  label: string;
-  error?: string;
-  icon?: ReactNode;
-  prefix?: string;
-  right?: ReactNode;
-}) {
-  return (
-    <View className="gap-1.5">
-      <Text className="font-ui text-caption text-muted uppercase">
-        {label} <Text className="text-danger">*</Text>
-      </Text>
-      <View
-        className={`min-h-12 flex-row items-center rounded-xl border bg-surface px-3 ${error ? 'border-danger' : 'border-border/50'}`}
-      >
-        {icon ? <View className="mr-2">{icon}</View> : null}
-        {prefix ? (
-          <View className="mr-3 border-separator border-r pr-3">
-            <Text className="font-numeric text-caption text-foreground">{prefix}</Text>
-          </View>
-        ) : null}
-        <TextInput
-          {...inputProps}
-          accessibilityLabel={label}
-          className="h-12 flex-1 font-body text-body-md text-foreground"
-          placeholderTextColor={ICON_COLOR}
-        />
-        {right}
-      </View>
-      {error ? <Text className="font-body text-caption text-danger">{error}</Text> : null}
-    </View>
+      </ScrollView>
+    </FlowScreen>
   );
 }
 
 function PasswordHint({ isValid }: { isValid: boolean }) {
   return (
     <View className="-mt-1 flex-row items-center gap-1.5">
-      <View className={`h-1 flex-1 rounded-full ${isValid ? 'bg-success' : 'bg-border'}`} />
-      <View className={`h-1 flex-1 rounded-full ${isValid ? 'bg-success' : 'bg-border'}`} />
-      <View className={`h-1 flex-1 rounded-full ${isValid ? 'bg-success' : 'bg-border'}`} />
-      <View className={`h-1 flex-1 rounded-full ${isValid ? 'bg-success' : 'bg-border'}`} />
-      <Check color={isValid ? '#059669' : ICON_COLOR} size={15} weight="bold" />
-      <Text className={`font-ui text-caption ${isValid ? 'text-success' : 'text-muted'}`}>
+      <View
+        className={`h-1 flex-1 rounded-full ${isValid ? 'bg-status-success-solid' : 'bg-border-default'}`}
+      />
+      <View
+        className={`h-1 flex-1 rounded-full ${isValid ? 'bg-status-success-solid' : 'bg-border-default'}`}
+      />
+      <View
+        className={`h-1 flex-1 rounded-full ${isValid ? 'bg-status-success-solid' : 'bg-border-default'}`}
+      />
+      <View
+        className={`h-1 flex-1 rounded-full ${isValid ? 'bg-status-success-solid' : 'bg-border-default'}`}
+      />
+      <Icon
+        color={isValid ? colors.semantic.statusSuccess : colors.semantic.textSecondary}
+        name="check-circle"
+        size={15}
+      />
+      <Text
+        className={`text-caption font-medium ${isValid ? 'text-status-success' : 'text-text-secondary'}`}
+      >
         Tối thiểu 8 ký tự
       </Text>
     </View>

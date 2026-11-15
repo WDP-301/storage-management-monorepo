@@ -1,6 +1,6 @@
 import type { CounterSessionView } from '@storage/types';
-import { Button } from 'heroui-native';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Button, InlineMessage, Text } from '../../../components/ui';
 import { CounterContractCard } from './CounterContractCard';
 
 type Props = {
@@ -27,22 +27,22 @@ export function CounterCustomerPanel({
   const { customer } = session;
   return (
     <View className="gap-4">
-      <View className="gap-1 rounded-xl border border-success bg-success-bg p-4">
-        <Text className="font-strong text-body-md text-foreground">
+      <View className="gap-1 rounded-[20px] border border-success-200 bg-success-0 p-4">
+        <Text className="text-subtitle font-semibold text-text-primary">
           {customer.fullName ?? customer.phone ?? '—'}
         </Text>
         {customer.fullName && customer.phone ? (
-          <Text className="font-body text-body-sm text-foreground">{customer.phone}</Text>
+          <Text className="text-body text-text-primary">{customer.phone}</Text>
         ) : null}
-        <Text className="font-body text-caption text-muted">
+        <Text className="text-caption font-medium text-status-success">
           {session.warehouse.name} · phiên còn {clock(secondsLeft)}
         </Text>
       </View>
 
       {session.overdueInvoiceNos.length > 0 ? (
-        <View className="gap-0.5 rounded-xl bg-danger-bg p-3">
-          <Text className="font-strong text-body-sm text-danger">Khách còn hóa đơn quá hạn</Text>
-          <Text className="font-body text-body-sm text-foreground">
+        <View className="gap-1 rounded-[20px] border border-border-error/30 bg-danger-0 p-4">
+          <InlineMessage message="Khách còn hóa đơn quá hạn" type="error" />
+          <Text className="text-body text-text-primary">
             {session.overdueInvoiceNos.join(', ')}
           </Text>
         </View>
@@ -53,14 +53,12 @@ export function CounterCustomerPanel({
           key={contract.contractId}
           contract={contract}
           onDropOff={(requestId) => onDropOff(contract.contractId, requestId)}
-          onPickUp={(requestId) => onPickUp(contract.contractId, requestId)}
           onOpenReceipt={onOpenReceipt}
+          onPickUp={(requestId) => onPickUp(contract.contractId, requestId)}
         />
       ))}
 
-      <Button variant="secondary" onPress={onNextCustomer}>
-        <Button.Label>Khách tiếp theo</Button.Label>
-      </Button>
+      <Button fullWidth label="Khách tiếp theo" onPress={onNextCustomer} variant="secondary" />
     </View>
   );
 }

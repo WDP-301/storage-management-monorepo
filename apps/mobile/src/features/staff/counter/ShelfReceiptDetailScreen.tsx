@@ -1,11 +1,10 @@
 import { useRouter } from 'expo-router';
-import { Button } from 'heroui-native';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { useSession } from '../../../../lib/session';
 import { ShelfStorageApi } from '../../../../lib/shelf-storage-api';
-import { ScreenHeader } from '../../../components/ScreenHeader';
 import { ShelfReceiptView } from '../../../components/ShelfReceiptView';
+import { Button, colors, FlowScreen, InlineMessage } from '../../../components/ui';
 import { shelfApiError } from '../staff-errors';
 import { useFocusLoader } from './use-focus-loader';
 import { VoidReceiptForm } from './VoidReceiptForm';
@@ -47,26 +46,24 @@ export function ShelfReceiptDetailScreen({
   };
 
   return (
-    <View className="flex-1 bg-background">
-      <ScreenHeader
-        title="Chi tiết phiếu"
-        backLabel={backToTicketId ? 'Quay lại yêu cầu' : 'Quay lại Gửi / lấy đồ'}
-        onBack={() =>
-          backToTicketId
-            ? router.navigate(`/(staff)/staff-ticket?id=${encodeURIComponent(backToTicketId)}`)
-            : router.navigate('/(staff)/scan')
-        }
-      />
-      <ScrollView contentContainerClassName="gap-4 px-4 pb-10">
+    <FlowScreen
+      backLabel={backToTicketId ? 'Quay lại yêu cầu' : 'Quay lại Gửi / lấy đồ'}
+      muted
+      onBack={() =>
+        backToTicketId
+          ? router.navigate(`/(staff)/staff-ticket?id=${encodeURIComponent(backToTicketId)}`)
+          : router.navigate('/(staff)/scan')
+      }
+      title="Chi tiết phiếu"
+    >
+      <ScrollView className="flex-1" contentContainerClassName="gap-4 px-4 py-4 pb-10">
         {error ? (
-          <View className="gap-2 rounded-xl bg-danger-bg p-3">
-            <Text className="font-body text-body-sm text-danger">{error}</Text>
-            <Button size="sm" variant="secondary" onPress={() => void reload()}>
-              <Button.Label>Thử lại</Button.Label>
-            </Button>
+          <View className="gap-3 rounded-[20px] border border-border-error/30 bg-danger-0 p-4">
+            <InlineMessage message={error} type="error" />
+            <Button label="Thử lại" onPress={() => void reload()} size="sm" variant="secondary" />
           </View>
         ) : !receipt ? (
-          <ActivityIndicator />
+          <ActivityIndicator className="py-6" color={colors.semantic.actionPrimary} />
         ) : (
           <>
             <ShelfReceiptView receipt={receipt} />
@@ -80,6 +77,6 @@ export function ShelfReceiptDetailScreen({
           </>
         )}
       </ScrollView>
-    </View>
+    </FlowScreen>
   );
 }

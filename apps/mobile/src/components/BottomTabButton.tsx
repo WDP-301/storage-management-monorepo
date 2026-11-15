@@ -9,28 +9,30 @@ type Props = {
   onPress: () => void;
 };
 
-/** One item of a custom bottom tab bar; shared by the customer and staff areas. */
+/** One item of a custom bottom tab bar styled after Medipay Navbar (`#007BB5` active, `#667783` idle). */
 export function BottomTabButton({ badge, icon, isSelected, label, onPress }: Props) {
   return (
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="tab"
       accessibilityState={{ selected: isSelected }}
-      className="min-h-14 flex-1 items-center justify-center gap-1"
+      className="flex-1 items-center gap-1 pt-3"
       onPress={onPress}
     >
       <View>
         {icon}
-        {badge ? (
-          <View className="absolute -right-3 -top-2 min-w-5 items-center rounded-full bg-accent px-1">
-            <Text className="text-caption font-display text-accent-foreground">{badge}</Text>
+        {badge && badge > 0 ? (
+          <View className="absolute -top-1 -right-2.5 h-4 min-w-4 items-center justify-center rounded-full bg-danger-500 px-1">
+            <Text className="font-inter text-[10px] leading-[12px] font-bold text-white">
+              {badge > 9 ? '9+' : badge}
+            </Text>
           </View>
         ) : null}
       </View>
       <Text
-        className={
-          isSelected ? 'text-caption font-display text-accent' : 'font-body text-caption text-muted'
-        }
+        className={`font-inter text-caption font-medium ${
+          isSelected ? 'text-text-link' : 'text-text-secondary'
+        }`}
         numberOfLines={1}
       >
         {label}

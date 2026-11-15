@@ -1,11 +1,11 @@
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
-import { Button } from 'heroui-native';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import {
   dropOffRequestBlockLabel,
   pickupRequestBlockLabel,
 } from '../../../lib/shelf-storage-format';
+import { Button, colors, InlineMessage, Text } from '../../components/ui';
 import type { ApiContract } from '../../types/contract-api';
 import { SectionCard } from './contract-sections';
 import { DropOffRequestCard } from './DropOffRequestCard';
@@ -65,13 +65,11 @@ function ShelfStorageBody({ contract }: { contract: ApiContract }) {
       badge={storage ? `Kệ ${storage.shelf.code}` : 'Kệ'}
       tone="accent"
     >
-      {isLoading && !data ? <ActivityIndicator /> : null}
+      {isLoading && !data ? <ActivityIndicator color={colors.semantic.actionPrimary} /> : null}
       {error ? (
         <View className="gap-2">
-          <Text className="font-body text-body-sm text-danger">{error}</Text>
-          <Button variant="secondary" onPress={reload}>
-            <Button.Label>Thử lại</Button.Label>
-          </Button>
+          <InlineMessage message={error} type="error" />
+          <Button label="Thử lại" onPress={reload} size="sm" variant="secondary" />
         </View>
       ) : null}
       {data && storage ? (
@@ -84,27 +82,27 @@ function ShelfStorageBody({ contract }: { contract: ApiContract }) {
           ) : null}
 
           {canRequest ? (
-            <View className="gap-1.5">
+            <View className="gap-2">
               <View className="flex-row gap-2">
                 <Button
                   className="flex-1"
-                  isDisabled={dropOffBlock !== null}
-                  variant="secondary"
+                  disabled={dropOffBlock !== null}
+                  label="Hẹn gửi đồ"
                   onPress={() => dropOffSheetRef.current?.present()}
-                >
-                  <Button.Label>Hẹn gửi đồ</Button.Label>
-                </Button>
+                  size="sm"
+                  variant="secondary"
+                />
                 <Button
                   className="flex-1"
-                  isDisabled={block !== null}
-                  variant="secondary"
+                  disabled={block !== null}
+                  label="Hẹn lấy đồ"
                   onPress={() => sheetRef.current?.present()}
-                >
-                  <Button.Label>Hẹn lấy đồ</Button.Label>
-                </Button>
+                  size="sm"
+                  variant="secondary"
+                />
               </View>
               {blockNote ? (
-                <Text className="font-body text-caption text-muted">{blockNote}</Text>
+                <Text className="text-caption text-text-secondary">{blockNote}</Text>
               ) : null}
             </View>
           ) : null}
@@ -116,7 +114,7 @@ function ShelfStorageBody({ contract }: { contract: ApiContract }) {
                 accessibilityState={{ expanded: pastOpen }}
                 onPress={() => setPastOpen((open) => !open)}
               >
-                <Text className="font-strong text-body-sm text-accent">
+                <Text className="text-body-sm font-semibold text-text-link">
                   Yêu cầu đã hủy ({pastCount}) {pastOpen ? '▴' : '▾'}
                 </Text>
               </Pressable>

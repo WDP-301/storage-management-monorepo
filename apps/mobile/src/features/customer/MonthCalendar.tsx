@@ -1,11 +1,11 @@
 import { CaretLeft, CaretRight } from 'phosphor-react-native';
 import { type ReactNode, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { formatIsoDate } from '../../../lib/format-vi';
 import { fromIsoDate, toIsoDate } from '../../../lib/rental-schedule';
+import { colors, Text } from '../../components/ui';
 
 const WEEKDAYS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-const ACCENT = 'hsl(203 100% 30%)';
 const CELL_WIDTH = '14.2857%';
 
 type Props = {
@@ -43,9 +43,9 @@ export function MonthCalendar({ minIso, maxIso, selectedIso, markedIso, onSelect
           enabled={canGoPrevious}
           onPress={() => setVisibleMonth(new Date(year, month - 1, 1))}
         >
-          <CaretLeft color={ACCENT} size={20} weight="bold" />
+          <CaretLeft color={colors.semantic.iconBrand} size={20} weight="bold" />
         </MonthButton>
-        <Text className="font-strong text-body-md text-foreground">
+        <Text className="text-body-md font-semibold text-text-primary tabular-nums">
           Tháng {month + 1}/{year}
         </Text>
         <MonthButton
@@ -53,7 +53,7 @@ export function MonthCalendar({ minIso, maxIso, selectedIso, markedIso, onSelect
           enabled={canGoNext}
           onPress={() => setVisibleMonth(new Date(year, month + 1, 1))}
         >
-          <CaretRight color={ACCENT} size={20} weight="bold" />
+          <CaretRight color={colors.semantic.iconBrand} size={20} weight="bold" />
         </MonthButton>
       </View>
 
@@ -64,7 +64,7 @@ export function MonthCalendar({ minIso, maxIso, selectedIso, markedIso, onSelect
             className="h-8 items-center justify-center"
             style={{ width: CELL_WIDTH }}
           >
-            <Text className="font-ui text-caption text-muted">{weekday}</Text>
+            <Text className="text-caption font-medium text-text-secondary">{weekday}</Text>
           </View>
         ))}
       </View>
@@ -77,11 +77,12 @@ export function MonthCalendar({ minIso, maxIso, selectedIso, markedIso, onSelect
           const iso = toIsoDate(new Date(year, month, day));
           const enabled = iso >= minIso && iso <= maxIso;
           const selected = iso === selectedIso;
+          const isMinDay = iso === minIso;
           const ring =
             iso === markedIso
-              ? 'border border-warning'
-              : iso === minIso
-                ? 'border border-accent'
+              ? 'border border-warning-500'
+              : isMinDay
+                ? 'border border-action-primary'
                 : '';
           return (
             <View
@@ -94,16 +95,20 @@ export function MonthCalendar({ minIso, maxIso, selectedIso, markedIso, onSelect
                 accessibilityLabel={`Ngày ${formatIsoDate(iso)}`}
                 accessibilityState={{ disabled: !enabled, selected }}
                 disabled={!enabled}
-                className={`size-10 items-center justify-center rounded-full ${selected ? 'bg-accent' : ring}`}
+                className={`size-10 items-center justify-center rounded-full ${
+                  selected ? 'bg-action-primary' : ring
+                }`}
                 onPress={() => onSelect(iso)}
               >
                 <Text
-                  className={`font-ui text-body-sm ${
+                  className={`text-body-sm tabular-nums ${
                     selected
-                      ? 'text-accent-foreground'
-                      : enabled
-                        ? 'text-foreground'
-                        : 'text-muted/40'
+                      ? 'font-semibold text-text-inverse'
+                      : !enabled
+                        ? 'text-text-disabled'
+                        : isMinDay
+                          ? 'font-semibold text-action-primary'
+                          : 'font-medium text-text-primary'
                   }`}
                 >
                   {day}
@@ -133,7 +138,7 @@ function MonthButton({
       accessibilityLabel={label}
       accessibilityRole="button"
       disabled={!enabled}
-      className="size-11 items-center justify-center rounded-full border border-border"
+      className="size-10 items-center justify-center rounded-full border border-border-default bg-bg-card"
       style={{ opacity: enabled ? 1 : 0.35 }}
       onPress={onPress}
     >

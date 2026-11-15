@@ -1,12 +1,12 @@
-import { Button } from 'heroui-native';
-import { CaretLeft, CaretRight } from 'phosphor-react-native';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { isActiveHold } from '../../../lib/booking-hold-state';
+import { Button, CardTabs, colors, FlowScreen, InlineMessage, Text } from '../../components/ui';
 import type { ApiBooking } from '../../types/booking-api';
 import type { ApiContract } from '../../types/contract-api';
 import { BookingHoldCard, ClosedBookingRow } from './BookingHoldCard';
 import { ContractCard } from './ContractCard';
+import { ShelfAccessCard } from './ShelfAccessCard';
 
 type Props = {
   bookings: ApiBooking[];
@@ -116,162 +116,140 @@ export function MyStorageScreen({
   };
 
   return (
-    <ScrollView
-      ref={scrollRef}
-      contentContainerStyle={{ paddingBottom: contentBottomPadding }}
-      refreshControl={
-        <RefreshControl refreshing={isLoading && totalCount > 0} onRefresh={onRefresh} />
-      }
-      showsVerticalScrollIndicator={false}
-    >
-      <View className="px-4 pt-5 pb-4">
-        <Text className="font-strong text-foreground text-title-md">Kho của tôi</Text>
-        <Text className="font-body mt-1 text-body-sm text-muted">
-          Theo dõi kho đang thuê, đặt cọc và lịch sử.
-        </Text>
+    <FlowScreen muted showBack={false} title="Kho của tôi" titleAlign="left">
+      <ScrollView
+        ref={scrollRef}
+        className="flex-1 bg-bg-muted"
+        contentContainerStyle={{ paddingBottom: contentBottomPadding }}
+        refreshControl={
+          <RefreshControl refreshing={isLoading && totalCount > 0} onRefresh={onRefresh} />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        <View className="gap-4 p-4">
+          <ShelfAccessCard contracts={contracts} />
 
-        {error ? (
-          <View className="mt-4 rounded-xl border border-danger/30 bg-danger-bg p-3">
-            <Text className="font-body text-body-sm text-danger">{error}</Text>
-            <Button className="mt-3" size="sm" variant="secondary" onPress={onRefresh}>
-              <Button.Label className="font-ui">Thử lại</Button.Label>
-            </Button>
-          </View>
-        ) : null}
-
-        {isLoading && totalCount === 0 ? (
-          <View className="items-center py-12">
-            <ActivityIndicator />
-          </View>
-        ) : null}
-
-        {!isLoading && totalCount === 0 ? (
-          <View className="mt-5 items-center rounded-2xl border border-border border-dashed px-5 py-10">
-            <Text className="font-strong text-body-md text-foreground">Bạn chưa có kho nào</Text>
-            <Text className="font-body mt-1 text-center text-body-sm text-muted">
-              Chọn kho và lịch thuê để giữ chỗ, đặt cọc rồi nhận kho.
-            </Text>
-            <Button className="mt-5" onPress={onBrowse}>
-              <Button.Label className="font-ui">Tìm kho trống</Button.Label>
-            </Button>
-          </View>
-        ) : null}
-
-        {totalCount > 0 ? (
-          <>
-            {counts.awaiting > 0 && filter !== 'awaiting' ? (
-              <Pressable
-                accessibilityRole="button"
-                className="mt-5 flex-row items-center justify-between gap-3 rounded-xl bg-warning-bg px-3 py-3"
-                onPress={() => chooseFilter('awaiting')}
-              >
-                <Text className="flex-1 font-ui text-body-sm text-warning">
-                  {counts.awaiting} đặt chỗ cần thanh toán cọc
-                </Text>
-                <Text className="font-strong text-body-sm text-warning">Xem ngay</Text>
-              </Pressable>
-            ) : null}
-
-            <ScrollView
-              className="-mx-4 mt-5"
-              contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-            >
-              {FILTERS.map((item) => {
-                const selected = filter === item.key;
-                return (
-                  <Pressable
-                    key={item.key}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2.5 ${selected ? 'bg-foreground' : 'bg-surface-secondary'}`}
-                    onPress={() => chooseFilter(item.key)}
-                  >
-                    <Text
-                      className={`font-ui text-body-sm ${selected ? 'text-background' : 'text-muted'}`}
-                    >
-                      {item.label}
-                    </Text>
-                    <Text
-                      className={`font-numeric text-caption ${selected ? 'text-background' : 'text-muted'}`}
-                    >
-                      {counts[item.key]}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            <View className="mt-5 flex-row items-center justify-between gap-2">
-              <Text className="font-strong text-body-md text-foreground">{currentLabel}</Text>
-              {/* The chip already shows the count; the range only helps once there are pages. */}
-              {pageCount > 1 ? (
-                <Text className="font-numeric text-caption text-muted">
-                  {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, entries.length)} /{' '}
-                  {entries.length}
-                </Text>
-              ) : null}
+          {error ? (
+            <View className="gap-3 rounded-[20px] border border-danger-200 bg-bg-card p-4">
+              <InlineMessage message={error} type="error" />
+              <Button label="Thử lại" size="sm" variant="secondary" onPress={onRefresh} />
             </View>
+          ) : null}
 
-            {entries.length === 0 ? (
-              <View className="mt-3 rounded-xl border border-border bg-surface px-4 py-8">
-                <Text className="text-center font-body text-body-sm text-muted">
-                  Chưa có kho ở trạng thái “{currentLabel.toLowerCase()}”.
-                </Text>
-              </View>
-            ) : (
-              <View className="mt-3 gap-3">
-                {pageEntries.map((entry) =>
-                  entry.kind === 'contract' ? (
-                    <ContractCard
-                      key={entry.contract.id}
-                      contract={entry.contract}
-                      now={now}
-                      onPress={() => onDetail(entry.contract.id)}
-                    />
-                  ) : entry.kind === 'hold' ? (
-                    <BookingHoldCard
-                      key={entry.booking.id}
-                      booking={entry.booking}
-                      now={now}
-                      onPay={() => onPay(entry.booking.id)}
-                    />
-                  ) : (
-                    <ClosedBookingRow key={entry.booking.id} booking={entry.booking} />
-                  ),
-                )}
-              </View>
-            )}
+          {isLoading && totalCount === 0 ? (
+            <View className="items-center py-12">
+              <ActivityIndicator color={colors.semantic.actionPrimary} size="large" />
+            </View>
+          ) : null}
 
-            {pageCount > 1 ? (
-              <View className="mt-5 flex-row items-center justify-between gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  isDisabled={page === 1}
-                  onPress={() => choosePage(page - 1)}
-                >
-                  <CaretLeft size={16} />
-                  <Button.Label>Trước</Button.Label>
-                </Button>
-                <Text className="font-numeric text-body-sm text-muted">
-                  Trang {page} / {pageCount}
-                </Text>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  isDisabled={page === pageCount}
-                  onPress={() => choosePage(page + 1)}
-                >
-                  <Button.Label>Tiếp</Button.Label>
-                  <CaretRight size={16} />
-                </Button>
+          {!isLoading && !error && totalCount === 0 ? (
+            <View className="items-center rounded-[20px] border border-dashed border-border-default bg-bg-card px-5 py-10">
+              <Text className="text-body-lg font-semibold text-text-primary">
+                Bạn chưa có kho nào
+              </Text>
+              <Text className="mt-1 text-center text-body-sm text-text-secondary">
+                Chọn kho và lịch thuê để giữ chỗ, đặt cọc rồi nhận kho.
+              </Text>
+              <View className="mt-5 w-full">
+                <Button label="Tìm kho trống" onPress={onBrowse} />
               </View>
-            ) : null}
-          </>
-        ) : null}
-      </View>
-    </ScrollView>
+            </View>
+          ) : null}
+
+          {totalCount > 0 ? (
+            <>
+              {counts.awaiting > 0 && filter !== 'awaiting' ? (
+                <Pressable
+                  accessibilityRole="button"
+                  className="flex-row items-center justify-between gap-3 rounded-2xl border border-warning-200 bg-warning-0 px-4 py-3"
+                  onPress={() => chooseFilter('awaiting')}
+                >
+                  <Text className="flex-1 text-body-sm font-medium text-warning-700">
+                    {counts.awaiting} đặt chỗ cần thanh toán cọc
+                  </Text>
+                  <Text className="text-body-sm font-semibold text-warning-700">Xem ngay</Text>
+                </Pressable>
+              ) : null}
+
+              <CardTabs
+                tabs={FILTERS.map((item) => ({
+                  key: item.key,
+                  label: item.label,
+                  count: counts[item.key],
+                }))}
+                value={filter}
+                onChange={chooseFilter}
+              />
+
+              <View className="flex-row items-center justify-between gap-2">
+                <Text className="text-body-md font-semibold text-text-primary">{currentLabel}</Text>
+                {pageCount > 1 ? (
+                  <Text className="text-caption font-medium text-text-secondary tabular-nums">
+                    {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, entries.length)} /{' '}
+                    {entries.length}
+                  </Text>
+                ) : null}
+              </View>
+
+              {entries.length === 0 ? (
+                <View className="rounded-[20px] border border-border-default bg-bg-card px-4 py-8">
+                  <Text className="text-center text-body-sm text-text-secondary">
+                    Chưa có kho ở trạng thái “{currentLabel.toLowerCase()}”.
+                  </Text>
+                </View>
+              ) : (
+                <View className="gap-3">
+                  {pageEntries.map((entry) =>
+                    entry.kind === 'contract' ? (
+                      <ContractCard
+                        key={entry.contract.id}
+                        contract={entry.contract}
+                        now={now}
+                        onPress={() => onDetail(entry.contract.id)}
+                      />
+                    ) : entry.kind === 'hold' ? (
+                      <BookingHoldCard
+                        key={entry.booking.id}
+                        booking={entry.booking}
+                        now={now}
+                        onPay={() => onPay(entry.booking.id)}
+                      />
+                    ) : (
+                      <ClosedBookingRow key={entry.booking.id} booking={entry.booking} />
+                    ),
+                  )}
+                </View>
+              )}
+
+              {pageCount > 1 ? (
+                <View className="flex-row items-center justify-between gap-2 pt-1">
+                  <Button
+                    disabled={page === 1}
+                    fullWidth={false}
+                    label="Trước"
+                    leftIcon="chevron-left"
+                    size="sm"
+                    variant="secondary"
+                    onPress={() => choosePage(page - 1)}
+                  />
+                  <Text className="text-body-sm text-text-secondary tabular-nums">
+                    Trang {page} / {pageCount}
+                  </Text>
+                  <Button
+                    disabled={page === pageCount}
+                    fullWidth={false}
+                    label="Tiếp"
+                    rightIcon="chevron-right"
+                    size="sm"
+                    variant="secondary"
+                    onPress={() => choosePage(page + 1)}
+                  />
+                </View>
+              ) : null}
+            </>
+          ) : null}
+        </View>
+      </ScrollView>
+    </FlowScreen>
   );
 }

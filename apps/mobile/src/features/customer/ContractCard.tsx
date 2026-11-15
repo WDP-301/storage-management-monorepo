@@ -1,6 +1,7 @@
 import { MapPin } from 'phosphor-react-native';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
+import { colors, Dashed, Text } from '../../components/ui';
 import type { ApiContract } from '../../types/contract-api';
 import {
   ContractUnitLines,
@@ -10,8 +11,6 @@ import {
   StatusPill,
   storageState,
 } from './contract-display';
-
-const MUTED = 'hsl(215 16% 47%)';
 
 /** One rented (or paid-for) warehouse; opens the contract detail. */
 export function ContractCard({
@@ -29,20 +28,20 @@ export function ContractCard({
   return (
     <Pressable
       accessibilityRole="button"
-      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+      style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
       onPress={onPress}
     >
-      <View className="gap-2.5 rounded-xl border border-border bg-surface p-3">
+      <View className="gap-3 rounded-[20px] border border-border-default bg-bg-card p-4">
         <View className="flex-row items-start justify-between gap-3">
           <View className="flex-1 gap-1">
-            <Text className="font-strong text-foreground text-title-sm" numberOfLines={1}>
+            <Text className="text-title-sm font-bold text-text-primary" numberOfLines={1}>
               {contractWarehouseName(contract)}
             </Text>
             <ContractUnitLines contract={contract} />
             {contract.unit ? (
-              <View className="flex-row items-start gap-1.5">
-                <MapPin color={MUTED} size={14} weight="fill" />
-                <Text className="flex-1 font-body text-body-sm text-muted" numberOfLines={2}>
+              <View className="mt-0.5 flex-row items-start gap-1.5">
+                <MapPin color={colors.semantic.textSecondary} size={14} weight="fill" />
+                <Text className="flex-1 text-body-sm text-text-secondary" numberOfLines={2}>
                   {contract.unit.address}
                 </Text>
               </View>
@@ -51,24 +50,26 @@ export function ContractCard({
           <StatusPill label={state.label} tone={state.tone} />
         </View>
 
-        <View className="h-px bg-separator" />
+        <Dashed />
 
         <View className="flex-row items-end justify-between gap-3">
           <View>
-            <Text className="font-body text-caption text-muted">Thời hạn</Text>
-            <Text className="mt-0.5 font-numeric text-foreground text-num-md">
+            <Text className="text-caption text-text-secondary">Thời hạn</Text>
+            <Text className="mt-0.5 text-body-md font-semibold text-text-primary tabular-nums">
               {formatIsoDate(contractStartIso(contract))} → {formatIsoDate(endIso)}
             </Text>
           </View>
           <View className="items-end">
-            <Text className="font-numeric-strong text-accent text-num-lg">
+            <Text className="text-subtitle font-bold text-text-brand tabular-nums">
               {formatMoney(contract.monthlyPrice)}
             </Text>
-            <Text className="font-body text-caption text-muted">/tháng</Text>
+            <Text className="text-caption text-text-secondary">/tháng</Text>
           </View>
         </View>
 
-        {state.hint ? <Text className="font-ui text-body-sm text-accent">{state.hint}</Text> : null}
+        {state.hint ? (
+          <Text className="text-body-sm font-medium text-text-link">{state.hint}</Text>
+        ) : null}
       </View>
     </Pressable>
   );

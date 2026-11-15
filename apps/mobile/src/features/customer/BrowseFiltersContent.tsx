@@ -1,4 +1,4 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import {
   AREA_PRESETS,
   MAX_AMENITY_FILTER,
@@ -8,6 +8,7 @@ import {
   toggleAmenityId,
   VOLUME_PRESETS,
 } from '../../../lib/warehouse-query';
+import { Text } from '../../components/ui';
 import type { BrowseCriteria } from '../../types/customer';
 import type { Amenity } from '../../types/storage-api';
 import { ChipButton, FilterRow } from './FilterChips';
@@ -58,9 +59,9 @@ export function BrowseFiltersContent({
   return (
     <View className="gap-5 px-4">
       {provinceOptions.length === 0 ? (
-        <View className="gap-1 rounded-xl bg-surface-secondary p-3">
-          <Text className="font-strong text-body-md text-foreground">Khu vực tìm kho</Text>
-          <Text className="font-body text-body-sm text-muted">
+        <View className="gap-1 rounded-2xl border border-border-default bg-bg-subtle p-3.5">
+          <Text className="text-body-md font-semibold text-text-primary">Khu vực tìm kho</Text>
+          <Text className="text-body-sm text-text-secondary">
             Thông tin tỉnh thành và phường/xã của các kho đang được cập nhật. Bạn vẫn có thể lọc
             theo diện tích, thể tích và giá bên dưới.
           </Text>
@@ -119,7 +120,7 @@ export function BrowseFiltersContent({
           ))}
           {criteria.amenityIds.length >= MAX_AMENITY_FILTER ? (
             // Chips cannot be disabled, so say why an extra tap does nothing.
-            <Text className="w-full font-body text-body-sm text-muted">
+            <Text className="w-full text-body-sm text-text-secondary">
               Tối đa {MAX_AMENITY_FILTER} tiện ích
             </Text>
           ) : null}

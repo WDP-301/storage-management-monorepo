@@ -79,7 +79,7 @@ export function LoginScreen({ onAuthenticated }: { onAuthenticated: (user: AuthU
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      className="flex-1 bg-background"
+      className="flex-1 bg-bg-page"
     >
       <AuthFormScreen
         mode={screen}

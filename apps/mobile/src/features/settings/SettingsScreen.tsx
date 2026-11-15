@@ -1,8 +1,17 @@
-import { Button } from 'heroui-native';
-import { Hourglass, Lock, ShieldCheck } from 'phosphor-react-native';
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { primaryRoleLabel } from '../../../lib/app-area';
+import {
+  AlertSheet,
+  colors,
+  Divider,
+  Icon,
+  type IconName,
+  StatusPill,
+  Text,
+  useModal,
+} from '../../components/ui';
+import { FlowScreen } from '../../components/ui/flow-screen';
 import type { AuthUser } from '../../types/auth';
 
 type Props = {
@@ -17,10 +26,6 @@ type Props = {
   accessCard?: ReactNode;
 };
 
-/** Mirror the colour tokens in global.css; SVG icons cannot read a Tailwind class. */
-const ACCENT = 'hsl(203 100% 30%)';
-const MUTED = 'hsl(215 16% 47%)';
-
 export function SettingsScreen({
   user,
   isLoggingOut,
@@ -31,140 +36,204 @@ export function SettingsScreen({
   pendingDepositCount,
   accessCard,
 }: Props) {
+  const logoutModal = useModal();
   const initial = user.fullName.trim().charAt(0).toUpperCase() || 'S';
 
   return (
-    <View className="flex-1">
+    <FlowScreen muted showBack={false} title="Tài khoản">
       <ScrollView
         className="flex-1"
-        contentContainerClassName="pb-6 pt-5"
+        contentContainerClassName="gap-4 px-4 pt-5 pb-8"
         showsVerticalScrollIndicator={false}
       >
-        <View className="px-4 pb-3">
-          <Text className="font-strong text-foreground text-title-md">Tài khoản</Text>
-          <Text className="font-body mt-1 text-body-sm text-muted">
-            Thông tin tài khoản của bạn
-          </Text>
-        </View>
-
-        {/* Identity first: name, how we reach you, and which side of the app you are on. */}
-        <View className="mx-4 gap-3 rounded-xl border border-border bg-surface p-3">
-          <View className="flex-row items-center gap-3">
-            <View className="size-12 items-center justify-center rounded-full bg-accent/10">
-              <Text className="font-display text-accent text-title-sm">{initial}</Text>
-            </View>
-            <View className="flex-1">
-              <Text className="font-strong text-foreground text-body-lg">{user.fullName}</Text>
-              <Text className="font-body text-body-sm text-muted" numberOfLines={1}>
-                {user.email}
-              </Text>
-            </View>
-            <View className="rounded-full bg-surface-secondary px-2.5 py-1">
-              <Text className="font-ui text-caption text-subtle">
-                {primaryRoleLabel(user.roles)}
-              </Text>
-            </View>
+        <View className="items-center gap-2 pt-2 pb-1">
+          <View className="size-20 items-center justify-center rounded-full border-2 border-bg-card bg-secondary-0 shadow-sm">
+            <Text className="text-heading font-bold text-text-link">{initial}</Text>
           </View>
-
-          <View className="h-px bg-separator" />
-
-          <View className="flex-row items-center justify-between gap-3">
-            <Text className="font-body text-body-sm text-muted">Số điện thoại</Text>
-            <Text className="font-strong text-body-sm text-foreground">
-              {user.phone || 'Chưa cập nhật'}
+          <View className="items-center gap-1">
+            <Text className="text-center text-title font-bold text-text-primary">
+              {user.fullName}
+            </Text>
+            <Text className="text-center text-body text-text-secondary" numberOfLines={1}>
+              {user.email}
             </Text>
           </View>
-          <View className="flex-row items-center justify-between gap-3">
-            <Text className="font-body text-body-sm text-muted">Trạng thái tài khoản</Text>
-            <View className="rounded-full bg-success-bg px-2 py-0.5">
-              <Text className="font-ui text-caption text-success">Đang hoạt động</Text>
-            </View>
-          </View>
+          <StatusPill label={primaryRoleLabel(user.roles)} tone="info" />
         </View>
 
-        {accessCard ? <View className="mx-4">{accessCard}</View> : null}
+        {accessCard ? <View>{accessCard}</View> : null}
 
         {rentalUnitCount !== undefined ? (
-          <View className="mx-4 mt-4 flex-row rounded-xl bg-surface-secondary p-3">
+          <View className="flex-row rounded-2xl bg-bg-card p-4">
             <AccountStat
-              icon={<Lock color={ACCENT} size={18} />}
-              value={rentalUnitCount === null ? '—' : `${rentalUnitCount} kho`}
+              icon="lock-outline"
+              iconBg="bg-secondary-0"
+              iconColor={colors.semantic.textLink}
               label="Đã xác nhận thuê"
+              value={rentalUnitCount === null ? '—' : `${rentalUnitCount} kho`}
             />
-            <View className="w-px bg-separator" />
+            <View className="mx-3 w-px bg-border-divider" />
             <AccountStat
-              icon={<Hourglass color="hsl(32 95% 44%)" size={18} />}
-              value={pendingDepositCount == null ? '—' : `${pendingDepositCount} đơn`}
+              icon="hourglass-empty"
+              iconBg="bg-warning-0"
+              iconColor={colors.warning[700]}
               label="Chờ chuyển cọc"
-            />
-            <View className="w-px bg-separator" />
-            <AccountStat
-              icon={<ShieldCheck color={MUTED} size={18} />}
-              value="—"
-              label="Vi phạm hợp đồng"
+              value={pendingDepositCount == null ? '—' : `${pendingDepositCount} đơn`}
             />
           </View>
         ) : null}
-        <View className="mx-4 mt-4 rounded-xl border border-border bg-surface px-3">
+
+        <AccountSection title="Thông tin liên hệ">
+          <InfoRow label="Số điện thoại" value={user.phone || 'Chưa cập nhật'} />
+          <Divider />
+          <View className="min-h-12 flex-row items-center justify-between gap-3 py-2.5">
+            <Text className="text-body text-text-secondary">Trạng thái tài khoản</Text>
+            <StatusPill label="Đang hoạt động" tone="success" />
+          </View>
+        </AccountSection>
+
+        <AccountSection title="Dịch vụ & Hỗ trợ">
           {onTours ? (
             <>
-              <SettingItem
-                title="Lịch hẹn xem kho"
-                description="Theo dõi lịch tham quan kho mẫu và tư vấn"
+              <ActionRow
+                icon="calendar-month"
+                label="Lịch hẹn xem kho"
                 onPress={onTours}
+                subtitle="Theo dõi lịch tham quan kho mẫu và tư vấn"
               />
-              <View className="h-px bg-separator" />
+              <Divider />
             </>
           ) : null}
-          <SettingItem title="Thông báo" description="Booking, thanh toán và nhắc lịch" />
-          <View className="h-px bg-separator" />
-          <SettingItem title="Hỗ trợ" description="Liên hệ và yêu cầu hỗ trợ" onPress={onSupport} />
-        </View>
-
-        {/* Signing out ends the page instead of being pinned over it: a destructive action
-            should not be the loudest thing on screen, nor cover the check-in history. */}
-        <View className="mx-4 mt-6">
-          <Button isDisabled={isLoggingOut} variant="ghost" onPress={onLogout}>
-            <Button.Label className="font-ui text-danger">
-              {isLoggingOut ? 'Đang đăng xuất...' : 'Đăng xuất'}
-            </Button.Label>
-          </Button>
-        </View>
+          {onSupport ? (
+            <>
+              <ActionRow
+                icon="support-agent"
+                label="Yêu cầu hỗ trợ của tôi"
+                onPress={onSupport}
+                subtitle="Gửi phản hồi hoặc theo dõi tiến độ xử lý"
+              />
+              <Divider />
+            </>
+          ) : null}
+          <ActionRow
+            danger
+            icon="logout"
+            label={isLoggingOut ? 'Đang đăng xuất...' : 'Đăng xuất'}
+            onPress={() => {
+              if (!isLoggingOut) logoutModal.present();
+            }}
+            showChevron={false}
+          />
+        </AccountSection>
       </ScrollView>
+
+      <AlertSheet
+        actionsLayout="row"
+        icon="logout"
+        message="Bạn có chắc chắn muốn đăng xuất khỏi tài khoản này không?"
+        primaryAction={{
+          label: isLoggingOut ? 'Đang đăng xuất...' : 'Đăng xuất',
+          loading: isLoggingOut,
+          onPress: onLogout,
+        }}
+        ref={logoutModal.ref}
+        secondaryAction={{ label: 'Hủy' }}
+        testID="logout-sheet"
+        title="Đăng xuất"
+        variant="danger"
+      />
+    </FlowScreen>
+  );
+}
+
+function AccountSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View className="rounded-2xl bg-bg-card px-4 pt-4 pb-1">
+      <Text className="mb-1 text-caption font-semibold text-text-secondary uppercase">{title}</Text>
+      {children}
     </View>
   );
 }
 
-function SettingItem({
-  title,
-  description,
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="min-h-12 flex-row items-center justify-between gap-3 py-2.5">
+      <Text className="text-body text-text-secondary">{label}</Text>
+      <Text className="text-body font-semibold text-text-primary">{value}</Text>
+    </View>
+  );
+}
+
+function ActionRow({
+  icon,
+  label,
+  subtitle,
   onPress,
+  danger = false,
+  showChevron = true,
 }: {
-  title: string;
-  description: string;
-  onPress?: () => void;
+  icon: IconName;
+  label: string;
+  subtitle?: string;
+  onPress: () => void;
+  danger?: boolean;
+  showChevron?: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} disabled={!onPress}>
-      <View className="flex-row items-center justify-between py-3">
-        <View className="flex-1">
-          <Text className="font-strong text-foreground">{title}</Text>
-          <Text className="font-body mt-1 text-caption text-muted">{description}</Text>
-        </View>
-        <Text className="font-body text-title-sm text-muted">›</Text>
+    <Pressable
+      accessibilityRole="button"
+      className="min-h-14 flex-row items-center gap-3 py-3"
+      onPress={onPress}
+      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+    >
+      <View
+        className={`size-9 items-center justify-center rounded-xl ${
+          danger ? 'bg-danger-0' : 'bg-secondary-0'
+        }`}
+      >
+        <Icon
+          color={danger ? colors.semantic.statusDanger : colors.semantic.actionPrimary}
+          name={icon}
+          size={20}
+        />
       </View>
+      <View className="flex-1 gap-0.5">
+        <Text
+          className={`text-body font-semibold ${
+            danger ? 'text-status-danger' : 'text-text-primary'
+          }`}
+        >
+          {label}
+        </Text>
+        {subtitle ? <Text className="text-caption text-text-secondary">{subtitle}</Text> : null}
+      </View>
+      {showChevron ? (
+        <Icon color={colors.semantic.textSecondary} name="chevron-right" size={20} />
+      ) : null}
     </Pressable>
   );
 }
 
-function AccountStat({ icon, value, label }: { icon: ReactNode; value: string; label: string }) {
+function AccountStat({
+  icon,
+  iconBg,
+  iconColor,
+  value,
+  label,
+}: {
+  icon: IconName;
+  iconBg: string;
+  iconColor: string;
+  value: string;
+  label: string;
+}) {
   return (
-    <View className="flex-1 items-center gap-1 px-1">
-      <View className="flex-row items-center gap-1.5">
-        {icon}
-        <Text className="font-numeric text-num-sm text-foreground">{value}</Text>
+    <View className="flex-1 items-center gap-1.5 px-1">
+      <View className={`size-9 items-center justify-center rounded-xl ${iconBg}`}>
+        <Icon color={iconColor} name={icon} size={18} />
       </View>
-      <Text className="font-body text-center text-caption text-muted">{label}</Text>
+      <Text className="text-lead font-bold text-text-primary">{value}</Text>
+      <Text className="text-center text-caption text-text-secondary">{label}</Text>
     </View>
   );
 }

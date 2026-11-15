@@ -1,6 +1,6 @@
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { Stack } from 'expo-router';
-import { HeroUINativeProvider } from 'heroui-native';
+import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
 import { SessionProvider, useSession } from '../lib/session';
@@ -12,14 +12,13 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-        <HeroUINativeProvider>
-          {/* Sits above the navigator so sheets render over the tab bar, not inside a tab. */}
-          <BottomSheetModalProvider>
-            <SessionProvider>
-              <RootNavigator />
-            </SessionProvider>
-          </BottomSheetModalProvider>
-        </HeroUINativeProvider>
+        <StatusBar style="dark" />
+        {/* Sits above the navigator so sheets render over the tab bar, not inside a tab. */}
+        <BottomSheetModalProvider>
+          <SessionProvider>
+            <RootNavigator />
+          </SessionProvider>
+        </BottomSheetModalProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
@@ -34,7 +33,7 @@ function RootNavigator() {
   const areFontsLoaded = useAppFonts();
 
   // Holding the splash one frame longer avoids the flash where every label renders in the system
-  // font and then reflows once Be Vietnam Pro arrives, which is worse than a slightly longer wait.
+  // font and then reflows once Inter arrives, which is worse than a slightly longer wait.
   if (isCheckingSession || !areFontsLoaded) {
     return <SessionLoadingScreen />;
   }

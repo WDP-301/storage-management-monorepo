@@ -1,9 +1,10 @@
-import { TicketStatus } from '@storage/types';
+import { type TicketPriority, TicketStatus } from '@storage/types';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { Image, Linking, Pressable, Text, View } from 'react-native';
+import { Image, Linking, Pressable, View } from 'react-native';
 import { formatIsoDateTime } from '../../../lib/format-vi';
 import { UploadsApi } from '../../../lib/uploads-api';
+import { Dashed, Text } from '../../components/ui';
 import type {
   ServiceTicketRecord,
   TicketAttachment,
@@ -20,6 +21,11 @@ const HISTORY_ACTION_LABEL: Record<string, string> = {
   PRIORITY_CHANGED: 'Đổi độ ưu tiên',
 };
 
+function priorityLabel(priority: string | null): string {
+  if (!priority) return '—';
+  return TICKET_PRIORITY_LABEL[priority as TicketPriority] ?? priority;
+}
+
 /** Header card: status, priority, subject, description and where the ticket is filed. */
 export function TicketSummaryCard({
   ticket,
@@ -30,35 +36,32 @@ export function TicketSummaryCard({
   children?: ReactNode;
 }) {
   return (
-    <View className="gap-2.5 rounded-xl border border-border bg-surface p-3">
-      <View className="flex-row items-center justify-between gap-2">
-        <Text className="font-numeric text-num-sm text-muted">{ticket.ticket_no}</Text>
+    <View className="gap-3 rounded-[20px] border border-border-default bg-bg-card p-4">
+      <View className="flex-row flex-wrap items-center justify-between gap-2">
+        <View className="flex-row flex-wrap items-center gap-2">
+          <StatusPill label={`Ưu tiên: ${priorityLabel(ticket.priority)}`} tone="neutral" />
+          {ticket.type ? <StatusPill label={ticket.type.name} tone="neutral" /> : null}
+        </View>
         <StatusPill
-          label={TICKET_STATUS_LABEL[ticket.status]}
-          tone={TICKET_STATUS_TONE[ticket.status]}
+          label={TICKET_STATUS_LABEL[ticket.status] ?? ticket.status}
+          tone={TICKET_STATUS_TONE[ticket.status] ?? 'neutral'}
         />
       </View>
-      <View className="flex-row flex-wrap items-center gap-2">
-        <StatusPill label={`Ưu tiên: ${TICKET_PRIORITY_LABEL[ticket.priority]}`} tone="neutral" />
-        {ticket.type ? <StatusPill label={ticket.type.name} tone="neutral" /> : null}
+
+      <Text className="text-subtitle font-bold text-text-primary">{ticket.subject}</Text>
+      <Text className="text-body-sm leading-5 text-text-primary">{ticket.description}</Text>
+
+      <Dashed />
+      <View className="gap-2">
+        <DetailRow label="Chi nhánh" value={ticket.facility?.name ?? '—'} />
+        <DetailRow
+          label="Kho"
+          value={ticket.storage_unit ? ticket.storage_unit.name : 'Toàn chi nhánh'}
+        />
+        <DetailRow isNumeric label="Ngày tạo" value={formatIsoDateTime(ticket.created_at)} />
+        {children}
+        {ticket.resolution ? <DetailRow label="Kết quả" value={ticket.resolution} /> : null}
       </View>
-
-      <Text className="text-title-sm font-strong text-foreground">{ticket.subject}</Text>
-      <Text className="font-body text-body-sm leading-5 text-foreground">{ticket.description}</Text>
-
-      <View className="h-px bg-separator" />
-      <DetailRow label="Chi nhánh" value={ticket.facility?.name ?? '—'} />
-      <DetailRow
-        label="Kho"
-        value={
-          ticket.storage_unit
-            ? `${ticket.storage_unit.name} (${ticket.storage_unit.code})`
-            : 'Toàn chi nhánh'
-        }
-      />
-      <DetailRow isNumeric label="Ngày tạo" value={formatIsoDateTime(ticket.created_at)} />
-      {children}
-      {ticket.resolution ? <DetailRow label="Kết quả" value={ticket.resolution} /> : null}
     </View>
   );
 }
@@ -66,8 +69,8 @@ export function TicketSummaryCard({
 export function TicketAttachmentsCard({ attachments }: { attachments: TicketAttachment[] }) {
   if (attachments.length === 0) return null;
   return (
-    <View className="gap-2.5 rounded-xl border border-border bg-surface p-3">
-      <Text className="font-strong text-body-lg text-foreground">Ảnh đính kèm</Text>
+    <View className="gap-3 rounded-[20px] border border-border-default bg-bg-card p-4">
+      <Text className="text-lead font-bold text-text-primary">Ảnh đính kèm</Text>
       <View className="flex-row flex-wrap gap-3">
         {attachments.map((attachment) => (
           <AttachmentThumb key={attachment.fileKey} attachment={attachment} />
@@ -98,21 +101,24 @@ export function TicketHistoryCard({
   ];
 
   return (
-    <View className="gap-2.5 rounded-xl border border-border bg-surface p-3">
-      <Text className="font-strong text-body-lg text-foreground">Tiến trình</Text>
+    <View className="gap-3 rounded-[20px] border border-border-default bg-bg-card p-4">
+      <Text className="text-lead font-bold text-text-primary">Tiến trình</Text>
+      <Dashed />
       <View className="gap-3">
         {entries.map((entry, index) => (
           <View key={`${entry.at}-${index}`} className="flex-row gap-3">
-            <View className="items-center pt-1">
-              <View className="size-2 rounded-full bg-accent" />
-              {index < entries.length - 1 ? <View className="w-px flex-1 bg-separator" /> : null}
+            <View className="items-center pt-1.5">
+              <View className="size-2 rounded-full bg-action-primary" />
+              {index < entries.length - 1 ? (
+                <View className="w-px flex-1 bg-border-divider" />
+              ) : null}
             </View>
             <View className="flex-1 pb-1">
-              <Text className="text-body-sm font-strong text-foreground">{entry.label}</Text>
+              <Text className="text-body-sm font-semibold text-text-primary">{entry.label}</Text>
               {entry.detail ? (
-                <Text className="font-body mt-0.5 text-caption text-muted">{entry.detail}</Text>
+                <Text className="mt-0.5 text-caption text-text-secondary">{entry.detail}</Text>
               ) : null}
-              <Text className="font-numeric mt-0.5 text-num-sm text-muted">
+              <Text className="mt-0.5 text-caption text-text-secondary tabular-nums">
                 {formatIsoDateTime(entry.at)}
                 {entry.by ? ` · ${describeActor(entry.by)}` : ''}
               </Text>
@@ -135,10 +141,10 @@ export function DetailRow({
 }) {
   return (
     <View className="flex-row items-start justify-between gap-4">
-      <Text className="font-body text-body-sm text-muted">{label}</Text>
+      <Text className="text-body-sm text-text-secondary">{label}</Text>
       <Text
-        className={`flex-1 text-right text-foreground ${
-          isNumeric ? 'font-numeric text-num-md' : 'font-strong text-body-sm'
+        className={`flex-1 text-right text-body-sm font-semibold text-text-primary ${
+          isNumeric ? 'tabular-nums' : ''
         }`}
       >
         {value}
@@ -150,6 +156,11 @@ export function DetailRow({
 function historyDetail(entry: TicketHistoryEntry): string {
   if (entry.action === 'STATUS_CHANGED') {
     return `${statusLabel(entry.from)} → ${statusLabel(entry.to)}`;
+  }
+  if (entry.action === 'PRIORITY_CHANGED') {
+    return entry.from
+      ? `${priorityLabel(entry.from)} → ${priorityLabel(entry.to)}`
+      : priorityLabel(entry.to);
   }
   // ASSIGNED stores the previous assignee as a user id but the new one as a name — show the name.
   if (entry.action === 'ASSIGNED') return entry.to;
@@ -190,10 +201,10 @@ function AttachmentThumb({ attachment }: { attachment: TicketAttachment }) {
   return (
     <Pressable onPress={() => void open()}>
       {isImage && url ? (
-        <Image source={{ uri: url }} className="size-20 rounded-lg" resizeMode="cover" />
+        <Image source={{ uri: url }} className="size-20 rounded-xl" resizeMode="cover" />
       ) : (
-        <View className="size-20 items-center justify-center rounded-lg border border-border bg-background p-1">
-          <Text className="font-body text-center text-caption text-muted" numberOfLines={3}>
+        <View className="size-20 items-center justify-center rounded-xl border border-border-default bg-bg-subtle p-1.5">
+          <Text className="text-center text-caption text-text-secondary" numberOfLines={3}>
             {attachment.name}
           </Text>
         </View>

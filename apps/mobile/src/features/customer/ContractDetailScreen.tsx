@@ -1,16 +1,17 @@
-import {
-  BottomSheetBackdrop,
-  type BottomSheetBackdropProps,
-  BottomSheetModal,
-  BottomSheetView,
-} from '@gorhom/bottom-sheet';
-import { useThemeColor } from 'heroui-native';
+import { BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
 import { Headset, MapPin, SignOut, Swap } from 'phosphor-react-native';
-import { type ReactNode, useCallback, useRef } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { type ReactNode, useRef } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { openChangeRequest } from '../../../lib/change-requests-api';
-import { ScreenHeader } from '../../components/ScreenHeader';
+import {
+  Button,
+  colors,
+  FlowScreen,
+  InlineMessage,
+  renderCoatBackdrop,
+  Text,
+} from '../../components/ui';
 import type { ApiContract } from '../../types/contract-api';
 import { ContractInvoicesSection } from './ContractInvoicesSection';
 import { ContractAmenitiesSection } from './contract-amenities-section';
@@ -32,9 +33,6 @@ import { UnitChangeRequestSheet } from './UnitChangeRequestSheet';
 import { UnitChangeStatusCard } from './UnitChangeStatusCard';
 import { type ContractInvoicesState, useContractInvoices } from './use-contract-invoices';
 import { useUnitChangeRequests } from './use-unit-change-requests';
-
-const MUTED = 'hsl(215 16% 47%)';
-const ACCENT = 'hsl(203 100% 30%)';
 
 type Props = {
   contract: ApiContract | null;
@@ -67,20 +65,35 @@ export function ContractDetailScreen({
   };
 
   return (
-    <View className="flex-1">
-      <ScreenHeader backLabel="Quay lại Kho của tôi" title="Chi tiết kho thuê" onBack={onBack} />
-
+    <FlowScreen muted title="Chi tiết kho thuê" titleAlign="left" onBack={onBack}>
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: contentBottomPadding }}
+        className="flex-1 bg-bg-muted"
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingTop: 16,
+          paddingBottom: contentBottomPadding,
+        }}
         refreshControl={
           <RefreshControl refreshing={isLoading && contract !== null} onRefresh={refresh} />
         }
         showsVerticalScrollIndicator={false}
       >
         {!contract ? (
-          <Text className="font-body mt-8 text-center text-body-sm text-muted">
-            {isLoading ? 'Đang tải…' : (error ?? 'Không tìm thấy hợp đồng này.')}
-          </Text>
+          isLoading ? (
+            <View className="items-center gap-2 py-12">
+              <ActivityIndicator color={colors.semantic.actionPrimary} />
+              <Text className="text-body-sm text-text-secondary">Đang tải…</Text>
+            </View>
+          ) : error ? (
+            <View className="gap-3 rounded-[20px] border border-border-default bg-bg-card p-4">
+              <InlineMessage message={error} type="error" />
+              <Button label="Thử lại" onPress={refresh} size="sm" variant="secondary" />
+            </View>
+          ) : (
+            <View className="items-center rounded-[20px] border border-border-default bg-bg-card px-5 py-8">
+              <Text className="text-body text-text-secondary">Không tìm thấy hợp đồng này.</Text>
+            </View>
+          )
         ) : (
           <ContractDetail
             contract={contract}
@@ -99,7 +112,7 @@ export function ContractDetailScreen({
           />
         )}
       </ScrollView>
-    </View>
+    </FlowScreen>
   );
 }
 
@@ -122,18 +135,6 @@ function ContractDetail({
   const changeSheet = useRef<BottomSheetModal>(null);
   const requestSheet = useRef<BottomSheetModal>(null);
   const insets = useSafeAreaInsets();
-  const [surfaceColor, mutedColor] = useThemeColor(['surface', 'muted']);
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        appearsOnIndex={0}
-        disappearsOnIndex={-1}
-        pressBehavior="close"
-      />
-    ),
-    [],
-  );
   const state = storageState(contract, now);
   const isActive = contract.status === 'ACTIVE';
   const pending = openReturn(contract);
@@ -168,10 +169,11 @@ function ContractDetail({
   const canFileTicket = isActive || contract.status === 'DRAFT' || contract.status === 'ENDED';
 
   return (
-    <View className="gap-3">
-      <View className="gap-1 rounded-xl border border-border bg-surface p-3">
+    <View className="gap-4">
+      {/* 1. Overview card */}
+      <View className="gap-2.5 rounded-[20px] border border-border-default bg-bg-card p-4">
         <View className="flex-row items-start justify-between gap-3">
-          <Text className="flex-1 font-strong text-foreground text-title-sm">
+          <Text className="flex-1 text-subtitle font-bold text-text-primary">
             {contractWarehouseName(contract)}
           </Text>
           <StatusPill label={state.label} tone={state.tone} />
@@ -179,22 +181,26 @@ function ContractDetail({
         <ContractUnitLines contract={contract} />
         {contract.unit ? (
           <View className="flex-row items-start gap-1.5">
-            <MapPin color={MUTED} size={14} weight="fill" />
-            <Text className="flex-1 font-body text-body-sm text-muted">
-              {contract.unit.address}
-            </Text>
+            <MapPin color={colors.semantic.iconBrand} size={15} weight="fill" />
+            <Text className="flex-1 text-body-sm text-text-secondary">{contract.unit.address}</Text>
           </View>
         ) : null}
         {state.hint ? (
-          <Text className="mt-1 font-ui text-body-sm text-accent">{state.hint}</Text>
+          <Text className="mt-0.5 text-body-sm font-medium text-text-link">{state.hint}</Text>
         ) : null}
       </View>
 
+      {/* 2. Urgent alerts (ending/overdue, due invoices, unit-change status) */}
       <TermEndNotice contract={contract} />
-      <ContractSection contract={contract}>
-        <ContractDocumentsList contract={contract} />
-      </ContractSection>
-      <ContractAmenitiesSection contract={contract} />
+      {invoices ? (
+        <ContractInvoicesSection
+          state={invoices}
+          returnScheduledAt={pending?.scheduledAt ?? null}
+        />
+      ) : null}
+      {openChange ? <UnitChangeStatusCard request={openChange} onChanged={changed} /> : null}
+
+      {/* 3. Operations (shelf goods, handover, return inspections) */}
       <ShelfStorageSection contract={contract} />
       <HandoverSection handover={contract.handover} />
       {showReturnSection ? (
@@ -209,24 +215,25 @@ function ContractDetail({
           ) : null}
         </ReturnSection>
       ) : null}
+
+      {/* 4. History & billing */}
       {contract.status === 'ENDED' && contract.settlement ? (
         <SettlementSection settlement={contract.settlement} />
       ) : null}
-      {invoices ? (
-        <ContractInvoicesSection
-          state={invoices}
-          returnScheduledAt={pending?.scheduledAt ?? null}
-        />
-      ) : null}
 
-      {openChange ? <UnitChangeStatusCard request={openChange} onChanged={changed} /> : null}
+      {/* 5. Static reference (contract terms, documents, amenities) */}
+      <ContractSection contract={contract}>
+        <ContractDocumentsList contract={contract} />
+      </ContractSection>
+      <ContractAmenitiesSection contract={contract} />
 
+      {/* 6. Bottom actions */}
       {canRequestAny || canFileTicket ? (
-        <View className="flex-row justify-around pt-1">
+        <View className="flex-row justify-around pt-2">
           {canRequestAny ? (
             <QuickAction
               accessibilityLabel="Yêu cầu đổi kho hoặc trả kho"
-              icon={<Swap color={ACCENT} size={24} weight="bold" />}
+              icon={<Swap color={colors.semantic.actionPrimary} size={24} weight="bold" />}
               label="Đổi / trả kho"
               onPress={onRequestPress}
             />
@@ -234,7 +241,7 @@ function ContractDetail({
           {canFileTicket ? (
             <QuickAction
               accessibilityLabel="Báo sự cố hoặc hỗ trợ"
-              icon={<Headset color={ACCENT} size={24} weight="bold" />}
+              icon={<Headset color={colors.semantic.actionPrimary} size={24} weight="bold" />}
               label="Hỗ trợ"
               onPress={onSupport}
             />
@@ -251,25 +258,25 @@ function ContractDetail({
       {canRequestAny ? (
         <BottomSheetModal
           ref={requestSheet}
-          backdropComponent={renderBackdrop}
-          backgroundStyle={{ backgroundColor: surfaceColor }}
+          backdropComponent={renderCoatBackdrop}
+          backgroundStyle={{ backgroundColor: colors.semantic.bgCard }}
           enablePanDownToClose
-          handleIndicatorStyle={{ backgroundColor: mutedColor }}
-          snapPoints={['34%']}
+          handleIndicatorStyle={{ backgroundColor: colors.neutral[300] }}
+          snapPoints={['36%']}
         >
           <BottomSheetView
             className="gap-3 px-4"
             style={{ paddingBottom: Math.max(insets.bottom, 16) }}
           >
-            <Text className="font-strong text-foreground text-title-sm">Tạo yêu cầu</Text>
+            <Text className="text-title-sm font-bold text-text-primary">Tạo yêu cầu</Text>
             <RequestKindRow
-              icon={<Swap color={ACCENT} size={22} weight="bold" />}
+              icon={<Swap color={colors.semantic.actionPrimary} size={22} weight="bold" />}
               title="Đổi kho"
               subtitle="Chuyển sang kho khác cùng loại, kèm ngày chuyển đồ"
               onPress={() => openRequest('change')}
             />
             <RequestKindRow
-              icon={<SignOut color={ACCENT} size={22} weight="bold" />}
+              icon={<SignOut color={colors.semantic.actionPrimary} size={22} weight="bold" />}
               title="Trả kho"
               subtitle="Hẹn ngày dọn đồ và kết thúc hợp đồng"
               onPress={() => openRequest('return')}
@@ -301,8 +308,10 @@ function QuickAction({
       style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
       onPress={onPress}
     >
-      <View className="size-14 items-center justify-center rounded-full bg-accent/10">{icon}</View>
-      <Text className="font-ui text-body-sm text-foreground">{label}</Text>
+      <View className="size-14 items-center justify-center rounded-full bg-secondary-0">
+        {icon}
+      </View>
+      <Text className="text-body-sm font-medium text-text-primary">{label}</Text>
     </Pressable>
   );
 }
@@ -321,14 +330,16 @@ function RequestKindRow({
   return (
     <Pressable
       accessibilityRole="button"
-      className="flex-row items-center gap-3 rounded-xl border border-border bg-surface-secondary px-3 py-3"
+      className="flex-row items-center gap-3 rounded-2xl border border-border-default bg-bg-subtle px-3.5 py-3"
       style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
       onPress={onPress}
     >
-      <View className="size-10 items-center justify-center rounded-full bg-accent/10">{icon}</View>
+      <View className="size-10 items-center justify-center rounded-full bg-secondary-0">
+        {icon}
+      </View>
       <View className="flex-1">
-        <Text className="font-strong text-body-sm text-foreground">{title}</Text>
-        <Text className="font-body text-caption text-muted">{subtitle}</Text>
+        <Text className="text-body-sm font-semibold text-text-primary">{title}</Text>
+        <Text className="text-caption text-text-secondary">{subtitle}</Text>
       </View>
     </Pressable>
   );

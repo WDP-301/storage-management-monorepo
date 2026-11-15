@@ -1,9 +1,9 @@
 import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import type { VnBank } from '@storage/types';
-import { Button } from 'heroui-native';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { toAccountHolderName } from '../../../lib/settlement-format';
+import { Button, colors, InlineMessage, Text } from '../../components/ui';
 
 /** Rows shown at once; typing narrows the list rather than scrolling through all banks. */
 const MAX_MATCHES = 6;
@@ -14,13 +14,15 @@ type Props = {
   /** The list could not be loaded; the customer can try again but not pick a bank. */
   failed: boolean;
   onRetry: () => void;
-  mutedColor: string;
+  mutedColor?: string;
   onPickBank: (bank: VnBank) => void;
 };
 
 /** Search over the server's bank directory by name or BIN. */
 export function BankPicker({ banks, isLoading, failed, onRetry, mutedColor, onPickBank }: Props) {
   const [query, setQuery] = useState('');
+  const placeholderColor = mutedColor ?? colors.semantic.textPlaceholder;
+
   const index = useMemo(
     () =>
       banks.map((bank) => ({
@@ -40,20 +42,19 @@ export function BankPicker({ banks, isLoading, failed, onRetry, mutedColor, onPi
 
   if (isLoading) {
     return (
-      <View className="items-center rounded-lg border border-border px-3 py-4">
-        <ActivityIndicator color={mutedColor} />
+      <View className="items-center rounded-xl border border-border-default bg-bg-subtle px-3 py-4">
+        <ActivityIndicator color={colors.semantic.actionPrimary} />
       </View>
     );
   }
   if (failed) {
     return (
-      <View className="gap-2 rounded-lg border border-border px-3 py-3">
-        <Text className="font-body text-body-sm text-danger">
-          Không tải được danh sách ngân hàng, vui lòng thử lại
-        </Text>
-        <Button size="sm" variant="secondary" onPress={onRetry}>
-          <Button.Label className="font-ui">Thử lại</Button.Label>
-        </Button>
+      <View className="gap-2 rounded-xl border border-border-default bg-bg-card p-3">
+        <InlineMessage
+          message="Không tải được danh sách ngân hàng, vui lòng thử lại"
+          type="error"
+        />
+        <Button label="Thử lại" onPress={onRetry} size="sm" variant="secondary" />
       </View>
     );
   }
@@ -61,29 +62,29 @@ export function BankPicker({ banks, isLoading, failed, onRetry, mutedColor, onPi
   return (
     <View className="gap-2">
       <BottomSheetTextInput
-        className="font-body rounded-lg border border-border bg-surface-secondary px-3 py-2.5 text-body-sm text-foreground"
+        className="rounded-xl border border-border-default bg-bg-subtle px-3.5 py-2.5 font-inter text-body text-text-primary"
         placeholder="Tìm ngân hàng theo tên hoặc mã BIN"
-        placeholderTextColor={mutedColor}
+        placeholderTextColor={placeholderColor}
         value={query}
         onChangeText={setQuery}
         autoCorrect={false}
       />
-      <View className="overflow-hidden rounded-lg border border-border">
+      <View className="overflow-hidden rounded-xl border border-border-default bg-bg-card">
         {matches.map((bank) => (
           <Pressable
             key={bank.bin}
             accessibilityRole="button"
-            className="border-b border-separator px-3 py-2.5"
+            className="border-b border-border-divider px-3.5 py-2.5"
             onPress={() => onPickBank(bank)}
           >
-            <Text className="font-strong text-body-sm text-foreground">{bank.shortName}</Text>
-            <Text className="font-body text-caption text-muted" numberOfLines={1}>
+            <Text className="text-body-sm font-semibold text-text-primary">{bank.shortName}</Text>
+            <Text className="text-caption text-text-secondary" numberOfLines={1}>
               {bank.name} · {bank.bin}
             </Text>
           </Pressable>
         ))}
         {matches.length === 0 ? (
-          <Text className="font-body px-3 py-2.5 text-body-sm text-muted">
+          <Text className="px-3.5 py-2.5 text-body-sm text-text-secondary">
             Không thấy ngân hàng phù hợp.
           </Text>
         ) : null}

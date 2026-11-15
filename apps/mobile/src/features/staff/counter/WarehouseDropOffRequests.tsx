@@ -1,12 +1,20 @@
 import type { DropOffRequestView } from '@storage/types';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { formatIsoDateTime } from '../../../../lib/format-vi';
+import { useSession } from '../../../../lib/session';
 import { ShelfStorageApi } from '../../../../lib/shelf-storage-api';
-import { dropOffStatusLabel, quantityWithUnit } from '../../../../lib/shelf-storage-format';
+import {
+  dropOffStatusLabel,
+  quantityWithUnit,
+  type RequestScope,
+  requestsInScope,
+} from '../../../../lib/shelf-storage-format';
 import { Button, DashedDivider, InlineMessage, Text } from '../../../components/ui';
 import { StatusPill } from '../../customer/contract-display';
 import { shelfApiError } from '../staff-errors';
+import { AssigneeFilter } from './AssigneeFilter';
+import { AssigneeLine } from './AssigneeLine';
 import { ListState } from './ListState';
 import { useFocusLoader } from './use-focus-loader';
 
@@ -20,8 +28,14 @@ export function WarehouseDropOffRequests({ warehouseId }: { warehouseId: string 
     fetcher,
     'Không tải được yêu cầu gửi đồ.',
   );
+  const { user } = useSession();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [scope, setScope] = useState<RequestScope>('MINE');
+  const shown = useMemo(
+    () => requestsInScope(data ?? [], scope, user?.id),
+    [data, scope, user?.id],
+  );
 
   const confirm = async (request: DropOffRequestView) => {
     setBusyId(request.id);
@@ -39,11 +53,23 @@ export function WarehouseDropOffRequests({ warehouseId }: { warehouseId: string 
 
   return (
     <View className="gap-3">
+      {data && data.length > 0 ? (
+        <AssigneeFilter
+          scope={scope}
+          onChange={setScope}
+          mineCount={requestsInScope(data, 'MINE', user?.id).length}
+          allCount={data.length}
+        />
+      ) : null}
       <ListState
-        empty={!data || data.length === 0}
-        emptyText="Chưa có yêu cầu gửi đồ nào."
-        error={error}
         loading={loading}
+        error={error}
+        empty={shown.length === 0}
+        emptyText={
+          scope === 'MINE' && (data?.length ?? 0) > 0
+            ? 'Không có yêu cầu nào của bạn. Chọn "Tất cả" để xem của cả kho.'
+            : 'Chưa có yêu cầu gửi đồ nào.'
+        }
         onRetry={() => void reload()}
       />
       {actionError ? (
@@ -51,7 +77,7 @@ export function WarehouseDropOffRequests({ warehouseId }: { warehouseId: string 
           <InlineMessage message={actionError} type="error" />
         </View>
       ) : null}
-      {data?.map((request) => (
+      {shown.map((request) => (
         <View
           key={request.id}
           className="gap-2.5 rounded-[20px] border border-border-default bg-bg-card p-4"
@@ -68,6 +94,7 @@ export function WarehouseDropOffRequests({ warehouseId }: { warehouseId: string 
           <Text className="text-caption text-text-secondary">
             Kệ {request.shelf.code} · hẹn gửi {formatIsoDateTime(String(request.requestedFor))}
           </Text>
+          <AssigneeLine assignedTo={request.assignedTo} myId={user?.id} />
           <DashedDivider />
           {request.lines.map((line) => (
             <View

@@ -38,6 +38,8 @@ interface RawRequest {
   note: string | null;
   lines: DropOffRequestLine[];
   createdAt: Date;
+  assignedToId: string | null;
+  assignedToName: string | null;
   confirmedAt: Date | null;
   confirmedById: string | null;
   confirmedByName: string | null;
@@ -78,6 +80,7 @@ export async function loadDropOffRequests(
             w."id" AS "warehouseId", w."code" AS "warehouseCode", w."name" AS "warehouseName",
             cu."id" AS "customerId", cu."full_name" AS "customerName", cu."phone" AS "customerPhone",
             r."requested_for" AS "requestedFor", r."note", r."lines", r."created_at" AS "createdAt",
+            r."assigned_to" AS "assignedToId", ab."full_name" AS "assignedToName",
             r."confirmed_at" AS "confirmedAt", r."confirmed_by" AS "confirmedById",
             cb."full_name" AS "confirmedByName",
             r."cancelled_at" AS "cancelledAt", r."cancelled_by" AS "cancelledById",
@@ -89,6 +92,7 @@ export async function loadDropOffRequests(
        JOIN "storage_units" w ON w."id" = u."parent_id"
        JOIN "app_users" cu ON cu."id" = r."customer_id"
        LEFT JOIN "app_users" cb ON cb."id" = r."confirmed_by"
+       LEFT JOIN "app_users" ab ON ab."id" = r."assigned_to"
        LEFT JOIN "shelf_receipts" sr ON sr."drop_off_request_id" = r."id"
       ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
       ORDER BY ${order}
@@ -130,6 +134,9 @@ export async function loadDropOffRequests(
         unit: line.unit ?? ShelfItemUnit.PACKAGE,
       })),
       createdAt: row.createdAt,
+      assignedTo: row.assignedToId
+        ? { id: row.assignedToId, fullName: row.assignedToName ?? '' }
+        : null,
       confirmedAt: row.confirmedAt,
       confirmedBy,
       cancelledAt: row.cancelledAt,

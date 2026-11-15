@@ -38,6 +38,8 @@ interface RawRequest {
   note: string | null;
   lines: PickupRequestLine[];
   createdAt: Date;
+  assignedToId: string | null;
+  assignedToName: string | null;
   readyAt: Date | null;
   readyById: string | null;
   readyByName: string | null;
@@ -81,6 +83,7 @@ export async function loadPickupRequests(
             w."id" AS "warehouseId", w."code" AS "warehouseCode", w."name" AS "warehouseName",
             cu."id" AS "customerId", cu."full_name" AS "customerName", cu."phone" AS "customerPhone",
             r."requested_for" AS "requestedFor", r."note", r."lines", r."created_at" AS "createdAt",
+            r."assigned_to" AS "assignedToId", ab."full_name" AS "assignedToName",
             r."ready_at" AS "readyAt", r."ready_by" AS "readyById", rb."full_name" AS "readyByName",
             r."cancelled_at" AS "cancelledAt", r."cancelled_by" AS "cancelledById",
             r."completed_at" AS "completedAt", sr."id" AS "completedReceiptId"
@@ -91,6 +94,7 @@ export async function loadPickupRequests(
        JOIN "storage_units" w ON w."id" = u."parent_id"
        JOIN "app_users" cu ON cu."id" = r."customer_id"
        LEFT JOIN "app_users" rb ON rb."id" = r."ready_by"
+       LEFT JOIN "app_users" ab ON ab."id" = r."assigned_to"
        LEFT JOIN "shelf_receipts" sr ON sr."pickup_request_id" = r."id"
       ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
       ORDER BY ${order}
@@ -143,6 +147,9 @@ export async function loadPickupRequests(
         available: byId.get(line.itemId)?.quantity ?? 0,
       })),
       createdAt: row.createdAt,
+      assignedTo: row.assignedToId
+        ? { id: row.assignedToId, fullName: row.assignedToName ?? '' }
+        : null,
       readyAt: row.readyAt,
       readyBy,
       cancelledAt: row.cancelledAt,

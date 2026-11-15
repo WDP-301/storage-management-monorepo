@@ -14,6 +14,7 @@ import { PickupRequestStatus, type PickupRequestView } from '@storage/types';
 import { DataSource, type EntityManager, QueryFailedError } from 'typeorm';
 import { loadPickupRequests } from '../shelf-storage/pickup-request.read';
 import { findShelfContracts, loadStock } from '../shelf-storage/shelf-contract.query';
+import { assignShelfRequestSafely } from '../shelf-storage/shelf-request-assignment';
 import { PICKUP_REQUEST_MAX_DAYS_AHEAD, pickupRequestBlock } from '../shelf-storage/shelf-rules';
 import type { CreatePickupRequestDto } from './dto/pickup-request.dto';
 import { notifyFacilityStaff, notifyRequestCancelled } from './pickup-notifications';
@@ -180,6 +181,7 @@ export class PickupRequestsService {
         quantity: line.quantity,
       })),
     });
+    await assignShelfRequestSafely(em, 'PICKUP', identifiers[0].id, this.notifications);
     const [view] = await loadPickupRequests(em, { ids: [identifiers[0].id], order: 'newest' });
     await notifyFacilityStaff(em, this.notifications, view, contract.facility.id);
     return view;

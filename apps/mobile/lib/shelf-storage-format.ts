@@ -59,6 +59,32 @@ const DROP_OFF_STATUS_LABEL: Record<DropOffRequestStatus, string> = {
 export const dropOffStatusLabel = (status: DropOffRequestStatus): string =>
   DROP_OFF_STATUS_LABEL[status] ?? status;
 
+/**
+ * Who a pick-up / drop-off request was given to, round robin, from the viewer's side: theirs,
+ * a colleague's, or nobody's (nobody was on shift, so the whole branch was told).
+ */
+export function assigneeLabel(
+  assignedTo: { id: string; fullName: string } | null | undefined,
+  myId: string | undefined,
+): { text: string; mine: boolean } {
+  if (!assignedTo) return { text: 'Chưa giao cho ai', mine: false };
+  if (assignedTo.id === myId) return { text: 'Phụ trách: bạn', mine: true };
+  return { text: `Phụ trách: ${assignedTo.fullName || 'nhân viên khác'}`, mine: false };
+}
+
+/** Which requests a staff member lists: only those assigned to them, or all of the warehouse. */
+export type RequestScope = 'MINE' | 'ALL';
+
+/** Requests in `scope`; unassigned ones (nobody was on shift) only show under "all". */
+export function requestsInScope<T extends { assignedTo?: { id: string } | null }>(
+  requests: readonly T[],
+  scope: RequestScope,
+  myId: string | undefined,
+): T[] {
+  if (scope === 'ALL') return [...requests];
+  return requests.filter((request) => myId !== undefined && request.assignedTo?.id === myId);
+}
+
 /** Badge on a receipt a manager recorded without the customer, on an abandoned shelf. */
 export const recoveredLabel = 'Thu hồi (khách bỏ kệ)';
 

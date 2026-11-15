@@ -8,12 +8,17 @@ import { ContractStatus, type ShelfItemUnit, StorageUnitKind } from '@storage/ty
 import { QueryFailedError } from 'typeorm';
 import { loadDropOffRequests } from '../shelf-storage/drop-off-request.read';
 import { findShelfContracts, loadStock } from '../shelf-storage/shelf-contract.query';
+import { assignShelfRequestSafely } from '../shelf-storage/shelf-request-assignment';
 import { DropOffRequestsService } from './drop-off-requests.service';
 import { DropOffRequestsStaffService } from './drop-off-requests-staff.service';
 
 jest.mock('@modules/access/overdue-invoices.query');
 jest.mock('@modules/access/staff-facility.util');
 jest.mock('../shelf-storage/drop-off-request.read');
+jest.mock('../shelf-storage/shelf-request-assignment', () => ({
+  ...jest.requireActual('../shelf-storage/shelf-request-assignment'),
+  assignShelfRequestSafely: jest.fn().mockResolvedValue(null),
+}));
 jest.mock('../shelf-storage/shelf-contract.query');
 
 const customer = { id: 'cust-1' } as AuthUser;
@@ -131,6 +136,7 @@ describe('drop-off requests', () => {
           ],
         }),
       );
+      expect(assignShelfRequestSafely).toHaveBeenCalledWith(em, 'DROP_OFF', 'req-1', notifications);
       expect(mockedRequests).toHaveBeenLastCalledWith(em, { ids: ['req-1'], order: 'newest' });
       expect(em.query).toHaveBeenCalledWith(expect.stringContaining('user_role_assignments'), [
         'fac-1',

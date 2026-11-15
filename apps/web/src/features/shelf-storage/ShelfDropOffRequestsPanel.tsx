@@ -59,13 +59,14 @@ export const ShelfDropOffRequestsPanel: React.FC<{
               <Table.Head>Kệ</Table.Head>
               <Table.Head>Khách hàng</Table.Head>
               <Table.Head>Đồ sẽ gửi</Table.Head>
+              <Table.Head>Phụ trách</Table.Head>
               <Table.Head>Trạng thái</Table.Head>
             </Table.Row>
           </Table.Header>
           <Table.Body>
             {rows.length === 0 ? (
               <Table.Row>
-                <Table.Cell colSpan={5} className="text-center py-10 text-kumo-subtle">
+                <Table.Cell colSpan={6} className="text-center py-10 text-kumo-subtle">
                   {loading ? 'Đang tải...' : 'Không có yêu cầu gửi đồ.'}
                 </Table.Cell>
               </Table.Row>
@@ -92,6 +93,13 @@ export const ShelfDropOffRequestsPanel: React.FC<{
                       )
                       .join(', ')}
                     {req.note && <span className="block text-xs text-kumo-subtle">{req.note}</span>}
+                  </Table.Cell>
+                  <Table.Cell className="whitespace-nowrap text-sm">
+                    {req.assignedTo ? (
+                      req.assignedTo.fullName
+                    ) : (
+                      <span className="text-kumo-subtle">Chưa giao</span>
+                    )}
                   </Table.Cell>
                   <Table.Cell>
                     <Badge variant={STATUS_VARIANT[req.status]}>

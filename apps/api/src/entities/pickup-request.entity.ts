@@ -50,6 +50,17 @@ export class PickupRequest {
   @Column({ type: 'varchar', length: 12, default: PickupRequestStatus.PENDING })
   status: PickupRequestStatus;
 
+  /**
+   * Staff member responsible, given round robin among those on shift at `requestedFor`. Anyone at
+   * the facility may still serve the request; null = nobody was on shift, the branch handles it.
+   */
+  @Column({ type: 'uuid', nullable: true, name: 'assigned_to' })
+  assignedTo: string | null;
+
+  /** When `assignedTo` was set; the rotation continues after the latest one. */
+  @Column({ type: 'timestamptz', nullable: true, name: 'assigned_at' })
+  assignedAt: Date | null;
+
   @Column({ type: 'timestamptz', nullable: true, name: 'ready_at' })
   readyAt: Date | null;
 

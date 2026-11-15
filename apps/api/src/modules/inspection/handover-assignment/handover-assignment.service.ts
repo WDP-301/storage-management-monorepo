@@ -1,5 +1,10 @@
 import { Inspection } from '@entities/inspection.entity';
 import { NotificationsService } from '@modules/notifications/notifications.service';
+import {
+  assignShelfRequestSafely,
+  pendingShelfRequests,
+  type ShelfRequestKind,
+} from '@modules/shelf-storage/shelf-request-assignment';
 import { Injectable, Logger } from '@nestjs/common';
 import { InspectionType, NotificationType } from '@storage/types';
 import { Between, type EntityManager, In, IsNull } from 'typeorm';
@@ -114,8 +119,8 @@ export class HandoverAssignmentService {
   }
 
   /**
-   * Re-runs the round-robin assignment for every still-unassigned handover and open return of
-   * `facilityId` whose appointment falls in `[from, to]`. Called when staff shifts are added, so
+   * Re-runs the round-robin assignment for every still-unassigned handover, open return and open
+   * shelf pick-up / drop-off request of `facilityId` whose appointment falls in `[from, to]`. Called when staff shifts are added, so
    * an appointment left for a manager while nobody was on shift is taken as soon as the shift
    * exists. Never throws — a failure only leaves it unassigned — so it cannot undo the shift
    * write it runs inside. Returns how many bookings and returns were re-visited.
@@ -153,7 +158,29 @@ export class HandoverAssignmentService {
     }
     for (const bookingId of bookingIds) await this.assignSafely(em, bookingId);
     for (const returnId of returnIds) await this.assignReturnSafely(em, returnId);
-    return bookingIds.length + returnIds.length;
+    const shelfRequests = await this.pendingShelfRequestsSafely(em, facilityId, from, to);
+    for (const { kind, id } of shelfRequests) {
+      await assignShelfRequestSafely(em, kind, id, this.notifications);
+    }
+    return bookingIds.length + returnIds.length + shelfRequests.length;
+  }
+
+  /** Never throws, like the rest of the sweep: a failed listing only leaves them to the branch. */
+  private async pendingShelfRequestsSafely(
+    em: EntityManager,
+    facilityId: string,
+    from: Date,
+    to: Date,
+  ): Promise<{ kind: ShelfRequestKind; id: string }[]> {
+    try {
+      return await pendingShelfRequests(em, facilityId, from, to);
+    } catch (err) {
+      this.logger.error(
+        `Listing pending shelf requests of facility ${facilityId} failed; left for the branch`,
+        err instanceof Error ? err.stack : String(err),
+      );
+      return [];
+    }
   }
 
   private async assign(em: EntityManager, bookingId: string): Promise<void> {

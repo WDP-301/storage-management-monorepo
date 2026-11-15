@@ -112,6 +112,8 @@ export interface PickupRequestView {
   note: string | null;
   lines: PickupRequestLineView[];
   createdAt: string | Date;
+  /** Staff member given the request round robin; null = nobody on shift then, left to the branch. */
+  assignedTo: ShelfStaffRef | null;
   readyAt: string | Date | null;
   readyBy: ShelfStaffRef | null;
   cancelledAt: string | Date | null;
@@ -140,6 +142,8 @@ export interface DropOffRequestView {
   note: string | null;
   lines: DropOffRequestLineView[];
   createdAt: string | Date;
+  /** Staff member given the request round robin; null = nobody on shift then, left to the branch. */
+  assignedTo: ShelfStaffRef | null;
   confirmedAt: string | Date | null;
   confirmedBy: ShelfStaffRef | null;
   cancelledAt: string | Date | null;

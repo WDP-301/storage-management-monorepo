@@ -8,12 +8,17 @@ import { ContractStatus, StorageUnitKind } from '@storage/types';
 import { QueryFailedError } from 'typeorm';
 import { loadPickupRequests } from '../shelf-storage/pickup-request.read';
 import { findShelfContracts, loadStock } from '../shelf-storage/shelf-contract.query';
+import { assignShelfRequestSafely } from '../shelf-storage/shelf-request-assignment';
 import { PickupRequestsService } from './pickup-requests.service';
 import { PickupRequestsStaffService } from './pickup-requests-staff.service';
 
 jest.mock('@modules/access/overdue-invoices.query');
 jest.mock('@modules/access/staff-facility.util');
 jest.mock('../shelf-storage/pickup-request.read');
+jest.mock('../shelf-storage/shelf-request-assignment', () => ({
+  ...jest.requireActual('../shelf-storage/shelf-request-assignment'),
+  assignShelfRequestSafely: jest.fn().mockResolvedValue(null),
+}));
 jest.mock('../shelf-storage/shelf-contract.query');
 
 const customer = { id: 'cust-1' } as AuthUser;
@@ -107,6 +112,8 @@ describe('pickup requests', () => {
           lines: [{ itemId: 'i-1', name: 'Sách', quantity: 2 }],
         }),
       );
+      // Assigned on the same transaction, before the branch is told.
+      expect(assignShelfRequestSafely).toHaveBeenCalledWith(em, 'PICKUP', 'req-1', notifications);
       expect(em.query).toHaveBeenCalledWith(expect.stringContaining('user_role_assignments'), [
         'fac-1',
       ]);

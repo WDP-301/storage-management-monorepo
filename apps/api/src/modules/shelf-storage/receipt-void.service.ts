@@ -6,7 +6,7 @@ import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { ContractStatus, type ShelfReceiptType, type ShelfReceiptView } from '@storage/types';
 import { DataSource } from 'typeorm';
-import { reverseReceiptStock } from './receipt-stock.util';
+import { type AppliedLine, reverseReceiptStock } from './receipt-stock.util';
 import { findShelfContracts, loadStock } from './shelf-contract.query';
 import { voidedNotice } from './shelf-notifications';
 import { loadReceipts } from './shelf-receipt.read';
@@ -72,8 +72,8 @@ export class ReceiptVoidService {
         );
       }
 
-      const lines: { itemId: string; name: string; quantity: number }[] = await em.query(
-        `SELECT "item_id" AS "itemId", "name", "quantity" FROM "shelf_receipt_lines" WHERE "receipt_id" = $1`,
+      const lines: AppliedLine[] = await em.query(
+        `SELECT "item_id" AS "itemId", "name", "quantity", "unit" FROM "shelf_receipt_lines" WHERE "receipt_id" = $1`,
         [receiptId],
       );
       const stock =

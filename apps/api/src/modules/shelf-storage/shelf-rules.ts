@@ -6,6 +6,8 @@ import {
   type DropOffRequestBlockReason,
   type PickUpBlockReason,
   type PickupRequestBlockReason,
+  SHELF_ITEM_UNIT_LABEL,
+  type ShelfItemUnit,
   type ShelfReceiptType,
 } from '@storage/types';
 
@@ -89,12 +91,14 @@ export function dropOffRequestBlock(input: {
   return input.overdue ? 'INVOICE_OVERDUE' : null;
 }
 
-/** "Sách ×2, Chăn ×1 và 3 món khác" for notification bodies. */
+/** "Sách ×2 thùng, Chăn ×1 cái và 3 món khác" for notification bodies. */
 export function linesSummary(
-  lines: readonly { name: string; quantity: number }[],
+  lines: readonly { name: string; quantity: number; unit: ShelfItemUnit }[],
   max = 3,
 ): string {
-  const shown = lines.slice(0, max).map((line) => `${line.name} ×${line.quantity}`);
+  const shown = lines
+    .slice(0, max)
+    .map((line) => `${line.name} ×${line.quantity} ${SHELF_ITEM_UNIT_LABEL[line.unit]}`);
   const rest = lines.length - shown.length;
   return rest > 0 ? `${shown.join(', ')} và ${rest} món khác` : shown.join(', ');
 }

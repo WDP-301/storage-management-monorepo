@@ -40,11 +40,12 @@ function emFor(requests: unknown[], stock: unknown[] = []) {
 
 describe('loadPickupRequests', () => {
   it('maps a request with current stock per line and the staff who prepared it', async () => {
-    const { em } = emFor([base], [{ id: 'i-1', quantity: 5 }]);
+    const { em } = emFor([base], [{ id: 'i-1', quantity: 5, unit: 'BOX' }]);
     const [view] = await loadPickupRequests(em, { order: 'newest' });
     expect(view.lines).toEqual([
-      { itemId: 'i-1', name: 'Chăn', quantity: 2, available: 5 },
-      { itemId: 'i-2', name: 'Sách', quantity: 1, available: 0 },
+      { itemId: 'i-1', name: 'Chăn', quantity: 2, unit: 'BOX', available: 5 },
+      // An item no longer found falls back to PACKAGE.
+      { itemId: 'i-2', name: 'Sách', quantity: 1, unit: 'PACKAGE', available: 0 },
     ]);
     expect(view.readyBy).toEqual({ id: 'st-1', fullName: 'Bình' });
     expect(view.customer).toEqual({ id: 'u-1', fullName: 'An', phone: '0900000000' });

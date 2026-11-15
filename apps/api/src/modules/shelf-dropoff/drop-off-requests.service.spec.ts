@@ -4,7 +4,7 @@ import { findOverdueInvoiceNos } from '@modules/access/overdue-invoices.query';
 import { assertWorksAtFacility } from '@modules/access/staff-facility.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { addVietnamDays, vietnamToday } from '@shared/utils/calendar.util';
-import { ContractStatus, StorageUnitKind } from '@storage/types';
+import { ContractStatus, type ShelfItemUnit, StorageUnitKind } from '@storage/types';
 import { QueryFailedError } from 'typeorm';
 import { loadDropOffRequests } from '../shelf-storage/drop-off-request.read';
 import { findShelfContracts, loadStock } from '../shelf-storage/shelf-contract.query';
@@ -30,7 +30,12 @@ const contractRow = (overrides = {}) => ({
   facility: { id: 'fac-1' },
   ...overrides,
 });
-const item = (id: string, name: string, quantity: number) => ({ id, name, quantity });
+const item = (id: string, name: string, quantity: number, unit: ShelfItemUnit = 'BOX') => ({
+  id,
+  name,
+  quantity,
+  unit,
+});
 const requestView = (overrides = {}) => ({
   id: 'req-1',
   contractId: 'c-1',
@@ -94,6 +99,7 @@ describe('drop-off requests', () => {
         itemId?: string;
         name?: string;
         quantity: number;
+        unit?: ShelfItemUnit;
       }[],
       requestedFor: FUTURE(),
       ...patch,
@@ -106,7 +112,7 @@ describe('drop-off requests', () => {
     it('stores lines by item or by name and notifies the facility staff on the same transaction', async () => {
       const lines = [
         { itemId: 'i-1', quantity: 2 },
-        { name: '  Thùng   sách ', quantity: 1 },
+        { name: '  Thùng   sách ', quantity: 1, unit: 'BAG' },
       ];
 
       const result = await customerService.create('c-1', body({ lines, note: ' hi ' }), customer);
@@ -120,8 +126,8 @@ describe('drop-off requests', () => {
           customerId: 'cust-1',
           note: 'hi',
           lines: [
-            { itemId: 'i-1', name: 'Sách', quantity: 2 },
-            { itemId: null, name: 'Thùng sách', quantity: 1 },
+            { itemId: 'i-1', name: 'Sách', quantity: 2, unit: 'BOX' },
+            { itemId: null, name: 'Thùng sách', quantity: 1, unit: 'BAG' },
           ],
         }),
       );
@@ -148,11 +154,37 @@ describe('drop-off requests', () => {
         expect.objectContaining({
           note: null,
           lines: [
-            { itemId: 'i-1', name: 'Sách', quantity: 1 },
-            { itemId: 'i-2', name: 'Chăn bông', quantity: 3 },
+            { itemId: 'i-1', name: 'Sách', quantity: 1, unit: 'BOX' },
+            { itemId: 'i-2', name: 'Chăn bông', quantity: 3, unit: 'BOX' },
           ],
         }),
       );
+    });
+
+    it('requires a unit for a new item and refuses another unit for an existing one', async () => {
+      await expect(
+        customerService.create('c-1', body({ lines: [{ name: 'Đèn', quantity: 1 }] }), customer),
+      ).rejects.toMatchObject({
+        status: 400,
+        response: { details: { fields: [{ field: 'lines[0].unit', code: 'unitRequired' }] } },
+      });
+      await expect(
+        customerService.create(
+          'c-1',
+          body({ lines: [{ name: 'sách', quantity: 1, unit: 'PIECE' }] }),
+          customer,
+        ),
+      ).rejects.toMatchObject({
+        status: 409,
+        response: {
+          code: 'DROP_OFF_REQUEST_NOT_ALLOWED',
+          details: {
+            reason: 'UNIT_MISMATCH',
+            items: [{ itemId: 'i-1', name: 'Sách', unit: 'BOX', requested: 'PIECE' }],
+          },
+        },
+      });
+      expect(em.insert).not.toHaveBeenCalled();
     });
 
     it('stores a blank note as null', async () => {

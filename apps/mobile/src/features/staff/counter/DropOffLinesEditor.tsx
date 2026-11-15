@@ -1,4 +1,4 @@
-import type { ShelfItemView } from '@storage/types';
+import type { ShelfItemUnit, ShelfItemView } from '@storage/types';
 import { Button } from 'heroui-native';
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
@@ -9,7 +9,10 @@ import {
   type ReceiptDraft,
   removeLine,
   setQuantity,
+  setUnit,
 } from '../../../../lib/shelf-receipt-draft';
+import { DEFAULT_UNIT, quantityWithUnit, unitLabel } from '../../../../lib/shelf-storage-format';
+import { UnitPicker } from '../../../components/UnitPicker';
 import { QuantityStepper } from './QuantityStepper';
 
 /** Receiving goods: tap an item already on the shelf to add more, or type a new item. */
@@ -23,9 +26,11 @@ export function DropOffLinesEditor({
   onChange: (draft: ReceiptDraft) => void;
 }) {
   const [name, setName] = useState('');
+  const [unit, setNewUnit] = useState<ShelfItemUnit>(DEFAULT_UNIT);
   const add = () => {
-    onChange(addNewItem(draft, name));
+    onChange(addNewItem(draft, name, unit));
     setName('');
+    setNewUnit(DEFAULT_UNIT);
   };
   return (
     <View className="gap-3">
@@ -41,7 +46,7 @@ export function DropOffLinesEditor({
                 onPress={() => onChange(addTopUp(draft, item))}
               >
                 <Text className="font-ui text-body-sm text-foreground">
-                  + {item.name} ({item.quantity})
+                  + {item.name} ({quantityWithUnit(item.quantity, item.unit)})
                 </Text>
               </Pressable>
             ))}
@@ -63,11 +68,21 @@ export function DropOffLinesEditor({
           <Button.Label>Thêm</Button.Label>
         </Button>
       </View>
+      <UnitPicker label="Đơn vị món mới" value={unit} onChange={setNewUnit} />
 
       {draft.lines.map((line) => (
         <View key={line.key} className="flex-row items-center justify-between gap-3">
-          <View className="flex-1">
-            <Text className="font-body text-body-md text-foreground">{line.name}</Text>
+          <View className="flex-1 gap-1">
+            <Text className="font-body text-body-md text-foreground">
+              {line.name}
+              {line.itemId ? ` · ${unitLabel(line.unit)}` : ''}
+            </Text>
+            {line.itemId ? null : (
+              <UnitPicker
+                value={line.unit}
+                onChange={(next) => onChange(setUnit(draft, line.key, next))}
+              />
+            )}
             <Pressable
               accessibilityRole="button"
               onPress={() => onChange(removeLine(draft, line.key))}

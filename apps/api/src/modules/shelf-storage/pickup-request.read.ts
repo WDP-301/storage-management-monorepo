@@ -1,10 +1,11 @@
 import type { PickupRequestLine } from '@entities/pickup-request.entity';
-import type {
-  PickupRequestStatus,
-  PickupRequestView,
-  ShelfPersonRef,
-  ShelfRef,
-  ShelfStaffRef,
+import {
+  type PickupRequestStatus,
+  type PickupRequestView,
+  ShelfItemUnit,
+  type ShelfPersonRef,
+  type ShelfRef,
+  type ShelfStaffRef,
 } from '@storage/types';
 import type { EntityManager } from 'typeorm';
 
@@ -99,13 +100,15 @@ export async function loadPickupRequests(
   if (rows.length === 0) return [];
 
   const itemIds = [...new Set(rows.flatMap((row) => row.lines.map((line) => line.itemId)))];
-  const stock: { id: string; quantity: number }[] =
+  // Units are read from the item, which never changes its unit, so request lines need no copy.
+  const stock: { id: string; quantity: number; unit: ShelfItemUnit }[] =
     itemIds.length > 0
-      ? await em.query(`SELECT "id", "quantity" FROM "shelf_items" WHERE "id" = ANY($1::uuid[])`, [
-          itemIds,
-        ])
+      ? await em.query(
+          `SELECT "id", "quantity", "unit" FROM "shelf_items" WHERE "id" = ANY($1::uuid[])`,
+          [itemIds],
+        )
       : [];
-  const available = new Map(stock.map((item) => [item.id, item.quantity]));
+  const byId = new Map(stock.map((item) => [item.id, item]));
 
   return rows.map((row) => {
     const shelf: ShelfRef = { id: row.shelfId, code: row.shelfCode, name: row.shelfName };
@@ -134,7 +137,11 @@ export async function loadPickupRequests(
       customer,
       requestedFor: row.requestedFor,
       note: row.note,
-      lines: row.lines.map((line) => ({ ...line, available: available.get(line.itemId) ?? 0 })),
+      lines: row.lines.map((line) => ({
+        ...line,
+        unit: byId.get(line.itemId)?.unit ?? ShelfItemUnit.PACKAGE,
+        available: byId.get(line.itemId)?.quantity ?? 0,
+      })),
       createdAt: row.createdAt,
       readyAt: row.readyAt,
       readyBy,

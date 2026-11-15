@@ -30,8 +30,8 @@ const ctx = {
   note: ' ',
 };
 const items = [
-  { id: 'i1', name: 'Sách', quantity: 5 },
-  { id: 'i2', name: 'Chăn', quantity: 2 },
+  { id: 'i1', name: 'Sách', quantity: 5, unit: 'BOX' },
+  { id: 'i2', name: 'Chăn', quantity: 2, unit: 'PIECE' },
 ];
 
 test('cleanName composes accents so typed and pasted names match', () => {
@@ -47,16 +47,27 @@ test('top-up raises an existing line, new item merges with a same-named line', (
   let draft = d.newDraft('DROP_OFF');
   draft = d.addTopUp(draft, items[0]);
   draft = d.addTopUp(draft, items[0]);
-  draft = d.addNewItem(draft, ' sách ');
+  draft = d.addNewItem(draft, ' sách ', 'PIECE');
   assert.equal(draft.lines.length, 1);
   assert.equal(draft.lines[0].quantity, 3);
-  draft = d.addNewItem(draft, 'Đèn   bàn');
+  assert.equal(draft.lines[0].unit, 'BOX');
+  draft = d.addNewItem(draft, 'Đèn   bàn', 'PIECE');
   assert.equal(draft.lines[1].name, 'Đèn bàn');
-  assert.equal(d.addNewItem(draft, '   ').lines.length, 2);
+  assert.equal(draft.lines[1].unit, 'PIECE');
+  assert.equal(d.addNewItem(draft, '   ', 'PIECE').lines.length, 2);
+});
+
+test('only a new item can change its unit', () => {
+  let draft = d.addNewItem(d.addTopUp(d.newDraft('DROP_OFF'), items[0]), 'Đèn', 'PACKAGE');
+  draft = d.setUnit(d.setUnit(draft, 'i1', 'BAG'), draft.lines[1].key, 'BAG');
+  assert.deepEqual(
+    draft.lines.map((l) => l.unit),
+    ['BOX', 'BAG'],
+  );
 });
 
 test('drop-off input needs a line and a photo, and sends itemId or name', () => {
-  let draft = d.addNewItem(d.addTopUp(d.newDraft('DROP_OFF'), items[0]), 'Đèn');
+  let draft = d.addNewItem(d.addTopUp(d.newDraft('DROP_OFF'), items[0]), 'Đèn', 'PIECE');
   assert.deepEqual(d.toReceiptInput(d.newDraft('DROP_OFF'), ctx), {
     error: 'Thêm ít nhất một món với số lượng từ 1.',
   });
@@ -64,7 +75,7 @@ test('drop-off input needs a line and a photo, and sends itemId or name', () => 
   const { input } = d.toReceiptInput(draft, ctx);
   assert.deepEqual(input.lines, [
     { itemId: 'i1', quantity: 1 },
-    { name: 'Đèn', quantity: 1 },
+    { name: 'Đèn', quantity: 1, unit: 'PIECE' },
   ]);
   assert.equal(input.note, undefined);
   assert.equal(input.pickupRequestId, undefined);

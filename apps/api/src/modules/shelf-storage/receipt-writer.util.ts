@@ -99,13 +99,14 @@ export async function insertReceipt(em: EntityManager, input: NewReceipt): Promi
     ],
   );
   await em.query(
-    `INSERT INTO "shelf_receipt_lines" ("receipt_id", "item_id", "name", "quantity")
-     SELECT $1, t.* FROM unnest($2::uuid[], $3::text[], $4::int[]) AS t`,
+    `INSERT INTO "shelf_receipt_lines" ("receipt_id", "item_id", "name", "quantity", "unit")
+     SELECT $1, t.* FROM unnest($2::uuid[], $3::text[], $4::int[], $5::text[]) AS t`,
     [
       row.id,
       input.lines.map((line) => line.itemId),
       input.lines.map((line) => line.name),
       input.lines.map((line) => line.quantity),
+      input.lines.map((line) => line.unit),
     ],
   );
   return row.id;

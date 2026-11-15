@@ -2,6 +2,7 @@ import type {
   ContractStatus,
   DropOffRequestStatus,
   PickupRequestStatus,
+  ShelfItemUnit,
   ShelfReceiptStatus,
   ShelfReceiptType,
 } from './domain.enums';
@@ -30,6 +31,7 @@ export interface ShelfItemView {
   id: string;
   name: string;
   quantity: number;
+  unit: ShelfItemUnit;
   updatedAt: string | Date;
 }
 
@@ -49,6 +51,7 @@ export interface ShelfReceiptLineView {
   itemId: string;
   name: string;
   quantity: number;
+  unit: ShelfItemUnit;
 }
 
 export interface ShelfReceiptView {
@@ -92,6 +95,7 @@ export interface PickupRequestLineView {
   itemId: string;
   name: string;
   quantity: number;
+  unit: ShelfItemUnit;
   /** Current stock of the item. */
   available: number;
 }
@@ -121,6 +125,7 @@ export interface DropOffRequestLineView {
   itemId: string | null;
   name: string;
   quantity: number;
+  unit: ShelfItemUnit;
 }
 
 export interface DropOffRequestView {
@@ -205,6 +210,11 @@ export interface ShelfReceiptLineInput {
   itemId?: string;
   name?: string;
   quantity: number;
+  /**
+   * Required with `name` when it starts a new item. With `itemId`, or a name matching an item,
+   * it may be left out; if given it must be that item's unit.
+   */
+  unit?: ShelfItemUnit;
 }
 
 export interface CreateShelfReceiptInput {
@@ -258,6 +268,8 @@ export interface DropOffRequestLineInput {
   itemId?: string;
   name?: string;
   quantity: number;
+  /** Same rule as `ShelfReceiptLineInput.unit`. */
+  unit?: ShelfItemUnit;
 }
 
 export interface CreateDropOffRequestInput {

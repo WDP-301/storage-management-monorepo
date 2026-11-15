@@ -1,7 +1,7 @@
 import type { ShelfReceiptView as ShelfReceipt } from '@storage/types';
 import { Text, View } from 'react-native';
 import { formatIsoDateTime } from '../../lib/format-vi';
-import { receiptTypeLabel, recoveredLabel } from '../../lib/shelf-storage-format';
+import { quantityWithUnit, receiptTypeLabel, recoveredLabel } from '../../lib/shelf-storage-format';
 import { StatusPill } from '../features/customer/contract-display';
 import { EvidenceGallery } from './EvidenceGallery';
 import { ReceiptDisputeRow } from './ReceiptDisputeRow';
@@ -48,7 +48,9 @@ export function ShelfReceiptView({
         {receipt.lines.map((line) => (
           <View key={line.itemId} className="flex-row items-center justify-between gap-3">
             <Text className="flex-1 font-body text-body-md text-foreground">{line.name}</Text>
-            <Text className="font-strong text-body-md text-foreground">×{line.quantity}</Text>
+            <Text className="font-strong text-body-md text-foreground">
+              ×{quantityWithUnit(line.quantity, line.unit)}
+            </Text>
           </View>
         ))}
       </View>

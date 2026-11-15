@@ -3,6 +3,7 @@ import {
   TIMESTAMP_WITH_OFFSET,
   TIMESTAMP_WITH_OFFSET_MESSAGE,
 } from '@shared/utils/timestamp-offset.util';
+import { ShelfItemUnit } from '@storage/types';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -38,6 +39,15 @@ export class DropOffRequestLineDto {
   @IsString()
   @MaxLength(300)
   name?: string;
+
+  @ApiPropertyOptional({
+    enum: Object.values(ShelfItemUnit),
+    description:
+      'Required when the line starts a new item; otherwise optional and must be the item unit',
+  })
+  @IsOptional()
+  @IsIn(Object.values(ShelfItemUnit))
+  unit?: ShelfItemUnit;
 
   @ApiProperty({ minimum: 1, maximum: 10000 })
   @IsInt()

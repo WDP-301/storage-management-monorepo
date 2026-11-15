@@ -1,5 +1,5 @@
 import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
-import type { ShelfItemView } from '@storage/types';
+import type { ShelfItemUnit, ShelfItemView } from '@storage/types';
 import { Button, useThemeColor } from 'heroui-native';
 import { CalendarBlank, Plus, X } from 'phosphor-react-native';
 import { useState } from 'react';
@@ -20,7 +20,13 @@ import {
 } from '../../../lib/pickup-request-draft';
 import { MAX_QUANTITY, nameKey } from '../../../lib/shelf-receipt-draft';
 import { ShelfStorageApi } from '../../../lib/shelf-storage-api';
-import { shelfErrorMessage } from '../../../lib/shelf-storage-format';
+import {
+  DEFAULT_UNIT,
+  quantityWithUnit,
+  shelfErrorMessage,
+  unitLabel,
+} from '../../../lib/shelf-storage-format';
+import { UnitPicker } from '../../components/UnitPicker';
 import { MonthCalendar } from './MonthCalendar';
 import { Stepper } from './PickupRequestForm';
 
@@ -41,6 +47,7 @@ export function DropOffRequestForm({
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [newLines, setNewLines] = useState<NewItemLine[]>([]);
   const [newName, setNewName] = useState('');
+  const [newUnit, setNewUnit] = useState<ShelfItemUnit>(DEFAULT_UNIT);
   const [dayIso, setDayIso] = useState<string | null>(null);
   const [hour, setHour] = useState<number | null>(null);
   const [note, setNote] = useState('');
@@ -64,9 +71,10 @@ export function DropOffRequestForm({
         [existing.id]: Math.min((current[existing.id] ?? 0) + 1, MAX_QUANTITY),
       }));
     } else {
-      setNewLines((lines) => addNewLine(lines, newName));
+      setNewLines((lines) => addNewLine(lines, newName, newUnit));
     }
     setNewName('');
+    setNewUnit(DEFAULT_UNIT);
   };
 
   const setNewQuantity = (key: string, quantity: number) =>
@@ -117,7 +125,9 @@ export function DropOffRequestForm({
             <View key={item.id} className="flex-row items-center justify-between gap-3">
               <View className="flex-1">
                 <Text className="font-body text-body-md text-foreground">{item.name}</Text>
-                <Text className="font-body text-caption text-muted">Trên kệ: {item.quantity}</Text>
+                <Text className="font-body text-caption text-muted">
+                  Trên kệ: {quantityWithUnit(item.quantity, item.unit)}
+                </Text>
               </View>
               <Stepper
                 value={quantities[item.id] ?? 0}
@@ -153,6 +163,7 @@ export function DropOffRequestForm({
             <Plus color="white" size={18} weight="bold" />
           </Pressable>
         </View>
+        <UnitPicker value={newUnit} onChange={setNewUnit} />
         {newLines.map((line) => (
           <View key={line.key} className="flex-row items-center justify-between gap-3">
             <Pressable
@@ -162,7 +173,9 @@ export function DropOffRequestForm({
               onPress={() => setNewQuantity(line.key, 0)}
             >
               <X color={mutedColor} size={14} weight="bold" />
-              <Text className="flex-1 font-body text-body-md text-foreground">{line.name}</Text>
+              <Text className="flex-1 font-body text-body-md text-foreground">
+                {line.name} · {unitLabel(line.unit)}
+              </Text>
             </Pressable>
             <Stepper
               value={line.quantity}

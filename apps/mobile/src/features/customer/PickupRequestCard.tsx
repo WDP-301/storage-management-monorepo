@@ -5,7 +5,11 @@ import { Alert, Text, View } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import { formatIsoDateTime } from '../../../lib/format-vi';
 import { ShelfStorageApi } from '../../../lib/shelf-storage-api';
-import { pickupStatusLabel, shelfErrorMessage } from '../../../lib/shelf-storage-format';
+import {
+  pickupStatusLabel,
+  quantityWithUnit,
+  shelfErrorMessage,
+} from '../../../lib/shelf-storage-format';
 import { StatusPill, type StatusTone } from './contract-display';
 
 const TONE: Record<PickupRequestView['status'], StatusTone> = {
@@ -59,7 +63,9 @@ export function PickupRequestCard({
       {request.lines.map((line) => (
         <View key={line.itemId} className="flex-row items-center justify-between gap-3">
           <Text className="flex-1 font-body text-body-sm text-foreground">{line.name}</Text>
-          <Text className="font-strong text-body-sm text-foreground">×{line.quantity}</Text>
+          <Text className="font-strong text-body-sm text-foreground">
+            ×{quantityWithUnit(line.quantity, line.unit)}
+          </Text>
         </View>
       ))}
       {request.note ? (

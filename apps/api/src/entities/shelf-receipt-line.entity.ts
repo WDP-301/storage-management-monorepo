@@ -1,8 +1,9 @@
 import { ShelfItem } from '@entities/shelf-item.entity';
 import { ShelfReceipt } from '@entities/shelf-receipt.entity';
+import { ShelfItemUnit } from '@storage/types';
 import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 
-/** One item and quantity on a receipt; `name` is the item's name when the receipt was saved. */
+/** One item and quantity on a receipt; `name` and `unit` are the item's when the receipt was saved. */
 @Entity('shelf_receipt_lines')
 @Index('UQ_shelf_receipt_lines_item', ['receiptId', 'itemId'], { unique: true })
 @Index('IDX_shelf_receipt_lines_item', ['itemId'])
@@ -21,6 +22,9 @@ export class ShelfReceiptLine {
 
   @Column({ type: 'int' })
   quantity: number;
+
+  @Column({ type: 'varchar', length: 10, default: ShelfItemUnit.PACKAGE })
+  unit: ShelfItemUnit;
 
   @ManyToOne(
     () => ShelfReceipt,

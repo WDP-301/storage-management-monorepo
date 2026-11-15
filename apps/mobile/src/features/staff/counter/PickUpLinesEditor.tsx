@@ -1,5 +1,6 @@
 import { Text, View } from 'react-native';
 import { type ReceiptDraft, setQuantity } from '../../../../lib/shelf-receipt-draft';
+import { quantityWithUnit } from '../../../../lib/shelf-storage-format';
 import { QuantityStepper } from './QuantityStepper';
 
 /** One stepper per item on the shelf (0 up to what is there); only items with a quantity are handed back. */
@@ -23,7 +24,9 @@ export function PickUpLinesEditor({
         <View key={line.key} className="flex-row items-center justify-between gap-3">
           <View className="flex-1">
             <Text className="font-body text-body-md text-foreground">{line.name}</Text>
-            <Text className="font-body text-caption text-muted">Trên kệ: {line.max}</Text>
+            <Text className="font-body text-caption text-muted">
+              Trên kệ: {quantityWithUnit(line.max ?? 0, line.unit)}
+            </Text>
           </View>
           <QuantityStepper
             value={line.quantity}

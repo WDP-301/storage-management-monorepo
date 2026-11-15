@@ -1,6 +1,6 @@
 import { EvidenceFileDto } from '@modules/inspection/dto/inspection-evidence.dto';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ShelfReceiptType } from '@storage/types';
+import { ShelfItemUnit, ShelfReceiptType } from '@storage/types';
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -39,6 +39,15 @@ export class ShelfReceiptLineDto {
   @IsString()
   @MaxLength(300)
   name?: string;
+
+  @ApiPropertyOptional({
+    enum: Object.values(ShelfItemUnit),
+    description:
+      'Required when the line starts a new item; otherwise optional and must be the item unit',
+  })
+  @IsOptional()
+  @IsIn(Object.values(ShelfItemUnit))
+  unit?: ShelfItemUnit;
 
   @ApiProperty({ minimum: 1, maximum: MAX_LINE_QUANTITY })
   @IsInt()

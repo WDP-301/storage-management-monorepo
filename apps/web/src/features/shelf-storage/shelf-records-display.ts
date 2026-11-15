@@ -1,6 +1,8 @@
 import {
   DropOffRequestStatus,
   PickupRequestStatus,
+  SHELF_ITEM_UNIT_LABEL,
+  type ShelfItemUnit,
   type ShelfReceiptLineView,
   ShelfReceiptStatus,
   ShelfReceiptType,
@@ -45,13 +47,32 @@ export const TICKET_STATUS_LABEL: Record<TicketStatus, string> = {
 export const VOID_REASON_MIN = 3;
 export const VOID_REASON_MAX = 500;
 
-/** `Tên ×n` for the first `max` lines, then "và k món khác". */
+/** `2 thùng`. */
+export const quantityWithUnit = (quantity: number, unit: ShelfItemUnit): string =>
+  `${quantity} ${SHELF_ITEM_UNIT_LABEL[unit] ?? 'kiện'}`;
+
+/**
+ * `12 thùng` when every line shares a unit; with several units, how many kinds of goods there
+ * are, since adding boxes to pieces counts nothing.
+ */
+export function totalLabel(lines: readonly { quantity: number; unit: ShelfItemUnit }[]): string {
+  if (lines.length === 0) return '0';
+  if (lines.some((line) => line.unit !== lines[0].unit)) return `${lines.length} loại`;
+  return quantityWithUnit(
+    lines.reduce((sum, line) => sum + line.quantity, 0),
+    lines[0].unit,
+  );
+}
+
+/** `Tên ×n thùng` for the first `max` lines, then "và k món khác". */
 export function summarizeLines(
-  lines: Pick<ShelfReceiptLineView, 'name' | 'quantity'>[],
+  lines: Pick<ShelfReceiptLineView, 'name' | 'quantity' | 'unit'>[],
   max = 3,
 ): string {
   if (lines.length === 0) return '—';
-  const head = lines.slice(0, max).map((line) => `${line.name} ×${line.quantity}`);
+  const head = lines
+    .slice(0, max)
+    .map((line) => `${line.name} ×${quantityWithUnit(line.quantity, line.unit)}`);
   const rest = lines.length - head.length;
   return rest > 0 ? `${head.join(', ')} và ${rest} món khác` : head.join(', ');
 }

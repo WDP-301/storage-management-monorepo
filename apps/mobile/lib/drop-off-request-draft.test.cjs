@@ -34,7 +34,7 @@ test('existing items go by id, new items by name, with the Vietnam offset and a 
   const result = toDropOffRequestInput(
     items,
     { a: 2, b: 0 },
-    [{ key: 'xe đạp', name: 'Xe đạp', quantity: 1 }],
+    [{ key: 'xe đạp', name: 'Xe đạp', quantity: 1, unit: 'PIECE' }],
     '2026-11-20',
     9,
     '  sáng mai  ',
@@ -43,7 +43,7 @@ test('existing items go by id, new items by name, with the Vietnam offset and a 
     input: {
       lines: [
         { itemId: 'a', quantity: 2 },
-        { name: 'Xe đạp', quantity: 1 },
+        { name: 'Xe đạp', quantity: 1, unit: 'PIECE' },
       ],
       requestedFor: '2026-11-20T09:00:00+07:00',
       note: 'sáng mai',
@@ -76,16 +76,18 @@ test('a typed name that is already on the shelf must be picked from the list', (
 });
 
 test('adding the same name twice raises the quantity instead of a second line', () => {
-  const once = addNewLine([], '  Xe   đạp ');
-  assert.deepEqual(once, [{ key: 'xe đạp', name: 'Xe đạp', quantity: 1 }]);
-  assert.deepEqual(addNewLine(once, 'XE ĐẠP'), [{ key: 'xe đạp', name: 'Xe đạp', quantity: 2 }]);
-  assert.deepEqual(addNewLine(once, '   '), once);
+  const once = addNewLine([], '  Xe   đạp ', 'PIECE');
+  assert.deepEqual(once, [{ key: 'xe đạp', name: 'Xe đạp', unit: 'PIECE', quantity: 1 }]);
+  assert.deepEqual(addNewLine(once, 'XE ĐẠP', 'PIECE'), [
+    { key: 'xe đạp', name: 'Xe đạp', unit: 'PIECE', quantity: 2 },
+  ]);
+  assert.deepEqual(addNewLine(once, '   ', 'PIECE'), once);
 });
 
 test('a drop-off receipt prefilled from a request carries its lines and the request id', () => {
   const draft = prefillDropOff([
-    { itemId: 'a', name: 'Sách', quantity: 2 },
-    { itemId: null, name: 'Xe đạp', quantity: 1 },
+    { itemId: 'a', name: 'Sách', quantity: 2, unit: 'BOX' },
+    { itemId: null, name: 'Xe đạp', quantity: 1, unit: 'PIECE' },
   ]);
   assert.equal(draft.type, 'DROP_OFF');
   const built = toReceiptInput(draft, {
@@ -99,7 +101,7 @@ test('a drop-off receipt prefilled from a request carries its lines and the requ
   });
   assert.deepEqual(built.input.lines, [
     { itemId: 'a', quantity: 2 },
-    { name: 'Xe đạp', quantity: 1 },
+    { name: 'Xe đạp', quantity: 1, unit: 'PIECE' },
   ]);
   assert.equal(built.input.dropOffRequestId, 'req-1');
   assert.equal('pickupRequestId' in built.input, false);

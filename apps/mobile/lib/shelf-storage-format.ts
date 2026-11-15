@@ -5,11 +5,34 @@ import type {
   PickUpBlockReason,
   PickupRequestBlockReason,
   PickupRequestStatus,
+  ShelfItemUnit,
   ShelfReceiptType,
 } from '@storage/types';
 import { formatIsoDateTime } from './format-vi';
 
 /** Vietnamese wording for shelf storage; pure so the rules are testable. */
+
+/**
+ * Units in the order the pickers show them. Mirrors SHELF_ITEM_UNIT_LABEL of @storage/types,
+ * kept here because lib files only import types from that package.
+ */
+export const SHELF_UNITS: readonly { unit: ShelfItemUnit; label: string; hint: string }[] = [
+  { unit: 'PACKAGE', label: 'kiện', hint: 'Đồ đã bọc, quấn kín: màng co, bạt, xốp, buộc dây' },
+  { unit: 'BOX', label: 'thùng', hint: 'Hộp cứng đóng kín: thùng carton, thùng nhựa, thùng xốp' },
+  { unit: 'BAG', label: 'bao', hint: 'Vật chứa mềm: bao tải, túi lớn, túi hút chân không' },
+  {
+    unit: 'PIECE',
+    label: 'cái',
+    hint: 'Món rời thấy nguyên món: ghế, quạt, vali, xe đạp. Bộ bàn ghế thì đếm từng cái',
+  },
+];
+/** New items start as a package: what customers bring most. */
+export const DEFAULT_UNIT: ShelfItemUnit = 'PACKAGE';
+export const unitLabel = (unit: ShelfItemUnit | undefined): string =>
+  SHELF_UNITS.find((option) => option.unit === unit)?.label ?? 'kiện';
+/** `2 thùng`. */
+export const quantityWithUnit = (quantity: number, unit: ShelfItemUnit | undefined): string =>
+  `${quantity} ${unitLabel(unit)}`;
 
 const RECEIPT_TYPE_LABEL: Record<ShelfReceiptType, string> = {
   DROP_OFF: 'Phiếu gửi đồ',
@@ -70,17 +93,30 @@ const DROP_OFF_REQUEST_BLOCK: Record<DropOffRequestBlockReason, string> = {
 export const dropOffRequestBlockLabel = (reason: DropOffRequestBlockReason): string =>
   DROP_OFF_REQUEST_BLOCK[reason] ?? 'Chưa thể tạo yêu cầu gửi đồ';
 
-type NamedQuantity = { name: string; quantity: number };
+type NamedQuantity = { name: string; quantity: number; unit?: ShelfItemUnit };
 
-/** `Sách ×2, Chăn ×1 và 3 món khác`: the first lines, then how many more there are. */
+/** `Sách ×2 thùng, Chăn ×1 cái và 3 món khác`: the first lines, then how many more there are. */
 export function linesSummary(lines: readonly NamedQuantity[], max = 3): string {
-  const shown = lines.slice(0, max).map((line) => `${line.name} ×${line.quantity}`);
+  const shown = lines
+    .slice(0, max)
+    .map((line) => `${line.name} ×${quantityWithUnit(line.quantity, line.unit)}`);
   const rest = lines.length - shown.length;
   return rest > 0 ? `${shown.join(', ')} và ${rest} món khác` : shown.join(', ');
 }
 
 export const totalQuantity = (lines: readonly { quantity: number }[]): number =>
   lines.reduce((sum, line) => sum + line.quantity, 0);
+
+/**
+ * `12 thùng` when every line shares a unit, else null: adding 2 boxes to 3 pieces gives a number
+ * that counts nothing.
+ */
+export function totalWithUnit(
+  lines: readonly { quantity: number; unit: ShelfItemUnit }[],
+): string | null {
+  if (lines.length === 0 || lines.some((line) => line.unit !== lines[0].unit)) return null;
+  return quantityWithUnit(totalQuantity(lines), lines[0].unit);
+}
 
 /** Whole seconds from `nowMs` to `deadlineMs` (device-clock ms), never negative. */
 export function secondsUntil(deadlineMs: number, nowMs: number): number {
@@ -110,9 +146,19 @@ function effectiveDate(details: Details): string {
   return typeof at === 'string' ? formatIsoDateTime(at) : '';
 }
 
+function unitMismatchMessage(details: Details): string {
+  const list = itemList(
+    details,
+    'items',
+    (item) => `${item.name} đang tính theo ${unitLabel(item.unit as ShelfItemUnit)}`,
+  );
+  return list ? `Sai đơn vị: ${list}.` : 'Đơn vị khác với món đang có trên kệ.';
+}
+
 const FIELD_ERROR: Record<string, string> = {
   lineShape: 'Mỗi dòng đồ cần tên hoặc món đã có, kèm số lượng từ 1 trở lên.',
   duplicateLine: 'Có món bị nhập trùng, hãy gộp thành một dòng.',
+  unitRequired: 'Chọn đơn vị cho món mới.',
   notOwnUpload: 'Ảnh không hợp lệ, hãy chụp lại ảnh rồi thử lại.',
   required: 'Cần ít nhất một ảnh.',
   notAllowed: 'Phiếu gửi đồ không thể gắn với yêu cầu lấy đồ.',
@@ -167,6 +213,7 @@ export function shelfErrorMessage(
       if (reason === 'DROP_OFF_REQUEST_MISMATCH')
         return 'Yêu cầu gửi đồ không còn khớp với kệ này.';
       if (reason === 'ITEM_NOT_IN_CONTRACT') return 'Có món không thuộc kệ của khách.';
+      if (reason === 'UNIT_MISMATCH') return unitMismatchMessage(details);
       if (reason === 'CLIENT_REQUEST_REUSED')
         return 'Phiếu này đã được lưu cho kệ khác. Tạo phiếu mới.';
       if (reason === 'NOT_ABANDONED_RETURN')
@@ -203,6 +250,7 @@ export function shelfErrorMessage(
           : 'Hợp đồng chưa bắt đầu vào thời gian này.';
       }
       if (reason === 'ITEM_NOT_IN_CONTRACT') return 'Có món không còn thuộc kệ của bạn.';
+      if (reason === 'UNIT_MISMATCH') return unitMismatchMessage(details);
       if (reason === 'NOT_PENDING') return 'Yêu cầu này đã được xử lý.';
       if (reason === 'NOT_OPEN') return 'Yêu cầu này đã đóng.';
       return fallback;

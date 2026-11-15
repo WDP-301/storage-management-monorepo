@@ -133,7 +133,7 @@ export async function loadReceipts(
   if (rows.length === 0) return { receipts: [], total };
 
   const lineRows: (ShelfReceiptLineView & { receiptId: string })[] = await em.query(
-    `SELECT "receipt_id" AS "receiptId", "item_id" AS "itemId", "name", "quantity"
+    `SELECT "receipt_id" AS "receiptId", "item_id" AS "itemId", "name", "quantity", "unit"
        FROM "shelf_receipt_lines" WHERE "receipt_id" = ANY($1::uuid[]) ORDER BY "name", "id"`,
     [rows.map((row) => row.id)],
   );

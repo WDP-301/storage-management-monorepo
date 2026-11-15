@@ -288,6 +288,28 @@ export const ShelfReceiptType = {
 } as const;
 export type ShelfReceiptType = (typeof ShelfReceiptType)[keyof typeof ShelfReceiptType];
 
+/**
+ * How a shelf item is counted. Fixed when the item is first dropped off: "Sách ×2" alone does not
+ * say whether two books or two boxes of books are on the shelf. Every unit is one thing staff can
+ * lift and count at the counter; there is deliberately no "set", since "1 bộ" hides how many
+ * pieces were handed over.
+ */
+export const ShelfItemUnit = {
+  PACKAGE: 'PACKAGE',
+  BOX: 'BOX',
+  BAG: 'BAG',
+  PIECE: 'PIECE',
+} as const;
+export type ShelfItemUnit = (typeof ShelfItemUnit)[keyof typeof ShelfItemUnit];
+
+/** Vietnamese unit words, shared by the API's notifications and both apps. */
+export const SHELF_ITEM_UNIT_LABEL: Record<ShelfItemUnit, string> = {
+  PACKAGE: 'kiện',
+  BOX: 'thùng',
+  BAG: 'bao',
+  PIECE: 'cái',
+};
+
 export const ShelfReceiptStatus = {
   ACTIVE: 'ACTIVE',
   VOIDED: 'VOIDED',

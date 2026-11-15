@@ -105,7 +105,7 @@ describe('insertReceipt', () => {
       photos: [{ fileKey: 'uploads/m-1-a', name: 'a', mimeType: 'image/jpeg' }],
       pickupRequestId: null,
       dropOffRequestId: null,
-      lines: [{ itemId: 'i-1', name: 'Sách', quantity: 2 }],
+      lines: [{ itemId: 'i-1', name: 'Sách', quantity: 2, unit: 'BOX' }],
     });
     expect(id).toBe('r-1');
     const [, params] = query.mock.calls[0] as unknown as [string, unknown[]];
@@ -125,6 +125,6 @@ describe('insertReceipt', () => {
       null,
       null,
     ]);
-    expect(query.mock.calls[1][1]).toEqual(['r-1', ['i-1'], ['Sách'], [2]]);
+    expect(query.mock.calls[1][1]).toEqual(['r-1', ['i-1'], ['Sách'], [2], ['BOX']]);
   });
 });

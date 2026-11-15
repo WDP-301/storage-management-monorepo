@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
 import { formatIsoDateTime } from '../../../../lib/format-vi';
 import { ShelfStorageApi } from '../../../../lib/shelf-storage-api';
-import { dropOffStatusLabel } from '../../../../lib/shelf-storage-format';
+import { dropOffStatusLabel, quantityWithUnit } from '../../../../lib/shelf-storage-format';
 import { StatusPill } from '../../customer/contract-display';
 import { shelfApiError } from '../staff-errors';
 import { ListState } from './ListState';
@@ -74,7 +74,9 @@ export function WarehouseDropOffRequests({ warehouseId }: { warehouseId: string 
                 {line.name}
                 {line.itemId ? '' : ' (món mới)'}
               </Text>
-              <Text className="font-strong text-body-sm text-foreground">×{line.quantity}</Text>
+              <Text className="font-strong text-body-sm text-foreground">
+                ×{quantityWithUnit(line.quantity, line.unit)}
+              </Text>
             </View>
           ))}
           {request.note ? (

@@ -53,6 +53,17 @@ export class DropOffRequest {
   @Column({ type: 'varchar', length: 12, default: DropOffRequestStatus.PENDING })
   status: DropOffRequestStatus;
 
+  /**
+   * Staff member responsible, given round robin among those on shift at `requestedFor`. Anyone at
+   * the facility may still serve the request; null = nobody was on shift, the branch handles it.
+   */
+  @Column({ type: 'uuid', nullable: true, name: 'assigned_to' })
+  assignedTo: string | null;
+
+  /** When `assignedTo` was set; the rotation continues after the latest one. */
+  @Column({ type: 'timestamptz', nullable: true, name: 'assigned_at' })
+  assignedAt: Date | null;
+
   @Column({ type: 'timestamptz', nullable: true, name: 'confirmed_at' })
   confirmedAt: Date | null;
 

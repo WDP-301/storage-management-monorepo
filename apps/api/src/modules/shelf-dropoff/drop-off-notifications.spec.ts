@@ -86,4 +86,30 @@ describe('drop-off notifications', () => {
     });
     expect(payload.data).not.toHaveProperty('contractId');
   });
+
+  describe('with an assignee', () => {
+    const assigned = { ...view, assignedTo: { id: 'u1', fullName: 'Lan' } } as DropOffRequestView;
+    // Managers only: the assignee already got their own notice from the assignment.
+    const managerEm = () => ({ query: jest.fn().mockResolvedValue([{ userId: 'boss' }]) });
+
+    it('tells only the managers about the new request, naming the assignee', async () => {
+      const notifications = { createForUsers: jest.fn() };
+
+      await notifyDropOffCreated(managerEm() as never, notifications as never, assigned, 'fac-1');
+
+      const [, userIds, payload] = notifications.createForUsers.mock.calls[0];
+      expect(userIds).toEqual(['boss']);
+      expect(payload.body).toBe(
+        'An muốn gửi Sách ×2 thùng, Chăn ×1 cái vào kệ K-01 lúc 09:30 10/11 · giao cho Lan',
+      );
+    });
+
+    it('tells the assignee and the managers when the customer cancels', async () => {
+      const notifications = { createForUsers: jest.fn() };
+
+      await notifyDropOffCancelled(managerEm() as never, notifications as never, assigned, 'fac-1');
+
+      expect(notifications.createForUsers.mock.calls[0][1]).toEqual(['u1', 'boss']);
+    });
+  });
 });

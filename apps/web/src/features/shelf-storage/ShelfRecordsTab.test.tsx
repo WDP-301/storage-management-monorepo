@@ -74,6 +74,7 @@ describe('ShelfRecordsTab', () => {
           { itemId: null, name: 'Xe đạp', quantity: 1, unit: 'PIECE' },
         ],
         createdAt: '2026-11-12T02:00:00.000Z',
+        assignedTo: { id: 'st2', fullName: 'Nhân viên Lan' },
         confirmedAt: '2026-11-12T03:00:00.000Z',
         confirmedBy: { id: 'st1', fullName: 'Nhân viên Bình' },
         cancelledAt: null,
@@ -126,6 +127,7 @@ describe('ShelfRecordsTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Yêu cầu gửi đồ' }));
     expect(await screen.findByText(/Xe đạp ×1 cái \(món mới\)/)).toBeTruthy();
     expect(screen.getByText(/Thùng sách ×2 thùng/)).toBeTruthy();
+    expect(screen.getByText('Nhân viên Lan')).toBeTruthy();
     expect(screen.getByText('Đã xác nhận')).toBeTruthy();
     expect(screen.getByText('Mang thêm thùng')).toBeTruthy();
     expect(api.warehouseDropOffRequests).toHaveBeenLastCalledWith('w1', 'OPEN');

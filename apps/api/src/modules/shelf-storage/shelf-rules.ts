@@ -103,6 +103,10 @@ export function linesSummary(
   return rest > 0 ? `${shown.join(', ')} và ${rest} món khác` : shown.join(', ');
 }
 
+/** ` · giao cho Lan` on a branch notice about an assigned request; empty when unassigned. */
+export const assigneeSuffix = (assignedTo: { fullName: string } | null): string =>
+  assignedTo ? ` · giao cho ${assignedTo.fullName}` : '';
+
 const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 /** `09:30 10/11` in Vietnam time, without Intl so the output is fixed across runtimes. */

@@ -2,12 +2,14 @@ import type { NotificationsService } from '@modules/notifications/notifications.
 import { NotificationType, type PickupRequestView } from '@storage/types';
 import type { EntityManager } from 'typeorm';
 import { findFacilityStaffIds } from '../shelf-storage/facility-staff.query';
-import { linesSummary, timeVi } from '../shelf-storage/shelf-rules';
+import { shelfRequestRecipients } from '../shelf-storage/shelf-request-assignment';
+import { assigneeSuffix, linesSummary, timeVi } from '../shelf-storage/shelf-rules';
 
 /**
- * Tells the active staff and managers of the shelf warehouse's facility about a new request.
- * Runs on the caller's transaction so the notice commits with the request. No contractId in the
- * data: staff have no customer contract screen to open.
+ * Tells the facility about a new request: its managers when it was assigned (the assignee got
+ * their own notice), every staff member and manager when nobody was on shift to take it. Runs on
+ * the caller's transaction so the notice commits with the request. No contractId in the data:
+ * staff have no customer contract screen to open.
  */
 export async function notifyFacilityStaff(
   em: EntityManager,
@@ -15,12 +17,16 @@ export async function notifyFacilityStaff(
   request: PickupRequestView,
   facilityId: string,
 ): Promise<void> {
-  await notifications.createForUsers(em, await findFacilityStaffIds(em, facilityId), {
+  const assigneeId = request.assignedTo?.id ?? null;
+  const recipients = assigneeId
+    ? (await shelfRequestRecipients(em, facilityId, assigneeId)).filter((id) => id !== assigneeId)
+    : await findFacilityStaffIds(em, facilityId);
+  await notifications.createForUsers(em, recipients, {
     type: NotificationType.PICKUP_REQUEST_CREATED,
     title: 'Yêu cầu lấy đồ mới',
     body: `${request.customer.fullName ?? 'Khách'} muốn lấy ${linesSummary(request.lines)} ở kệ ${
       request.shelf.code
-    } lúc ${timeVi(new Date(request.requestedFor))}`,
+    } lúc ${timeVi(new Date(request.requestedFor))}${assigneeSuffix(request.assignedTo)}`,
     data: { pickupRequestId: request.id, warehouseId: request.warehouse.id, facilityId },
   });
 }
@@ -39,14 +45,15 @@ export async function notifyRequestReady(
   });
 }
 
-/** Tells the facility's staff and managers the customer no longer needs the goods prepared. */
+/** Tells the assignee and managers (or the whole branch if unassigned) the goods are not needed. */
 export async function notifyRequestCancelled(
   em: EntityManager,
   notifications: NotificationsService,
   request: PickupRequestView,
   facilityId: string,
 ): Promise<void> {
-  await notifications.createForUsers(em, await findFacilityStaffIds(em, facilityId), {
+  const recipients = await shelfRequestRecipients(em, facilityId, request.assignedTo?.id ?? null);
+  await notifications.createForUsers(em, recipients, {
     type: NotificationType.PICKUP_REQUEST_CANCELLED,
     title: 'Khách hủy yêu cầu lấy đồ',
     body: `${request.customer.fullName ?? 'Khách'} đã hủy yêu cầu lấy ${linesSummary(

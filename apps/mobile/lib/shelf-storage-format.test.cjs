@@ -61,6 +61,25 @@ test('lines summary shows three lines and counts the rest', () => {
   assert.equal(f.totalQuantity([]), 0);
 });
 
+test('a request assignee reads from the viewer side', () => {
+  const lan = { id: 'u1', fullName: 'Lan' };
+  assert.deepEqual(f.assigneeLabel(lan, 'u1'), { text: 'Phụ trách: bạn', mine: true });
+  assert.deepEqual(f.assigneeLabel(lan, 'u2'), { text: 'Phụ trách: Lan', mine: false });
+  assert.deepEqual(f.assigneeLabel(null, 'u1'), { text: 'Chưa giao cho ai', mine: false });
+});
+
+test('my requests are only those assigned to me; all is everything', () => {
+  const requests = [
+    { id: 'a', assignedTo: { id: 'u1', fullName: 'Lan' } },
+    { id: 'b', assignedTo: { id: 'u2', fullName: 'Bình' } },
+    { id: 'c', assignedTo: null },
+  ];
+  const ids = (list) => list.map((r) => r.id);
+  assert.deepEqual(ids(f.requestsInScope(requests, 'MINE', 'u1')), ['a']);
+  assert.deepEqual(ids(f.requestsInScope(requests, 'ALL', 'u1')), ['a', 'b', 'c']);
+  assert.deepEqual(ids(f.requestsInScope(requests, 'MINE', undefined)), []);
+});
+
 test('a total with a unit is shown only when every line shares it', () => {
   assert.equal(
     f.totalWithUnit([

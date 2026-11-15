@@ -2,7 +2,8 @@ import type { NotificationsService } from '@modules/notifications/notifications.
 import { type DropOffRequestView, NotificationType } from '@storage/types';
 import type { EntityManager } from 'typeorm';
 import { findFacilityStaffIds } from '../shelf-storage/facility-staff.query';
-import { linesSummary, timeVi } from '../shelf-storage/shelf-rules';
+import { shelfRequestRecipients } from '../shelf-storage/shelf-request-assignment';
+import { assigneeSuffix, linesSummary, timeVi } from '../shelf-storage/shelf-rules';
 
 const staffData = (request: DropOffRequestView, facilityId: string) => ({
   dropOffRequestId: request.id,
@@ -11,9 +12,10 @@ const staffData = (request: DropOffRequestView, facilityId: string) => ({
 });
 
 /**
- * Tells the active staff and managers of the shelf warehouse's facility about a new request.
- * Runs on the caller's transaction so the notice commits with the request. No contractId in the
- * data: staff have no customer contract screen to open.
+ * Tells the facility about a new request: its managers when it was assigned (the assignee got
+ * their own notice), every staff member and manager when nobody was on shift to take it. Runs on
+ * the caller's transaction so the notice commits with the request. No contractId in the data:
+ * staff have no customer contract screen to open.
  */
 export async function notifyDropOffCreated(
   em: EntityManager,
@@ -21,12 +23,16 @@ export async function notifyDropOffCreated(
   request: DropOffRequestView,
   facilityId: string,
 ): Promise<void> {
-  await notifications.createForUsers(em, await findFacilityStaffIds(em, facilityId), {
+  const assigneeId = request.assignedTo?.id ?? null;
+  const recipients = assigneeId
+    ? (await shelfRequestRecipients(em, facilityId, assigneeId)).filter((id) => id !== assigneeId)
+    : await findFacilityStaffIds(em, facilityId);
+  await notifications.createForUsers(em, recipients, {
     type: NotificationType.DROP_OFF_REQUEST_CREATED,
     title: 'Yêu cầu gửi đồ mới',
     body: `${request.customer.fullName ?? 'Khách'} muốn gửi ${linesSummary(request.lines)} vào kệ ${
       request.shelf.code
-    } lúc ${timeVi(new Date(request.requestedFor))}`,
+    } lúc ${timeVi(new Date(request.requestedFor))}${assigneeSuffix(request.assignedTo)}`,
     data: staffData(request, facilityId),
   });
 }
@@ -47,14 +53,15 @@ export async function notifyDropOffConfirmed(
   });
 }
 
-/** Tells the facility's staff and managers the customer will not come with these goods. */
+/** Tells the assignee and managers (or the whole branch if unassigned) the goods are not coming. */
 export async function notifyDropOffCancelled(
   em: EntityManager,
   notifications: NotificationsService,
   request: DropOffRequestView,
   facilityId: string,
 ): Promise<void> {
-  await notifications.createForUsers(em, await findFacilityStaffIds(em, facilityId), {
+  const recipients = await shelfRequestRecipients(em, facilityId, request.assignedTo?.id ?? null);
+  await notifications.createForUsers(em, recipients, {
     type: NotificationType.DROP_OFF_REQUEST_CANCELLED,
     title: 'Khách hủy yêu cầu gửi đồ',
     body: `${request.customer.fullName ?? 'Khách'} đã hủy yêu cầu gửi ${linesSummary(

@@ -26,6 +26,7 @@ import { loadDropOffRequests } from '../shelf-storage/drop-off-request.read';
 import { type NormalizedLine, normalizeLines } from '../shelf-storage/receipt-input.util';
 import { assertUnits } from '../shelf-storage/receipt-stock.util';
 import { findShelfContracts, loadStock } from '../shelf-storage/shelf-contract.query';
+import { assignShelfRequestSafely } from '../shelf-storage/shelf-request-assignment';
 import {
   DROP_OFF_REQUEST_MAX_DAYS_AHEAD,
   dropOffRequestBlock,
@@ -208,6 +209,7 @@ export class DropOffRequestsService {
       note: note?.trim() || null,
       lines: stored,
     });
+    await assignShelfRequestSafely(em, 'DROP_OFF', identifiers[0].id, this.notifications);
     const [view] = await loadDropOffRequests(em, { ids: [identifiers[0].id], order: 'newest' });
     await notifyDropOffCreated(em, this.notifications, view, contract.facility.id);
     return view;

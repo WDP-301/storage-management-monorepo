@@ -1,10 +1,11 @@
 import type { DropOffRequestLine } from '@entities/drop-off-request.entity';
-import type {
-  DropOffRequestStatus,
-  DropOffRequestView,
-  ShelfPersonRef,
-  ShelfRef,
-  ShelfStaffRef,
+import {
+  type DropOffRequestStatus,
+  type DropOffRequestView,
+  ShelfItemUnit,
+  type ShelfPersonRef,
+  type ShelfRef,
+  type ShelfStaffRef,
 } from '@storage/types';
 import type { EntityManager } from 'typeorm';
 
@@ -126,6 +127,7 @@ export async function loadDropOffRequests(
         itemId: line.itemId ?? null,
         name: line.name,
         quantity: line.quantity,
+        unit: line.unit ?? ShelfItemUnit.PACKAGE,
       })),
       createdAt: row.createdAt,
       confirmedAt: row.confirmedAt,

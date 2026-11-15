@@ -3,7 +3,7 @@ import { PickupRequestStatus } from '@storage/types';
 import type React from 'react';
 import { ShelfStorageApi } from '../../lib/shelf-storage-api';
 import { formatDateTime } from '../inspections/inspection-display';
-import { PICKUP_REQUEST_STATUS_LABEL } from './shelf-records-display';
+import { PICKUP_REQUEST_STATUS_LABEL, quantityWithUnit } from './shelf-records-display';
 import { useShelfLoad } from './use-shelf-load';
 
 type Scope = 'OPEN' | 'ALL';
@@ -85,7 +85,9 @@ export const ShelfPickupRequestsPanel: React.FC<{
                     </span>
                   </Table.Cell>
                   <Table.Cell className="min-w-[220px] text-sm">
-                    {req.lines.map((l) => `${l.name} ×${l.quantity}`).join(', ')}
+                    {req.lines
+                      .map((l) => `${l.name} ×${quantityWithUnit(l.quantity, l.unit)}`)
+                      .join(', ')}
                     {req.note && <span className="block text-xs text-kumo-subtle">{req.note}</span>}
                   </Table.Cell>
                   <Table.Cell>

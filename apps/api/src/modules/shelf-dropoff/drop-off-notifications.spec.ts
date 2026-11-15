@@ -14,8 +14,8 @@ const view = {
   // 02:30 UTC = 09:30 in Vietnam
   requestedFor: new Date('2026-11-10T02:30:00Z'),
   lines: [
-    { itemId: 'i', name: 'Sách', quantity: 2 },
-    { itemId: null, name: 'Chăn', quantity: 1 },
+    { itemId: 'i', name: 'Sách', quantity: 2, unit: 'BOX' },
+    { itemId: null, name: 'Chăn', quantity: 1, unit: 'PIECE' },
   ],
 } as unknown as DropOffRequestView;
 
@@ -40,7 +40,7 @@ describe('drop-off notifications', () => {
     expect(payload).toEqual({
       type: 'DROP_OFF_REQUEST_CREATED',
       title: 'Yêu cầu gửi đồ mới',
-      body: 'An muốn gửi Sách ×2, Chăn ×1 vào kệ K-01 lúc 09:30 10/11',
+      body: 'An muốn gửi Sách ×2 thùng, Chăn ×1 cái vào kệ K-01 lúc 09:30 10/11',
       data: { dropOffRequestId: 'req-1', warehouseId: 'w-1', facilityId: 'fac-1' },
     });
   });
@@ -81,7 +81,7 @@ describe('drop-off notifications', () => {
     expect(payload).toEqual({
       type: 'DROP_OFF_REQUEST_CANCELLED',
       title: 'Khách hủy yêu cầu gửi đồ',
-      body: 'An đã hủy yêu cầu gửi Sách ×2, Chăn ×1 vào kệ K-01 (hẹn 09:30 10/11)',
+      body: 'An đã hủy yêu cầu gửi Sách ×2 thùng, Chăn ×1 cái vào kệ K-01 (hẹn 09:30 10/11)',
       data: { dropOffRequestId: 'req-1', warehouseId: 'w-1', facilityId: 'fac-1' },
     });
     expect(payload.data).not.toHaveProperty('contractId');

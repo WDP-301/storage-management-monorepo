@@ -8,6 +8,7 @@ import {
   linesSummary,
   pickUpBlockLabel,
   pickupStatusLabel,
+  quantityWithUnit,
   receiptTypeLabel,
 } from '../../../../lib/shelf-storage-format';
 import { StatusPill } from '../../customer/contract-display';
@@ -40,7 +41,9 @@ export function CounterContractCard({ contract, onDropOff, onPickUp, onOpenRecei
           items.map((item) => (
             <View key={item.id} className="flex-row justify-between gap-3">
               <Text className="flex-1 font-body text-body-sm text-foreground">{item.name}</Text>
-              <Text className="font-strong text-body-sm text-foreground">×{item.quantity}</Text>
+              <Text className="font-strong text-body-sm text-foreground">
+                ×{quantityWithUnit(item.quantity, item.unit)}
+              </Text>
             </View>
           ))
         )}

@@ -1,6 +1,6 @@
 import { AppUser } from '@entities/app-user.entity';
 import { Contract } from '@entities/contract.entity';
-import { DropOffRequestStatus } from '@storage/types';
+import { DropOffRequestStatus, type ShelfItemUnit } from '@storage/types';
 import {
   Column,
   CreateDateColumn,
@@ -17,6 +17,8 @@ export interface DropOffRequestLine {
   itemId: string | null;
   name: string;
   quantity: number;
+  /** Missing only on a line written by an instance from before units, during a deploy. */
+  unit?: ShelfItemUnit;
 }
 
 /**
@@ -44,7 +46,7 @@ export class DropOffRequest {
   @Column({ type: 'varchar', length: 500, nullable: true })
   note: string | null;
 
-  /** Item names are snapshots of what the customer announced. */
+  /** Item names and units are snapshots of what the customer announced. */
   @Column({ type: 'jsonb' })
   lines: DropOffRequestLine[];
 

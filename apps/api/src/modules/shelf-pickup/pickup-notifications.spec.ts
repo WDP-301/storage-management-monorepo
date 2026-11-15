@@ -13,7 +13,7 @@ const view = {
   customer: { id: 'cust-1', fullName: 'An', phone: null },
   // 02:30 UTC = 09:30 in Vietnam
   requestedFor: new Date('2026-11-10T02:30:00Z'),
-  lines: [{ itemId: 'i', name: 'Sách', quantity: 2, available: 5 }],
+  lines: [{ itemId: 'i', name: 'Sách', quantity: 2, unit: 'BOX', available: 5 }],
 } as unknown as PickupRequestView;
 
 describe('pickup notifications', () => {
@@ -32,7 +32,7 @@ describe('pickup notifications', () => {
     expect(userIds).toEqual(['u1', 'u2']);
     expect(payload).toMatchObject({
       type: 'PICKUP_REQUEST_CREATED',
-      body: 'An muốn lấy Sách ×2 ở kệ K-01 lúc 09:30 10/11',
+      body: 'An muốn lấy Sách ×2 thùng ở kệ K-01 lúc 09:30 10/11',
       data: { pickupRequestId: 'req-1', warehouseId: 'w-1', facilityId: 'fac-1' },
     });
     expect(payload.data).not.toHaveProperty('contractId');
@@ -62,7 +62,7 @@ describe('pickup notifications', () => {
     expect(notifications.createForUsers).toHaveBeenCalledWith(em, ['u1'], {
       type: 'PICKUP_REQUEST_CANCELLED',
       title: 'Khách hủy yêu cầu lấy đồ',
-      body: 'An đã hủy yêu cầu lấy Sách ×2 ở kệ K-01 (hẹn 09:30 10/11)',
+      body: 'An đã hủy yêu cầu lấy Sách ×2 thùng ở kệ K-01 (hẹn 09:30 10/11)',
       data: { pickupRequestId: 'req-1', warehouseId: 'w-1', facilityId: 'fac-1' },
     });
   });

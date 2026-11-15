@@ -1,14 +1,14 @@
-import type { ShelfItemView } from '@storage/types';
+import type { ShelfItemUnit, ShelfItemView } from '@storage/types';
 import { applyDropOff, applyPickUp, reverseReceiptStock } from './receipt-stock.util';
 
 const at = new Date();
-const item = (id: string, name: string, quantity: number): ShelfItemView => ({
-  id,
-  name,
-  quantity,
-  updatedAt: at,
-});
-const stock = [item('i-1', 'Thùng Sách', 5), item('i-2', 'Chăn', 0)];
+const item = (
+  id: string,
+  name: string,
+  quantity: number,
+  unit: ShelfItemUnit = 'BOX',
+): ShelfItemView => ({ id, name, quantity, unit, updatedAt: at });
+const stock = [item('i-1', 'Thùng Sách', 5), item('i-2', 'Chăn', 0, 'PIECE')];
 
 const setup = () => {
   let n = 0;
@@ -27,43 +27,51 @@ const errorOf = async (promise: Promise<unknown>) => {
   }
   throw new Error('did not throw');
 };
+/** Answers the name-clash lookup with an item the database already holds. */
+const clashing = (clash: { id: string; name: string; unit: ShelfItemUnit }) =>
+  jest.fn(async (sql: string) => {
+    if (sql.startsWith('INSERT')) return [];
+    if (sql.startsWith('SELECT')) return [clash];
+    return [[], 1];
+  });
 
 describe('applyDropOff', () => {
   it('tops up by item id, even an emptied item', async () => {
     const { em, query } = setup();
     const applied = await applyDropOff(em, 'c-1', [{ itemId: 'i-2', quantity: 3 }], stock);
-    expect(applied).toEqual([{ itemId: 'i-2', name: 'Chăn', quantity: 3 }]);
+    expect(applied).toEqual([{ itemId: 'i-2', name: 'Chăn', unit: 'PIECE', quantity: 3 }]);
     expect(update(query)?.[1]).toEqual([['i-2'], [3]]);
   });
 
   it('tops up by name ignoring case and spacing, keeping the stored name', async () => {
     const { em, query } = setup();
     const applied = await applyDropOff(em, 'c-1', [{ name: 'thùng sách', quantity: 2 }], stock);
-    expect(applied).toEqual([{ itemId: 'i-1', name: 'Thùng Sách', quantity: 2 }]);
+    expect(applied).toEqual([{ itemId: 'i-1', name: 'Thùng Sách', unit: 'BOX', quantity: 2 }]);
     expect(query.mock.calls.some(([sql]) => sql.startsWith('INSERT'))).toBe(false);
   });
 
-  it('inserts a new item for an unknown name', async () => {
+  it('inserts a new item for an unknown name, in the unit given', async () => {
     const { em, query } = setup();
-    const applied = await applyDropOff(em, 'c-1', [{ name: 'Đèn', quantity: 4 }], stock);
-    expect(applied).toEqual([{ itemId: 'new-1', name: 'Đèn', quantity: 4 }]);
-    expect(query.mock.calls[0][1]).toEqual(['c-1', 'Đèn', 4]);
+    const applied = await applyDropOff(
+      em,
+      'c-1',
+      [{ name: 'Đèn', quantity: 4, unit: 'PIECE' }],
+      stock,
+    );
+    expect(applied).toEqual([{ itemId: 'new-1', name: 'Đèn', unit: 'PIECE', quantity: 4 }]);
+    expect(query.mock.calls[0][1]).toEqual(['c-1', 'Đèn', 4, 'PIECE']);
     expect(update(query)).toBeUndefined();
   });
 
   it('merges into the existing item when the database sees the name as taken', async () => {
-    const query = jest.fn(async (sql: string) => {
-      if (sql.startsWith('INSERT')) return [];
-      if (sql.startsWith('SELECT')) return [{ id: 'i-9', name: 'Lều' }];
-      return [[], 1];
-    });
+    const query = clashing({ id: 'i-9', name: 'Lều', unit: 'BAG' });
     const applied = await applyDropOff(
       { query } as never,
       'c-1',
-      [{ name: 'LỀU', quantity: 2 }],
+      [{ name: 'LỀU', quantity: 2, unit: 'BAG' }],
       stock,
     );
-    expect(applied).toEqual([{ itemId: 'i-9', name: 'Lều', quantity: 2 }]);
+    expect(applied).toEqual([{ itemId: 'i-9', name: 'Lều', unit: 'BAG', quantity: 2 }]);
     expect(update(query as never)?.[1]).toEqual([['i-9'], [2]]);
   });
 
@@ -78,7 +86,7 @@ describe('applyDropOff', () => {
       ],
       stock,
     );
-    expect(applied).toEqual([{ itemId: 'i-1', name: 'Thùng Sách', quantity: 3 }]);
+    expect(applied).toEqual([{ itemId: 'i-1', name: 'Thùng Sách', unit: 'BOX', quantity: 3 }]);
     expect(update(query)?.[1]).toEqual([['i-1'], [3]]);
   });
 
@@ -91,13 +99,81 @@ describe('applyDropOff', () => {
     });
     expect(query).not.toHaveBeenCalled();
   });
+
+  it('requires a unit on a line that starts a new item', async () => {
+    const { em, query } = setup();
+    const error = await errorOf(
+      applyDropOff(
+        em,
+        'c-1',
+        [
+          { itemId: 'i-1', quantity: 1 },
+          { name: 'Đèn', quantity: 1 },
+        ],
+        stock,
+      ),
+    );
+    expect(error.status).toBe(400);
+    expect(JSON.stringify(error.response)).toContain('lines[1].unit');
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('refuses a top-up in another unit than the item, listing every such line', async () => {
+    const { em, query } = setup();
+    const error = await errorOf(
+      applyDropOff(
+        em,
+        'c-1',
+        [
+          { itemId: 'i-1', quantity: 1, unit: 'PIECE' },
+          { name: 'chăn', quantity: 1, unit: 'BOX' },
+        ],
+        stock,
+      ),
+    );
+    expect(error.status).toBe(409);
+    expect(error.response).toMatchObject({
+      code: 'SHELF_RECEIPT_NOT_ALLOWED',
+      details: {
+        reason: 'UNIT_MISMATCH',
+        items: [
+          { itemId: 'i-1', name: 'Thùng Sách', unit: 'BOX', requested: 'PIECE' },
+          { itemId: 'i-2', name: 'Chăn', unit: 'PIECE', requested: 'BOX' },
+        ],
+      },
+    });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('accepts a top-up that repeats the item unit', async () => {
+    const { em } = setup();
+    const applied = await applyDropOff(
+      em,
+      'c-1',
+      [{ itemId: 'i-1', quantity: 1, unit: 'BOX' }],
+      stock,
+    );
+    expect(applied).toEqual([{ itemId: 'i-1', name: 'Thùng Sách', unit: 'BOX', quantity: 1 }]);
+  });
+
+  it('refuses a new name the database already holds in another unit', async () => {
+    const query = clashing({ id: 'i-9', name: 'Lều', unit: 'BAG' });
+    const error = await errorOf(
+      applyDropOff({ query } as never, 'c-1', [{ name: 'LỀU', quantity: 2, unit: 'PIECE' }], stock),
+    );
+    expect(error.response.details).toMatchObject({
+      reason: 'UNIT_MISMATCH',
+      items: [{ itemId: 'i-9', unit: 'BAG', requested: 'PIECE' }],
+    });
+    expect(update(query as never)).toBeUndefined();
+  });
 });
 
 describe('applyPickUp', () => {
   it('subtracts the quantities', async () => {
     const { em, query } = setup();
     const applied = await applyPickUp(em, [{ itemId: 'i-1', quantity: 5 }], stock);
-    expect(applied).toEqual([{ itemId: 'i-1', name: 'Thùng Sách', quantity: 5 }]);
+    expect(applied).toEqual([{ itemId: 'i-1', name: 'Thùng Sách', unit: 'BOX', quantity: 5 }]);
     expect(update(query)?.[1]).toEqual([['i-1'], [-5]]);
   });
 
@@ -132,10 +208,19 @@ describe('applyPickUp', () => {
     const error = await errorOf(applyPickUp(em, [{ itemId: 'zzz', quantity: 1 }], stock));
     expect(error.response.details).toMatchObject({ reason: 'ITEM_NOT_IN_CONTRACT' });
   });
+
+  it('refuses a line naming another unit than the item', async () => {
+    const { em, query } = setup();
+    const error = await errorOf(
+      applyPickUp(em, [{ itemId: 'i-1', quantity: 1, unit: 'PIECE' }], stock),
+    );
+    expect(error.response.details).toMatchObject({ reason: 'UNIT_MISMATCH' });
+    expect(query).not.toHaveBeenCalled();
+  });
 });
 
 describe('reverseReceiptStock', () => {
-  const lines = [{ itemId: 'i-1', name: 'Thùng Sách', quantity: 5 }];
+  const lines = [{ itemId: 'i-1', name: 'Thùng Sách', unit: 'BOX' as const, quantity: 5 }];
 
   it('takes a voided drop-off back off the shelf', async () => {
     const { em, query } = setup();

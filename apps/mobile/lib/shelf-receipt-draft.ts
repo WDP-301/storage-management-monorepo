@@ -3,6 +3,7 @@ import type {
   CreateShelfRecoveryInput,
   DropOffRequestLineView,
   PickupRequestLineView,
+  ShelfItemUnit,
   ShelfItemView,
   ShelfReceiptType,
 } from '@storage/types';
@@ -15,6 +16,8 @@ export type DraftLine = {
   itemId?: string;
   name: string;
   quantity: number;
+  /** The item's own unit, or the one chosen for a new item. */
+  unit: ShelfItemUnit;
   /** Pick-up only: what is on the shelf right now. */
   max?: number;
 };
@@ -46,7 +49,7 @@ const bump = (lines: DraftLine[], index: number): DraftLine[] =>
 /** Drop-off of more of an item already on the shelf; a repeated tap raises the quantity. */
 export function addTopUp(
   draft: ReceiptDraft,
-  item: Pick<ShelfItemView, 'id' | 'name'>,
+  item: Pick<ShelfItemView, 'id' | 'name' | 'unit'>,
 ): ReceiptDraft {
   const key = nameKey(item.name);
   const index = draft.lines.findIndex(
@@ -55,12 +58,15 @@ export function addTopUp(
   if (index >= 0) return { ...draft, lines: bump(draft.lines, index) };
   return {
     ...draft,
-    lines: [...draft.lines, { key: item.id, itemId: item.id, name: item.name, quantity: 1 }],
+    lines: [
+      ...draft.lines,
+      { key: item.id, itemId: item.id, name: item.name, unit: item.unit, quantity: 1 },
+    ],
   };
 }
 
 /** Drop-off of an item not typed before; a name already in the form raises that line instead. */
-export function addNewItem(draft: ReceiptDraft, name: string): ReceiptDraft {
+export function addNewItem(draft: ReceiptDraft, name: string, unit: ShelfItemUnit): ReceiptDraft {
   const cleaned = cleanName(name);
   if (!cleaned) return draft;
   const key = nameKey(cleaned);
@@ -68,7 +74,7 @@ export function addNewItem(draft: ReceiptDraft, name: string): ReceiptDraft {
   if (index >= 0) return { ...draft, lines: bump(draft.lines, index) };
   return {
     ...draft,
-    lines: [...draft.lines, { key: `new:${key}`, name: cleaned, quantity: 1 }],
+    lines: [...draft.lines, { key: `new:${key}`, name: cleaned, unit, quantity: 1 }],
   };
 }
 
@@ -79,6 +85,12 @@ export const setQuantity = (draft: ReceiptDraft, key: string, quantity: number):
   ),
 });
 
+/** Changes the unit of a new item; an item already on the shelf keeps its own. */
+export const setUnit = (draft: ReceiptDraft, key: string, unit: ShelfItemUnit): ReceiptDraft => ({
+  ...draft,
+  lines: draft.lines.map((line) => (line.key === key && !line.itemId ? { ...line, unit } : line)),
+});
+
 export const removeLine = (draft: ReceiptDraft, key: string): ReceiptDraft => ({
   ...draft,
   lines: draft.lines.filter((line) => line.key !== key),
@@ -86,7 +98,10 @@ export const removeLine = (draft: ReceiptDraft, key: string): ReceiptDraft => ({
 
 /** Drop-off lines preset from the customer's request: known items by id, new ones by name. */
 export function prefillDropOff(
-  requestLines: readonly Pick<DropOffRequestLineView, 'itemId' | 'name' | 'quantity'>[] = [],
+  requestLines: readonly Pick<
+    DropOffRequestLineView,
+    'itemId' | 'name' | 'quantity' | 'unit'
+  >[] = [],
 ): ReceiptDraft {
   return {
     type: 'DROP_OFF',
@@ -96,11 +111,13 @@ export function prefillDropOff(
             key: line.itemId,
             itemId: line.itemId,
             name: line.name,
+            unit: line.unit,
             quantity: clampQuantity(line.quantity),
           }
         : {
             key: `new:${nameKey(line.name)}`,
             name: cleanName(line.name),
+            unit: line.unit,
             quantity: clampQuantity(line.quantity),
           },
     ),
@@ -119,6 +136,7 @@ export function prefillPickUp(
       key: item.id,
       itemId: item.id,
       name: item.name,
+      unit: item.unit,
       quantity: clampQuantity(wanted.get(item.id) ?? 0, item.quantity),
       max: item.quantity,
     })),
@@ -179,7 +197,7 @@ export function toReceiptInput(
       lines: checked.lines.map((line) =>
         line.itemId
           ? { itemId: line.itemId, quantity: line.quantity }
-          : { name: cleanName(line.name), quantity: line.quantity },
+          : { name: cleanName(line.name), quantity: line.quantity, unit: line.unit },
       ),
       ...(ctx.photos.length > 0 ? { photos: ctx.photos } : {}),
       ...(note ? { note } : {}),

@@ -4,15 +4,20 @@ import {
   type CreateShelfReceiptInput,
   type CreateShelfRecoveryInput,
   type EvidenceFile,
+  type ShelfItemUnit,
   ShelfReceiptType,
 } from '@storage/types';
 import { itemNameKey, normalizeItemName } from './shelf-rules';
 
-/** A receipt line after validation: a known item, or a name (name is already normalized). */
+/**
+ * A receipt line after validation: a known item, or a name (name is already normalized). `unit`
+ * is what the client sent; whether it is required or must match depends on the stock.
+ */
 export interface NormalizedLine {
   itemId?: string;
   name?: string;
   quantity: number;
+  unit?: ShelfItemUnit;
 }
 
 const MAX_NAME_LENGTH = 120;
@@ -57,6 +62,7 @@ export function normalizeLines(
       key = `id:${line.itemId}`;
       normalized = { itemId: line.itemId, quantity: line.quantity };
     }
+    if (line.unit) normalized.unit = line.unit;
     if (seen.has(key)) {
       throw fieldValidationError(`lines[${index}]`, 'duplicateLine', 'Món này đã có ở dòng trước');
     }

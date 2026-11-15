@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
 import { formatIsoDateTime } from '../../../../lib/format-vi';
 import { ShelfStorageApi } from '../../../../lib/shelf-storage-api';
-import { pickupStatusLabel } from '../../../../lib/shelf-storage-format';
+import { pickupStatusLabel, unitLabel } from '../../../../lib/shelf-storage-format';
 import { StatusPill } from '../../customer/contract-display';
 import { shelfApiError } from '../staff-errors';
 import { ListState } from './ListState';
@@ -71,7 +71,7 @@ export function WarehousePickupRequests({ warehouseId }: { warehouseId: string }
               <Text
                 className={`font-strong text-body-sm ${line.quantity > line.available ? 'text-danger' : 'text-foreground'}`}
               >
-                {line.quantity} / còn {line.available}
+                {line.quantity} / còn {line.available} {unitLabel(line.unit)}
               </Text>
             </View>
           ))}

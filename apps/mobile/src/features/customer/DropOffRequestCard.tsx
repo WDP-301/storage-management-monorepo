@@ -5,7 +5,11 @@ import { Alert, Text, View } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import { formatIsoDateTime } from '../../../lib/format-vi';
 import { ShelfStorageApi } from '../../../lib/shelf-storage-api';
-import { dropOffStatusLabel, shelfErrorMessage } from '../../../lib/shelf-storage-format';
+import {
+  dropOffStatusLabel,
+  quantityWithUnit,
+  shelfErrorMessage,
+} from '../../../lib/shelf-storage-format';
 import { StatusPill, type StatusTone } from './contract-display';
 
 const TONE: Record<DropOffRequestView['status'], StatusTone> = {
@@ -65,7 +69,9 @@ export function DropOffRequestCard({
             {line.name}
             {line.itemId ? '' : ' (mới)'}
           </Text>
-          <Text className="font-strong text-body-sm text-foreground">×{line.quantity}</Text>
+          <Text className="font-strong text-body-sm text-foreground">
+            ×{quantityWithUnit(line.quantity, line.unit)}
+          </Text>
         </View>
       ))}
       {request.note ? (

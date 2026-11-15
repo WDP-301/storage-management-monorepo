@@ -15,10 +15,16 @@ import {
   startOfVietnamDay,
   vietnamToday,
 } from '@shared/utils/calendar.util';
-import { DropOffRequestStatus, type DropOffRequestView, ShelfReceiptType } from '@storage/types';
+import {
+  DropOffRequestStatus,
+  type DropOffRequestView,
+  type ShelfItemUnit,
+  ShelfReceiptType,
+} from '@storage/types';
 import { DataSource, type EntityManager, QueryFailedError } from 'typeorm';
 import { loadDropOffRequests } from '../shelf-storage/drop-off-request.read';
 import { type NormalizedLine, normalizeLines } from '../shelf-storage/receipt-input.util';
+import { assertUnits } from '../shelf-storage/receipt-stock.util';
 import { findShelfContracts, loadStock } from '../shelf-storage/shelf-contract.query';
 import {
   DROP_OFF_REQUEST_MAX_DAYS_AHEAD,
@@ -175,12 +181,19 @@ export class DropOffRequestsService {
       });
     }
     // A typed name that matches an existing item becomes that item, so the receipt tops it up.
-    const stored: DropOffRequestLine[] = lines.map((line) => {
-      const item = line.itemId ? byId.get(line.itemId) : byName.get(itemNameKey(line.name ?? ''));
+    const targets = lines.map((line) =>
+      line.itemId ? byId.get(line.itemId) : byName.get(itemNameKey(line.name ?? '')),
+    );
+    assertUnits(lines, targets, (items) =>
+      notAllowed('UNIT_MISMATCH', 'A line is not in the unit its item is counted in', { items }),
+    );
+    const stored: DropOffRequestLine[] = lines.map((line, index) => {
+      const item = targets[index];
       return {
         itemId: item?.id ?? null,
         name: item?.name ?? (line.name as string),
         quantity: line.quantity,
+        unit: item?.unit ?? (line.unit as ShelfItemUnit),
       };
     });
     const ids = stored.map((line) => line.itemId).filter((id): id is string => id !== null);

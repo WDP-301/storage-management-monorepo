@@ -50,15 +50,48 @@ test('labels cover every receipt type, request status and block reason', () => {
 
 test('lines summary shows three lines and counts the rest', () => {
   const lines = [
-    { name: 'Sách', quantity: 2 },
-    { name: 'Chăn', quantity: 1 },
-    { name: 'Đèn', quantity: 4 },
-    { name: 'Ghế', quantity: 1 },
+    { name: 'Sách', quantity: 2, unit: 'BOX' },
+    { name: 'Chăn', quantity: 1, unit: 'PIECE' },
+    { name: 'Đèn', quantity: 4, unit: 'PIECE' },
+    { name: 'Ghế', quantity: 1, unit: 'PIECE' },
   ];
-  assert.equal(f.linesSummary(lines), 'Sách ×2, Chăn ×1, Đèn ×4 và 1 món khác');
-  assert.equal(f.linesSummary(lines.slice(0, 1)), 'Sách ×2');
+  assert.equal(f.linesSummary(lines), 'Sách ×2 thùng, Chăn ×1 cái, Đèn ×4 cái và 1 món khác');
+  assert.equal(f.linesSummary(lines.slice(0, 1)), 'Sách ×2 thùng');
   assert.equal(f.totalQuantity(lines), 8);
   assert.equal(f.totalQuantity([]), 0);
+});
+
+test('a total with a unit is shown only when every line shares it', () => {
+  assert.equal(
+    f.totalWithUnit([
+      { quantity: 2, unit: 'BOX' },
+      { quantity: 3, unit: 'BOX' },
+    ]),
+    '5 thùng',
+  );
+  assert.equal(
+    f.totalWithUnit([
+      { quantity: 2, unit: 'BOX' },
+      { quantity: 3, unit: 'PIECE' },
+    ]),
+    null,
+  );
+  assert.equal(f.totalWithUnit([]), null);
+});
+
+test('unit errors name the item and the unit it is counted in', () => {
+  const details = {
+    reason: 'UNIT_MISMATCH',
+    items: [{ itemId: 'i', name: 'Sách', unit: 'BOX', requested: 'PIECE' }],
+  };
+  assert.equal(
+    f.shelfErrorMessage('SHELF_RECEIPT_NOT_ALLOWED', details, 'x'),
+    'Sai đơn vị: Sách đang tính theo thùng.',
+  );
+  assert.equal(
+    f.shelfErrorMessage('DROP_OFF_REQUEST_NOT_ALLOWED', details, 'x'),
+    'Sai đơn vị: Sách đang tính theo thùng.',
+  );
 });
 
 test('countdown never goes negative and tolerates a bad deadline', () => {

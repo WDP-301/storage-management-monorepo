@@ -14,7 +14,7 @@ import { ShelfStorageApi } from '../../lib/shelf-storage-api';
 import { formatDateTime } from '../inspections/inspection-display';
 import { ReceiptDisputePanel } from './ReceiptDisputePanel';
 import { ShelfReceiptVoidForm } from './ShelfReceiptVoidForm';
-import { RECEIPT_TYPE_LABEL } from './shelf-records-display';
+import { quantityWithUnit, RECEIPT_TYPE_LABEL } from './shelf-records-display';
 import { useShelfLoad } from './use-shelf-load';
 
 const VOID_ROLES = [UserRole.FACILITY_MANAGER, UserRole.OPERATIONS_MANAGER, UserRole.ADMIN];
@@ -88,7 +88,9 @@ export const ShelfReceiptDetailDialog: React.FC<Props> = ({ receiptId, onClose, 
                   {shown.lines.map((line) => (
                     <li key={line.itemId} className="flex justify-between">
                       <span>{line.name}</span>
-                      <span className="font-semibold">×{line.quantity}</span>
+                      <span className="font-semibold">
+                        ×{quantityWithUnit(line.quantity, line.unit)}
+                      </span>
                     </li>
                   ))}
                 </ul>

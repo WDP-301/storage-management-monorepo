@@ -106,20 +106,20 @@ describe('pickupRequestBlock', () => {
 
 describe('linesSummary', () => {
   const lines = [
-    { name: 'Sách', quantity: 2 },
-    { name: 'Chăn', quantity: 1 },
-    { name: 'Đèn', quantity: 4 },
-    { name: 'Ghế', quantity: 1 },
-    { name: 'Bàn', quantity: 1 },
+    { unit: 'BOX' as const, name: 'Sách', quantity: 2 },
+    { unit: 'BOX' as const, name: 'Chăn', quantity: 1 },
+    { unit: 'BOX' as const, name: 'Đèn', quantity: 4 },
+    { unit: 'BOX' as const, name: 'Ghế', quantity: 1 },
+    { unit: 'BOX' as const, name: 'Bàn', quantity: 1 },
   ];
 
   it('lists up to three lines and counts the rest', () => {
-    expect(linesSummary(lines)).toBe('Sách ×2, Chăn ×1, Đèn ×4 và 2 món khác');
+    expect(linesSummary(lines)).toBe('Sách ×2 thùng, Chăn ×1 thùng, Đèn ×4 thùng và 2 món khác');
   });
 
   it('lists everything when it fits', () => {
-    expect(linesSummary(lines.slice(0, 2))).toBe('Sách ×2, Chăn ×1');
-    expect(linesSummary(lines, 5)).toContain('Bàn ×1');
+    expect(linesSummary(lines.slice(0, 2))).toBe('Sách ×2 thùng, Chăn ×1 thùng');
+    expect(linesSummary(lines, 5)).toContain('Bàn ×1 thùng');
     expect(linesSummary([])).toBe('');
   });
 });

@@ -120,7 +120,7 @@ export async function loadStock(
   const stock = new Map<string, ShelfItemView[]>(contractIds.map((id) => [id, []]));
   if (contractIds.length === 0) return stock;
   const rows: (ShelfItemView & { contractId: string })[] = await em.query(
-    `SELECT "id", "contract_id" AS "contractId", "name", "quantity", "updated_at" AS "updatedAt"
+    `SELECT "id", "contract_id" AS "contractId", "name", "quantity", "unit", "updated_at" AS "updatedAt"
        FROM "shelf_items"
       WHERE "contract_id" = ANY($1::uuid[]) ${options.includeEmpty ? '' : 'AND "quantity" > 0'}
       ${options.lock ? 'ORDER BY "id" FOR UPDATE' : 'ORDER BY "name" ASC, "id"'}`,

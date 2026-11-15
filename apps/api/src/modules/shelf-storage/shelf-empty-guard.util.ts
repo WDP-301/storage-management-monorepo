@@ -1,6 +1,7 @@
 import { HttpStatus } from '@nestjs/common';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
+import type { ShelfItemUnit } from '@storage/types';
 import type { EntityManager } from 'typeorm';
 
 export type ShelfEmptyReason = 'RETURN' | 'UNIT_CHANGE';
@@ -19,11 +20,12 @@ export async function assertShelfEmpty(
   contractId: string,
   reason: ShelfEmptyReason,
 ): Promise<void> {
-  const rows: { id: string; name: string; quantity: number }[] = await em.query(
-    `SELECT "id", "name", "quantity" FROM "shelf_items"
+  const rows: { id: string; name: string; quantity: number; unit: ShelfItemUnit }[] =
+    await em.query(
+      `SELECT "id", "name", "quantity", "unit" FROM "shelf_items"
       WHERE "contract_id" = $1 AND "quantity" > 0 ORDER BY "name"`,
-    [contractId],
-  );
+      [contractId],
+    );
   if (rows.length === 0) return;
   const totalQuantity = rows.reduce((sum, row) => sum + row.quantity, 0);
   throw new DomainException(
@@ -34,7 +36,7 @@ export async function assertShelfEmpty(
       reason,
       contractId,
       totalQuantity,
-      items: rows.map(({ id, name, quantity }) => ({ itemId: id, name, quantity })),
+      items: rows.map(({ id, name, quantity, unit }) => ({ itemId: id, name, quantity, unit })),
     },
   );
 }

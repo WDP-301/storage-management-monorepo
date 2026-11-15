@@ -15,7 +15,7 @@ import {
   vietnamToday,
 } from '../../../lib/pickup-request-draft';
 import { ShelfStorageApi } from '../../../lib/shelf-storage-api';
-import { shelfErrorMessage } from '../../../lib/shelf-storage-format';
+import { quantityWithUnit, shelfErrorMessage } from '../../../lib/shelf-storage-format';
 import { MonthCalendar } from './MonthCalendar';
 
 const ACCENT = 'hsl(203 100% 30%)';
@@ -122,7 +122,9 @@ export function PickupRequestForm({
           <View key={item.id} className="flex-row items-center justify-between gap-3">
             <View className="flex-1">
               <Text className="font-body text-body-md text-foreground">{item.name}</Text>
-              <Text className="font-body text-caption text-muted">Trên kệ: {item.quantity}</Text>
+              <Text className="font-body text-caption text-muted">
+                Trên kệ: {quantityWithUnit(item.quantity, item.unit)}
+              </Text>
             </View>
             <Stepper
               value={quantities[item.id] ?? 0}

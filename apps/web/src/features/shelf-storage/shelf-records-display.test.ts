@@ -4,16 +4,35 @@ import {
   describeVoidError,
   EMPTY_RECEIPT_FILTERS,
   summarizeLines,
+  totalLabel,
 } from './shelf-records-display';
 
 const apiError = (props: object) => Object.assign(new Error('server text'), props);
 
+describe('totalLabel', () => {
+  it('adds up one unit and counts kinds when units differ', () => {
+    expect(
+      totalLabel([
+        { quantity: 2, unit: 'BOX' },
+        { quantity: 3, unit: 'BOX' },
+      ]),
+    ).toBe('5 thùng');
+    expect(
+      totalLabel([
+        { quantity: 2, unit: 'BOX' },
+        { quantity: 3, unit: 'PIECE' },
+      ]),
+    ).toBe('2 loại');
+    expect(totalLabel([])).toBe('0');
+  });
+});
+
 describe('summarizeLines', () => {
-  const line = (name: string, quantity: number) => ({ name, quantity });
+  const line = (name: string, quantity: number) => ({ name, quantity, unit: 'BOX' as const });
   it('lists up to three lines then counts the rest', () => {
-    expect(summarizeLines([line('A', 1), line('B', 2)])).toBe('A ×1, B ×2');
+    expect(summarizeLines([line('A', 1), line('B', 2)])).toBe('A ×1 thùng, B ×2 thùng');
     expect(summarizeLines([line('A', 1), line('B', 2), line('C', 3), line('D', 4)])).toBe(
-      'A ×1, B ×2, C ×3 và 1 món khác',
+      'A ×1 thùng, B ×2 thùng, C ×3 thùng và 1 món khác',
     );
     expect(summarizeLines([])).toBe('—');
   });

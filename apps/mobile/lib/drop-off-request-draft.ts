@@ -1,11 +1,11 @@
-import type { CreateDropOffRequestInput } from '@storage/types';
+import type { CreateDropOffRequestInput, ShelfItemUnit } from '@storage/types';
 import { NOTE_MAX, requestedForIso } from './pickup-request-draft';
 import { cleanName, MAX_ITEM_NAME, MAX_QUANTITY, nameKey } from './shelf-receipt-draft';
 
 /** Pure rules for the customer's drop-off request form, kept apart from the UI so they are testable. */
 
 /** A new item the customer will bring, typed by name. */
-export type NewItemLine = { key: string; name: string; quantity: number };
+export type NewItemLine = { key: string; name: string; quantity: number; unit: ShelfItemUnit };
 
 type StockItem = { id: string; name: string };
 
@@ -15,7 +15,11 @@ export type DropOffDraftResult = { input: CreateDropOffRequestInput } | { error:
  * Adds a typed item, or raises the quantity of the line with the same name. A name matching an
  * item already on the shelf is left to the caller, which tops that item up instead.
  */
-export function addNewLine(lines: readonly NewItemLine[], name: string): NewItemLine[] {
+export function addNewLine(
+  lines: readonly NewItemLine[],
+  name: string,
+  unit: ShelfItemUnit,
+): NewItemLine[] {
   const cleaned = cleanName(name);
   if (!cleaned) return [...lines];
   const key = nameKey(cleaned);
@@ -24,7 +28,7 @@ export function addNewLine(lines: readonly NewItemLine[], name: string): NewItem
       line.key === key ? { ...line, quantity: Math.min(line.quantity + 1, MAX_QUANTITY) } : line,
     );
   }
-  return [...lines, { key, name: cleaned, quantity: 1 }];
+  return [...lines, { key, name: cleaned, unit, quantity: 1 }];
 }
 
 /** Validates the form and shapes the request body; `error` is ready to show the customer. */
@@ -55,7 +59,7 @@ export function toDropOffRequestInput(
     if (names.has(nameKey(name))) {
       return { error: `${name} đã có trên kệ, hãy chọn ở danh sách phía trên.` };
     }
-    lines.push({ name, quantity: line.quantity });
+    lines.push({ name, quantity: line.quantity, unit: line.unit });
   }
   if (lines.length === 0) return { error: 'Chọn hoặc thêm ít nhất một món sẽ gửi.' };
   if (!dayIso) return { error: 'Chọn ngày gửi đồ.' };

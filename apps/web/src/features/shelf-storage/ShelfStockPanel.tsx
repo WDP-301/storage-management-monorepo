@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import { ShelfStorageApi } from '../../lib/shelf-storage-api';
 import { useClientPagination } from '../../lib/use-client-pagination';
 import { formatDateTime } from '../inspections/inspection-display';
-import { PICKUP_REQUEST_STATUS_LABEL, summarizeLines } from './shelf-records-display';
+import { PICKUP_REQUEST_STATUS_LABEL, summarizeLines, totalLabel } from './shelf-records-display';
 import { useShelfLoad } from './use-shelf-load';
 
 const PAGE_SIZE = 20;
@@ -124,7 +124,9 @@ export const ShelfStockPanel: React.FC<{ warehouseId: string; refreshKey: number
                   <Table.Cell className="min-w-[220px] text-sm">
                     {row.items.length ? summarizeLines(row.items, 50) : 'Kệ trống'}
                   </Table.Cell>
-                  <Table.Cell className="text-right font-semibold">{row.totalQuantity}</Table.Cell>
+                  <Table.Cell className="text-right font-semibold whitespace-nowrap">
+                    {totalLabel(row.items)}
+                  </Table.Cell>
                   <Table.Cell>
                     <div className="flex flex-wrap gap-1">
                       <RequestBadge row={row} />

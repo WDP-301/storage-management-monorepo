@@ -13,7 +13,7 @@ import {
   Warehouse,
   XCircle,
 } from 'phosphor-react-native';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, ScrollView, TextInput, View } from 'react-native';
 import {
   AlertSheet,
@@ -32,8 +32,10 @@ type Props = {
   appointment: TourAppointmentRecord | null;
   isLoading: boolean;
   isSaving: boolean;
+  error?: string | null;
   onComplete: (notes: string) => Promise<void>;
   onCancel: (reason: string) => Promise<void>;
+  onRetry?: () => void;
   onBack: () => void;
 };
 
@@ -41,8 +43,10 @@ export function StaffTourDetailScreen({
   appointment,
   isLoading,
   isSaving,
+  error,
   onComplete,
   onCancel,
+  onRetry,
   onBack,
 }: Props) {
   const completeConfirmRef = useRef<BottomSheetModal>(null);
@@ -52,11 +56,45 @@ export function StaffTourDetailScreen({
   const [isCancelFormOpen, setIsCancelFormOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  if (isLoading || !appointment) {
+  // Route stays mounted between tour visits inside Tabs: reset form inputs on tour switch.
+  const appointmentId = appointment?.id;
+  useEffect(() => {
+    setResultNotes('');
+    setCancelReason('');
+    setIsCancelFormOpen(false);
+    setFormError(null);
+  }, [appointmentId]);
+
+  if (isLoading && !appointment) {
     return (
       <FlowScreen muted onBack={onBack} title="Chi tiết ca dẫn khách" titleAlign="left">
         <View className="flex-1 items-center justify-center bg-bg-muted">
           <ActivityIndicator color={colors.semantic.actionPrimary} size="large" />
+        </View>
+      </FlowScreen>
+    );
+  }
+
+  if (!appointment) {
+    return (
+      <FlowScreen muted onBack={onBack} title="Chi tiết ca dẫn khách" titleAlign="left">
+        <View className="flex-1 justify-center bg-bg-muted px-4">
+          <View className="gap-3 rounded-[20px] border border-border-default bg-bg-card p-5">
+            <InlineMessage
+              message={error || 'Ca dẫn khách này không tồn tại hoặc bạn không có quyền truy cập.'}
+              type="error"
+            />
+            <View className="flex-row gap-2">
+              {onRetry ? (
+                <View className="flex-1">
+                  <Button label="Tải lại" onPress={onRetry} size="sm" variant="secondary" />
+                </View>
+              ) : null}
+              <View className="flex-1">
+                <Button label="Quay lại" onPress={onBack} size="sm" variant="outline" />
+              </View>
+            </View>
+          </View>
         </View>
       </FlowScreen>
     );

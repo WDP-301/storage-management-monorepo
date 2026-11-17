@@ -10,6 +10,7 @@ export default function StaffTodayRoute() {
       onOpenMaintenance={(id) =>
         router.navigate(`/(staff)/staff-maintenance?id=${encodeURIComponent(id)}`)
       }
+      onOpenShifts={() => router.navigate('/(staff)/shifts')}
     />
   );
 }

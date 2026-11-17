@@ -39,6 +39,36 @@ const TIME_SLOTS = [
   '17:00 - 18:00',
 ];
 
+function vietnamNowParts(now: Date = new Date()): {
+  dateIso: string;
+  hour: number;
+  minute: number;
+} {
+  const vn = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  return {
+    dateIso: vn.toISOString().slice(0, 10),
+    hour: vn.getUTCHours(),
+    minute: vn.getUTCMinutes(),
+  };
+}
+
+function isSlotPastOnDate(slot: string, dateIso: string, now: Date = new Date()): boolean {
+  const vn = vietnamNowParts(now);
+  if (dateIso !== vn.dateIso) return false;
+  const match = /(\d{1,2}):(\d{2})/.exec(slot);
+  if (!match) return false;
+  const [slotHour, slotMinute] = [Number(match[1]), Number(match[2])];
+  return vn.hour > slotHour || (vn.hour === slotHour && vn.minute >= slotMinute);
+}
+
+function defaultTourSchedule(now: Date = new Date()): { dateIso: string; slot: string } {
+  const vn = vietnamNowParts(now);
+  const openToday = TIME_SLOTS.find((slot) => !isSlotPastOnDate(slot, vn.dateIso, now));
+  if (openToday) return { dateIso: vn.dateIso, slot: openToday };
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  return { dateIso: vietnamNowParts(tomorrow).dateIso, slot: TIME_SLOTS[0] };
+}
+
 type Props = {
   sheetRef: RefObject<BottomSheetModal | null>;
   facility: { id: string; name: string; addressLine?: string } | null;
@@ -50,7 +80,8 @@ export function TourAppointmentSheet({ sheetRef, facility, storageUnit, onSucces
   const insets = useSafeAreaInsets();
   const { user } = useSession();
 
-  const todayIso = useMemo(() => toIsoDate(new Date()), []);
+  const initialSchedule = useMemo(() => defaultTourSchedule(), []);
+  const todayIso = useMemo(() => vietnamNowParts().dateIso, []);
   const maxIso = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + 30);
@@ -60,8 +91,8 @@ export function TourAppointmentSheet({ sheetRef, facility, storageUnit, onSucces
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [preferredDate, setPreferredDate] = useState(todayIso);
-  const [preferredTimeSlot, setPreferredTimeSlot] = useState(TIME_SLOTS[1]);
+  const [preferredDate, setPreferredDate] = useState(initialSchedule.dateIso);
+  const [preferredTimeSlot, setPreferredTimeSlot] = useState(initialSchedule.slot);
   const [customerNotes, setCustomerNotes] = useState('');
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -78,22 +109,16 @@ export function TourAppointmentSheet({ sheetRef, facility, storageUnit, onSucces
   }, [user]);
 
   const isSlotPast = useCallback(
-    (slot: string) => {
-      if (preferredDate !== todayIso) return false;
-      const match = /(\d{1,2}):(\d{2})/.exec(slot);
-      if (!match) return false;
-      const [slotHour, slotMinute] = [Number(match[1]), Number(match[2])];
-      const now = new Date();
-      const vnNow = new Date(now.getTime() + 7 * 60 * 60 * 1000);
-      const nowHour = vnNow.getUTCHours();
-      const nowMinute = vnNow.getUTCMinutes();
-      return nowHour > slotHour || (nowHour === slotHour && nowMinute >= slotMinute);
-    },
-    [preferredDate, todayIso],
+    (slot: string) => isSlotPastOnDate(slot, preferredDate),
+    [preferredDate],
   );
 
   const handlePickDate = (iso: string) => {
     setPreferredDate(iso);
+    if (isSlotPastOnDate(preferredTimeSlot, iso)) {
+      const nextSlot = TIME_SLOTS.find((slot) => !isSlotPastOnDate(slot, iso));
+      if (nextSlot) setPreferredTimeSlot(nextSlot);
+    }
     setIsCalendarOpen(false);
     setError(null);
   };

@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import type { AuthUser, LoginInput, RegisterInput } from '../src/types/auth';
+import type { AuthMeDetail, AuthUser, LoginInput, RegisterInput } from '../src/types/auth';
 
 const DEV_HOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? `http://${DEV_HOST}:3001/api/v1`;
@@ -106,6 +106,8 @@ export const AuthApi = {
     const response = await request<{ user: AuthUser }>('/auth/me');
     return response.user;
   },
+
+  meDetail: (signal?: AbortSignal) => request<AuthMeDetail>('/auth/me', { signal }),
 
   login: async (input: LoginInput) => {
     await request<{ expiresAt: string }>('/auth/login', {

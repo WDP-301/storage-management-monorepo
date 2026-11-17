@@ -104,6 +104,9 @@ test('every known notification type lands in a labelled filter group, unknowns f
     'UNIT_CHANGE_COMPLETED',
     'UNIT_CHANGE_CANCELLED',
     'UNIT_CHANGE_MOVE_TODAY',
+    'UNIT_CHANGE_READY_FOR_FINAL_APPROVAL',
+    'MAINTENANCE_CHECK_DUE',
+    'MAINTENANCE_COMPLETED',
   ]) {
     const group = notificationGroup(type);
     assert.notEqual(group, 'other', type);
@@ -132,6 +135,42 @@ test('staff notifications open the staff screens, never the customer ones', () =
   assert.equal(notificationHref({ ticketId: 't-9' }, 'staff'), '/(staff)/staff-ticket?id=t-9');
   assert.equal(notificationHref({ contractId: 'c-1' }, 'staff'), '/(staff)/staff-contract?id=c-1');
   assert.equal(notificationHref({ invoiceId: 'i-1' }, 'staff'), null);
+  assert.equal(
+    notificationHref({ appointmentId: 'apt-1', facilityId: 'fac-1' }, 'staff'),
+    '/(staff)/staff-tour?id=apt-1',
+  );
+  assert.equal(
+    notificationHref({ appointmentId: 'apt-1', facilityId: 'fac-1' }, 'customer'),
+    '/(customer)/tours',
+  );
+  assert.equal(
+    notificationHref(
+      { inspectionId: 'insp-1', contractId: 'c-old', unitCode: 'A-01' },
+      'staff',
+      'MAINTENANCE_CHECK_DUE',
+    ),
+    '/(staff)/staff-maintenance?id=insp-1',
+  );
+  assert.equal(
+    notificationHref({ shiftId: 'shift-1', facilityId: 'fac-1' }, 'staff', 'SHIFT_UPDATED'),
+    '/(staff)/shifts',
+  );
+  assert.equal(
+    notificationHref({ shiftIds: ['shift-1', 'shift-2'] }, 'staff', 'SHIFT_ASSIGNED'),
+    '/(staff)/shifts',
+  );
+  assert.equal(
+    notificationHref({ dropOffRequestId: 'drop-1' }, 'staff', 'DROP_OFF_REQUEST_CREATED'),
+    '/(staff)/scan',
+  );
+  assert.equal(
+    notificationHref({ bookingId: 'book-1' }, 'staff', 'HANDOVER_ASSIGNED'),
+    '/(staff)/today',
+  );
+  assert.equal(
+    notificationHref({ bookingId: 'book-1' }, 'customer', 'BOOKING_DEPOSIT_PARTIAL'),
+    '/(customer)/payment?id=book-1',
+  );
 });
 
 test('notifications without a usable target resolve to no route', () => {

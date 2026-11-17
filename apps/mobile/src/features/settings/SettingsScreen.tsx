@@ -20,6 +20,11 @@ type Props = {
   onLogout: () => void;
   onSupport?: () => void;
   onTours?: () => void;
+  onShifts?: () => void;
+  onEditProfile?: () => void;
+  onChangePassword?: () => void;
+  addressLabel?: string | null;
+  companyLabel?: string | null;
   rentalUnitCount?: number | null;
   pendingDepositCount?: number | null;
   /** Customer-only: the check-in code, shown right under the identity card. */
@@ -32,6 +37,11 @@ export function SettingsScreen({
   onLogout,
   onSupport,
   onTours,
+  onShifts,
+  onEditProfile,
+  onChangePassword,
+  addressLabel,
+  companyLabel,
   rentalUnitCount,
   pendingDepositCount,
   accessCard,
@@ -85,6 +95,18 @@ export function SettingsScreen({
 
         <AccountSection title="Thông tin liên hệ">
           <InfoRow label="Số điện thoại" value={user.phone || 'Chưa cập nhật'} />
+          {addressLabel ? (
+            <>
+              <Divider />
+              <InfoRow label="Địa chỉ" value={addressLabel} />
+            </>
+          ) : null}
+          {companyLabel ? (
+            <>
+              <Divider />
+              <InfoRow label="Công ty" value={companyLabel} />
+            </>
+          ) : null}
           <Divider />
           <View className="min-h-12 flex-row items-center justify-between gap-3 py-2.5">
             <Text className="text-body text-text-secondary">Trạng thái tài khoản</Text>
@@ -92,7 +114,42 @@ export function SettingsScreen({
           </View>
         </AccountSection>
 
+        {onEditProfile || onChangePassword ? (
+          <AccountSection title="Tài khoản & Bảo mật">
+            {onEditProfile ? (
+              <>
+                <ActionRow
+                  icon="edit"
+                  label="Chỉnh sửa hồ sơ"
+                  onPress={onEditProfile}
+                  subtitle="Cập nhật họ tên, số điện thoại và thông tin liên hệ"
+                />
+                {onChangePassword ? <Divider /> : null}
+              </>
+            ) : null}
+            {onChangePassword ? (
+              <ActionRow
+                icon="vpn-key"
+                label="Đổi mật khẩu"
+                onPress={onChangePassword}
+                subtitle="Thay mật khẩu mới và bảo vệ tài khoản"
+              />
+            ) : null}
+          </AccountSection>
+        ) : null}
+
         <AccountSection title="Dịch vụ & Hỗ trợ">
+          {onShifts ? (
+            <>
+              <ActionRow
+                icon="event-available"
+                label="Ca làm việc & Chấm công"
+                onPress={onShifts}
+                subtitle="Xem lịch trực theo tuần và check-in / check-out"
+              />
+              <Divider />
+            </>
+          ) : null}
           {onTours ? (
             <>
               <ActionRow
@@ -159,7 +216,12 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <View className="min-h-12 flex-row items-center justify-between gap-3 py-2.5">
       <Text className="text-body text-text-secondary">{label}</Text>
-      <Text className="text-body font-semibold text-text-primary">{value}</Text>
+      <Text
+        className="flex-1 text-right text-body font-semibold text-text-primary"
+        numberOfLines={2}
+      >
+        {value}
+      </Text>
     </View>
   );
 }

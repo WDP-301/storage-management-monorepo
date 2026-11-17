@@ -121,6 +121,9 @@ const GROUP_BY_TYPE: Partial<Record<NotificationType, NotificationGroup>> = {
   UNIT_CHANGE_COMPLETED: 'unitChange',
   UNIT_CHANGE_CANCELLED: 'unitChange',
   UNIT_CHANGE_MOVE_TODAY: 'unitChange',
+  UNIT_CHANGE_READY_FOR_FINAL_APPROVAL: 'unitChange',
+  MAINTENANCE_CHECK_DUE: 'contract',
+  MAINTENANCE_COMPLETED: 'contract',
   SHELF_DROP_OFF: 'storage',
   SHELF_PICK_UP: 'storage',
   SHELF_RECEIPT_VOIDED: 'storage',
@@ -165,30 +168,68 @@ function idOf(value: unknown): string | null {
 /** Detail screens a notification can open, per app area — staff never land on customer routes. */
 const TARGET_ROUTES = {
   customer: { contract: '/(customer)/contract-detail', ticket: '/(customer)/ticket-detail' },
-  staff: { contract: '/(staff)/staff-contract', ticket: '/(staff)/staff-ticket' },
+  staff: {
+    contract: '/(staff)/staff-contract',
+    ticket: '/(staff)/staff-ticket',
+    maintenance: '/(staff)/staff-maintenance',
+    shifts: '/(staff)/shifts',
+  },
 } as const;
 
 export type NotificationArea = keyof typeof TARGET_ROUTES;
 
 /**
- * Screen a notification opens: its contract, else its ticket; null when `data` points nowhere
- * (e.g. an invoice notification), in which case tapping only marks it read.
+ * Screen a notification opens: maintenance check -> tour/contract/ticket/shift; null when `data`
+ * points nowhere (e.g. an invoice notification), in which case tapping only marks it read.
  */
 export function notificationHref(
   data: Record<string, unknown>,
   area: NotificationArea = 'customer',
+  type?: string,
 ): string | null {
   const routes = TARGET_ROUTES[area];
+  const inspectionId = idOf(data.inspectionId);
+  // MAINTENANCE_CHECK_DUE carries both the vacated old contractId and the maintenance inspectionId;
+  // staff must land on the maintenance check screen rather than the cancelled old contract.
+  if (area === 'staff' && type === 'MAINTENANCE_CHECK_DUE' && inspectionId) {
+    return `${TARGET_ROUTES.staff.maintenance}?id=${encodeURIComponent(inspectionId)}`;
+  }
+
   const contractId = idOf(data.contractId);
   if (contractId) return `${routes.contract}?id=${encodeURIComponent(contractId)}`;
   const ticketId = idOf(data.ticketId);
   if (ticketId) return `${routes.ticket}?id=${encodeURIComponent(ticketId)}`;
-  const tourAppointmentId = idOf(data.tourAppointmentId);
+
+  const tourAppointmentId = idOf(data.tourAppointmentId) ?? idOf(data.appointmentId);
   if (tourAppointmentId) {
     return area === 'staff'
       ? `/(staff)/staff-tour?id=${encodeURIComponent(tourAppointmentId)}`
       : '/(customer)/tours';
   }
+
+  const bookingId = idOf(data.bookingId);
+  if (area === 'customer' && type === 'BOOKING_DEPOSIT_PARTIAL' && bookingId) {
+    return `/(customer)/payment?id=${encodeURIComponent(bookingId)}`;
+  }
+
+  if (area === 'staff') {
+    if (
+      idOf(data.shiftId) !== null ||
+      (Array.isArray(data.shiftIds) && data.shiftIds.length > 0) ||
+      type === 'SHIFT_ASSIGNED' ||
+      type === 'SHIFT_UPDATED' ||
+      type === 'SHIFT_CANCELLED'
+    ) {
+      return TARGET_ROUTES.staff.shifts;
+    }
+    if (idOf(data.dropOffRequestId) !== null || idOf(data.pickupRequestId) !== null) {
+      return '/(staff)/scan';
+    }
+    if (type === 'HANDOVER_ASSIGNED') {
+      return '/(staff)/today';
+    }
+  }
+
   return null;
 }
 

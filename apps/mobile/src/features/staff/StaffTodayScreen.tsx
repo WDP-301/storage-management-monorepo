@@ -1,7 +1,15 @@
 import type { TourAppointmentRecord } from '@storage/types';
+import { Clock } from 'phosphor-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { todayIso } from '../../../lib/rental-schedule';
+import { useSession } from '../../../lib/session';
+import {
+  formatVietnamTime,
+  pickTodayActiveShift,
+  shiftAttendanceHint,
+  shiftStatusDisplay,
+} from '../../../lib/staff-shift-state';
 import { TourAppointmentsApi } from '../../../lib/tour-appointments-api';
 import {
   Button,
@@ -9,6 +17,7 @@ import {
   colors,
   FlowScreen,
   InlineMessage,
+  StatusPill,
   TabChip,
   Text,
 } from '../../components/ui';
@@ -17,6 +26,7 @@ import { InspectionListItem } from './InspectionListItem';
 import { groupBySchedule, SCHEDULE_GROUP_LABEL } from './inspection-display';
 import { StaffTourListItem } from './StaffTourListItem';
 import { useStaffInspections } from './use-staff-inspections';
+import { useStaffShifts } from './use-staff-shifts';
 
 type PrimaryTab = 'todo' | 'tours' | 'done';
 type TodoKind = 'handover' | 'return' | 'maintenance';
@@ -31,10 +41,21 @@ type Props = {
   onOpen: (contractId: string) => void;
   onOpenTour?: (tourId: string) => void;
   onOpenMaintenance?: (inspectionId: string) => void;
+  onOpenShifts?: () => void;
 };
 
 /** Today tab: the handovers, returns, maintenance checks and tour appointments to carry out. */
-export function StaffTodayScreen({ onOpen, onOpenTour, onOpenMaintenance }: Props) {
+export function StaffTodayScreen({ onOpen, onOpenTour, onOpenMaintenance, onOpenShifts }: Props) {
+  const { user } = useSession();
+  const isStaff = user?.roles.includes('FACILITY_STAFF') ?? false;
+  const shifts = useStaffShifts(isStaff, 0);
+  const todayShift = useMemo(
+    () => pickTodayActiveShift(shifts.shifts, shifts.nowMs),
+    [shifts.shifts, shifts.nowMs],
+  );
+  const shiftHint = todayShift ? shiftAttendanceHint(todayShift, shifts.nowMs) : null;
+  const shiftBadge = todayShift ? shiftStatusDisplay(todayShift.status) : null;
+
   const [primaryTab, setPrimaryTab] = useState<PrimaryTab>('todo');
   const [todoKind, setTodoKind] = useState<TodoKind>('handover');
 
@@ -119,6 +140,7 @@ export function StaffTodayScreen({ onOpen, onOpenTour, onOpenMaintenance }: Prop
 
   const handleRefresh = () => {
     setOpenError(null);
+    if (isStaff) shifts.refetch();
     if (primaryTab === 'tours') void fetchTours();
     else if (primaryTab === 'done') void doneInspections.refetch();
     else void openInspections.refetch();
@@ -137,6 +159,82 @@ export function StaffTodayScreen({ onOpen, onOpenTour, onOpenMaintenance }: Prop
         <Text className="text-body-sm text-text-secondary">
           Lượt nhận kho, trả kho, bảo trì và các ca dẫn khách tham quan.
         </Text>
+
+        {isStaff ? (
+          <View className="gap-2.5 rounded-[20px] border border-border-default bg-bg-card p-4">
+            <View className="flex-row items-center justify-between gap-2">
+              <View className="flex-row items-center gap-2">
+                <Clock color={colors.semantic.actionPrimary} size={18} weight="bold" />
+                <Text className="text-body font-bold text-text-primary">Ca làm hôm nay</Text>
+              </View>
+              {onOpenShifts ? (
+                <Pressable accessibilityRole="button" onPress={onOpenShifts}>
+                  <Text className="text-caption font-semibold text-text-link">Xem lịch tuần →</Text>
+                </Pressable>
+              ) : null}
+            </View>
+
+            {shifts.actionError ? (
+              <InlineMessage message={shifts.actionError} type="error" />
+            ) : null}
+
+            {todayShift && shiftBadge ? (
+              <>
+                <View className="flex-row items-center justify-between gap-2">
+                  <View className="flex-1">
+                    <Text className="text-body-sm font-semibold text-text-primary">
+                      {todayShift.shift_template_name ??
+                        todayShift.shift_template_code ??
+                        'Ca làm việc'}
+                    </Text>
+                    <Text className="text-caption text-text-secondary tabular-nums">
+                      {formatVietnamTime(todayShift.start_at)} –{' '}
+                      {formatVietnamTime(todayShift.end_at)}
+                    </Text>
+                  </View>
+                  <StatusPill label={shiftBadge.label} tone={shiftBadge.tone} />
+                </View>
+
+                {shiftHint?.kind === 'check-in' ? (
+                  <Button
+                    disabled={shifts.busyShiftId === todayShift.id}
+                    fullWidth
+                    label={
+                      shifts.busyShiftId === todayShift.id ? 'Đang check-in...' : 'Check-in vào ca'
+                    }
+                    loading={shifts.busyShiftId === todayShift.id}
+                    onPress={() => void shifts.checkIn(todayShift.id)}
+                    size="sm"
+                  />
+                ) : shiftHint?.kind === 'check-out' ? (
+                  <Button
+                    disabled={shifts.busyShiftId === todayShift.id}
+                    fullWidth
+                    label={
+                      shifts.busyShiftId === todayShift.id
+                        ? 'Đang check-out...'
+                        : 'Check-out tan ca'
+                    }
+                    loading={shifts.busyShiftId === todayShift.id}
+                    onPress={() => void shifts.checkOut(todayShift.id)}
+                    size="sm"
+                    variant="secondary"
+                  />
+                ) : shiftHint ? (
+                  <Text className="text-caption text-text-secondary">{shiftHint.text}</Text>
+                ) : null}
+              </>
+            ) : shifts.isLoading ? (
+              <Text className="text-caption text-text-secondary">Đang tải lịch ca...</Text>
+            ) : shifts.error ? (
+              <Text className="text-caption text-status-danger">{shifts.error}</Text>
+            ) : (
+              <Text className="text-caption text-text-secondary">
+                Hôm nay bạn chưa được xếp ca trực.
+              </Text>
+            )}
+          </View>
+        ) : null}
 
         <CardTabs
           onChange={setPrimaryTab}

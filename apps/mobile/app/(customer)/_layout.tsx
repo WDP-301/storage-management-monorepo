@@ -69,6 +69,8 @@ export default function CustomerTabsLayout() {
                 <RouterTabs.Screen name="ticket-detail" options={{ title: 'Chi tiết yêu cầu' }} />
                 <RouterTabs.Screen name="ticket-create" options={{ title: 'Tạo yêu cầu' }} />
                 <RouterTabs.Screen name="tours" options={{ title: 'Lịch hẹn xem kho' }} />
+                <RouterTabs.Screen name="profile-edit" options={{ title: 'Chỉnh sửa hồ sơ' }} />
+                <RouterTabs.Screen name="change-password" options={{ title: 'Đổi mật khẩu' }} />
               </RouterTabs>
             </SafeAreaView>
           </BrowseSelectionProvider>
@@ -179,7 +181,9 @@ function toCustomerTab(routeName: string | undefined): CustomerTab {
     routeName === 'tickets' ||
     routeName === 'ticket-detail' ||
     routeName === 'ticket-create' ||
-    routeName === 'tours'
+    routeName === 'tours' ||
+    routeName === 'profile-edit' ||
+    routeName === 'change-password'
   ) {
     return 'settings';
   }

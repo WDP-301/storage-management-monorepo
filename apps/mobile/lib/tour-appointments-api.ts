@@ -3,6 +3,7 @@ import type {
   TourAppointmentListResponse,
   TourAppointmentQueryOptions,
   TourAppointmentRecord,
+  TourAppointmentResponse,
 } from '@storage/types';
 import { request } from './api';
 
@@ -11,10 +12,11 @@ export const TourAppointmentsApi = {
    * Khách hàng đặt lịch xem kho (hoặc khách vãng lai để lại thông tin liên hệ).
    */
   create: async (dto: CreateContactTourDto): Promise<TourAppointmentRecord> => {
-    return request<TourAppointmentRecord>('/tour-appointments', {
+    const res = await request<TourAppointmentResponse>('/tour-appointments/contact', {
       method: 'POST',
       body: JSON.stringify(dto),
     });
+    return res.appointment;
   },
 
   /**
@@ -39,22 +41,43 @@ export const TourAppointmentsApi = {
   },
 
   /**
+   * Chi tiết một lịch hẹn xem kho.
+   */
+  get: async (id: string): Promise<TourAppointmentRecord> => {
+    const res = await request<TourAppointmentResponse>(
+      `/tour-appointments/${encodeURIComponent(id)}`,
+      {
+        method: 'GET',
+      },
+    );
+    return res.appointment;
+  },
+
+  /**
    * Khách hàng hoặc Quản lý / Nhân viên hủy lịch hẹn với lý do cụ thể.
    */
   cancel: async (id: string, cancellationReason: string): Promise<TourAppointmentRecord> => {
-    return request<TourAppointmentRecord>(`/tour-appointments/${id}/cancel`, {
-      method: 'PATCH',
-      body: JSON.stringify({ cancellationReason }),
-    });
+    const res = await request<TourAppointmentResponse>(
+      `/tour-appointments/${encodeURIComponent(id)}/cancel`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ cancellationReason }),
+      },
+    );
+    return res.appointment;
   },
 
   /**
    * Nhân viên hoàn tất ca dẫn khách với ghi chú kết quả tư vấn.
    */
   complete: async (id: string, staffResultNotes: string): Promise<TourAppointmentRecord> => {
-    return request<TourAppointmentRecord>(`/tour-appointments/${id}/complete`, {
-      method: 'PATCH',
-      body: JSON.stringify({ staffResultNotes }),
-    });
+    const res = await request<TourAppointmentResponse>(
+      `/tour-appointments/${encodeURIComponent(id)}/complete`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ staffResultNotes }),
+      },
+    );
+    return res.appointment;
   },
 };

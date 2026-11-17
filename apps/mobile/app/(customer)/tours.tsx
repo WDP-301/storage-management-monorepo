@@ -55,7 +55,10 @@ export default function ToursRoute() {
       onRefresh={() => void loadData(statusFilter)}
       onCancelAppointment={(apt) => void handleCancelAppointment(apt)}
       onBrowse={() => router.navigate('/(customer)/browse')}
-      onBack={() => router.back()}
+      onBack={() => {
+        if (router.canGoBack()) router.back();
+        else router.navigate('/(customer)/settings');
+      }}
     />
   );
 }

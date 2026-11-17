@@ -139,10 +139,17 @@ function ContractDetail({
   const isActive = contract.status === 'ACTIVE';
   const pending = openReturn(contract);
   const canRequestReturn = isActive && !pending;
-  // A settled move CANCELLED the old contract, but the customer must still see the status card.
-  const changeRequests = useUnitChangeRequests(isActive || contract.status === 'CANCELLED');
+  // A settled move attaches `new_contract_id` on DRAFT, and CANCELLED old contracts still keep
+  // status context visible on the detail screen.
+  const changeRequests = useUnitChangeRequests(
+    isActive || contract.status === 'DRAFT' || contract.status === 'CANCELLED',
+  );
   const openChange =
-    openChangeRequest(changeRequests.requests.filter((r) => r.contract_id === contract.id)) ?? null;
+    openChangeRequest(
+      changeRequests.requests.filter(
+        (r) => r.contract_id === contract.id || r.new_contract_id === contract.id,
+      ),
+    ) ?? null;
   // A pending return already blocks a change request server-side; hide the entry point too.
   const canRequestChange = isActive && !pending && !openChange;
   const canRequestAny = canRequestChange || canRequestReturn;
@@ -217,7 +224,7 @@ function ContractDetail({
       ) : null}
 
       {/* 4. History & billing */}
-      {contract.status === 'ENDED' && contract.settlement ? (
+      {(contract.status === 'ENDED' || contract.status === 'CANCELLED') && contract.settlement ? (
         <SettlementSection settlement={contract.settlement} />
       ) : null}
 

@@ -21,14 +21,14 @@ function loadTourAppointmentsApi(requestImpl) {
   return mod.exports;
 }
 
-test('TourAppointmentsApi.create posts to /tour-appointments with payload', async () => {
+test('TourAppointmentsApi.create posts to /tour-appointments/contact and unwraps appointment', async () => {
   let capturedPath = '';
   let capturedInit = null;
 
   const { TourAppointmentsApi } = loadTourAppointmentsApi(async (p, init) => {
     capturedPath = p;
     capturedInit = init;
-    return { id: 'apt-1', status: 'PENDING' };
+    return { appointment: { id: 'apt-1', status: 'PENDING' } };
   });
 
   const dto = {
@@ -43,10 +43,28 @@ test('TourAppointmentsApi.create posts to /tour-appointments with payload', asyn
   };
 
   const res = await TourAppointmentsApi.create(dto);
-  assert.equal(capturedPath, '/tour-appointments');
+  assert.equal(capturedPath, '/tour-appointments/contact');
   assert.equal(capturedInit.method, 'POST');
   assert.deepEqual(JSON.parse(capturedInit.body), dto);
   assert.equal(res.id, 'apt-1');
+  assert.equal(res.status, 'PENDING');
+});
+
+test('TourAppointmentsApi.get fetches /tour-appointments/:id and unwraps appointment', async () => {
+  let capturedPath = '';
+  let capturedInit = null;
+
+  const { TourAppointmentsApi } = loadTourAppointmentsApi(async (p, init) => {
+    capturedPath = p;
+    capturedInit = init;
+    return { appointment: { id: 'apt-9', status: 'ASSIGNED' } };
+  });
+
+  const res = await TourAppointmentsApi.get('apt-9');
+  assert.equal(capturedPath, '/tour-appointments/apt-9');
+  assert.equal(capturedInit.method, 'GET');
+  assert.equal(res.id, 'apt-9');
+  assert.equal(res.status, 'ASSIGNED');
 });
 
 test('TourAppointmentsApi.list builds correct query string with filters', async () => {
@@ -72,14 +90,14 @@ test('TourAppointmentsApi.list builds correct query string with filters', async 
   );
 });
 
-test('TourAppointmentsApi.cancel patches /tour-appointments/:id/cancel', async () => {
+test('TourAppointmentsApi.cancel patches /tour-appointments/:id/cancel and unwraps', async () => {
   let capturedPath = '';
   let capturedInit = null;
 
   const { TourAppointmentsApi } = loadTourAppointmentsApi(async (p, init) => {
     capturedPath = p;
     capturedInit = init;
-    return { id: 'apt-1', status: 'CANCELLED' };
+    return { appointment: { id: 'apt-1', status: 'CANCELLED' } };
   });
 
   const res = await TourAppointmentsApi.cancel('apt-1', 'Bận việc đột xuất');
@@ -89,14 +107,14 @@ test('TourAppointmentsApi.cancel patches /tour-appointments/:id/cancel', async (
   assert.equal(res.status, 'CANCELLED');
 });
 
-test('TourAppointmentsApi.complete patches /tour-appointments/:id/complete', async () => {
+test('TourAppointmentsApi.complete patches /tour-appointments/:id/complete and unwraps', async () => {
   let capturedPath = '';
   let capturedInit = null;
 
   const { TourAppointmentsApi } = loadTourAppointmentsApi(async (p, init) => {
     capturedPath = p;
     capturedInit = init;
-    return { id: 'apt-1', status: 'COMPLETED' };
+    return { appointment: { id: 'apt-1', status: 'COMPLETED' } };
   });
 
   const res = await TourAppointmentsApi.complete('apt-1', 'Khách hài lòng về kho');

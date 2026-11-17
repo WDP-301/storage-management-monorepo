@@ -1,7 +1,7 @@
 import type { TourAppointmentRecord } from '@storage/types';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Alert } from 'react-native';
+import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, BackHandler } from 'react-native';
 import { ApiError } from '../../lib/api';
 import { TourAppointmentsApi } from '../../lib/tour-appointments-api';
 import { StaffTourDetailScreen } from '../../src/features/staff/StaffTourDetailScreen';
@@ -12,23 +12,29 @@ export default function StaffTourRoute() {
   const [appointment, setAppointment] = useState<TourAppointmentRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const leave = useCallback(() => router.navigate('/(staff)/today'), [router]);
+
+  useEffect(() => {
+    setAppointment(null);
+    setError(null);
+  }, [id]);
 
   const loadData = useCallback(async () => {
-    if (!id) return;
+    if (!id) {
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
+    setError(null);
     try {
-      const res = await TourAppointmentsApi.list({ limit: 100 });
-      const found = res.appointments.find((a) => a.id === id) ?? null;
-      setAppointment(found);
-      if (!found) {
-        Alert.alert(
-          'Không tìm thấy',
-          'Ca dẫn khách này không tồn tại hoặc bạn không có quyền truy cập.',
-        );
-      }
+      const loaded = await TourAppointmentsApi.get(id);
+      setAppointment(loaded);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Không tải được thông tin ca dẫn khách.';
-      Alert.alert('Lỗi', msg);
+      setError(msg);
+      setAppointment(null);
     } finally {
       setIsLoading(false);
     }
@@ -40,13 +46,24 @@ export default function StaffTourRoute() {
     }, [loadData]),
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        leave();
+        return true;
+      });
+      return () => sub.remove();
+    }, [leave]),
+  );
+
+  if (!id) return <Redirect href="/(staff)/today" />;
+
   const handleComplete = async (notes: string) => {
-    if (!id) return;
     setIsSaving(true);
     try {
       await TourAppointmentsApi.complete(id, notes);
       Alert.alert('Thành công', 'Đã lưu kết quả ca tư vấn dẫn khách.', [
-        { text: 'Đóng', onPress: () => router.back() },
+        { text: 'Đóng', onPress: leave },
       ]);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Không thể hoàn tất ca.';
@@ -57,12 +74,11 @@ export default function StaffTourRoute() {
   };
 
   const handleCancel = async (reason: string) => {
-    if (!id) return;
     setIsSaving(true);
     try {
       await TourAppointmentsApi.cancel(id, reason);
       Alert.alert('Đã cập nhật', 'Đã báo vắng / hủy ca dẫn khách.', [
-        { text: 'Đóng', onPress: () => router.back() },
+        { text: 'Đóng', onPress: leave },
       ]);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Không thể cập nhật ca.';
@@ -75,11 +91,13 @@ export default function StaffTourRoute() {
   return (
     <StaffTourDetailScreen
       appointment={appointment}
+      error={error}
       isLoading={isLoading}
       isSaving={isSaving}
       onComplete={handleComplete}
       onCancel={handleCancel}
-      onBack={() => router.back()}
+      onRetry={() => void loadData()}
+      onBack={leave}
     />
   );
 }

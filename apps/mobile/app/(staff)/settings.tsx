@@ -11,7 +11,12 @@ export default function SettingsRoute() {
   return (
     <SettingsScreen
       isLoggingOut={isLoggingOut}
+      onChangePassword={() => router.navigate('/(staff)/change-password')}
+      onEditProfile={() => router.navigate('/(staff)/profile-edit')}
       onLogout={logout}
+      onShifts={
+        user.roles.includes('FACILITY_STAFF') ? () => router.navigate('/(staff)/shifts') : undefined
+      }
       onSupport={() => router.navigate('/(staff)/requests')}
       user={user}
     />

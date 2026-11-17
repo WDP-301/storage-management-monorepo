@@ -29,7 +29,7 @@ export function NotificationsInbox({ area }: { area: NotificationArea }) {
       onMarkAllRead={() => void inbox.markAllRead()}
       onOpen={(notification) => {
         void inbox.markRead(notification.id);
-        const href = notificationHref(notification.data, area);
+        const href = notificationHref(notification.data, area, notification.type);
         if (href) router.navigate(href);
       }}
     />

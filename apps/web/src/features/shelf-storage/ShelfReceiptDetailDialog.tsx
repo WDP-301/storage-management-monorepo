@@ -1,4 +1,5 @@
 import { Badge, Button, Dialog } from '@cloudflare/kumo';
+import { X } from '@phosphor-icons/react';
 import { ShelfReceiptStatus, UserRole } from '@storage/types';
 import type React from 'react';
 import {
@@ -52,10 +53,23 @@ export const ShelfReceiptDetailDialog: React.FC<Props> = ({ receiptId, onClose, 
     <Dialog.Root open={Boolean(receiptId)} onOpenChange={(open) => !open && onClose()}>
       <Dialog size="xl" className={`${DIALOG_SHELL} max-w-2xl sm:w-[640px] w-full`}>
         <DialogHeader>
-          <Dialog.Title className="text-base font-semibold text-kumo-default">
-            Phiếu {shown ? `${RECEIPT_TYPE_LABEL[shown.type].toLowerCase()} ${shown.code}` : ''}
-          </Dialog.Title>
-          {shown?.status === ShelfReceiptStatus.VOIDED && <Badge variant="error">Đã hủy</Badge>}
+          <div className="flex items-center gap-2 min-w-0">
+            <Dialog.Title className="text-base font-semibold text-kumo-default truncate">
+              Phiếu {shown ? `${RECEIPT_TYPE_LABEL[shown.type].toLowerCase()} ${shown.code}` : ''}
+            </Dialog.Title>
+            {shown?.status === ShelfReceiptStatus.VOIDED && <Badge variant="error">Đã hủy</Badge>}
+          </div>
+          <Dialog.Close
+            render={
+              <Button
+                size="sm"
+                variant="ghost"
+                shape="square"
+                icon={<X className="w-4 h-4" />}
+                aria-label="Đóng"
+              />
+            }
+          />
         </DialogHeader>
         <DialogBody>
           {loading && !shown && <p className="text-sm text-kumo-subtle">Đang tải...</p>}

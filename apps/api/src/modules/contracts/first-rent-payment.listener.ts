@@ -17,6 +17,7 @@ import {
 import { PAYMENT_EVENTS, PaymentReceivedEvent } from '@modules/payments/types/payment';
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+import { parseVietnamDateTime } from '@shared/utils/calendar.util';
 import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import {
   InvoiceKind,
@@ -176,7 +177,7 @@ export class FirstRentPaymentListener {
           status: PaymentStatus.SUCCEEDED,
           amount: event.amount,
           providerRef,
-          paidAt: new Date(event.transactionDate),
+          paidAt: parseVietnamDateTime(event.transactionDate) ?? new Date(),
           metadata: {
             ...(review ? { needsReview: review } : {}),
             // Kept so a later hand-recorded payment cannot reuse this transfer's bank reference.
@@ -186,7 +187,7 @@ export class FirstRentPaymentListener {
         if (!payable) return 'needs-review';
 
         // A top-up payment is extra deposit held even if the invoice is only part-paid.
-        await creditDepositTopUp(em, topUpBooking, event.amount);
+        await creditDepositTopUp(em, topUpBooking, event.amount, invoice.contractId);
 
         const paid = await sumInvoicePayments(em, invoice.id);
         const status = paid.gte(invoice.total) ? InvoiceStatus.PAID : InvoiceStatus.PARTIALLY_PAID;

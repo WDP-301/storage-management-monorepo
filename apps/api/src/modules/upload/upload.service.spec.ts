@@ -1,5 +1,12 @@
 import { Readable } from 'node:stream';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { validate } from 'class-validator';
+import { GetPresignedUrlDto } from './dto/upload.dto';
 import { buildUploadKey, isOwnUpload, UploadService } from './upload.service';
+
+jest.mock('@aws-sdk/s3-request-presigner', () => ({
+  getSignedUrl: jest.fn().mockResolvedValue('https://signed.example/obj'),
+}));
 
 describe('UploadService error contract', () => {
   const config = {
@@ -62,6 +69,61 @@ describe('UploadService error contract', () => {
       expect(send).not.toHaveBeenCalled();
     },
   );
+
+  it('falls back to endpoint/bucket when S3_PUBLIC_URL is blank string', async () => {
+    const blankPublicUrlConfig = {
+      get: jest.fn((key: string, defaultValue?: string) => {
+        if (key === 'S3_ENDPOINT') return 'https://s3.example.com';
+        if (key === 'S3_BUCKET') return 'my-bucket';
+        if (key === 'S3_PUBLIC_URL') return '   ';
+        return defaultValue;
+      }),
+    };
+    const svc = new UploadService(blankPublicUrlConfig as never);
+    (svc as unknown as { s3Client: { send: jest.Mock } }).s3Client = { send: jest.fn() };
+
+    const res = await svc.uploadBuffer('uploads/a.png', Buffer.from('x'), 'image/png');
+    expect(res.publicUrl).toBe('https://s3.example.com/my-bucket/uploads/a.png');
+  });
+
+  it('signs download URLs with Content-Disposition attachment', async () => {
+    const url = await service.generatePresignedDownloadUrl('uploads/1-doc.pdf');
+
+    expect(url).toBe('https://signed.example/obj');
+    expect(getSignedUrl).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        input: expect.objectContaining({
+          Bucket: 'storage-management-bucket',
+          Key: 'uploads/1-doc.pdf',
+          ResponseContentDisposition: 'attachment; filename="1-doc.pdf"',
+        }),
+      }),
+      { expiresIn: 3600 },
+    );
+  });
+
+  it('rejects active scriptable MIME types in GetPresignedUrlDto', async () => {
+    const svg = Object.assign(new GetPresignedUrlDto(), {
+      fileName: 'evil.svg',
+      mimeType: 'image/svg+xml',
+      fileSize: 120,
+    });
+    const html = Object.assign(new GetPresignedUrlDto(), {
+      fileName: 'evil.html',
+      mimeType: 'text/html',
+      fileSize: 120,
+    });
+    const jpg = Object.assign(new GetPresignedUrlDto(), {
+      fileName: 'ok.jpg',
+      mimeType: 'image/jpeg',
+      fileSize: 120,
+    });
+
+    expect((await validate(svg)).length).toBeGreaterThan(0);
+    expect((await validate(html)).length).toBeGreaterThan(0);
+    expect(await validate(jpg)).toEqual([]);
+  });
 });
 
 describe('buildUploadKey', () => {

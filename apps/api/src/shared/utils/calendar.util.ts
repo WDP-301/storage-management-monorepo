@@ -71,6 +71,84 @@ export function addVietnamMonths(at: Date, months: number): Date {
   return new Date(Date.UTC(year, month, date) - VN_OFFSET_MS);
 }
 
+/**
+ * Like `addVietnamMonths`, while keeping the time-of-day of `at` in Vietnam time
+ * (used for billing periods and first-month handover end instants).
+ */
+export function addVietnamCalendarMonths(at: Date, months: number): Date {
+  if (!Number.isInteger(months)) throw new RangeError(`months must be an integer: ${months}`);
+  const shifted = new Date(at.getTime() + VN_OFFSET_MS);
+  const year = shifted.getUTCFullYear();
+  const month = shifted.getUTCMonth() + months;
+  const lastDate = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const date = Math.min(shifted.getUTCDate(), lastDate);
+  const ms = Date.UTC(
+    year,
+    month,
+    date,
+    shifted.getUTCHours(),
+    shifted.getUTCMinutes(),
+    shifted.getUTCSeconds(),
+    shifted.getUTCMilliseconds(),
+  );
+  return new Date(ms - VN_OFFSET_MS);
+}
+
+const BARE_DATETIME_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/;
+
+/**
+ * Parses a timestamp from SePay or user input. Explicit offsets (`Z`, `+07:00`, ...) are
+ * respected; bare timestamps without a timezone offset (such as SePay's `"YYYY-MM-DD HH:mm:ss"`)
+ * are interpreted in Vietnam time (`+07:00`) rather than server local time. Returns `null` for
+ * empty or malformed strings.
+ */
+export function parseVietnamDateTime(raw: string | null | undefined): Date | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(trimmed)) {
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  if (DAY_PATTERN.test(trimmed)) {
+    try {
+      return fromVietnamDate(trimmed);
+    } catch {
+      return null;
+    }
+  }
+
+  const match = BARE_DATETIME_PATTERN.exec(trimmed);
+  if (!match) {
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const date = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6] ?? 0);
+  const ms = Number((match[7] ?? '').padEnd(3, '0'));
+  const utc = Date.UTC(year, month, date, hour, minute, second, ms);
+  const check = new Date(utc);
+  if (
+    check.getUTCFullYear() !== year ||
+    check.getUTCMonth() !== month ||
+    check.getUTCDate() !== date ||
+    check.getUTCHours() !== hour ||
+    check.getUTCMinutes() !== minute ||
+    check.getUTCSeconds() !== second
+  ) {
+    return null;
+  }
+  return new Date(utc - VN_OFFSET_MS);
+}
+
 /** `dd/MM/yyyy` of a Vietnam day, as customers read dates. */
 export function formatVietnamDate(day: string | Date): string {
   const iso = typeof day === 'string' ? day : vietnamDate(day);

@@ -1,6 +1,5 @@
-import { formatVnDay, lastDayBefore } from '../../lib/vn-day';
+import { formatVnDay, lastDayBefore, vnDay } from '../../lib/vn-day';
 import type { ContractPatch, ContractRecord, ContractStatus } from '../../types/contract';
-import { formatDay } from '../inspections/inspection-display';
 
 export const CONTRACT_STATUS_LABEL: Record<
   ContractStatus,
@@ -26,45 +25,37 @@ export function shortContractNo(contractNo: string): string {
   return match ? `CT-${match[1].toUpperCase()}` : contractNo;
 }
 
-const pad = (n: number) => String(n).padStart(2, '0');
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
 
-/** yyyy-mm-dd of the viewer's local day, the value a date input expects. */
+/** yyyy-mm-dd in Vietnam (+07:00), the value a date input expects. */
 export function toDateInput(iso: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return iso ? vnDay(iso) : '';
 }
 
-/** Local midnight of a date-input value, as ISO for the API. */
+/** Start of the Vietnam (+07:00) calendar day for a date-input value, as ISO for the API. */
 export function fromDateInput(value: string): string {
-  const [y, m, d] = value.split('-').map(Number);
-  return new Date(y, m - 1, d).toISOString();
+  return new Date(`${value}T00:00:00+07:00`).toISOString();
 }
 
 /**
- * The last moment of a date-input day. An end date names the last day of use, and the API
- * treats a contract as running while `endedAt >= now`, so midnight would cut that day off.
+ * Last moment of the Vietnam (+07:00) calendar day. An end date names the last day of use, and the
+ * API treats a contract as running while `endedAt >= now`, so midnight would cut that day off.
  */
 export function endOfDateInput(value: string): string {
-  const [y, m, d] = value.split('-').map(Number);
-  return new Date(y, m - 1, d, 23, 59, 59, 999).toISOString();
+  return new Date(`${value}T23:59:59.999+07:00`).toISOString();
 }
 
 /**
- * Last day of the term: start + N months, minus one day, clamped so 31/01 + 1 month ends on
- * 27/02 rather than rolling into March. Matches what the customer app shows.
+ * Last day of the term in Vietnam time: start + N months, minus one day, clamped so 31/01 + 1 month
+ * ends on 27/02 rather than rolling into March. Matches what the customer app shows.
  */
 export function plannedEnd(contract: Pick<ContractRecord, 'effective_at' | 'months'>): string {
-  const start = new Date(contract.effective_at);
-  const targetMonth = start.getMonth() + contract.months;
-  const lastDayOfTargetMonth = new Date(start.getFullYear(), targetMonth + 1, 0).getDate();
-  const end = new Date(
-    start.getFullYear(),
-    targetMonth,
-    Math.min(start.getDate(), lastDayOfTargetMonth),
-  );
-  end.setDate(end.getDate() - 1);
-  return end.toISOString();
+  const shifted = new Date(new Date(contract.effective_at).getTime() + VN_OFFSET_MS);
+  const year = shifted.getUTCFullYear();
+  const targetMonth = shifted.getUTCMonth() + contract.months;
+  const lastDayOfTargetMonth = new Date(Date.UTC(year, targetMonth + 1, 0)).getUTCDate();
+  const date = Math.min(shifted.getUTCDate(), lastDayOfTargetMonth);
+  return new Date(Date.UTC(year, targetMonth, date - 1) - VN_OFFSET_MS).toISOString();
 }
 
 /** dd/mm/yyyy of the term's last day: from the server's term end when known, else computed. */
@@ -73,7 +64,7 @@ export function termLastDay(
 ): string {
   return contract.term_end_at
     ? formatVnDay(lastDayBefore(contract.term_end_at))
-    : formatDay(plannedEnd(contract));
+    : formatVnDay(vnDay(plannedEnd(contract)));
 }
 
 export type HandoverState = 'none' | 'unassigned' | 'assigned' | 'done';

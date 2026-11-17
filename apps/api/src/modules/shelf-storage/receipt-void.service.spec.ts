@@ -106,4 +106,18 @@ describe('ReceiptVoidService.void', () => {
     await service.void(actor, 'r-1', 'Nhầm');
     expect(call('UPDATE "shelf_items"')?.[1]).toEqual([['i-1'], [2]]);
   });
+
+  it('cancels open pickup requests when voiding leaves the shelf empty', async () => {
+    em.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('FOR UPDATE')) return [current];
+      if (sql.includes('FROM "shelf_receipt_lines"')) return lines;
+      if (sql.includes('FROM "shelf_receipts"')) return head;
+      if (sql.includes('sum("quantity")')) return [{ total: 0 }];
+      return [[], 1];
+    });
+
+    await service.void(actor, 'r-1', 'Nhập nhầm');
+
+    expect(call('UPDATE "pickup_requests"')?.[1]).toEqual(['c-1']);
+  });
 });

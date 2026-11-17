@@ -6,7 +6,11 @@ import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { HttpStatus, Logger } from '@nestjs/common';
-import { fromVietnamDate, vietnamToday } from '@shared/utils/calendar.util';
+import {
+  addVietnamCalendarMonths,
+  fromVietnamDate,
+  vietnamToday,
+} from '@shared/utils/calendar.util';
 import {
   ContractStatus,
   DamageSeverity,
@@ -274,8 +278,7 @@ describe('InspectionLifecycleService.finalize', () => {
 
     const result = await service.finalize('insp-1', actor('staff-1'));
 
-    const endAt = new Date(result.finalizedAt as Date);
-    endAt.setMonth(endAt.getMonth() + 1);
+    const endAt = addVietnamCalendarMonths(result.finalizedAt as Date, 1);
     expect(em.update).toHaveBeenCalledWith(
       Invoice,
       { id: 'inv-1' },

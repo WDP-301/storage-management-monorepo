@@ -12,7 +12,7 @@ export class InvoiceScheduleService {
    * Cron job running every day at midnight (00:00) to scan active contracts
    * and issue recurring rental invoices.
    */
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, { timeZone: 'Asia/Ho_Chi_Minh' })
   async handleDailyRecurringInvoicing(): Promise<void> {
     this.logger.log('Starting daily recurring invoice schedule pass...');
     try {

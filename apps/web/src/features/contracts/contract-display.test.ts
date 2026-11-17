@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { vnTimeOfDay } from '../../lib/vn-day';
 import { contractRecord } from '../../test-utils/contract-fixtures';
 import {
   buildContractPatch,
@@ -106,9 +107,11 @@ describe('contract display helpers', () => {
       { ...toContractForm(signed), months: '12', endedAt: '2027-10-15' },
       signed,
     );
-    // The end date keeps its whole last day.
+    // The end date keeps its whole Vietnam (+07:00) day regardless of viewer timezone.
     expect(patch).toEqual({ endedAt: endOfDateInput('2027-10-15') });
+    expect(endOfDateInput('2027-10-15')).toBe('2027-10-15T16:59:59.999Z');
     expect(toDateInput(endOfDateInput('2027-10-15'))).toBe('2027-10-15');
-    expect(new Date(endOfDateInput('2027-10-15')).getHours()).toBe(23);
+    expect(toDateInput('2027-10-14T20:00:00.000Z')).toBe('2027-10-15');
+    expect(vnTimeOfDay(endOfDateInput('2027-10-15'))).toBe('23:59');
   });
 });

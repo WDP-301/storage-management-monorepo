@@ -49,6 +49,32 @@ describe('PlacesService', () => {
 
       await expect(service.autocomplete('quận 1')).rejects.toMatchObject({ status: 503 });
     });
+
+    it('reuses normalized cache keys and skips Goong for blank input', async () => {
+      const spy = mockGoong({ status: 'OK', predictions: [{ description: 'Quận 1' }] });
+
+      await expect(service.autocomplete('   ')).resolves.toEqual([]);
+      expect(spy).not.toHaveBeenCalled();
+
+      await service.autocomplete('  Quận 1 ');
+      await service.autocomplete('quận 1');
+      expect(spy).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes a timeout signal and returns 503 when Goong returns invalid JSON', async () => {
+      jest.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => {
+          throw new SyntaxError('Unexpected token');
+        },
+      } as unknown as Response);
+
+      await expect(service.autocomplete('thủ đức')).rejects.toMatchObject({ status: 503 });
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+    });
   });
 
   describe('findNearby', () => {

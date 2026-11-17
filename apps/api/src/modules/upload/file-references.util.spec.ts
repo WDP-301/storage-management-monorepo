@@ -13,6 +13,9 @@ describe('assertFileKeyUnreferenced', () => {
     expect(sql).toContain('FROM contract_settlements');
     expect(sql).toContain('FROM contracts c WHERE c.documents @> $1::jsonb');
     expect(sql).toContain('FROM shelf_receipts r WHERE r.photos @> $1::jsonb');
+    expect(sql).toContain('FROM service_tickets t WHERE t.attachments @> $1::jsonb');
+    expect(sql).toContain('FROM storage_units u WHERE u.images @> $1::jsonb');
+    expect(sql).toContain('FROM invoices i');
     expect(params.map((p) => JSON.parse(p))).toEqual([
       [{ fileKey: KEY }],
       [{ evidence: [{ fileKey: KEY }] }],
@@ -54,6 +57,7 @@ describe('assertCanReadFile', () => {
     expect(sql).toContain(
       'FROM shelf_receipts r WHERE r.customer_id = $1 AND r.photos @> $2::jsonb',
     );
+    expect(sql).toContain('FROM invoices i');
     expect(params[0]).toBe('user-1');
     expect(params.slice(1).map((p) => JSON.parse(p))).toEqual([
       [{ fileKey: KEY }],

@@ -324,6 +324,40 @@ describe('pickup requests', () => {
       await expect(staffService.markReady('req-1', staff)).rejects.toMatchObject({ status: 403 });
       expect(em.update).not.toHaveBeenCalled();
     });
+
+    it('refuses marking ready when the contract is no longer active', async () => {
+      mockedContracts.mockResolvedValue([contractRow({ status: ContractStatus.ENDED }) as never]);
+
+      await expect(staffService.markReady('req-1', staff)).rejects.toMatchObject({
+        status: 409,
+        response: {
+          code: 'PICKUP_REQUEST_NOT_ALLOWED',
+          details: { reason: 'CONTRACT_NOT_ACTIVE' },
+        },
+      });
+      expect(em.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses marking ready when shelf stock dropped below the requested quantity', async () => {
+      mockedRequests.mockResolvedValue([
+        requestView({ lines: [{ itemId: 'i-1', name: 'Sách', quantity: 4 }] }) as never,
+      ]);
+      jest
+        .mocked(loadStock)
+        .mockResolvedValue(new Map([['c-1', [item('i-1', 'Sách', 2) as never]]]));
+
+      await expect(staffService.markReady('req-1', staff)).rejects.toMatchObject({
+        status: 409,
+        response: {
+          code: 'PICKUP_REQUEST_NOT_ALLOWED',
+          details: {
+            reason: 'QUANTITY_EXCEEDS_STOCK',
+            items: [{ itemId: 'i-1', name: 'Sách', requested: 4, available: 2 }],
+          },
+        },
+      });
+      expect(em.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('lists', () => {

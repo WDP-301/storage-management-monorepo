@@ -33,14 +33,20 @@ import { Stepper } from './PickupRequestForm';
 /** What the customer will bring (more of an item on the shelf, or new items), and when. */
 export function DropOffRequestForm({
   contractId,
+  contractEffectiveAt,
   items,
   onDone,
 }: {
   contractId: string;
+  contractEffectiveAt?: string;
   items: ShelfItemView[];
   onDone: () => void;
 }) {
   const [today] = useState(() => vietnamToday(Date.now()));
+  const effectiveDay = contractEffectiveAt
+    ? vietnamToday(new Date(contractEffectiveAt).getTime())
+    : today;
+  const minDay = effectiveDay > today ? effectiveDay : today;
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [newLines, setNewLines] = useState<NewItemLine[]>([]);
   const [newName, setNewName] = useState('');
@@ -201,7 +207,7 @@ export function DropOffRequestForm({
         {calendarOpen ? (
           <View className="rounded-2xl border border-border-default bg-bg-card p-3.5">
             <MonthCalendar
-              minIso={today}
+              minIso={minDay}
               maxIso={lastRequestDay(today)}
               selectedIso={dayIso}
               onSelect={pickDay}

@@ -1,5 +1,6 @@
 import { Booking } from '@entities/booking.entity';
 import { ApiProperty } from '@nestjs/swagger';
+import { startOfVietnamDay } from '@shared/utils/calendar.util';
 import { BookingStatus } from '@storage/types';
 import { Type } from 'class-transformer';
 import {
@@ -33,17 +34,7 @@ export function IsValidBookingStartDate(validationOptions?: ValidationOptions) {
           const date = new Date(value);
           if (Number.isNaN(date.getTime())) return false;
 
-          const now = new Date();
-          // Beginning of today (local time)
-          const startOfToday = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate(),
-            0,
-            0,
-            0,
-            0,
-          );
+          const startOfToday = startOfVietnamDay(new Date());
 
           return date >= startOfToday;
         },

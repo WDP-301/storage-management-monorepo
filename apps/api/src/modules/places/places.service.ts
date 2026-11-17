@@ -25,9 +25,11 @@ export interface NearbyResult {
 
 @Injectable()
 export class PlacesService {
-  /** Simple in-memory cache: input → { predictions, expiresAt } */
+  /** Simple in-memory cache: normalized input → { predictions, expiresAt } */
   private readonly autocompleteCache = new Map<string, { data: any[]; expiresAt: number }>();
   private readonly CACHE_TTL_MS = 60_000; // 60 seconds
+  private readonly MAX_CACHE_ENTRIES = 500;
+  private readonly REQUEST_TIMEOUT_MS = 5_000;
 
   constructor(
     private readonly config: ConfigService,
@@ -49,13 +51,19 @@ export class PlacesService {
   // ─── Autocomplete ──────────────────────────────────────────────────────────
 
   async autocomplete(input: string): Promise<any[]> {
+    const normalized = input.trim();
+    if (!normalized) return [];
+
+    const cacheKey = normalized.toLowerCase();
+    const now = Date.now();
     // Return from cache if still fresh
-    const cached = this.autocompleteCache.get(input);
-    if (cached && cached.expiresAt > Date.now()) return cached.data;
+    const cached = this.autocompleteCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) return cached.data;
+    if (cached) this.autocompleteCache.delete(cacheKey);
 
     const params = new URLSearchParams({
       api_key: this.apiKey,
-      input,
+      input: normalized,
       more_compound: 'true',
       limit: '10',
       radius: '100',
@@ -64,7 +72,7 @@ export class PlacesService {
     const url = `${GOONG_BASE_URL}/place/autocomplete?${params.toString()}`;
     let res: Response;
     try {
-      res = await fetch(url);
+      res = await fetch(url, { signal: AbortSignal.timeout(this.REQUEST_TIMEOUT_MS) });
     } catch {
       throw new DomainException(
         ErrorCode.SERVICE_UNAVAILABLE,
@@ -81,7 +89,16 @@ export class PlacesService {
       );
     }
 
-    const json = await res.json();
+    let json: any;
+    try {
+      json = await res.json();
+    } catch {
+      throw new DomainException(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        'Goong returned invalid autocomplete response',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
     // Goong signals business errors via json.status, not HTTP status
     // (e.g. REQUEST_DENIED on quota exceeded returns 200 with no predictions).
     // ZERO_RESULTS is a normal "no match" answer, not an outage.
@@ -95,12 +112,25 @@ export class PlacesService {
 
     const predictions: any[] = json?.predictions ?? [];
 
-    this.autocompleteCache.set(input, {
-      data: predictions,
-      expiresAt: Date.now() + this.CACHE_TTL_MS,
-    });
+    this.setAutocompleteCache(cacheKey, predictions);
 
     return predictions;
+  }
+
+  private setAutocompleteCache(key: string, data: any[]): void {
+    const now = Date.now();
+    for (const [k, entry] of this.autocompleteCache.entries()) {
+      if (entry.expiresAt <= now) this.autocompleteCache.delete(k);
+    }
+    while (this.autocompleteCache.size >= this.MAX_CACHE_ENTRIES) {
+      const oldestKey = this.autocompleteCache.keys().next().value;
+      if (oldestKey === undefined) break;
+      this.autocompleteCache.delete(oldestKey);
+    }
+    this.autocompleteCache.set(key, {
+      data,
+      expiresAt: now + this.CACHE_TTL_MS,
+    });
   }
 
   async findNearby(query: NearbyQueryDto): Promise<NearbyResult> {
@@ -153,7 +183,7 @@ export class PlacesService {
   private extractLocation(detail: any): { lat: number; lng: number } {
     const location: { lat: number; lng: number } = detail?.result?.geometry?.location;
 
-    if (!location?.lat || !location?.lng) {
+    if (typeof location?.lat !== 'number' || typeof location?.lng !== 'number') {
       throw new DomainException(
         ErrorCode.BAD_REQUEST,
         'Place has no resolvable coordinates',
@@ -167,7 +197,7 @@ export class PlacesService {
     const url = `${GOONG_BASE_URL}/place/detail?api_key=${this.apiKey}&place_id=${encodeURIComponent(placeId)}`;
     let res: Response;
     try {
-      res = await fetch(url);
+      res = await fetch(url, { signal: AbortSignal.timeout(this.REQUEST_TIMEOUT_MS) });
     } catch {
       throw new DomainException(
         ErrorCode.SERVICE_UNAVAILABLE,
@@ -184,7 +214,16 @@ export class PlacesService {
       );
     }
 
-    const json = await res.json();
+    let json: any;
+    try {
+      json = await res.json();
+    } catch {
+      throw new DomainException(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        'Goong returned invalid place detail response',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
     if (json?.status !== 'OK') {
       throw new DomainException(
         ErrorCode.BAD_REQUEST,

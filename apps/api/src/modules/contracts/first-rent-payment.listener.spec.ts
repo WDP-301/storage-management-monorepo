@@ -94,7 +94,7 @@ describe('FirstRentPaymentListener', () => {
       status: PaymentStatus.SUCCEEDED,
       amount: 1500000,
       providerRef: '42',
-      paidAt: new Date('2026-10-12 10:32:00'),
+      paidAt: new Date('2026-10-12T10:32:00+07:00'),
       metadata: {},
     });
     expect(em.update).toHaveBeenCalledWith(

@@ -24,7 +24,10 @@ async function main(): Promise<void> {
     const body = JSON.stringify({
       id,
       gateway: 'DEMO',
-      transactionDate: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      transactionDate: new Date(Date.now() + 7 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 19)
+        .replace('T', ' '),
       accountNumber: process.env.SEPAY_ACCOUNT_NO ?? '0000000000',
       subAccount: null,
       referenceCode: `DEMO${id}`,

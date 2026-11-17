@@ -1,9 +1,11 @@
 import {
+  addVietnamCalendarMonths,
   addVietnamDays,
   addVietnamMonths,
   formatVietnamDate,
   fromVietnamDate,
   isPastVietnamTimeSlot,
+  parseVietnamDateTime,
   startOfVietnamDay,
   vietnamDate,
   vietnamDayIndex,
@@ -140,6 +142,34 @@ describe('calendar.util', () => {
 
     it('returns false if no time slot is provided for today', () => {
       expect(isPastVietnamTimeSlot('2026-11-07', null, fixedNow)).toBe(false);
+    });
+  });
+
+  describe('addVietnamCalendarMonths', () => {
+    it('preserves Vietnam time-of-day and clamps month ends', () => {
+      expect(addVietnamCalendarMonths(new Date('2026-01-31T03:15:30.500Z'), 1).toISOString()).toBe(
+        '2026-02-28T03:15:30.500Z',
+      );
+      expect(addVietnamCalendarMonths(new Date('2028-01-31T17:30:00.000Z'), 1).toISOString()).toBe(
+        '2028-02-29T17:30:00.000Z',
+      );
+    });
+  });
+
+  describe('parseVietnamDateTime', () => {
+    it('interprets bare SePay timestamps as Vietnam +07:00 time', () => {
+      expect(parseVietnamDateTime('2026-10-12 10:32:00')?.toISOString()).toBe(
+        '2026-10-12T03:32:00.000Z',
+      );
+    });
+
+    it('keeps explicit offsets unchanged and rejects empty or invalid inputs', () => {
+      expect(parseVietnamDateTime('2026-10-04T00:00:00Z')?.toISOString()).toBe(
+        '2026-10-04T00:00:00.000Z',
+      );
+      expect(parseVietnamDateTime('')).toBeNull();
+      expect(parseVietnamDateTime(null)).toBeNull();
+      expect(parseVietnamDateTime('2026-02-30 10:00:00')).toBeNull();
     });
   });
 });

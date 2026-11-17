@@ -5,10 +5,15 @@ import type { AuthUser } from '@modules/auth/types/auth-user';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { Injectable } from '@nestjs/common';
 import { notFound } from '@shared/exceptions/domain.exception';
-import { PickupRequestStatus, type PickupRequestView, StorageUnitKind } from '@storage/types';
+import {
+  ContractStatus,
+  PickupRequestStatus,
+  type PickupRequestView,
+  StorageUnitKind,
+} from '@storage/types';
 import { DataSource } from 'typeorm';
 import { loadPickupRequests } from '../shelf-storage/pickup-request.read';
-import { findShelfContracts } from '../shelf-storage/shelf-contract.query';
+import { findShelfContracts, loadStock } from '../shelf-storage/shelf-contract.query';
 import { notifyRequestReady } from './pickup-notifications';
 import { lockRequestStatus, notAllowed } from './pickup-requests.service';
 
@@ -48,6 +53,24 @@ export class PickupRequestsStaffService {
       const status = await lockRequestStatus(em, id);
       if (status !== PickupRequestStatus.PENDING) {
         throw notAllowed('NOT_PENDING', 'Only a pending request can be marked ready', { status });
+      }
+      if (contract.status !== ContractStatus.ACTIVE) {
+        throw notAllowed('CONTRACT_NOT_ACTIVE', 'The contract is no longer active');
+      }
+      const items = (await loadStock(em, [contract.id], { lock: true })).get(contract.id) ?? [];
+      const stockByItemId = new Map(items.map((item) => [item.id, item.quantity]));
+      const shortage = view.lines.filter(
+        (line) => line.quantity > (stockByItemId.get(line.itemId) ?? 0),
+      );
+      if (shortage.length > 0) {
+        throw notAllowed('QUANTITY_EXCEEDS_STOCK', 'More requested than is on the shelf', {
+          items: shortage.map((line) => ({
+            itemId: line.itemId,
+            name: line.name,
+            requested: line.quantity,
+            available: stockByItemId.get(line.itemId) ?? 0,
+          })),
+        });
       }
       await em.update(
         PickupRequest,

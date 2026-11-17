@@ -19,6 +19,7 @@ import {
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
+import { addVietnamCalendarMonths } from '@shared/utils/calendar.util';
 import {
   ContractStatus,
   DamageSeverity,
@@ -157,8 +158,7 @@ export class InspectionLifecycleService {
         : await this.moveUnit(em, contract, transition, inspection);
       // The first paid month runs from the day the customer actually took the unit.
       if (firstRent) {
-        const endAt = new Date(now);
-        endAt.setMonth(endAt.getMonth() + firstRent.months);
+        const endAt = addVietnamCalendarMonths(now, firstRent.months);
         await em.update(Invoice, { id: firstRent.id }, { startAt: now, endAt });
       }
       // Before the contract ends: rent still owed is billed on an ACTIVE contract.

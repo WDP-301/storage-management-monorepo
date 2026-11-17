@@ -34,6 +34,19 @@ describe('recurringRentPeriods', () => {
     expect(periods[1]).toEqual({ periodNo: 3, startAt: expected(2), endAt: expected(3) });
   });
 
+  it('clamps month ends in Vietnam +07:00 instead of overflowing into the next month', () => {
+    const periods = recurringRentPeriods(
+      contract({ effectiveAt: new Date('2026-01-31T05:00:00.000Z'), months: 2 }),
+    );
+    expect(periods).toEqual([
+      {
+        periodNo: 2,
+        startAt: new Date('2026-02-28T05:00:00.000Z'),
+        endAt: new Date('2026-03-31T05:00:00.000Z'),
+      },
+    ]);
+  });
+
   it.each([
     ['a one-month contract', { months: 1 }],
     ['a contract without a start', { effectiveAt: null }],

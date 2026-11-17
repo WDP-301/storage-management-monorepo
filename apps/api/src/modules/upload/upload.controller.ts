@@ -32,7 +32,7 @@ import { UserRole } from '@storage/types';
 import { Response } from 'express';
 import { DataSource } from 'typeorm';
 import { DownloadFileQueryDto, FileKeyParamDto } from './dto/download-file.dto';
-import { GetPresignedUrlDto, MAX_UPLOAD_BYTES } from './dto/upload.dto';
+import { ALLOWED_UPLOAD_MIME_TYPES, GetPresignedUrlDto, MAX_UPLOAD_BYTES } from './dto/upload.dto';
 import {
   DeleteFileResponseDto,
   DownloadUrlResponseDto,
@@ -105,10 +105,23 @@ export class UploadController {
       });
     }
 
+    const mimeType = file.mimetype?.toLowerCase() ?? '';
+    if (!(ALLOWED_UPLOAD_MIME_TYPES as readonly string[]).includes(mimeType)) {
+      throw new DomainException(ErrorCode.VALIDATION_FAILED, 'Unsupported file type', 400, {
+        fields: [
+          {
+            field: 'file',
+            code: 'unsupportedMimeType',
+            message: 'Only JPEG, PNG, WebP, HEIC, HEIF, or PDF uploads are allowed',
+          },
+        ],
+      });
+    }
+
     return this.uploadService.uploadBuffer(
       buildUploadKey(file.originalname, user.id),
       file.buffer,
-      file.mimetype || 'application/octet-stream',
+      mimeType,
     );
   }
 
@@ -140,6 +153,13 @@ export class UploadController {
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    stream.on?.('error', (err) => {
+      if (!res.headersSent) {
+        res.status(502).end();
+      } else {
+        res.destroy?.(err);
+      }
+    });
     stream.pipe(res);
   }
 

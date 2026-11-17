@@ -145,7 +145,12 @@ function ShelfStorageBody({ contract }: { contract: ApiContract }) {
           />
           <RequestFormSheet sheetRef={dropOffSheetRef} onSubmitted={reload}>
             {(done) => (
-              <DropOffRequestForm contractId={contract.id} items={storage.items} onDone={done} />
+              <DropOffRequestForm
+                contractEffectiveAt={contract.effectiveAt}
+                contractId={contract.id}
+                items={storage.items}
+                onDone={done}
+              />
             )}
           </RequestFormSheet>
         </>

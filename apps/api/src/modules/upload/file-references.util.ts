@@ -26,6 +26,13 @@ export async function assertFileKeyUnreferenced(em: EntityManager, fileKey: stri
      SELECT 1 FROM payments p WHERE p.metadata->'evidence' @> $1::jsonb
      UNION ALL
      SELECT 1 FROM shelf_receipts r WHERE r.photos @> $1::jsonb
+     UNION ALL
+     SELECT 1 FROM service_tickets t WHERE t.attachments @> $1::jsonb
+     UNION ALL
+     SELECT 1 FROM storage_units u WHERE u.images @> $1::jsonb AND u.deleted_at IS NULL
+     UNION ALL
+     SELECT 1 FROM invoices i
+      WHERE $1::jsonb = jsonb_build_array(jsonb_build_object('fileKey', 'uploads/invoices/INV-' || i.invoice_no || '.pdf'))
      LIMIT 1`,
     [file, damage],
   );
@@ -80,6 +87,10 @@ export async function assertCanReadFile(
      SELECT 1 FROM storage_units u WHERE u.images @> $2::jsonb
      UNION ALL
      SELECT 1 FROM shelf_receipts r WHERE r.customer_id = $1 AND r.photos @> $2::jsonb
+     UNION ALL
+     SELECT 1 FROM invoices i
+      WHERE i.customer_id = $1
+        AND $2::jsonb = jsonb_build_array(jsonb_build_object('fileKey', 'uploads/invoices/INV-' || i.invoice_no || '.pdf'))
      LIMIT 1`,
     [user.id, file, damage],
   );

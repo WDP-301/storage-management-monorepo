@@ -47,7 +47,8 @@ export class UploadService implements OnModuleInit {
     this.endpoint = this.configService.get<string>(ENV_KEY.S3_ENDPOINT, '');
     this.bucket = this.configService.get<string>(ENV_KEY.S3_BUCKET, 'storage-management-bucket');
     this.publicBaseUrl =
-      this.configService.get<string>(ENV_KEY.S3_PUBLIC_URL) ?? `${this.endpoint}/${this.bucket}`;
+      this.configService.get<string>(ENV_KEY.S3_PUBLIC_URL)?.trim() ||
+      `${this.endpoint}/${this.bucket}`;
 
     this.s3Client = new S3Client({
       endpoint: this.endpoint,
@@ -137,9 +138,15 @@ export class UploadService implements OnModuleInit {
   async generatePresignedDownloadUrl(fileKey: string, expiresIn = 3600): Promise<string> {
     this.assertUploadsKey(fileKey);
     try {
+      const fileName =
+        fileKey
+          .split('/')
+          .pop()
+          ?.replace(/[^A-Za-z0-9._-]/g, '_') || 'file';
       const command = new GetObjectCommand({
         Bucket: this.bucket,
         Key: fileKey,
+        ResponseContentDisposition: `attachment; filename="${fileName}"`,
       });
       return await getSignedUrl(this.s3Client, command, { expiresIn });
     } catch (err: any) {

@@ -160,9 +160,8 @@ export const ShelfManagementDialog: React.FC<Props> = ({
     `${warehouseId}|${search}|${statusFilter}`,
   );
 
-  if (!warehouse) return null;
-
   const openCreateSingle = () => {
+    if (!warehouse) return;
     setDeletingShelf(null);
     setEditingShelf(null);
     const next = String(nextShelfNumber(shelves, warehouse.code, 'A')).padStart(2, '0');
@@ -178,6 +177,7 @@ export const ShelfManagementDialog: React.FC<Props> = ({
   };
 
   const openBulkCreate = () => {
+    if (!warehouse) return;
     setDeletingShelf(null);
     setEditingShelf(null);
     setBulkForm(withNextBulkRange(EMPTY_BULK_SHELF_FORM, shelves, warehouse.code));
@@ -186,6 +186,7 @@ export const ShelfManagementDialog: React.FC<Props> = ({
 
   const handleSaveSingle = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!warehouse) return;
     const frozen =
       formMode === 'edit' && editingShelf !== null && !isIdleStatus(editingShelf.status);
     const problem = validateShelfForm(shelfForm, frozen);
@@ -218,6 +219,7 @@ export const ShelfManagementDialog: React.FC<Props> = ({
 
   const handleSaveBulk = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!warehouse) return;
     const problem = validateBulkShelfForm(warehouse.code, bulkForm);
     if (problem) {
       toast.warning('Thông tin tạo dãy kệ chưa hợp lệ', problem);
@@ -289,18 +291,18 @@ export const ShelfManagementDialog: React.FC<Props> = ({
 
   const singleDerived = computeDerived(shelfForm);
   const bulkDerived = computeDerived(bulkForm);
-  const bulkPreview = previewBulkShelfCodes(warehouse.code, bulkForm);
+  const bulkPreview = warehouse ? previewBulkShelfCodes(warehouse.code, bulkForm) : null;
   const frozenEdit =
     formMode === 'edit' && editingShelf !== null && !isIdleStatus(editingShelf.status);
 
   const renderSingleShelfForm = () => (
     <LayerCard className="p-4 ring ring-kumo-line space-y-4">
       <div className="flex items-center justify-between border-b border-kumo-line pb-2.5">
-        <Text as="strong" bold>
+        <span className="text-sm font-semibold text-kumo-default">
           {formMode === 'edit' && editingShelf
             ? `Chỉnh sửa kệ ${editingShelf.code}`
             : 'Thêm kệ mới'}
-        </Text>
+        </span>
         <Button
           size="xs"
           variant="ghost"
@@ -331,7 +333,7 @@ export const ShelfManagementDialog: React.FC<Props> = ({
           />
           <Input
             label="Tên kệ (để trống sẽ tự đặt theo mã)"
-            placeholder={defaultShelfNamePreview(warehouse, shelfForm.code)}
+            placeholder={warehouse ? defaultShelfNamePreview(warehouse, shelfForm.code) : ''}
             value={shelfForm.name}
             onChange={(e) => setShelfForm((prev) => ({ ...prev, name: e.target.value }))}
           />
@@ -442,13 +444,15 @@ export const ShelfManagementDialog: React.FC<Props> = ({
           <div>
             <div className="flex items-center gap-2">
               <Dialog.Title className="text-base font-semibold text-kumo-default">
-                Kho kệ: {warehouse.name} ({warehouse.code})
+                {warehouse ? `Kho kệ: ${warehouse.name} (${warehouse.code})` : 'Kho kệ'}
               </Dialog.Title>
               <Badge variant="primary">Kho kệ</Badge>
             </div>
-            <Text variant="secondary" size="xs">
-              {warehouse.facility.name} · {warehouse.addressLine}
-            </Text>
+            {warehouse && (
+              <Text variant="secondary" size="xs">
+                {warehouse.facility.name} · {warehouse.addressLine}
+              </Text>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -484,9 +488,9 @@ export const ShelfManagementDialog: React.FC<Props> = ({
         </DialogHeader>
 
         <DialogBody>
-          {tab === 'layout' ? (
+          {warehouse && tab === 'layout' ? (
             <ShelfLayoutEditor warehouse={warehouse} shelves={shelves} />
-          ) : (
+          ) : warehouse ? (
             <div className="space-y-4">
               {/* KPI Summary */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -910,7 +914,7 @@ export const ShelfManagementDialog: React.FC<Props> = ({
                 </div>
               )}
             </div>
-          )}
+          ) : null}
         </DialogBody>
       </Dialog>
     </Dialog.Root>

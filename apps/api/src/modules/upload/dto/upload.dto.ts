@@ -1,7 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsInt, IsNotEmpty, IsString, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsNotEmpty, IsString, Max, Min } from 'class-validator';
 
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+
+export const ALLOWED_UPLOAD_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'application/pdf',
+] as const;
 
 export class GetPresignedUrlDto {
   @ApiProperty({ example: 'pallet-photo-001.jpg', description: 'Original file name' })
@@ -9,9 +18,14 @@ export class GetPresignedUrlDto {
   @IsNotEmpty()
   fileName: string;
 
-  @ApiProperty({ example: 'image/jpeg', description: 'MIME type of the file' })
+  @ApiProperty({
+    example: 'image/jpeg',
+    enum: ALLOWED_UPLOAD_MIME_TYPES,
+    description: 'MIME type of the file (only JPEG, PNG, WebP, HEIC, HEIF, or PDF)',
+  })
   @IsString()
   @IsNotEmpty()
+  @IsIn(ALLOWED_UPLOAD_MIME_TYPES)
   mimeType: string;
 
   @ApiProperty({

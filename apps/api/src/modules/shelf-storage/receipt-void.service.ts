@@ -8,6 +8,7 @@ import { ContractStatus, type ShelfReceiptType, type ShelfReceiptView } from '@s
 import { DataSource } from 'typeorm';
 import { type AppliedLine, reverseReceiptStock } from './receipt-stock.util';
 import { findShelfContracts, loadStock } from './shelf-contract.query';
+import { cancelOpenPickupRequests } from './shelf-empty-guard.util';
 import { voidedNotice } from './shelf-notifications';
 import { loadReceipts } from './shelf-receipt.read';
 
@@ -80,6 +81,14 @@ export class ReceiptVoidService {
         (await loadStock(em, [contract.id], { lock: true, includeEmpty: true })).get(contract.id) ??
         [];
       await reverseReceiptStock(em, head.type, lines, stock);
+
+      const remaining: { total: number }[] = await em.query(
+        `SELECT coalesce(sum("quantity"), 0)::int AS "total" FROM "shelf_items" WHERE "contract_id" = $1`,
+        [contract.id],
+      );
+      if (remaining[0]?.total === 0) {
+        await cancelOpenPickupRequests(em, contract.id);
+      }
 
       const trimmed = reason.trim();
       await em.query(

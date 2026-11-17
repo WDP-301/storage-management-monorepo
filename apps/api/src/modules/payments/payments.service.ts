@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { parseVietnamDateTime } from '@shared/utils/calendar.util';
 import { DataSource } from 'typeorm';
 import { SepayWebhookDto } from './dto/sepay-webhook.dto';
 import { PAYMENT_EVENTS, PaymentReceivedEvent } from './types/payment';
@@ -32,7 +33,7 @@ export class PaymentsService {
         dto.content ?? null,
         dto.referenceCode ?? null,
         dto.gateway ?? null,
-        dto.transactionDate ? new Date(dto.transactionDate) : null,
+        parseVietnamDateTime(dto.transactionDate),
         dto.transferType === 'in' ? 'RECEIVED' : 'IGNORED',
       ],
     );

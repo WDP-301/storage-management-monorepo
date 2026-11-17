@@ -5,6 +5,7 @@ import type { NotificationsService } from '@modules/notifications/notifications.
 import type { NotificationPayload } from '@modules/notifications/types/notification';
 import { generateInvoiceNo } from '@modules/payments/invoice-no.util';
 import type { QueueService } from '@modules/queue/queue.service';
+import { addVietnamCalendarMonths } from '@shared/utils/calendar.util';
 import {
   InvoiceItemType,
   InvoiceKind,
@@ -48,10 +49,8 @@ export function recurringRentPeriods(
   if (new Decimal(contract.monthlyPriceSnapshot ?? 0).lte(0)) return [];
   const periods: RentPeriod[] = [];
   for (let periodNo = 2; periodNo <= contract.months; periodNo++) {
-    const startAt = new Date(contract.effectiveAt);
-    startAt.setMonth(startAt.getMonth() + (periodNo - 1));
-    const endAt = new Date(contract.effectiveAt);
-    endAt.setMonth(endAt.getMonth() + periodNo);
+    const startAt = addVietnamCalendarMonths(contract.effectiveAt, periodNo - 1);
+    const endAt = addVietnamCalendarMonths(contract.effectiveAt, periodNo);
     periods.push({ periodNo, startAt, endAt });
   }
   return periods;

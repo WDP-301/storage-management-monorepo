@@ -77,4 +77,24 @@ describe('UploadController reads', () => {
     });
     expect(uploads.getFileStream).not.toHaveBeenCalled();
   });
+
+  it('rejects active HTML or SVG uploads in uploadDirect', async () => {
+    const controller = new UploadController(
+      { uploadBuffer: jest.fn() } as never,
+      { manager: { query: jest.fn() } } as never,
+    );
+    await expect(
+      controller.uploadDirect(
+        {
+          originalname: 'xss.svg',
+          mimetype: 'image/svg+xml',
+          buffer: Buffer.from('<svg onload=alert(1)>'),
+        } as Express.Multer.File,
+        customer,
+      ),
+    ).rejects.toMatchObject({
+      status: 400,
+      response: { code: 'VALIDATION_FAILED' },
+    });
+  });
 });

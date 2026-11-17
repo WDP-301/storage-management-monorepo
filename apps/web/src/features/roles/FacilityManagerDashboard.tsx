@@ -427,6 +427,8 @@ export const FacilityManagerDashboard: React.FC = () => {
       <ChangeRequestsTable
         requests={requests}
         busyId={busyId}
+        facilityId={facilityId}
+        isAdmin={isAdmin || Boolean(user?.roles.includes(UserRole.ADMIN))}
         onDecide={handleDecision}
         onFinalApprove={(id) =>
           void handleChangeAction(

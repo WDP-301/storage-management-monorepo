@@ -2,7 +2,8 @@ import { Inspection } from '@entities/inspection.entity';
 import { StaffShift } from '@entities/staff-shift.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { Logger } from '@nestjs/common';
-import { InspectionType, NotificationType } from '@storage/types';
+import { ContractStatus, InspectionType, NotificationType } from '@storage/types';
+import { Not } from 'typeorm';
 import { HandoverAssignmentService } from './handover-assignment.service';
 
 const TEN_AM = new Date('2026-11-01T03:00:00Z'); // 10:00 in Vietnam
@@ -164,6 +165,14 @@ describe('HandoverAssignmentService', () => {
     );
 
     expect(visited).toBe(1);
+    expect(em.find).toHaveBeenCalledWith(
+      Inspection,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          contract: expect.objectContaining({ status: Not(ContractStatus.CANCELLED) }),
+        }),
+      }),
+    );
     expect(em.update).toHaveBeenCalledWith(Inspection, expect.anything(), { inspectedBy: 'an' });
   });
 
@@ -407,6 +416,67 @@ describe('HandoverAssignmentService', () => {
       expect(em.update).toHaveBeenCalledWith(Inspection, expect.objectContaining({ id: 'r-1' }), {
         inspectedBy: 'an',
       });
+    });
+  });
+
+  describe('reconcileStaffShiftRemoval', () => {
+    it('unassigns open unstarted PRE_HANDOVER and hands it to another on-shift colleague', async () => {
+      handovers = [handover('i-1', 'hcm', 'A-01')];
+      shifts = [morningShift('binh')];
+
+      await service.reconcileStaffShiftRemoval(
+        em as never,
+        'hcm',
+        'an',
+        new Date('2026-10-31T23:00:00Z'),
+        new Date('2026-11-01T05:00:00Z'),
+      );
+
+      expect(em.update).toHaveBeenNthCalledWith(
+        1,
+        Inspection,
+        expect.objectContaining({ inspectedBy: 'an' }),
+        { inspectedBy: null },
+      );
+      expect(em.update).toHaveBeenNthCalledWith(2, Inspection, expect.anything(), {
+        inspectedBy: 'binh',
+      });
+    });
+
+    it('clears unstarted RETURN when no replacement colleague is on shift', async () => {
+      handovers = [returnInspection({ inspectedBy: 'an' })];
+      returnRow = returnInspection({ inspectedBy: 'an' });
+      shifts = [];
+
+      await service.reconcileStaffShiftRemoval(
+        em as never,
+        'hcm',
+        'an',
+        new Date('2026-10-31T23:00:00Z'),
+        new Date('2026-11-01T05:00:00Z'),
+      );
+
+      expect(em.update).toHaveBeenCalledTimes(1);
+      expect(em.update).toHaveBeenCalledWith(
+        Inspection,
+        expect.objectContaining({ id: 'r-1', inspectedBy: 'an' }),
+        { inspectedBy: null },
+      );
+    });
+
+    it('keeps started RETURN assigned to the inspector even after shift removal', async () => {
+      handovers = [returnInspection({ inspectedBy: 'an', conditionNotes: 'Đã kiểm' })];
+      shifts = [];
+
+      await service.reconcileStaffShiftRemoval(
+        em as never,
+        'hcm',
+        'an',
+        new Date('2026-10-31T23:00:00Z'),
+        new Date('2026-11-01T05:00:00Z'),
+      );
+
+      expect(em.update).not.toHaveBeenCalled();
     });
   });
 });

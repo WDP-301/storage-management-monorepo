@@ -115,6 +115,7 @@ export class FacilityKpisService {
          JOIN booking_items bi ON bi.id = c.booking_item_id
          JOIN storage_units su ON su.id = bi.storage_unit_id
         WHERE p.status = 'SUCCEEDED' AND p.invoice_id IS NOT NULL
+          AND i.kind <> 'DEPOSIT_TOPUP' AND i.status <> 'VOID'
           AND su.facility_id = ANY($1::uuid[])
           AND date_trunc('month', coalesce(p.paid_at, p.created_at) AT TIME ZONE 'Asia/Ho_Chi_Minh')
             = date_trunc('month', now() AT TIME ZONE 'Asia/Ho_Chi_Minh')`,

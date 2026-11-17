@@ -1,4 +1,4 @@
-import type { StaffShiftStatus } from '@storage/types';
+import type { ShiftTemplateType, StaffShiftStatus } from '@storage/types';
 import { apiClient } from './api';
 
 export interface StaffShiftRecord {
@@ -23,9 +23,19 @@ export interface ShiftTemplateRecord {
   id: string;
   code: string;
   name: string;
+  type?: ShiftTemplateType;
   start_time: string;
   end_time: string;
   is_active: boolean;
+}
+
+export interface UpsertShiftTemplateInput {
+  code?: string;
+  name: string;
+  type: ShiftTemplateType;
+  startTime: string;
+  endTime: string;
+  isActive?: boolean;
 }
 
 export interface PlannedShiftRecord {
@@ -61,6 +71,40 @@ const unwrap = <T>(res: { data: ApiEnvelope<T> | T }): T =>
   res.data && typeof res.data === 'object' && 'data' in res.data ? res.data.data : res.data;
 
 export const StaffShiftsApi = {
+  /** Every shift template (active or inactive), for Admin CRUD. */
+  listAdminTemplates: async (): Promise<ShiftTemplateRecord[]> => {
+    const res =
+      await apiClient.get<ApiEnvelope<{ shift_templates: ShiftTemplateRecord[] }>>(
+        '/admin/shift-templates',
+      );
+    return unwrap(res).shift_templates;
+  },
+
+  createTemplate: async (
+    input: UpsertShiftTemplateInput & { code: string },
+  ): Promise<ShiftTemplateRecord> => {
+    const res = await apiClient.post<ApiEnvelope<{ shift_template: ShiftTemplateRecord }>>(
+      '/admin/shift-templates',
+      input,
+    );
+    return unwrap(res).shift_template;
+  },
+
+  updateTemplate: async (
+    id: string,
+    patch: Partial<Omit<UpsertShiftTemplateInput, 'code'>>,
+  ): Promise<ShiftTemplateRecord> => {
+    const res = await apiClient.patch<ApiEnvelope<{ shift_template: ShiftTemplateRecord }>>(
+      `/admin/shift-templates/${id}`,
+      patch,
+    );
+    return unwrap(res).shift_template;
+  },
+
+  removeTemplate: async (id: string): Promise<void> => {
+    await apiClient.delete(`/admin/shift-templates/${id}`);
+  },
+
   /** Shifts of one facility inside an inclusive YYYY-MM-DD range (at most 31 days). */
   list: async (params: {
     facilityId: string;

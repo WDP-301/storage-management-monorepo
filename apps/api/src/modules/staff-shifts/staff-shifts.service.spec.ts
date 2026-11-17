@@ -55,7 +55,10 @@ describe('StaffShiftsService', () => {
   let roleAssignments: { find: jest.Mock };
   let facilities: { findStaff: jest.Mock };
   let notifications: { createForUsers: jest.Mock };
-  let handoverAssignment: { assignPendingForFacility: jest.Mock };
+  let handoverAssignment: {
+    assignPendingForFacility: jest.Mock;
+    reconcileStaffShiftRemoval: jest.Mock;
+  };
   let service: StaffShiftsService;
 
   beforeEach(() => {
@@ -105,7 +108,10 @@ describe('StaffShiftsService', () => {
       ]),
     };
     notifications = { createForUsers: jest.fn().mockResolvedValue(1) };
-    handoverAssignment = { assignPendingForFacility: jest.fn().mockResolvedValue(0) };
+    handoverAssignment = {
+      assignPendingForFacility: jest.fn().mockResolvedValue(0),
+      reconcileStaffShiftRemoval: jest.fn().mockResolvedValue(undefined),
+    };
     const dataSource = { transaction: jest.fn((work: (e: unknown) => unknown) => work(em)) };
     service = new StaffShiftsService(
       dataSource as never,
@@ -247,6 +253,13 @@ describe('StaffShiftsService', () => {
         shiftPeriod('2099-01-12', MORNING).startAt,
         shiftPeriod('2099-01-12', MORNING).endAt,
       );
+      expect(handoverAssignment.reconcileStaffShiftRemoval).toHaveBeenCalledWith(
+        em,
+        'hcm',
+        'an',
+        shiftPeriod('2099-01-10', MORNING).startAt,
+        shiftPeriod('2099-01-10', MORNING).endAt,
+      );
     });
 
     it('only edits the note without re-checking times', async () => {
@@ -286,6 +299,13 @@ describe('StaffShiftsService', () => {
         em,
         ['an'],
         expect.objectContaining({ type: NotificationType.SHIFT_CANCELLED }),
+      );
+      expect(handoverAssignment.reconcileStaffShiftRemoval).toHaveBeenCalledWith(
+        em,
+        'hcm',
+        'an',
+        shiftPeriod('2099-01-10', MORNING).startAt,
+        shiftPeriod('2099-01-10', MORNING).endAt,
       );
     });
 

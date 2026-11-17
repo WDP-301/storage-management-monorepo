@@ -2,6 +2,7 @@ import { TicketPriority, TicketStatus } from '@storage/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as AuthContextModule from '../../context/AuthContext';
+import * as FacilityContextModule from '../../context/FacilityContext';
 import { FacilitiesApi, TicketsApi } from '../../lib/api';
 import { pickComboboxOption } from '../../test-utils/pick-combobox-option';
 import type { ServiceTicketRecord, TicketUserInfo } from '../../types/service-tickets';
@@ -103,6 +104,20 @@ const TEST_TICKETS: ServiceTicketRecord[] = [
 describe('ManagerTicketsPage Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(FacilityContextModule, 'useFacility').mockReturnValue({
+      facilities: [],
+      selectedFacility: {
+        id: 'fac-1',
+        code: 'TB-01',
+        name: 'Kho Tân Bình',
+        provinceCode: null,
+        status: 'ACTIVE',
+      },
+      selectFacility: vi.fn(),
+      refreshFacilities: vi.fn(),
+      canSelectAll: false,
+      isLoading: false,
+    });
     vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
       user: {
         id: 'mgr-1',
@@ -323,5 +338,39 @@ describe('ManagerTicketsPage Component', () => {
       expect(screen.getByText(/Đã xóa phiếu sự cố/i)).toBeTruthy();
     });
     expect(removeSpy).toHaveBeenCalled();
+  });
+
+  it('filters tickets by selected facility and lets ADMIN access assign action', async () => {
+    vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
+      user: {
+        id: 'admin-1',
+        email: 'admin@example.com',
+        fullName: 'System Admin',
+        status: 'ACTIVE',
+        roles: ['ADMIN'],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      activeRole: 'ADMIN',
+      isAuthenticated: true,
+      isLoading: false,
+      login: vi.fn(),
+      logout: vi.fn(),
+      refreshUser: vi.fn(),
+    } as unknown as ReturnType<typeof AuthContextModule.useAuth>);
+    const getAllSpy = vi.spyOn(TicketsApi, 'getAll').mockResolvedValue({
+      tickets: TEST_TICKETS,
+      meta: { page: 1, limit: 20, total: 2, totalPages: 1 },
+    });
+
+    render(<ManagerTicketsPage />);
+
+    await waitFor(() =>
+      expect(getAllSpy).toHaveBeenCalledWith(expect.objectContaining({ facilityId: 'fac-1' })),
+    );
+    await waitFor(() => expect(screen.getByText('TK-2026-0001')).toBeTruthy());
+
+    await openRowMenu();
+    expect(await screen.findByRole('menuitem', { name: /phân công/i })).toBeTruthy();
   });
 });

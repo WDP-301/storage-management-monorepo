@@ -42,6 +42,9 @@ describe('InvoicesService', () => {
 
     dataSource = {
       transaction: jest.fn(async (cb) => cb(em)),
+      manager: {
+        find: jest.fn().mockResolvedValue([]),
+      },
       // Succeeded payments summed per invoice: none unless a test says otherwise.
       query: jest.fn().mockResolvedValue([]),
     };
@@ -273,5 +276,58 @@ describe('InvoicesService', () => {
 
     expect(res).toMatchObject({ paidAmount: 100000, amountDue: 200000, items: [] });
     expect(res.paymentQrUrl).toContain('amount=200000&');
+  });
+
+  it('allows FACILITY_MANAGER to read an invoice of their managed facility and blocks other facilities', async () => {
+    invoicesRepo.findOne.mockResolvedValue({
+      id: 'inv-1',
+      invoiceNo: 'INV-1234',
+      customerId: 'cust-1',
+      status: InvoiceStatus.ISSUED,
+      total: 300000,
+      contract: { bookingItem: { storageUnit: { facilityId: 'fac-1' } } },
+    });
+    invoiceItemsRepo.find.mockResolvedValue([]);
+    dataSource.manager.find.mockResolvedValue([
+      {
+        facilityId: 'fac-1',
+        role: 'FACILITY_MANAGER',
+        startsAt: new Date('2020-01-01T00:00:00Z'),
+        endsAt: null,
+      },
+    ]);
+
+    await expect(
+      service.getInvoiceById('inv-1', {
+        id: 'mgr-1',
+        roles: ['FACILITY_MANAGER'],
+      } as never),
+    ).resolves.toMatchObject({ id: 'inv-1' });
+
+    dataSource.manager.find.mockResolvedValue([]);
+    await expect(
+      service.getInvoiceById('inv-1', {
+        id: 'mgr-2',
+        roles: ['FACILITY_MANAGER'],
+      } as never),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('allows OPERATIONS_MANAGER to read any invoice globally', async () => {
+    invoicesRepo.findOne.mockResolvedValue({
+      id: 'inv-1',
+      invoiceNo: 'INV-1234',
+      customerId: 'cust-1',
+      status: InvoiceStatus.ISSUED,
+      total: 300000,
+    });
+    invoiceItemsRepo.find.mockResolvedValue([]);
+
+    await expect(
+      service.getInvoiceById('inv-1', {
+        id: 'ops-1',
+        roles: ['OPERATIONS_MANAGER'],
+      } as never),
+    ).resolves.toMatchObject({ id: 'inv-1' });
   });
 });

@@ -193,10 +193,12 @@ export class AuthService {
   private async loadRoles(userId: string): Promise<UserRole[]> {
     const assignments = await this.roleAssignments.find({ where: { userId } });
     const now = Date.now();
-
-    return assignments
-      .filter((assignment) => isAssignmentActive(assignment, now))
-      .map((assignment) => assignment.role);
+    const active = new Set(
+      assignments
+        .filter((assignment) => isAssignmentActive(assignment, now))
+        .map((assignment) => assignment.role),
+    );
+    return [...active].sort((a, b) => roleRank(a) - roleRank(b));
   }
 
   private toAuthUser(user: AppUser, roles: UserRole[]): AuthUser {
@@ -211,4 +213,17 @@ export class AuthService {
       updatedAt: user.updatedAt,
     };
   }
+}
+
+const ROLE_ORDER: readonly UserRole[] = [
+  UserRole.ADMIN,
+  UserRole.OPERATIONS_MANAGER,
+  UserRole.FACILITY_MANAGER,
+  UserRole.FACILITY_STAFF,
+  UserRole.CUSTOMER,
+];
+
+function roleRank(role: UserRole): number {
+  const index = ROLE_ORDER.indexOf(role);
+  return index === -1 ? ROLE_ORDER.length : index;
 }

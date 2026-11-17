@@ -1,6 +1,8 @@
 import { Contract } from '@entities/contract.entity';
 import { Invoice } from '@entities/invoice.entity';
 import { InvoiceItem } from '@entities/invoice-item.entity';
+import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
+import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { PAYABLE_INVOICE_STATUSES } from '@modules/contracts/first-rent.util';
 import { NotificationsService } from '@modules/notifications/notifications.service';
@@ -13,7 +15,7 @@ import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { ContractStatus, InvoiceStatus, PaymentStatus, UserRole } from '@storage/types';
 import Decimal from 'decimal.js';
-import { DataSource, type FindOptionsWhere, Repository } from 'typeorm';
+import { DataSource, type FindOptionsWhere, In, Repository } from 'typeorm';
 import {
   issueRentPeriodInvoice,
   queueInvoicePdf,
@@ -66,8 +68,7 @@ export class InvoicesService {
     for (const contract of activeContracts) {
       for (const period of recurringRentPeriods(contract)) {
         // Issued from leadDays before the period starts until it ends.
-        const issueThreshold = new Date(period.startAt);
-        issueThreshold.setDate(issueThreshold.getDate() - leadDays);
+        const issueThreshold = new Date(period.startAt.getTime() - leadDays * 86_400_000);
         if (now < issueThreshold || now >= period.endAt) continue;
         try {
           const invoice = await this.issuePeriodInvoiceIfAbsent(contract, period, now);
@@ -187,19 +188,7 @@ export class InvoicesService {
 
     if (!invoice) notFound('Invoice');
 
-    const isCustomer = actor.roles.includes(UserRole.CUSTOMER);
-    const isStaffOrAdmin =
-      actor.roles.includes(UserRole.ADMIN) ||
-      actor.roles.includes(UserRole.FACILITY_MANAGER) ||
-      actor.roles.includes(UserRole.FACILITY_STAFF);
-
-    if (isCustomer && invoice.customerId !== actor.id && !isStaffOrAdmin) {
-      throw new DomainException(
-        ErrorCode.FORBIDDEN,
-        'You do not have access to this invoice',
-        HttpStatus.FORBIDDEN,
-      );
-    }
+    await this.assertCanViewInvoice(invoice, actor);
 
     const [items, paid] = await Promise.all([
       this.invoiceItems.find({ where: { invoiceId: invoice.id } }),
@@ -247,5 +236,40 @@ export class InvoicesService {
         ? buildPaymentQrUrl(this.configService, amountDue.toFixed(0), invoice.invoiceNo)
         : null,
     };
+  }
+
+  private async assertCanViewInvoice(invoice: Invoice, actor: AuthUser): Promise<void> {
+    if (actor.roles.includes(UserRole.ADMIN) || actor.roles.includes(UserRole.OPERATIONS_MANAGER)) {
+      return;
+    }
+
+    const isFacilityRole =
+      actor.roles.includes(UserRole.FACILITY_MANAGER) ||
+      actor.roles.includes(UserRole.FACILITY_STAFF);
+    if (isFacilityRole) {
+      const facilityId = invoice.contract?.bookingItem?.storageUnit?.facilityId;
+      if (facilityId) {
+        const assignments = await this.dataSource.manager.find(UserRoleAssignment, {
+          where: {
+            userId: actor.id,
+            role: In([UserRole.FACILITY_MANAGER, UserRole.FACILITY_STAFF]),
+            facilityId,
+          },
+        });
+        if (assignments.some((assignment) => isAssignmentActive(assignment))) {
+          return;
+        }
+      }
+    }
+
+    if (actor.roles.includes(UserRole.CUSTOMER) && invoice.customerId === actor.id) {
+      return;
+    }
+
+    throw new DomainException(
+      ErrorCode.FORBIDDEN,
+      'You do not have access to this invoice',
+      HttpStatus.FORBIDDEN,
+    );
   }
 }

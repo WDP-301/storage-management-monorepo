@@ -76,6 +76,7 @@ export interface ListTicketsQuery {
   status?: TicketStatus;
   priority?: TicketPriority;
   typeId?: string;
+  facilityId?: string;
 }
 
 export interface ServiceTicketResponse {

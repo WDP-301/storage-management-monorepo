@@ -112,7 +112,9 @@ export class StaffShiftsService {
     const { facilityId } = await this.findManagedShift(id, actor);
     return this.withFacilityLock(facilityId, async (em) => {
       const shift = await this.findEditableShift(em, id);
-      if (dto.shiftTemplateId !== undefined || dto.workDate !== undefined) {
+      const previousWindow = { startAt: shift.startAt, endAt: shift.endAt };
+      const windowChanged = dto.shiftTemplateId !== undefined || dto.workDate !== undefined;
+      if (windowChanged) {
         const template = await this.findActiveTemplate(
           em,
           dto.shiftTemplateId ?? shift.shiftTemplateId,
@@ -127,6 +129,15 @@ export class StaffShiftsService {
 
       const saved = await this.saveShifts(em, [shift]);
       await this.notifications.createForUsers(em, [shift.staffId], shiftUpdatedNotification(shift));
+      if (windowChanged) {
+        await this.handoverAssignment.reconcileStaffShiftRemoval?.(
+          em,
+          facilityId,
+          shift.staffId,
+          previousWindow.startAt,
+          previousWindow.endAt,
+        );
+      }
       await this.assignPendingHandovers(em, [shift]);
       return { staff_shift: (await this.loadRecords(em, [saved[0].id]))[0] };
     });
@@ -142,6 +153,13 @@ export class StaffShiftsService {
         em,
         [shift.staffId],
         shiftCancelledNotification(shift),
+      );
+      await this.handoverAssignment.reconcileStaffShiftRemoval?.(
+        em,
+        facilityId,
+        shift.staffId,
+        shift.startAt,
+        shift.endAt,
       );
       return { staff_shift: (await this.loadRecords(em, [shift.id]))[0] };
     });

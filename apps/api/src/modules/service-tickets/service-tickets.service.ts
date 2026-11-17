@@ -324,6 +324,9 @@ export class ServiceTicketsService {
     if (query.typeId) {
       builder.andWhere('ticket.type_id = :typeId', { typeId: query.typeId });
     }
+    if (query.facilityId) {
+      builder.andWhere('ticket.facility_id = :facilityId', { facilityId: query.facilityId });
+    }
 
     const [rows, total] = await builder.getManyAndCount();
 
@@ -620,11 +623,12 @@ export class ServiceTicketsService {
     const ticket = await this.findTicketOrFail(id);
 
     const isOwner = actor.roles.includes(UserRole.CUSTOMER) && ticket.customerId === actor.id;
-    if (!isOwner) {
+    const isAdmin = actor.roles.includes(UserRole.ADMIN);
+    if (!isOwner && !isAdmin) {
       if (!actor.roles.includes(UserRole.FACILITY_MANAGER)) {
         throw new DomainException(
           ErrorCode.FORBIDDEN,
-          'Only the ticket owner or a facility manager can cancel a ticket',
+          'Only the ticket owner, facility manager, or administrator can cancel a ticket',
           HttpStatus.FORBIDDEN,
         );
       }
@@ -646,7 +650,25 @@ export class ServiceTicketsService {
       this.historyEntry('STATUS_CHANGED', previousStatus, TicketStatus.CANCELLED, actor.id),
     ];
 
-    const saved = await this.tickets.save(ticket);
+    const changes: TicketChange[] = [
+      { field: 'status', from: previousStatus, to: TicketStatus.CANCELLED },
+    ];
+    const recipients = [
+      ...new Set(
+        [ticket.customerId, ticket.assignedTo].filter(
+          (uid): uid is string => Boolean(uid) && uid !== actor.id,
+        ),
+      ),
+    ];
+    const saved = await this.dataSource.transaction(async (em) => {
+      const row = await em.getRepository(ServiceTicket).save(ticket);
+      await this.notificationsService.createForUsers(
+        em,
+        recipients,
+        ticketUpdatedNotification(row, changes),
+      );
+      return row;
+    });
     return { ticket: toServiceTicketRecord(await this.findTicketOrFail(saved.id)) };
   }
 
@@ -754,6 +776,7 @@ export class ServiceTicketsService {
   }
 
   private async assertManagesFacility(actor: AuthUser, facilityId: string): Promise<void> {
+    if (actor.roles.includes(UserRole.ADMIN)) return;
     const managedFacilityIds = await this.loadManagedFacilityIds(actor.id);
 
     if (!managedFacilityIds.includes(facilityId)) {

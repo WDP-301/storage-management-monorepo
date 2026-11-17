@@ -190,6 +190,30 @@ describe('AuthService', () => {
       expect(user.roles).toEqual([UserRole.CUSTOMER]);
       expect(user).not.toHaveProperty('passwordHash');
     });
+
+    it('deduplicates repeated roles across facilities and sorts deterministically', async () => {
+      mockQueryBuilder(users, buildUser({ passwordHash: await hashPassword('secret123') }));
+      roleAssignments.find.mockResolvedValue([
+        { role: UserRole.CUSTOMER, startsAt: new Date(Date.now() - 1000), endsAt: undefined },
+        {
+          role: UserRole.FACILITY_MANAGER,
+          facilityId: 'fac-1',
+          startsAt: new Date(Date.now() - 1000),
+          endsAt: undefined,
+        },
+        {
+          role: UserRole.FACILITY_MANAGER,
+          facilityId: 'fac-2',
+          startsAt: new Date(Date.now() - 1000),
+          endsAt: undefined,
+        },
+        { role: UserRole.ADMIN, startsAt: new Date(Date.now() - 1000), endsAt: undefined },
+      ]);
+
+      const user = await service.login({ email: 'USER@example.com', password: 'secret123' });
+
+      expect(user.roles).toEqual([UserRole.ADMIN, UserRole.FACILITY_MANAGER, UserRole.CUSTOMER]);
+    });
   });
 
   describe('createSession', () => {

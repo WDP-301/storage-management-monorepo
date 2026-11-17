@@ -369,6 +369,11 @@ describe('BookingsService.handlePaymentReceived', () => {
       expect.objectContaining({ amount: 500_000, providerRef: '42' }),
     );
     expect(paymentRepo.save).not.toHaveBeenCalled();
+    expect(em.update).toHaveBeenCalledWith(
+      Booking,
+      { id: 'booking-1', status: BookingStatus.HOLDING },
+      { status: BookingStatus.PENDING_DEPOSIT },
+    );
     expect(em.update).not.toHaveBeenCalledWith(
       Booking,
       expect.anything(),
@@ -754,5 +759,95 @@ describe('BookingsService.create — shelf rules', () => {
     );
     const firstUnitLock = em.getRepository.mock.invocationCallOrder[0];
     expect(em.find.mock.invocationCallOrder[0]).toBeLessThan(firstUnitLock);
+  });
+});
+
+describe('BookingsService.releaseExpiredHolds', () => {
+  beforeEach(() => jest.spyOn(Logger.prototype, 'log').mockImplementation());
+  afterEach(() => jest.restoreAllMocks());
+
+  it('locks Booking before UnitHold/StorageUnit and expires both HOLDING and PENDING_DEPOSIT bookings', async () => {
+    const runner = {
+      connect: jest.fn(),
+      query: jest.fn().mockResolvedValue([{ acquired: true }]),
+      release: jest.fn(),
+    };
+    const em = {
+      findOne: jest
+        .fn()
+        .mockResolvedValue({ id: 'booking-1', status: BookingStatus.PENDING_DEPOSIT }),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      getRepository: jest.fn(() => ({ count: jest.fn().mockResolvedValue(0) })),
+    };
+    const dataSource = {
+      createQueryRunner: jest.fn(() => runner),
+      getRepository: jest.fn(() => ({
+        find: jest
+          .fn()
+          .mockResolvedValue([{ id: 'hold-1', bookingId: 'booking-1', storageUnitId: 'unit-1' }]),
+      })),
+      transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)),
+    };
+    const service = new BookingsService(
+      {} as never,
+      { delete: jest.fn().mockResolvedValue({ affected: 0 }) } as never,
+      dataSource as never,
+      { get: jest.fn() } as never,
+      {} as never,
+      { createForUsers: jest.fn() } as never,
+      { assignSafely: jest.fn() } as never,
+      { find: jest.fn().mockResolvedValue([]) } as never,
+    );
+
+    await service.releaseExpiredHolds();
+
+    expect(em.findOne).toHaveBeenCalledWith(Booking, {
+      where: { id: 'booking-1' },
+      lock: { mode: 'pessimistic_write', onLocked: 'skip_locked' },
+    });
+    expect(em.findOne.mock.invocationCallOrder[0]).toBeLessThan(
+      em.update.mock.invocationCallOrder[0],
+    );
+    expect(em.update).toHaveBeenCalledWith(
+      Booking,
+      { id: 'booking-1', status: In([BookingStatus.HOLDING, BookingStatus.PENDING_DEPOSIT]) },
+      { status: BookingStatus.EXPIRED },
+    );
+  });
+
+  it('skips updating UnitHold/StorageUnit when Booking lock is held elsewhere (skip_locked)', async () => {
+    const runner = {
+      connect: jest.fn(),
+      query: jest.fn().mockResolvedValue([{ acquired: true }]),
+      release: jest.fn(),
+    };
+    const em = {
+      findOne: jest.fn().mockResolvedValue(null),
+      update: jest.fn(),
+      getRepository: jest.fn(),
+    };
+    const dataSource = {
+      createQueryRunner: jest.fn(() => runner),
+      getRepository: jest.fn(() => ({
+        find: jest
+          .fn()
+          .mockResolvedValue([{ id: 'hold-1', bookingId: 'booking-1', storageUnitId: 'unit-1' }]),
+      })),
+      transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)),
+    };
+    const service = new BookingsService(
+      {} as never,
+      { delete: jest.fn().mockResolvedValue({ affected: 0 }) } as never,
+      dataSource as never,
+      { get: jest.fn() } as never,
+      {} as never,
+      { createForUsers: jest.fn() } as never,
+      { assignSafely: jest.fn() } as never,
+      { find: jest.fn().mockResolvedValue([]) } as never,
+    );
+
+    await service.releaseExpiredHolds();
+
+    expect(em.update).not.toHaveBeenCalled();
   });
 });

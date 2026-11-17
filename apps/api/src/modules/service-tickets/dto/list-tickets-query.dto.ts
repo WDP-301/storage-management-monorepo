@@ -38,4 +38,9 @@ export class ListTicketsQueryDto {
   @IsOptional()
   @IsUUID('all')
   typeId?: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Filter by facility' })
+  @IsOptional()
+  @IsUUID('all')
+  facilityId?: string;
 }

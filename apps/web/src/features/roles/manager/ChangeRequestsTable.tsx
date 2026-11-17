@@ -35,6 +35,8 @@ const isCrossFacility = (r: UnitChangeRequestRecord) =>
 interface Props {
   requests: UnitChangeRequestRecord[];
   busyId: string | null;
+  facilityId?: string | null;
+  isAdmin?: boolean;
   onDecide: (
     id: string,
     decision: 'APPROVED' | 'REJECTED',
@@ -47,6 +49,8 @@ interface Props {
 export const ChangeRequestsTable: React.FC<Props> = ({
   requests,
   busyId,
+  facilityId,
+  isAdmin = false,
   onDecide,
   onFinalApprove,
   onCancel,
@@ -135,24 +139,30 @@ export const ChangeRequestsTable: React.FC<Props> = ({
                 </Table.Cell>
                 <Table.Cell className="whitespace-nowrap text-right">
                   {req.status === 'REQUESTED' ? (
-                    <div className="inline-flex items-center gap-2">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        disabled={busyId === req.id}
-                        onClick={() => setApproving(req)}
-                      >
-                        Duyệt
-                      </Button>
-                      <Button
-                        variant="secondary-destructive"
-                        size="sm"
-                        disabled={busyId === req.id}
-                        onClick={() => onDecide(req.id, 'REJECTED')}
-                      >
-                        Từ chối
-                      </Button>
-                    </div>
+                    facilityId &&
+                    facilityId !== (req.old_unit?.facility_id ?? req.facility_id) &&
+                    !isAdmin ? (
+                      <span className="text-xs text-kumo-subtle">Chờ chi nhánh gửi duyệt</span>
+                    ) : (
+                      <div className="inline-flex items-center gap-2">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          disabled={busyId === req.id}
+                          onClick={() => setApproving(req)}
+                        >
+                          Duyệt
+                        </Button>
+                        <Button
+                          variant="secondary-destructive"
+                          size="sm"
+                          disabled={busyId === req.id}
+                          onClick={() => onDecide(req.id, 'REJECTED')}
+                        >
+                          Từ chối
+                        </Button>
+                      </div>
+                    )
                   ) : req.status === 'AWAITING_PAYMENT' || req.status === 'AWAITING_HANDOVER' ? (
                     <div className="inline-flex items-center gap-2">
                       <span className="text-xs text-kumo-subtle">
@@ -168,24 +178,14 @@ export const ChangeRequestsTable: React.FC<Props> = ({
                       </Button>
                     </div>
                   ) : req.status === 'AWAITING_FINAL_APPROVAL' ? (
-                    <div className="inline-flex items-center gap-2">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        disabled={busyId === req.id}
-                        onClick={() => onFinalApprove(req.id)}
-                      >
-                        Xác nhận hoàn tất
-                      </Button>
-                      <Button
-                        variant="secondary-destructive"
-                        size="sm"
-                        disabled={busyId === req.id}
-                        onClick={() => onCancel(req.id)}
-                      >
-                        Thu hồi
-                      </Button>
-                    </div>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={busyId === req.id}
+                      onClick={() => onFinalApprove(req.id)}
+                    >
+                      Xác nhận hoàn tất
+                    </Button>
                   ) : (
                     <span className="text-xs text-kumo-subtle">Đã xử lý</span>
                   )}

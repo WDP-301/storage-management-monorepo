@@ -149,7 +149,7 @@ export class ServiceTicketsController {
   }
 
   @Patch(':id/assign')
-  @Roles(UserRole.FACILITY_MANAGER)
+  @Roles(UserRole.ADMIN, UserRole.FACILITY_MANAGER)
   @ApiOperation({ summary: 'Assign a facility staff member to a ticket' })
   @ApiResponse({
     status: 200,
@@ -167,9 +167,9 @@ export class ServiceTicketsController {
   }
 
   @Patch(':id/cancel')
-  @Roles(UserRole.CUSTOMER, UserRole.FACILITY_MANAGER)
+  @Roles(UserRole.CUSTOMER, UserRole.ADMIN, UserRole.FACILITY_MANAGER)
   @ApiOperation({
-    summary: 'Cancel an open ticket (owning customer or facility manager of the ticket)',
+    summary: 'Cancel an open ticket (owning customer, facility manager, or admin)',
   })
   @ApiResponse({ status: 200, description: 'The cancelled ticket', type: ServiceTicketResponseDto })
   @ApiResponse({ status: 404, description: 'Ticket not found', type: ApiErrorResponseDto })

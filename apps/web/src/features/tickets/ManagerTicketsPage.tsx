@@ -28,7 +28,7 @@ import {
   XCircle,
 } from '@phosphor-icons/react';
 import { TicketPriority, TicketStatus, UserRole } from '@storage/types';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DIALOG_SHELL,
   DialogBody,
@@ -38,6 +38,7 @@ import {
 import { type FileRef, SignedFileLink } from '../../components/SignedFile';
 import { StaffSelect } from '../../components/StaffSelect';
 import { useAuth } from '../../context/AuthContext';
+import { useFacility } from '../../context/FacilityContext';
 import { FacilitiesApi, TicketsApi } from '../../lib/api';
 import { useAppToast } from '../../lib/toast';
 import type { FacilityStaffMember } from '../../types/inspection';
@@ -112,8 +113,10 @@ const toFileRef = (a: unknown, idx: number): FileRef => {
 export const ManagerTicketsPage: React.FC = () => {
   const toast = useAppToast();
   const { user } = useAuth();
+  const { selectedFacility } = useFacility();
+  const facilityId = selectedFacility?.id;
   const roles = user?.roles ?? [];
-  const canAssign = roles.includes(UserRole.FACILITY_MANAGER);
+  const canAssign = roles.includes(UserRole.ADMIN) || roles.includes(UserRole.FACILITY_MANAGER);
   const canDelete = roles.includes(UserRole.ADMIN);
   const canEdit = canAssign || canDelete;
   const [tickets, setTickets] = useState<ServiceTicketRecord[]>([]);
@@ -153,22 +156,34 @@ export const ManagerTicketsPage: React.FC = () => {
     return Array.from(new Map(existingAssignees.map((a) => [a.id, a])).values());
   }, [tickets]);
 
+  const prevFacilityIdRef = useRef<string | undefined>(facilityId);
+  useEffect(() => {
+    if (prevFacilityIdRef.current !== facilityId) {
+      prevFacilityIdRef.current = facilityId;
+      setPage(1);
+    }
+  }, [facilityId]);
+
   const loadTickets = useCallback(async () => {
     setIsLoading(true);
     setActionErrorMessage(null);
+    const facilityFilter = facilityId ? { facilityId } : {};
     const countByStatus = (s: TicketStatus) =>
-      TicketsApi.getAll({ status: s, limit: 1 }).then((r) => r?.meta?.total ?? 0);
+      TicketsApi.getAll({ status: s, limit: 1, ...facilityFilter }).then(
+        (r) => r?.meta?.total ?? 0,
+      );
     try {
       const [res, total, open, assigned, inProgress, resolved, closed] = await Promise.all([
         TicketsApi.getAll({
           page,
           limit: PAGE_SIZE,
+          ...facilityFilter,
           ...(statusFilter !== 'ALL' && statusFilter !== 'UNASSIGNED'
             ? { status: statusFilter as TicketStatus }
             : {}),
           ...(priorityFilter !== 'ALL' ? { priority: priorityFilter as TicketPriority } : {}),
         }),
-        TicketsApi.getAll({ limit: 1 }).then((r) => r?.meta?.total ?? 0),
+        TicketsApi.getAll({ limit: 1, ...facilityFilter }).then((r) => r?.meta?.total ?? 0),
         countByStatus(TicketStatus.OPEN),
         countByStatus(TicketStatus.ASSIGNED),
         countByStatus(TicketStatus.IN_PROGRESS),
@@ -193,7 +208,7 @@ export const ManagerTicketsPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [page, statusFilter, priorityFilter, toast]);
+  }, [facilityId, page, statusFilter, priorityFilter, toast]);
 
   useEffect(() => {
     loadTickets();
@@ -1231,7 +1246,7 @@ export const ManagerTicketsPage: React.FC = () => {
                   Hủy phiếu
                 </Button>
               )}
-              {canAssign && (
+              {canAssign && ACTIVE_STATUSES.includes(selectedTicket.status) && (
                 <Button
                   variant="primary"
                   icon={<UserPlus className="w-4 h-4" />}

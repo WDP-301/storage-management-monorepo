@@ -15,10 +15,11 @@ import {
   CaretLeft,
   CaretRight,
   CircleNotch,
+  Clock,
   UsersThree,
   X,
 } from '@phosphor-icons/react';
-import type { StaffShiftStatus } from '@storage/types';
+import { type StaffShiftStatus, UserRole } from '@storage/types';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { DateField } from '../../components/DateField';
 import {
@@ -27,6 +28,7 @@ import {
   DialogFooter,
   DialogHeader,
 } from '../../components/dialog-layout';
+import { useAuth } from '../../context/AuthContext';
 import { useFacility } from '../../context/FacilityContext';
 import { FacilitiesApi } from '../../lib/api';
 import {
@@ -38,6 +40,7 @@ import {
 import { useAppToast } from '../../lib/toast';
 import { addDays, formatVnDay, vnToday } from '../../lib/vn-day';
 import type { FacilityStaffMember } from '../../types/inspection';
+import { ShiftTemplatesDialog } from './ShiftTemplatesDialog';
 import { shiftCalendarRows } from './shift-calendar-rows';
 
 const STATUS_DISPLAY: Record<
@@ -84,8 +87,10 @@ const errMsg = (e: unknown, fallback: string): string => {
 
 export const StaffShiftsPage: React.FC = () => {
   const toast = useAppToast();
+  const { user } = useAuth();
   const { selectedFacility } = useFacility();
   const facilityId = selectedFacility?.id ?? '';
+  const isAdmin = Boolean(user?.roles.includes(UserRole.ADMIN));
 
   const [viewDate, setViewDate] = useState(() => vnToday());
   const weekStart = mondayOf(viewDate);
@@ -93,6 +98,8 @@ export const StaffShiftsPage: React.FC = () => {
   const [templates, setTemplates] = useState<ShiftTemplateRecord[]>([]);
   const [staff, setStaff] = useState<FacilityStaffMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
 
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleForm, setScheduleForm] = useState({
@@ -129,6 +136,7 @@ export const StaffShiftsPage: React.FC = () => {
   const load = useCallback(async () => {
     if (!facilityId) return;
     setLoading(true);
+    setLoadError(null);
     try {
       const [list, tpls, members] = await Promise.all([
         StaffShiftsApi.list({ facilityId, from: weekStart, to: addDays(weekStart, 6) }),
@@ -139,7 +147,9 @@ export const StaffShiftsPage: React.FC = () => {
       setTemplates(tpls);
       setStaff(members);
     } catch (e) {
-      toast.error('Lỗi tải dữ liệu', errMsg(e, 'Không tải được lịch ca.'));
+      const msg = errMsg(e, 'Không tải được lịch ca.');
+      setLoadError(msg);
+      toast.error('Lỗi tải dữ liệu', msg);
     } finally {
       setLoading(false);
     }
@@ -266,9 +276,23 @@ export const StaffShiftsPage: React.FC = () => {
 
   if (!facilityId) {
     return (
-      <LayerCard className="p-8 text-center">
-        <Text color="secondary">Chọn một chi nhánh để xem và xếp ca làm việc.</Text>
-      </LayerCard>
+      <div className="space-y-4">
+        <LayerCard className="p-8 text-center space-y-4">
+          <Text color="secondary">Chọn một chi nhánh để xem và xếp ca làm việc.</Text>
+          {isAdmin && (
+            <div className="flex justify-center">
+              <Button variant="secondary" icon={<Clock />} onClick={() => setTemplatesOpen(true)}>
+                Quản lý mẫu ca
+              </Button>
+            </div>
+          )}
+        </LayerCard>
+        <ShiftTemplatesDialog
+          open={templatesOpen}
+          onOpenChange={setTemplatesOpen}
+          onChanged={() => void load()}
+        />
+      </div>
     );
   }
 
@@ -282,7 +306,12 @@ export const StaffShiftsPage: React.FC = () => {
             trống ca bàn giao.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {isAdmin && (
+            <Button variant="secondary" icon={<Clock />} onClick={() => setTemplatesOpen(true)}>
+              Quản lý mẫu ca
+            </Button>
+          )}
           <Button variant="secondary" icon={<UsersThree />} onClick={openAuto}>
             Tự động xếp ca
           </Button>
@@ -329,6 +358,13 @@ export const StaffShiftsPage: React.FC = () => {
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <CircleNotch className="w-6 h-6 animate-spin text-kumo-subtle" />
+          </div>
+        ) : loadError ? (
+          <div className="flex flex-col items-center justify-center gap-3 px-4 py-12 text-center">
+            <p className="text-sm text-kumo-danger font-medium">{loadError}</p>
+            <Button variant="secondary" size="sm" onClick={() => void load()}>
+              Thử lại
+            </Button>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -828,6 +864,12 @@ export const StaffShiftsPage: React.FC = () => {
           </DialogFooter>
         </Dialog>
       </Dialog.Root>
+
+      <ShiftTemplatesDialog
+        open={templatesOpen}
+        onOpenChange={setTemplatesOpen}
+        onChanged={() => void load()}
+      />
     </div>
   );
 };

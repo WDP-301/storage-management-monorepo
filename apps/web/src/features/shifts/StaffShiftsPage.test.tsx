@@ -1,6 +1,8 @@
+import { ShiftTemplateType, UserRole } from '@storage/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as AuthContextModule from '../../context/AuthContext';
 import * as FacilityContextModule from '../../context/FacilityContext';
 import { FacilitiesApi } from '../../lib/api';
 import {
@@ -47,6 +49,25 @@ const shift = (overrides: Partial<StaffShiftRecord> = {}): StaffShiftRecord => (
   ...overrides,
 });
 
+const mockAuth = (role: UserRole = UserRole.FACILITY_MANAGER) =>
+  vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
+    user: {
+      id: 'user-1',
+      email: 'mgr@example.com',
+      fullName: 'Manager',
+      status: 'ACTIVE',
+      roles: [role],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    activeRole: role,
+    isAuthenticated: true,
+    isLoading: false,
+    login: vi.fn(),
+    logout: vi.fn(),
+    refreshUser: vi.fn(),
+  } as unknown as ReturnType<typeof AuthContextModule.useAuth>);
+
 const mockFacility = () =>
   vi.spyOn(FacilityContextModule, 'useFacility').mockReturnValue({
     facilities: [],
@@ -73,6 +94,7 @@ const renderPage = () =>
 describe('StaffShiftsPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    mockAuth(UserRole.FACILITY_MANAGER);
     mockFacility();
     vi.spyOn(StaffShiftsApi, 'templates').mockResolvedValue([MORNING, AFTERNOON]);
     vi.spyOn(StaffShiftsApi, 'list').mockResolvedValue([shift()]);
@@ -137,5 +159,57 @@ describe('StaffShiftsPage', () => {
     expect(await screen.findByText('Tự động xếp ca tuần này')).toBeTruthy();
     expect(screen.getByLabelText(/Ca sáng/)).toBeTruthy();
     expect(screen.getByLabelText(/Ca chiều/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Quản lý mẫu ca/ })).toBeNull();
+  });
+
+  it('shows inline error with retry when loading shifts fails', async () => {
+    vi.spyOn(StaffShiftsApi, 'list').mockRejectedValueOnce(new Error('Network down'));
+    renderPage();
+
+    expect(await screen.findByText('Không tải được lịch ca.')).toBeTruthy();
+    expect(screen.queryByText(/Chưa có ca mẫu nào/)).toBeNull();
+
+    vi.spyOn(StaffShiftsApi, 'list').mockResolvedValueOnce([shift()]);
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+    expect(await screen.findByText('Lê Nhân Viên')).toBeTruthy();
+  });
+
+  it('lets ADMIN open the shift templates dialog and create a template', async () => {
+    mockAuth(UserRole.ADMIN);
+    vi.spyOn(StaffShiftsApi, 'listAdminTemplates').mockResolvedValue([
+      { ...MORNING, type: ShiftTemplateType.OFFICE },
+    ]);
+    const createTplSpy = vi.spyOn(StaffShiftsApi, 'createTemplate').mockResolvedValue({
+      id: 'tpl-night',
+      code: 'NIGHT',
+      name: 'Ca tối',
+      type: ShiftTemplateType.WAREHOUSE,
+      start_time: '18:00',
+      end_time: '22:00',
+      is_active: true,
+    });
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Quản lý mẫu ca/ }));
+    expect(await screen.findByText('Quản lý mẫu ca làm việc')).toBeTruthy();
+
+    fireEvent.change(screen.getByPlaceholderText('VD: NIGHT_SHIFT'), {
+      target: { value: 'night' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('VD: Ca tối'), {
+      target: { value: 'Ca tối' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm mẫu ca' }));
+
+    await waitFor(() =>
+      expect(createTplSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: 'NIGHT',
+          name: 'Ca tối',
+          isActive: true,
+        }),
+      ),
+    );
   });
 });

@@ -1,4 +1,5 @@
 import { Inspection } from '@entities/inspection.entity';
+import { staffStarted } from '@modules/contracts/contract-return.util';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import {
   assignShelfRequestSafely,
@@ -6,8 +7,8 @@ import {
   type ShelfRequestKind,
 } from '@modules/shelf-storage/shelf-request-assignment';
 import { Injectable, Logger } from '@nestjs/common';
-import { InspectionType, NotificationType } from '@storage/types';
-import { Between, type EntityManager, In, IsNull } from 'typeorm';
+import { ContractStatus, InspectionType, NotificationType } from '@storage/types';
+import { Between, type EntityManager, In, IsNull, Not } from 'typeorm';
 import { facilityStaff, lastAssignedStaffId, staffOnShiftFor } from './assignment-queries';
 import { handoverAssignedNotification } from './handover-assigned.notification';
 import { nextInRotation } from './handover-rotation';
@@ -140,7 +141,10 @@ export class HandoverAssignmentService {
           inspectedBy: IsNull(),
           finalizedAt: IsNull(),
           scheduledAt: Between(from, to),
-          contract: { bookingItem: { storageUnit: { facilityId } } },
+          contract: {
+            status: Not(ContractStatus.CANCELLED),
+            bookingItem: { storageUnit: { facilityId } },
+          },
         },
         relations: { contract: { bookingItem: { storageUnit: true } } },
         // Oldest first, so the rotation hands them out in the order they were requested.
@@ -183,12 +187,119 @@ export class HandoverAssignmentService {
     }
   }
 
+  /**
+   * Reconciles open inspections assigned to `staffId` at `facilityId` whose appointment fell in
+   * `[from, to]` after that shift was cancelled or moved: unstarted inspections the staff member
+   * no longer has an active shift covering are released (`inspectedBy = null`) and re-queued
+   * through round-robin assignment for any remaining on-shift colleague (or left unassigned for
+   * a manager). Never throws.
+   */
+  async reconcileStaffShiftRemoval(
+    em: EntityManager,
+    facilityId: string,
+    staffId: string,
+    from: Date,
+    to: Date,
+  ): Promise<void> {
+    const bookingIds = new Set<string>();
+    const returnIds: string[] = [];
+
+    try {
+      await em.transaction(async (savepoint) => {
+        const assigned = await savepoint.find(Inspection, {
+          where: {
+            type: In([InspectionType.PRE_HANDOVER, InspectionType.RETURN]),
+            inspectedBy: staffId,
+            finalizedAt: IsNull(),
+            scheduledAt: Between(from, to),
+            contract: {
+              status: Not(ContractStatus.CANCELLED),
+              bookingItem: { storageUnit: { facilityId } },
+            },
+          },
+          relations: { contract: { bookingItem: { storageUnit: true } } },
+        });
+        if (assigned.length === 0) return;
+
+        const candidateBookingIds = [
+          ...new Set(
+            assigned
+              .filter((row) => row.type === InspectionType.PRE_HANDOVER)
+              .map((row) => row.contract.bookingItem.bookingId),
+          ),
+        ];
+
+        for (const bookingId of candidateBookingIds) {
+          const bookingHandovers = await savepoint.find(Inspection, {
+            where: {
+              type: InspectionType.PRE_HANDOVER,
+              inspectedBy: staffId,
+              finalizedAt: IsNull(),
+              contract: {
+                status: Not(ContractStatus.CANCELLED),
+                bookingItem: { bookingId, storageUnit: { facilityId } },
+              },
+            },
+          });
+          if (bookingHandovers.length === 0 || bookingHandovers.some((row) => staffStarted(row))) {
+            continue;
+          }
+          const stillCovered = await staffOnShiftFor(
+            savepoint,
+            facilityId,
+            [{ id: staffId, fullName: '' }],
+            bookingHandovers.map((row) => row.scheduledAt),
+          );
+          if (!stillCovered.has(staffId)) {
+            await savepoint.update(
+              Inspection,
+              {
+                id: In(bookingHandovers.map((row) => row.id)),
+                inspectedBy: staffId,
+                finalizedAt: IsNull(),
+              },
+              { inspectedBy: null },
+            );
+            bookingIds.add(bookingId);
+          }
+        }
+
+        for (const row of assigned) {
+          if (row.type !== InspectionType.RETURN || staffStarted(row)) continue;
+          const stillCovered = await staffOnShiftFor(
+            savepoint,
+            facilityId,
+            [{ id: staffId, fullName: '' }],
+            [row.scheduledAt],
+          );
+          if (!stillCovered.has(staffId)) {
+            await savepoint.update(
+              Inspection,
+              { id: row.id, inspectedBy: staffId, finalizedAt: IsNull() },
+              { inspectedBy: null },
+            );
+            returnIds.push(row.id);
+          }
+        }
+      });
+    } catch (err) {
+      this.logger.error(
+        `Reconciling removed shift of staff ${staffId} at facility ${facilityId} failed; left as-is`,
+        err instanceof Error ? err.stack : String(err),
+      );
+      return;
+    }
+
+    for (const bookingId of bookingIds) await this.assignSafely(em, bookingId);
+    for (const returnId of returnIds) await this.assignReturnSafely(em, returnId);
+  }
+
   private async assign(em: EntityManager, bookingId: string): Promise<void> {
     const handovers = await em.find(Inspection, {
       where: {
         type: InspectionType.PRE_HANDOVER,
         inspectedBy: IsNull(),
-        contract: { bookingItem: { bookingId } },
+        contract: { status: Not(ContractStatus.CANCELLED), bookingItem: { bookingId } },
       },
       relations: { contract: { bookingItem: { storageUnit: true } } },
       order: { scheduledAt: 'ASC' },

@@ -735,6 +735,17 @@ describe('ServiceTicketsService', () => {
       expect(result.meta).toEqual({ page: 1, limit: 20, total: 1, totalPages: 1 });
     });
 
+    it('narrows listing by facilityId when requested', async () => {
+      const builder = buildQueryBuilder([buildTicket()], 1);
+      tickets.createQueryBuilder.mockReturnValue(builder);
+
+      await service.list({ facilityId: 'facility-9' }, buildActor({ roles: [UserRole.ADMIN] }));
+
+      expect(builder.andWhere).toHaveBeenCalledWith('ticket.facility_id = :facilityId', {
+        facilityId: 'facility-9',
+      });
+    });
+
     it('applies status, priority and type filters on top of the visibility scope', async () => {
       const builder = buildQueryBuilder([], 0);
       tickets.createQueryBuilder.mockReturnValue(builder);
@@ -980,6 +991,19 @@ describe('ServiceTicketsService', () => {
         'ASSIGNED',
         'STATUS_CHANGED',
       ]);
+    });
+
+    it('allows an admin to assign a ticket of any facility without manager assignment', async () => {
+      roleAssignments.find.mockResolvedValue([]);
+      tickets.findOne.mockResolvedValue(
+        buildTicket({ facilityId: 'facility-2', assignedTo: undefined, status: TicketStatus.OPEN }),
+      );
+
+      await service.assign('ticket-1', dto, buildActor({ id: 'admin-1', roles: [UserRole.ADMIN] }));
+
+      expect(tickets.save).toHaveBeenCalledWith(
+        expect.objectContaining({ assignedTo: 'staff-1', status: TicketStatus.ASSIGNED }),
+      );
     });
 
     it('forbids a manager from assigning a ticket of a facility they do not manage', async () => {
@@ -1297,6 +1321,30 @@ describe('ServiceTicketsService', () => {
       expect(tickets.save).toHaveBeenCalledWith(
         expect.objectContaining({ status: TicketStatus.CANCELLED }),
       );
+      expect(em.insert).toHaveBeenCalledTimes(1);
+    });
+
+    it('allows an admin to cancel any facility ticket and notifies customer + assignee', async () => {
+      const admin = buildActor({ id: 'admin-1', roles: [UserRole.ADMIN] });
+      tickets.findOne.mockResolvedValue(
+        buildTicket({
+          facilityId: 'facility-2',
+          customerId: 'customer-1',
+          assignedTo: 'staff-1',
+          status: TicketStatus.ASSIGNED,
+        }),
+      );
+
+      await service.cancel('ticket-1', admin);
+
+      expect(tickets.save).toHaveBeenCalledWith(
+        expect.objectContaining({ status: TicketStatus.CANCELLED }),
+      );
+      const rows = em.insert.mock.calls.flatMap(([, payload]) => payload);
+      expect(rows.map((r: { userId: string }) => r.userId).sort()).toEqual([
+        'customer-1',
+        'staff-1',
+      ]);
     });
 
     it('forbids a manager from cancelling a ticket of a facility they do not manage', async () => {

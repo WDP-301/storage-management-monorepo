@@ -353,6 +353,8 @@ describe('FacilityManagerDashboard', () => {
     await waitFor(() => expect(screen.getByText('Khách chốt')).toBeTruthy());
     // The new KPI card surfaces the move waiting on the manager's final sign-off.
     expect(screen.getByText('Cần chốt cuối')).toBeTruthy();
+    // Settled requests waiting on final approval cannot be recalled anymore.
+    expect(screen.queryByRole('button', { name: 'Thu hồi' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hoàn tất' }));
     await waitFor(() => expect(finalApprove).toHaveBeenCalledWith('req-final'));
@@ -362,6 +364,44 @@ describe('FacilityManagerDashboard', () => {
         'Đã hoàn tất — kho cũ chuyển bảo trì, yêu cầu khép lại.',
       ),
     );
+  });
+
+  it('hides L1 approve/reject actions on cross-facility REQUESTED rows at destination branch', async () => {
+    mockAuth(UserRole.FACILITY_MANAGER);
+    vi.spyOn(WarehousesApi, 'listMine').mockResolvedValue([wh({})]);
+    vi.spyOn(ChangeRequestsApi, 'list').mockResolvedValue({
+      requests: [
+        {
+          id: 'req-in',
+          status: 'REQUESTED',
+          reason: 'chuyển chi nhánh',
+          rent_difference: 0,
+          deposit_difference: 0,
+          decision_note: null,
+          facility_id: 'fac-2',
+          move_at: null,
+          transition_start_at: null,
+          transition_end_at: null,
+          topup_invoice_id: null,
+          new_contract_id: null,
+          new_booking_id: null,
+          settled_at: null,
+          final_approved_by: null,
+          final_approved_at: null,
+          created_at: '2026-10-01T00:00:00.000Z',
+          requester: { id: 'c', full_name: 'Khách incoming L1', email: 'c@x.vn' },
+          old_unit: { id: 'u1', code: 'A-1', facility_id: 'fac-2' },
+          new_unit: { id: 'u2', code: 'B-1', facility_id: 'fac-1' },
+        },
+      ],
+      meta: { page: 1, limit: 50, total: 1, totalPages: 1 },
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Khách incoming L1')).toBeTruthy());
+    expect(screen.getByText('Chờ chi nhánh gửi duyệt')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Duyệt' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Từ chối' })).toBeNull();
   });
 
   it("approves with the customer's in-shift hour on the proposed day", async () => {

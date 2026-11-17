@@ -102,4 +102,29 @@ describe('AppRouter Route Guards and 404', () => {
     expect(screen.queryByRole('heading', { name: 'Tiện ích kho' })).toBeNull();
     expect(listAdmin).not.toHaveBeenCalled();
   });
+
+  it('keeps SePay transfer reconciliation away from facility managers', () => {
+    vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
+      user: {
+        id: 'usr-fm',
+        email: 'fm@example.com',
+        fullName: 'Facility Manager',
+        status: 'ACTIVE',
+        roles: [UserRole.FACILITY_MANAGER],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      activeRole: UserRole.FACILITY_MANAGER,
+      isAuthenticated: true,
+      isLoading: false,
+      login: vi.fn(),
+      logout: vi.fn(),
+      refreshUser: vi.fn(),
+    } as unknown as ReturnType<typeof AuthContextModule.useAuth>);
+    window.history.pushState({}, '', '/admin/sepay-transfers');
+
+    render(<AppRouter />);
+
+    expect(screen.getByText('Quyền truy cập bị giới hạn')).toBeTruthy();
+  });
 });

@@ -24,6 +24,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
+import { parseVietnamDateTime, startOfVietnamDay } from '@shared/utils/calendar.util';
 import { canonicalStringify } from '@shared/utils/canonical-json.util';
 import { claimIdempotencyKey, releaseIdempotencyKey } from '@shared/utils/idempotency-key.util';
 import { isUniqueViolation } from '@shared/utils/pg-error.util';
@@ -150,8 +151,7 @@ export class BookingsService implements OnApplicationBootstrap {
           message: `Tối đa ${maxUnits} storage unit mỗi booking`,
         });
       }
-      const startOfToday = new Date();
-      startOfToday.setHours(0, 0, 0, 0);
+      const startOfToday = startOfVietnamDay(new Date());
       const maxStartAt = new Date(startOfToday.getTime() + leadDays * 86_400_000 + 86_399_999);
       dto.items.forEach((item, i) => {
         if (item.rentalMonths < minRentalMonths || item.rentalMonths > maxRentalMonths) {
@@ -638,7 +638,18 @@ export class BookingsService implements OnApplicationBootstrap {
 
         for (const hold of expiredHolds) {
           try {
+            let released = false;
             await this.dataSource.transaction(async (em) => {
+              // Lock Booking FIRST (SKIP LOCKED) to align lock order with cancel() and
+              // applyDepositTransfer() (Booking -> UnitHold -> StorageUnit) and avoid deadlocks.
+              const booking = await em.findOne(Booking, {
+                where: { id: hold.bookingId },
+                lock: { mode: 'pessimistic_write', onLocked: 'skip_locked' },
+              });
+              if (!booking) {
+                return;
+              }
+
               // Update hold only if still ACTIVE
               const holdUpdate = await em.update(
                 UnitHold,
@@ -660,7 +671,7 @@ export class BookingsService implements OnApplicationBootstrap {
                 { status: StorageUnitStatus.AVAILABLE },
               );
 
-              // Expire the booking only if this was its last active hold and it is still HOLDING
+              // Expire the booking once its last active hold expires (HOLDING or PENDING_DEPOSIT)
               const remainingActiveHolds = await em.getRepository(UnitHold).count({
                 where: {
                   bookingId: hold.bookingId,
@@ -672,14 +683,17 @@ export class BookingsService implements OnApplicationBootstrap {
               if (remainingActiveHolds === 0) {
                 await em.update(
                   Booking,
-                  { id: hold.bookingId, status: BookingStatus.HOLDING },
+                  { id: hold.bookingId, status: In(STATUSES_AWAITING_DEPOSIT) },
                   { status: BookingStatus.EXPIRED },
                 );
               }
+              released = true;
             });
-            this.logger.log(
-              `[CronJob:releaseExpiredHolds] Successfully released hold ${hold.id} for unit ${hold.storageUnitId}`,
-            );
+            if (released) {
+              this.logger.log(
+                `[CronJob:releaseExpiredHolds] Successfully released hold ${hold.id} for unit ${hold.storageUnitId}`,
+              );
+            }
           } catch (err) {
             this.logger.error(
               `[CronJob:releaseExpiredHolds] Failed to release hold ${hold.id}: ${(err as Error).message}`,
@@ -867,7 +881,7 @@ export class BookingsService implements OnApplicationBootstrap {
       status: PaymentStatus.SUCCEEDED,
       amount: event.amount,
       providerRef,
-      paidAt: new Date(event.transactionDate),
+      paidAt: parseVietnamDateTime(event.transactionDate) ?? new Date(),
       // Kept so a later hand-recorded payment cannot reuse this transfer's bank reference.
       metadata: event.referenceCode ? { referenceCode: event.referenceCode } : {},
     };
@@ -912,6 +926,11 @@ export class BookingsService implements OnApplicationBootstrap {
 
         if (paidAmount.plus(priorPaid).lt(depositRequired)) {
           partialRemaining = depositRequired.minus(paidAmount.plus(priorPaid));
+          await em.update(
+            Booking,
+            { id: booking.id, status: BookingStatus.HOLDING },
+            { status: BookingStatus.PENDING_DEPOSIT },
+          );
           return 'partial' as const;
         }
 

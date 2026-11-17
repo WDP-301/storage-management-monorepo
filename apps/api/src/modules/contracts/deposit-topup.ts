@@ -1,5 +1,5 @@
 import type { Invoice } from '@entities/invoice.entity';
-import { InvoiceKind } from '@storage/types';
+import { DepositStatus, InvoiceKind } from '@storage/types';
 import type Decimal from 'decimal.js';
 import type { EntityManager } from 'typeorm';
 
@@ -46,19 +46,29 @@ async function isChangeRequestTopUp(em: EntityManager, invoiceId: string): Promi
 }
 
 /**
- * Money collected on a top-up invoice is additional deposit held. The ledger derives what is
- * held from `bookings.deposit_total` (not a payment sum), so every succeeded top-up payment
- * bumps it — for one item the derived held equals the total, for a changed item the total minus
- * the unchanged items' snapshots; both move by exactly the payment amount.
+ * Money collected on a top-up invoice is additional deposit held. Bumps `bookings.deposit_total`
+ * for the item-derivation path AND any existing HELD row in `deposits` for `contractId` so the
+ * ledger stays accurate once a `deposits` row already exists on the contract.
  */
 export async function creditDepositTopUp(
   em: EntityManager,
   bookingId: string | null,
   amount: Decimal.Value,
+  contractId?: string | null,
 ): Promise<void> {
   if (!bookingId) return;
   await em.query(`UPDATE bookings SET deposit_total = deposit_total + $1 WHERE id = $2`, [
     amount,
     bookingId,
   ]);
+  if (contractId) {
+    await em.query(
+      `UPDATE deposits
+          SET amount_snapshot = amount_snapshot + $1,
+              held_amount = held_amount + $1,
+              updated_at = now()
+        WHERE contract_id = $2 AND status = $3`,
+      [amount, contractId, DepositStatus.HELD],
+    );
+  }
 }

@@ -768,9 +768,9 @@ export class ChangeRequestsService {
       if (UNWINDABLE_STATUSES.includes(locked.status)) {
         // Settled but not signed: cancel the destination draft contract and release the new unit.
         // The old contract was never touched, so the customer keeps it.
-        await this.unwindSettled(manager, locked);
+        await this.unwindSettled(manager, locked, actor.id);
       } else if (locked.status === ChangeRequestStatus.AWAITING_PAYMENT) {
-        // Give the held unit back and void the top-up it billed; paid money stays in the deposit.
+        // Give the held unit back and void the top-up it billed so settlement can refund any partial payment.
         await releaseMoveHold(manager, locked);
       }
 
@@ -808,8 +808,15 @@ export class ChangeRequestsService {
    * Undoes a settled-but-unsigned move through the shared helper: cancel the destination draft
    * contract and release its new unit. The old contract was never touched.
    */
-  private unwindSettled(manager: EntityManager, request: UnitChangeRequest): Promise<void> {
-    return unwindSettledChangeRequest(manager, request);
+  private unwindSettled(
+    manager: EntityManager,
+    request: UnitChangeRequest,
+    actorId: string,
+  ): Promise<void> {
+    return unwindSettledChangeRequest(manager, request, {
+      actorId,
+      notifications: this.notifications,
+    });
   }
 
   /** Re-runs the settle step for a request whose top-up was paid but the settle step failed. */

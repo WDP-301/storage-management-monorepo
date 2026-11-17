@@ -2,6 +2,7 @@ import { Contract } from '@entities/contract.entity';
 import { ContractSettlement } from '@entities/contract-settlement.entity';
 import { Deposit } from '@entities/deposit.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { BanksService } from '@modules/banks/banks.service';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { DomainException, fieldValidationError } from '@shared/exceptions/domain.exception';
@@ -9,10 +10,12 @@ import { ErrorCode } from '@shared/models/api-response';
 import { isUniqueViolation } from '@shared/utils/pg-error.util';
 import {
   type CompleteRefundInput,
+  type RefundBankAccount,
   type SettlementDetailRecord,
   SettlementStatus,
 } from '@storage/types';
 import { DataSource } from 'typeorm';
+import { chooseRefundAccount } from './settlement-bank-account.util';
 import { refundCompletedNotification } from './settlement-notifications';
 import { SettlementQueryService } from './settlement-query.service';
 import { settledDepositStatus } from './settlement-totals';
@@ -32,13 +35,13 @@ export class SettlementRefundService {
     private readonly dataSource: DataSource,
     private readonly notifications: NotificationsService,
     private readonly query: SettlementQueryService,
+    private readonly banks: BanksService,
   ) {}
 
   /**
    * Needs proof — at least one evidence file of the transfer; the bank reference is optional but
-   * unique when given. The settlement row is locked, then the
-   * deposit (approval locks the contract and deposit before the settlement exists, so the two
-   * never wait on each other). The deposit is released with the status the refund gives it.
+   * unique when given. When no refund account was saved beforehand (e.g. a DRAFT cancel with no
+   * saved customer account), `bankAccount` must be supplied here before the refund can complete.
    */
   async complete(
     contractId: string,
@@ -54,6 +57,7 @@ export class SettlementRefundService {
         'Đính kèm ít nhất 1 ảnh chứng từ chuyển khoản',
       );
     }
+    const verifiedBank = dto.bankAccount ? await this.banks.verifyAccount(dto.bankAccount) : null;
     const now = new Date();
     try {
       await this.dataSource.transaction(async (em) => {
@@ -74,6 +78,26 @@ export class SettlementRefundService {
         if (transferRef && (await em.exists(ContractSettlement, { where: { transferRef } }))) {
           throw duplicateTransferRef(transferRef);
         }
+
+        const refundAmount = Number(settlement.refundAmount);
+        let bankPatch: Partial<ContractSettlement> = {};
+        let finalBankAccount: RefundBankAccount | null = settlement.bankAccount ?? null;
+        if (verifiedBank || (!finalBankAccount && refundAmount > 0)) {
+          const choice = chooseRefundAccount({
+            refundAmount,
+            customerAccount: settlement.customerBankAccount ?? null,
+            bankAccount: verifiedBank ?? undefined,
+            overrideReason: dto.bankOverrideReason,
+            actorId: actor.id,
+          });
+          bankPatch = {
+            bankAccount: choice.bankAccount,
+            bankOverrideBy: choice.overrideBy,
+            bankOverrideReason: choice.overrideReason,
+          };
+          finalBankAccount = choice.bankAccount;
+        }
+
         const note = [settlement.note, dto.note?.trim()].filter(Boolean).join('\n') || null;
         await em.update(
           ContractSettlement,
@@ -85,12 +109,13 @@ export class SettlementRefundService {
             note,
             completedBy: actor.id,
             completedAt: now,
+            ...bankPatch,
           },
         );
         const totals = {
           deposit_amount: Number(settlement.depositAmount),
           credits_total: Number(settlement.creditsTotal),
-          refund_amount: Number(settlement.refundAmount),
+          refund_amount: refundAmount,
         };
         await em.update(
           Deposit,
@@ -105,7 +130,7 @@ export class SettlementRefundService {
             contract,
             settlement.id,
             totals.refund_amount,
-            settlement.bankAccount ?? null,
+            finalBankAccount,
           ),
         );
       });

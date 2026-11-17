@@ -202,7 +202,7 @@ export class CustomerService {
       }
     }
 
-    if (!wardCode && provinceCode && stored?.ward) {
+    if (dto.ward === undefined && provinceCode && stored?.ward) {
       const wards = await this.dataSource.query(
         'SELECT province_code AS "provinceCode" FROM wards WHERE code = $1',
         [stored.ward],

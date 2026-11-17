@@ -4,10 +4,10 @@ import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { isAssignmentActive } from '@modules/auth/role-assignment.util';
+import { resolveContractDeposit } from '@modules/contracts/deposit-ledger.util';
 import type { HandoverAssignmentService } from '@modules/inspection/handover-assignment/handover-assignment.service';
 import type { NotificationsService } from '@modules/notifications/notifications.service';
 import {
-  assertShelfEmpty,
   cancelOpenDropOffRequests,
   cancelOpenPickupRequests,
 } from '@modules/shelf-storage/shelf-empty-guard.util';
@@ -16,6 +16,7 @@ import {
   ContractStatus,
   InspectionType,
   NotificationType,
+  StorageUnitKind,
   StorageUnitStatus,
   UserRole,
 } from '@storage/types';
@@ -51,9 +52,26 @@ export async function advanceChangeRequestToFinalApproval(
     lock: { mode: 'pessimistic_write' },
   });
   if (oldContract && oldContract.status === ContractStatus.ACTIVE) {
-    await assertShelfEmpty(em, oldContract.id, 'UNIT_CHANGE');
+    // Materialise the old deposit row while oldContract is still ACTIVE so the transfer below
+    // always finds a row even when no top-up was billed and the contract had only booking totals.
+    await resolveContractDeposit(em, oldContract, { create: true });
     await cancelOpenPickupRequests(em, oldContract.id);
     await cancelOpenDropOffRequests(em, oldContract.id);
+    const oldUnit = await em.findOne(StorageUnit, { where: { id: request.oldUnitId } });
+    if (oldUnit?.kind === StorageUnitKind.SHELF) {
+      // Shelf stock and receipt history follow the customer's active rental onto the new shelf;
+      // receipts retain their storage_unit_id/warehouse_id/facility_id snapshots.
+      await em.query(
+        `UPDATE "shelf_items" SET "contract_id" = $1, "updated_at" = now()
+          WHERE "contract_id" = $2`,
+        [newContractId, oldContract.id],
+      );
+      await em.query(
+        `UPDATE "shelf_receipts" SET "contract_id" = $1
+          WHERE "contract_id" = $2`,
+        [newContractId, oldContract.id],
+      );
+    }
     await em.update(
       Contract,
       { id: oldContract.id },
@@ -66,7 +84,6 @@ export async function advanceChangeRequestToFinalApproval(
     );
 
     // The vacated unit needs a maintenance check before it goes back on the market.
-    const oldUnit = await em.findOne(StorageUnit, { where: { id: request.oldUnitId } });
     const inspection = await em.save(
       Inspection,
       em.create(Inspection, {
@@ -92,7 +109,12 @@ export async function advanceChangeRequestToFinalApproval(
           body:
             `Kho ${oldUnit.code} đã trống sau khi khách chuyển đi — phân công nhân viên kiểm tra ` +
             'và trả kho về trạng thái trống.',
-          data: { requestId: request.id, contractId: oldContract.id, unitId: oldUnit.id },
+          data: {
+            inspectionId: inspection.id,
+            requestId: request.id,
+            contractId: oldContract.id,
+            unitId: oldUnit.id,
+          },
         });
       }
     }

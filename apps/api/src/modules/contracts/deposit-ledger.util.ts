@@ -50,7 +50,7 @@ async function recordContractDeposit(
       RETURNING ${DEPOSIT_COLUMNS}`,
     [contract.id, contract.bookingItemId],
   );
-  if (moved.length > 0) return moved[0];
+  if (Array.isArray(moved) && moved.length > 0) return moved[0];
 
   const inserted: LedgerDeposit[] = await em.query(
     `INSERT INTO deposits AS d (contract_id, payment_id, amount_snapshot, held_amount, status)

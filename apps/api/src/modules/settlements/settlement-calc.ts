@@ -1,7 +1,7 @@
 import { fromVietnamDate } from '@shared/utils/calendar.util';
 import {
   type DamageSeverity,
-  type InvoiceKind,
+  InvoiceKind,
   InvoiceStatus,
   PaymentMethod,
   type SettlementDecisionsInput,
@@ -100,7 +100,12 @@ export function computeSettlement(
     const meta = payment.metadata ?? {};
     if (!invoice || payment.method === PaymentMethod.DEPOSIT) continue;
     if (meta.reconciledAt || meta.settlementId) continue;
-    if (invoice.status !== InvoiceStatus.VOID && started(invoice)) continue;
+    if (invoice.kind === InvoiceKind.DEPOSIT_TOPUP) {
+      // Only a voided unit-change top-up stays outside `input.deposit`; live ones are held there.
+      if (invoice.status !== InvoiceStatus.VOID) continue;
+    } else if (invoice.status !== InvoiceStatus.VOID && started(invoice)) {
+      continue;
+    }
     credits.push({ payment, invoice, review: Boolean(meta.needsReview) });
   }
   const decided = indexDecisions(decisions, {
@@ -115,7 +120,12 @@ export function computeSettlement(
 
   const lines: SettlementLine[] = [];
   const unpaid = input.invoices
-    .filter((invoice) => PAYABLE.includes(invoice.status) && started(invoice))
+    .filter(
+      (invoice) =>
+        invoice.kind !== InvoiceKind.DEPOSIT_TOPUP &&
+        PAYABLE.includes(invoice.status) &&
+        started(invoice),
+    )
     .sort((a, b) => time(a.dueAt) - time(b.dueAt) || a.id.localeCompare(b.id));
   for (const invoice of unpaid) {
     const outstanding = new Decimal(invoice.total).minus(paid.get(invoice.id) ?? 0);
@@ -192,7 +202,9 @@ export function computeSettlement(
         direction: 'CREDIT',
         description: review
           ? `Khoản tiền cần kiểm tra — hoá đơn ${invoice.invoiceNo}`
-          : `Hoàn tiền thuê kỳ không dùng — hoá đơn ${invoice.invoiceNo}`,
+          : invoice.kind === InvoiceKind.DEPOSIT_TOPUP
+            ? `Hoàn tiền bù cọc đã thu — hoá đơn ${invoice.invoiceNo}`
+            : `Hoàn tiền thuê kỳ không dùng — hoá đơn ${invoice.invoiceNo}`,
         unit_amount: amount,
         amount: included ? amount : 0,
         needs_decision: included === null,

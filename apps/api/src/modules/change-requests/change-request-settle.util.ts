@@ -9,6 +9,10 @@ import { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import { generateBookingNo } from '@modules/bookings/booking-no.util';
+import {
+  contractCancelledNotification,
+  teardownDraftContract,
+} from '@modules/contracts/contract-draft-teardown.util';
 import { resolveContractDeposit } from '@modules/contracts/deposit-ledger.util';
 import { topUpChangeRequestId } from '@modules/contracts/deposit-topup';
 import { persistContract } from '@modules/contracts/initial-contract.util';
@@ -25,7 +29,6 @@ import {
   FacilityStatus,
   InspectionType,
   InvoiceKind,
-  InvoiceStatus,
   NotificationType,
   PaymentStatus,
   StorageUnitStatus,
@@ -336,6 +339,7 @@ export async function settleIfTopUpInvoicePaid(
 export async function unwindSettledChangeRequest(
   em: EntityManager,
   request: Pick<UnitChangeRequest, 'contractId' | 'newContractId' | 'newUnitId' | 'topupInvoiceId'>,
+  options: { actorId?: string | null; notifications?: NotificationsService; now?: Date } = {},
 ): Promise<void> {
   if (request.newContractId) {
     const newContract = await em.findOne(Contract, {
@@ -351,16 +355,24 @@ export async function unwindSettledChangeRequest(
           { contractId: newContract.id, status: newContract.status },
         );
       }
-      await em.update(
-        Invoice,
-        { contractId: newContract.id, status: InvoiceStatus.ISSUED },
-        { status: InvoiceStatus.VOID },
-      );
-      await em.update(
-        Contract,
-        { id: newContract.id },
-        { status: ContractStatus.CANCELLED, note: 'Huỷ do rút yêu cầu đổi kho' },
-      );
+      const newItem = newContract.bookingItemId
+        ? await em.findOne(BookingItem, { where: { id: newContract.bookingItemId } })
+        : null;
+      const { settlementId, refundAmount } = await teardownDraftContract(em, {
+        contract: newContract,
+        storageUnitId: newItem?.storageUnitId ?? request.newUnitId,
+        actorId: options.actorId ?? null,
+        now: options.now,
+        contractNote: 'Huỷ do rút yêu cầu đổi kho',
+        settlementNote: 'Hủy hợp đồng đổi kho trước bàn giao — hoàn lại tiền thuê đã thu',
+      });
+      if (refundAmount > 0 && options.notifications) {
+        await options.notifications.createForUsers(
+          em,
+          [newContract.customerId],
+          contractCancelledNotification(newContract, settlementId, refundAmount),
+        );
+      }
     }
   }
   if (request.newUnitId) {

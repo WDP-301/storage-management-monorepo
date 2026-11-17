@@ -1,11 +1,21 @@
 import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
+import { Inspection } from '@entities/inspection.entity';
 import { Invoice } from '@entities/invoice.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
+import { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { ContractStatus, InvoiceStatus, StorageUnitStatus, UserRole } from '@storage/types';
-import { In } from 'typeorm';
+import {
+  ChangeRequestStatus,
+  ContractStatus,
+  InspectionType,
+  InvoiceStatus,
+  NotificationType,
+  StorageUnitStatus,
+  UserRole,
+} from '@storage/types';
+import { In, IsNull } from 'typeorm';
 import { ContractCancelService } from './contract-cancel.service';
 
 const actor = (id: string, roles: UserRole[]): AuthUser => ({ id, roles }) as AuthUser;
@@ -107,11 +117,19 @@ describe('ContractCancelService.cancelDraft', () => {
       { id: 'unit-1', status: In([StorageUnitStatus.BOOKED, StorageUnitStatus.HELD]) },
       { status: StorageUnitStatus.AVAILABLE },
     );
-    // Only an invoice nobody paid is voided; money taken waits for a manual refund.
+    // Both open and partially-paid invoices are voided; money taken waits for a manual refund.
     expect(em.update).toHaveBeenCalledWith(
       Invoice,
-      { contractId: 'contract-1', status: InvoiceStatus.ISSUED },
+      {
+        contractId: 'contract-1',
+        status: In([InvoiceStatus.ISSUED, InvoiceStatus.PARTIALLY_PAID]),
+      },
       { status: InvoiceStatus.VOID },
+    );
+    expect(em.update).toHaveBeenCalledWith(
+      Inspection,
+      { contractId: 'contract-1', type: InspectionType.PRE_HANDOVER, finalizedAt: IsNull() },
+      { inspectedBy: null },
     );
   });
 
@@ -179,6 +197,75 @@ describe('ContractCancelService.cancelDraft', () => {
         type: 'CONTRACT_CANCELLED',
         data: expect.objectContaining({ settlementId: null, refundAmount: 0 }),
       }),
+    );
+  });
+
+  it('cancels a unit-change destination DRAFT in lockstep with its request without double-refunding the deposit', async () => {
+    const changeReq = {
+      id: 'req-1',
+      contractId: 'contract-old',
+      newContractId: 'contract-1',
+      status: ChangeRequestStatus.AWAITING_HANDOVER,
+      history: [],
+    };
+    const emSave = jest.fn(async (_entity, value) => value);
+    (em as Record<string, unknown>).save = emSave;
+    em.findOne.mockImplementation(async (entity) => {
+      if (entity === Contract) return contract;
+      if (entity === UnitChangeRequest) return changeReq;
+      return null;
+    });
+    // Destination DRAFT has no deposit row (`deposit` stays null), only paid first-month rent.
+    em.query = jest.fn(async (sql: string) => {
+      if (sql.includes('UPDATE deposits')) return [[], 0];
+      if (sql.includes('FROM payments p JOIN invoices')) {
+        return [
+          {
+            payment_id: 'pay-rent',
+            amount: 1_200_000,
+            invoice_id: 'inv-rent',
+            invoice_no: 'INV-R1',
+          },
+        ];
+      }
+      if (sql.includes('INSERT INTO deposits (contract_id')) {
+        return [
+          {
+            id: 'dep-zero',
+            contractId: 'contract-1',
+            amount: '0',
+            heldAmount: '0',
+            status: 'HELD',
+          },
+        ];
+      }
+      return [];
+    });
+
+    await service.cancelDraft('contract-1', actor('manager-1', [UserRole.FACILITY_MANAGER]));
+
+    expect(changeReq.status).toBe(ChangeRequestStatus.CANCELLED);
+    expect(emSave).toHaveBeenCalledWith(UnitChangeRequest, changeReq);
+    // Refunds ONLY the paid rent via a 0-deposit settlement — never the deposit held on contract-old.
+    expect(em.insert).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        contractId: 'contract-1',
+        depositId: 'dep-zero',
+        depositAmount: 0,
+        creditsTotal: 1_200_000,
+        refundAmount: 1_200_000,
+      }),
+    );
+    expect(notifications.createForUsers).toHaveBeenCalledWith(
+      em,
+      ['customer-1'],
+      expect.objectContaining({ type: NotificationType.UNIT_CHANGE_CANCELLED }),
+    );
+    expect(notifications.createForUsers).toHaveBeenCalledWith(
+      em,
+      ['customer-1'],
+      expect.objectContaining({ type: NotificationType.CONTRACT_CANCELLED }),
     );
   });
 });

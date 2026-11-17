@@ -135,8 +135,12 @@ export async function openReturnInspection(
   // A move in flight owns the contract's destination — a return now would strand its held
   // unit and any billed deposit top-up. The caller's contract lock serializes this check
   // against decide/complete, which take the same lock.
+  const openStatuses = In([...OPEN_CHANGE_STATUSES]);
   const openChange = await em.findOne(UnitChangeRequest, {
-    where: { contractId: contract.id, status: In([...OPEN_CHANGE_STATUSES]) },
+    where: [
+      { contractId: contract.id, status: openStatuses },
+      { newContractId: contract.id, status: openStatuses },
+    ],
   });
   if (openChange) {
     throw returnConflict(RETURN_MESSAGES.changeInProgress, {

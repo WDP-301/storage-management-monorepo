@@ -179,7 +179,11 @@ export class MoveDaySweepService {
 
     if (request.status === ChangeRequestStatus.AWAITING_HANDOVER) {
       if (!(await destinationStillRunnable(em, request))) {
-        await unwindSettledChangeRequest(em, request);
+        await unwindSettledChangeRequest(em, request, {
+          actorId: null,
+          notifications: this.notifications,
+          now,
+        });
         await this.recordCancelled(
           em,
           request,

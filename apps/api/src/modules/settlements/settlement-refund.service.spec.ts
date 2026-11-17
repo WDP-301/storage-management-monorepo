@@ -11,6 +11,7 @@ describe('SettlementRefundService', () => {
   let settlement: Record<string, unknown> | null;
   let em: Record<string, jest.Mock>;
   let notifications: { createForUsers: jest.Mock };
+  let banks: { verifyAccount: jest.Mock };
   let service: SettlementRefundService;
 
   beforeEach(() => {
@@ -41,10 +42,19 @@ describe('SettlementRefundService', () => {
       update: jest.fn(async () => ({ affected: 1 })),
     };
     notifications = { createForUsers: jest.fn(async () => 1) };
+    banks = {
+      verifyAccount: jest.fn(async ({ bankBin, accountNo }) => ({
+        bankBin,
+        bankName: 'Vietcombank',
+        accountNo,
+        accountName: 'NGUYEN VAN A',
+      })),
+    };
     service = new SettlementRefundService(
       { transaction: jest.fn((cb) => cb(em)) } as never,
       notifications as never,
       { detail: jest.fn(async () => ({ status: 'COMPLETED' })) } as never,
+      banks as never,
     );
   });
 
@@ -124,5 +134,37 @@ describe('SettlementRefundService', () => {
     await expect(
       service.complete('contract-1', { evidence: [PROOF], transferRef: 'FT1' }, ADMIN),
     ).rejects.toMatchObject({ status: 409, response: { code: 'CONFLICT' } });
+  });
+
+  it('requires and verifies a bank account when completing a settlement that has none yet', async () => {
+    settlement = { ...settlement, bankAccount: null, customerBankAccount: null };
+
+    await expect(
+      service.complete('contract-1', { evidence: [PROOF] }, ADMIN),
+    ).rejects.toMatchObject({ status: 409, response: { code: 'REFUND_ACCOUNT_REQUIRED' } });
+
+    await service.complete(
+      'contract-1',
+      {
+        evidence: [PROOF],
+        bankAccount: { bankBin: '970436', accountNo: '0999888777' },
+        bankOverrideReason: 'Khách gửi qua hotline',
+      },
+      ADMIN,
+    );
+
+    expect(banks.verifyAccount).toHaveBeenCalledWith({
+      bankBin: '970436',
+      accountNo: '0999888777',
+    });
+    expect(em.update).toHaveBeenCalledWith(
+      ContractSettlement,
+      { id: 'settlement-1' },
+      expect.objectContaining({
+        bankAccount: expect.objectContaining({ accountNo: '0999888777', bankName: 'Vietcombank' }),
+        bankOverrideBy: 'admin-1',
+        bankOverrideReason: 'Khách gửi qua hotline',
+      }),
+    );
   });
 });

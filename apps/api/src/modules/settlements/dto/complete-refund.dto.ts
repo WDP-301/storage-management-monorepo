@@ -1,3 +1,4 @@
+import { RefundAccountDto } from '@modules/contracts/dto/refund-account.dto';
 import { EvidenceFileDto } from '@modules/inspection/dto/inspection-evidence.dto';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { CompleteRefundInput } from '@storage/types';
@@ -35,4 +36,21 @@ export class CompleteRefundDto implements CompleteRefundInput {
   @IsString()
   @MaxLength(1000)
   note?: string;
+
+  @ApiPropertyOptional({
+    type: RefundAccountDto,
+    description:
+      'Refund recipient account; required when none was recorded yet (e.g. DRAFT cancel)',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RefundAccountDto)
+  bankAccount?: RefundAccountDto;
+
+  @ApiPropertyOptional({ maxLength: 500 })
+  @IsOptional()
+  @Transform(trimText)
+  @IsString()
+  @MaxLength(500)
+  bankOverrideReason?: string;
 }

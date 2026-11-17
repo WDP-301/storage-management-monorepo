@@ -57,6 +57,9 @@ export function paidDepositByItemSql(param: string): string {
                       WHERE c.booking_item_id = o.id
                         AND r.status = '${ChangeRequestStatus.COMPLETED}'
                         AND r.new_booking_id IS NOT NULL) AS moved,
+             EXISTS (SELECT 1 FROM unit_change_requests r
+                      WHERE r.new_booking_id = o.booking_id
+                        AND r.status <> '${ChangeRequestStatus.COMPLETED}') AS unsettled_destination,
              EXISTS (SELECT 1 FROM contracts c WHERE c.booking_item_id = o.id) AS has_contract
         FROM booking_items o
        WHERE o.booking_id IN (SELECT booking_id FROM booking_items WHERE id = ANY(${param}::uuid[]))
@@ -68,7 +71,7 @@ export function paidDepositByItemSql(param: string): string {
     )
     SELECT i.id AS item_id,
            CASE
-             WHEN i.moved THEN NULL
+             WHEN i.moved OR i.unsettled_destination THEN NULL
              WHEN pb.item_count = 1 THEN b.deposit_total
              WHEN NOT i.changed THEN i.deposit_snapshot
              WHEN pb.changed_count = 1 AND pb.contractless_count = 0

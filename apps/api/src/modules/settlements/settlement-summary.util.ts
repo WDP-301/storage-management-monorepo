@@ -129,8 +129,8 @@ function toSummary(
 
 /**
  * Batch extras of `/contracts/mine`: the deposit (resolver, null when unknown), the per-day
- * overstay charge (the return request's captured percent, else the current one) and, for ENDED
- * contracts, the settlement summary with the refund account masked.
+ * overstay charge (the return request's captured percent, else the current one) and the
+ * settlement summary for ENDED contracts and CANCELLED ones that carry a refund settlement.
  */
 export async function loadCustomerContractExtras(
   em: EntityManager,
@@ -138,12 +138,14 @@ export async function loadCustomerContractExtras(
   inspections: Map<string, ContractInspections>,
   currentPenaltyPercent: number,
 ): Promise<Map<string, CustomerContractExtras>> {
-  const endedIds = contracts.filter((c) => c.status === ContractStatus.ENDED).map((c) => c.id);
+  const settledIds = contracts
+    .filter((c) => c.status === ContractStatus.ENDED || c.status === ContractStatus.CANCELLED)
+    .map((c) => c.id);
   const [deposits, settlements] = await Promise.all([
     resolveDepositAmounts(em, contracts),
-    endedIds.length === 0
+    settledIds.length === 0
       ? Promise.resolve([] as ContractSettlement[])
-      : em.find(ContractSettlement, { where: { contractId: In(endedIds) } }),
+      : em.find(ContractSettlement, { where: { contractId: In(settledIds) } }),
   ]);
   const settlementOf = new Map(settlements.map((s) => [s.contractId, s]));
   return new Map(
@@ -151,15 +153,14 @@ export async function loadCustomerContractExtras(
       const own = inspections.get(c.id);
       const deposit = amountOrNull(deposits.get(c.id));
       const percent = own?.return?.returnRules?.penaltyPercent ?? currentPenaltyPercent;
+      const settled = settlementOf.get(c.id);
       return [
         c.id,
         {
           deposit,
           penaltyPerDay: overduePenaltyPerDay(c.monthlyPriceSnapshot ?? 0, percent),
           settlement:
-            c.status === ContractStatus.ENDED
-              ? toSummary(settlementOf.get(c.id), own, deposit)
-              : null,
+            c.status === ContractStatus.ENDED || settled ? toSummary(settled, own, deposit) : null,
         },
       ];
     }),

@@ -7,6 +7,7 @@ import {
   ChangeRequestStatus,
   ContractStatus,
   InspectionType,
+  StorageUnitKind,
   StorageUnitStatus,
 } from '@storage/types';
 import { advanceChangeRequestToFinalApproval } from './change-request-handover.util';
@@ -148,6 +149,39 @@ describe('advanceChangeRequestToFinalApproval', () => {
     expect(updates.some((u) => u.entity === Contract)).toBe(false);
     expect(updates.some((u) => u.entity === StorageUnit)).toBe(false);
     expect(queries.some((q) => q.sql.includes('UPDATE "deposits"'))).toBe(true);
+    expect(request?.status).toBe(ChangeRequestStatus.AWAITING_FINAL_APPROVAL);
+  });
+
+  it('carries shelf stock and receipt history over on a SHELF -> SHELF move without blocking on items', async () => {
+    em.findOne.mockImplementation(
+      async (entity: unknown, options?: { where?: { id?: string } }) => {
+        if (entity === UnitChangeRequest) return request;
+        if (entity === Contract) return oldContract;
+        if (entity === StorageUnit) {
+          return options?.where?.id === 'unit-old'
+            ? { id: 'unit-old', code: 'K-01', facilityId: 'fac-1', kind: StorageUnitKind.SHELF }
+            : { id: 'unit-new', code: 'K-02', facilityId: 'fac-1', kind: StorageUnitKind.SHELF };
+        }
+        return null;
+      },
+    );
+
+    await advanceChangeRequestToFinalApproval(
+      em as never,
+      'contract-new',
+      NOW,
+      notifications as never,
+      handoverAssignment as never,
+    );
+
+    expect(queries).toContainEqual({
+      sql: expect.stringContaining('UPDATE "shelf_items" SET "contract_id" = $1'),
+      params: ['contract-new', 'contract-old'],
+    });
+    expect(queries).toContainEqual({
+      sql: expect.stringContaining('UPDATE "shelf_receipts" SET "contract_id" = $1'),
+      params: ['contract-new', 'contract-old'],
+    });
     expect(request?.status).toBe(ChangeRequestStatus.AWAITING_FINAL_APPROVAL);
   });
 });

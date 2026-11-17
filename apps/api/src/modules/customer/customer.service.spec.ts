@@ -387,6 +387,20 @@ describe('CustomerService', () => {
       expect(dataSource.transaction).not.toHaveBeenCalled();
     });
 
+    it('allows changing province when ward is explicitly cleared alongside it', async () => {
+      profiles.findOne.mockResolvedValue(buildProfile({ ward: '00008', province: '01' }));
+      manager.findOne.mockResolvedValue(buildProfile({ ward: '00008', province: '01' }));
+      dataSource.query.mockResolvedValueOnce([{ code: '79' }]);
+
+      await expect(
+        service.updateProfile('user-1', { province: '79', ward: '' }, buildActor()),
+      ).resolves.toBeDefined();
+
+      expect(manager.save).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-1', province: '79', ward: null }),
+      );
+    });
+
     it('skips location queries when only the address is updated', async () => {
       await expect(
         service.updateProfile('user-1', { addressLine: '123 Le Loi' }, buildActor()),

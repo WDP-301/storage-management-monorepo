@@ -202,4 +202,38 @@ describe('settlement read model', () => {
       refund_evidence: [receipt],
     });
   });
+
+  it('returns the settlement for a CANCELLED contract when one exists, and null when none was created', async () => {
+    const settlement = {
+      contractId: 'cancelled-with-refund',
+      status: SettlementStatus.AWAITING_REFUND,
+      depositAmount: '2000000.00',
+      creditsTotal: '500000.00',
+      deductionsTotal: '0',
+      refundAmount: '2500000.00',
+      shortfallAmount: '0',
+      lines: [],
+      bankAccount: null,
+      feeInvoiceId: null,
+      approvedAt: new Date('2027-04-02'),
+      completedAt: null,
+    };
+    const em = { query: jest.fn(async () => []), find: jest.fn(async () => [settlement]) };
+
+    const extras = await loadCustomerContractExtras(
+      em as never,
+      [
+        contract('cancelled-with-refund', ContractStatus.CANCELLED),
+        contract('cancelled-empty', ContractStatus.CANCELLED),
+      ],
+      new Map(),
+      100,
+    );
+
+    expect(extras.get('cancelled-with-refund')?.settlement).toMatchObject({
+      status: SettlementStatus.AWAITING_REFUND,
+      totals: { refund_amount: 2500000 },
+    });
+    expect(extras.get('cancelled-empty')?.settlement).toBeNull();
+  });
 });

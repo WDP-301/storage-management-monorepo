@@ -964,7 +964,7 @@ describe('ChangeRequestsService', () => {
       expect(payload.type).toBe(NotificationType.UNIT_CHANGE_CANCELLED);
     });
 
-    it('manager cancel keeps a paid top-up but still releases and cancels', async () => {
+    it('manager cancel voids a partially-paid top-up and releases the held unit so partial funds return at settlement', async () => {
       requestRow = buildRequest({
         status: ChangeRequestStatus.AWAITING_PAYMENT,
         topupInvoiceId: 'inv-1',
@@ -973,16 +973,15 @@ describe('ChangeRequestsService', () => {
 
       const result = await service.cancel('req-1', manager);
 
-      // The money already sits in the held deposit — the invoice stays for settlement.
       expect(txManager.update).toHaveBeenCalledWith(
         StorageUnit,
         { id: 'unit-new', status: StorageUnitStatus.HELD },
         { status: StorageUnitStatus.AVAILABLE },
       );
-      expect(txManager.update).not.toHaveBeenCalledWith(
+      expect(txManager.update).toHaveBeenCalledWith(
         Invoice,
-        expect.anything(),
-        expect.anything(),
+        { id: 'inv-1' },
+        { status: InvoiceStatus.VOID },
       );
       expect(result.request.status).toBe(ChangeRequestStatus.CANCELLED);
     });

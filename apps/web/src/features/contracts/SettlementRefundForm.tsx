@@ -8,17 +8,20 @@ import { UploadsApi } from '../../lib/api';
 import { SettlementsApi } from '../../lib/settlements-api';
 import type { EvidenceFile, SettlementDetailRecord } from '../../types/settlement';
 import { ACCEPTED_DOCUMENT_TYPES } from './contract-display';
+import { RefundBankAccountFields } from './RefundBankAccountFields';
+import { currentVerification, isSameAccount } from './refund-account-form';
 import {
   buildRefundInput,
-  EMPTY_REFUND_PROOF,
+  initRefundProof,
   MAX_REFUND_EVIDENCE,
   MAX_TRANSFER_REF_LENGTH,
+  needsMissingRefundBank,
   validateProofFiles,
   validateRefundProof,
 } from './refund-proof-form';
 import { RefundTransferDetails } from './SettlementApprovalInfo';
 import { describeApiError, isStaleSettlementError } from './settlement-display';
-import { MAX_NOTE_LENGTH } from './settlement-form';
+import { MAX_NOTE_LENGTH, MAX_REASON_LENGTH } from './settlement-form';
 
 interface Props {
   /** AWAITING_REFUND settlement. */
@@ -27,13 +30,42 @@ interface Props {
   onStale: () => void;
 }
 
+function vietQrPreviewUrl(
+  account: { bankBin: string; accountNo: string; accountName: string },
+  amount: number,
+  addInfo: string,
+): string | null {
+  if (amount <= 0) return null;
+  const params = new URLSearchParams({
+    amount: String(Math.round(amount)),
+    addInfo,
+    accountName: account.accountName,
+  });
+  return `https://img.vietqr.io/image/${account.bankBin}-${account.accountNo}-compact2.png?${params}`;
+}
+
 /** What to transfer by hand, then the proof that it was sent. */
 export const SettlementRefundForm: React.FC<Props> = ({ record, onCompleted, onStale }) => {
   const fileInput = useRef<HTMLInputElement>(null);
-  const [proof, setProof] = useState(EMPTY_REFUND_PROOF);
+  const [proof, setProof] = useState(() => initRefundProof(record));
   const [busy, setBusy] = useState<'upload' | 'submit' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const viewer = useImageLightbox(proof.evidence);
+  const missingBank = needsMissingRefundBank(record);
+  const verifiedBank = missingBank ? currentVerification(proof.bank) : null;
+  const refundAmount = record.totals?.refund_amount ?? 0;
+  const detailsRecord: SettlementDetailRecord = verifiedBank
+    ? {
+        ...record,
+        bank_account: {
+          bankBin: verifiedBank.bankBin,
+          bankName: verifiedBank.bankName,
+          accountNo: verifiedBank.accountNo,
+          accountName: verifiedBank.accountName,
+        },
+        refund_qr_url: vietQrPreviewUrl(verifiedBank, refundAmount, record.transfer_content),
+      }
+    : record;
 
   const upload = async (files: File[]) => {
     const problem = validateProofFiles(proof.evidence.length, files);
@@ -53,12 +85,14 @@ export const SettlementRefundForm: React.FC<Props> = ({ record, onCompleted, onS
   };
 
   const submit = async () => {
-    const problem = validateRefundProof(proof);
+    const problem = validateRefundProof(proof, record);
     if (problem) return setError(problem);
     setBusy('submit');
     setError(null);
     try {
-      onCompleted(await SettlementsApi.refundComplete(record.contract.id, buildRefundInput(proof)));
+      onCompleted(
+        await SettlementsApi.refundComplete(record.contract.id, buildRefundInput(proof, record)),
+      );
     } catch (err) {
       setError(describeApiError(err, 'Không xác nhận được chuyển khoản.'));
       if (isStaleSettlementError(err)) onStale();
@@ -69,7 +103,30 @@ export const SettlementRefundForm: React.FC<Props> = ({ record, onCompleted, onS
 
   return (
     <div className="space-y-4">
-      <RefundTransferDetails record={record} />
+      {missingBank && (
+        <section className="space-y-3 p-3 rounded-lg ring ring-kumo-line">
+          <span className="text-xs font-semibold text-kumo-default block">
+            Tài khoản nhận tiền hoàn (chưa có từ bước trước)
+          </span>
+          <RefundBankAccountFields
+            value={proof.bank}
+            onChange={(bank) => setProof((prev) => ({ ...prev, bank }))}
+            disabled={busy !== null}
+          />
+          {verifiedBank && !isSameAccount(proof.bank, record.customer_bank_account) && (
+            <Input
+              label="Lý do dùng tài khoản này"
+              required
+              value={proof.bankReason}
+              maxLength={MAX_REASON_LENGTH}
+              disabled={busy !== null}
+              onChange={(e) => setProof((prev) => ({ ...prev, bankReason: e.target.value }))}
+            />
+          )}
+        </section>
+      )}
+
+      <RefundTransferDetails record={detailsRecord} />
 
       <section className="space-y-2">
         <span className="text-xs font-semibold text-kumo-default block">

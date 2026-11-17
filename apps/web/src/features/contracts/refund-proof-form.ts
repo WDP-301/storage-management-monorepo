@@ -1,6 +1,18 @@
-import type { CompleteRefundInput, EvidenceFile } from '../../types/settlement';
+import type {
+  CompleteRefundInput,
+  EvidenceFile,
+  SettlementDetailRecord,
+} from '../../types/settlement';
 import { ACCEPTED_DOCUMENT_TYPES, MAX_DOCUMENT_BYTES } from './contract-display';
-import { MAX_NOTE_LENGTH } from './settlement-form';
+import {
+  type BankFormState,
+  EMPTY_BANK_FORM,
+  isSameAccount,
+  toBankAccountInput,
+  toBankForm,
+  validateBankForm,
+} from './refund-account-form';
+import { DEFAULT_OVERRIDE_REASON, MAX_NOTE_LENGTH, MAX_REASON_LENGTH } from './settlement-form';
 
 export const MAX_REFUND_EVIDENCE = 5;
 export const MAX_TRANSFER_REF_LENGTH = 100;
@@ -9,9 +21,31 @@ export interface RefundProofState {
   evidence: EvidenceFile[];
   transferRef: string;
   note: string;
+  bank: BankFormState;
+  bankReason: string;
 }
 
-export const EMPTY_REFUND_PROOF: RefundProofState = { evidence: [], transferRef: '', note: '' };
+export type RefundProofInputState = Omit<RefundProofState, 'bank' | 'bankReason'> &
+  Partial<Pick<RefundProofState, 'bank' | 'bankReason'>>;
+
+export const EMPTY_REFUND_PROOF: RefundProofState = {
+  evidence: [],
+  transferRef: '',
+  note: '',
+  bank: EMPTY_BANK_FORM,
+  bankReason: DEFAULT_OVERRIDE_REASON,
+};
+
+export function initRefundProof(record: SettlementDetailRecord): RefundProofState {
+  return {
+    ...EMPTY_REFUND_PROOF,
+    bank: toBankForm(record.customer_bank_account),
+    bankReason: record.customer_bank_account ? '' : DEFAULT_OVERRIDE_REASON,
+  };
+}
+
+export const needsMissingRefundBank = (record: SettlementDetailRecord): boolean =>
+  !record.bank_account && (record.totals?.refund_amount ?? 0) > 0;
 
 /** Pre-check of picked files so a bad pick never costs an upload; the API stays the authority. */
 export function validateProofFiles(existing: number, files: readonly File[]): string | null {
@@ -26,8 +60,23 @@ export function validateProofFiles(existing: number, files: readonly File[]): st
   return null;
 }
 
-/** The transfer needs proof: at least one evidence file; the bank reference is optional. */
-export function validateRefundProof(state: RefundProofState): string | null {
+/** The transfer needs proof: at least one evidence file, and a verified bank account if not recorded yet. */
+export function validateRefundProof(
+  state: RefundProofInputState,
+  record?: Pick<SettlementDetailRecord, 'bank_account' | 'customer_bank_account' | 'totals'>,
+): string | null {
+  const bank = state.bank ?? EMPTY_BANK_FORM;
+  const bankReason = state.bankReason ?? '';
+  if (record && !record.bank_account && (record.totals?.refund_amount ?? 0) > 0) {
+    const bankProblem = validateBankForm(bank);
+    if (bankProblem) return bankProblem;
+    if (!isSameAccount(bank, record.customer_bank_account)) {
+      const reason = bankReason.trim();
+      if (!reason) return 'Nhập lý do sử dụng tài khoản nhận hoàn tiền này.';
+      if (reason.length > MAX_REASON_LENGTH)
+        return `Lý do đổi tài khoản tối đa ${MAX_REASON_LENGTH} ký tự.`;
+    }
+  }
   const ref = state.transferRef.trim();
   if (state.evidence.length === 0) return 'Đính kèm ít nhất 1 ảnh chứng từ chuyển khoản.';
   if (state.evidence.length > MAX_REFUND_EVIDENCE)
@@ -38,11 +87,22 @@ export function validateRefundProof(state: RefundProofState): string | null {
   return null;
 }
 
-export function buildRefundInput(state: RefundProofState): CompleteRefundInput {
+export function buildRefundInput(
+  state: RefundProofInputState,
+  record?: Pick<SettlementDetailRecord, 'bank_account' | 'customer_bank_account' | 'totals'>,
+): CompleteRefundInput {
+  const bank = state.bank ?? EMPTY_BANK_FORM;
+  const bankReason = state.bankReason ?? '';
   const input: CompleteRefundInput = { evidence: state.evidence };
   const ref = state.transferRef.trim();
   if (ref) input.transferRef = ref;
   const note = state.note.trim();
   if (note) input.note = note;
+  if (record && !record.bank_account && (record.totals?.refund_amount ?? 0) > 0) {
+    input.bankAccount = toBankAccountInput(bank);
+    if (!isSameAccount(bank, record.customer_bank_account) && bankReason.trim()) {
+      input.bankOverrideReason = bankReason.trim();
+    }
+  }
   return input;
 }

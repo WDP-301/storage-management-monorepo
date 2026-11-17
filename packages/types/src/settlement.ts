@@ -69,7 +69,7 @@ export interface SettlementWarning {
   message: string;
 }
 
-/** Customer view of a settlement in `/contracts/mine` (ENDED contracts only). */
+/** Customer view of a settlement in `/contracts/mine` (ENDED contracts, and CANCELLED ones with a settlement). */
 /**
  * RETURN_REQUEST: given with the return request. SAVED: the request carried none, so it is the
  * account the customer gave (and the bank confirmed) on an earlier return request.
@@ -205,4 +205,8 @@ export interface CompleteRefundInput {
   evidence: EvidenceFile[];
   transferRef?: string;
   note?: string;
+  /** Account the refund was sent to — required when none was recorded on approval (e.g. DRAFT cancel). */
+  bankAccount?: RefundBankAccountInput;
+  /** Required when setting a new account that differs from the customer's saved one (or they had none). */
+  bankOverrideReason?: string;
 }

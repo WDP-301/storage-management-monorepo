@@ -1,11 +1,12 @@
 import { Logger } from '@nestjs/common';
-import { ContractStatus, DepositStatus } from '@storage/types';
+import { ChangeRequestStatus, ContractStatus, DepositStatus } from '@storage/types';
 import {
   captureDepositSafely,
   type DepositContract,
   resolveContractDeposit,
   resolveDepositAmounts,
 } from './deposit-ledger.util';
+import { creditDepositTopUp } from './deposit-topup';
 
 const row = (overrides: Record<string, unknown> = {}) => ({
   id: 'deposit-1',
@@ -216,6 +217,10 @@ describe('resolveContractDeposit for reading', () => {
       /EXISTS \(SELECT 1 FROM contracts c WHERE c\.booking_item_id = o\.id\) AS has_contract/,
     );
     expect(formula).toMatch(/WHEN pb\.changed_count = 1 AND pb\.contractless_count = 0\s/);
+    expect(formula).toContain(
+      `r.new_booking_id = o.booking_id\n                        AND r.status <> '${ChangeRequestStatus.COMPLETED}'`,
+    );
+    expect(formula).toContain('WHEN i.moved OR i.unsettled_destination THEN NULL');
   });
 });
 
@@ -350,5 +355,24 @@ describe('captureDepositSafely', () => {
 
     await expect(captureDepositSafely(manager as never, contract())).resolves.toBeNull();
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('contract-1'));
+  });
+});
+
+describe('creditDepositTopUp', () => {
+  it('bumps both bookings.deposit_total and any existing HELD deposit row for the contract', async () => {
+    const manager = { query: jest.fn().mockResolvedValue([[], 1]) };
+
+    await creditDepositTopUp(manager as never, 'booking-1', 500000, 'contract-1');
+
+    expect(manager.query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('UPDATE bookings SET deposit_total = deposit_total + $1'),
+      [500000, 'booking-1'],
+    );
+    expect(manager.query).toHaveBeenNthCalledWith(2, expect.stringContaining('UPDATE deposits'), [
+      500000,
+      'contract-1',
+      DepositStatus.HELD,
+    ]);
   });
 });

@@ -170,7 +170,7 @@ export class ContractInvoicesService {
         metadata,
       });
       // A top-up payment is extra deposit held even if the invoice is only part-paid.
-      await creditDepositTopUp(em, topUpBooking, dto.amount);
+      await creditDepositTopUp(em, topUpBooking, dto.amount, locked.contractId);
 
       const status = paid.plus(dto.amount).gte(locked.total)
         ? InvoiceStatus.PAID

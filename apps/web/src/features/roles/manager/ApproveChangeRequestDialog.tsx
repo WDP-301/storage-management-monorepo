@@ -103,8 +103,8 @@ export const ApproveChangeRequestDialog: React.FC<Props> = ({
                       request.deposit_difference,
                     ).toLocaleString(
                       'vi-VN',
-                    )} đ và vẫn giữ kho đích đến khi khách thanh toán xong — khi đó mới huỷ hợp đồng cũ và tạo hợp đồng mới cho kho này.`
-                  : ' Tiền cọc không tăng, nên ngay sau khi duyệt hệ thống huỷ hợp đồng cũ, tạo hợp đồng mới cho kho này và lên lịch bàn giao.'}
+                    )} đ và giữ chỗ kho đích đến khi khách thanh toán xong — sau đó hệ thống tạo hợp đồng mới và lên lịch bàn giao (hợp đồng cũ vẫn hiệu lực đến khi hoàn tất bàn giao).`
+                  : ' Tiền cọc không tăng, nên ngay sau khi duyệt hệ thống tạo hợp đồng mới cho kho này và lên lịch bàn giao (hợp đồng cũ vẫn hiệu lực đến khi hoàn tất bàn giao).'}
               </Text>
             ) : null}
             <DateField

@@ -220,6 +220,43 @@ describe('computeSettlement', () => {
     expect(result.lines).toEqual([]);
   });
 
+  it('does not charge open DEPOSIT_TOPUP invoices as unpaid rent or double-credit paid ones', () => {
+    const topup = invoice({
+      id: 'inv-topup',
+      invoiceNo: 'INV-TOPUP',
+      kind: InvoiceKind.DEPOSIT_TOPUP,
+      status: InvoiceStatus.PARTIALLY_PAID,
+      startAt: null,
+      total: 1000000,
+    });
+    const topupPaid = payment({ id: 'p-topup', invoiceId: 'inv-topup', amount: 400000 });
+    const result = computeSettlement(input({ invoices: [topup], payments: [topupPaid] }));
+    expect(result.lines).toEqual([]);
+    expect(outcome(result)).toEqual([2000000, 0]);
+  });
+
+  it('credits partial payments on a voided unit-change DEPOSIT_TOPUP invoice without deducting the unpaid balance', () => {
+    const voidedTopup = invoice({
+      id: 'inv-topup-void',
+      invoiceNo: 'INV-TOPUP-V',
+      kind: InvoiceKind.DEPOSIT_TOPUP,
+      status: InvoiceStatus.VOID,
+      startAt: null,
+      total: 1000000,
+    });
+    const partial = payment({ id: 'p-partial', invoiceId: 'inv-topup-void', amount: 400000 });
+    const result = computeSettlement(input({ invoices: [voidedTopup], payments: [partial] }));
+    expect(result.lines).toEqual([
+      expect.objectContaining({
+        type: SettlementLineType.UNUSED_PERIOD_CREDIT,
+        direction: 'CREDIT',
+        amount: 400000,
+        description: expect.stringContaining('INV-TOPUP-V'),
+      }),
+    ]);
+    expect(outcome(result)).toEqual([2400000, 0]);
+  });
+
   it.each([
     ['a damage that does not exist', { damageDecisions: [{ index: 3, amount: 1 }] }],
     [

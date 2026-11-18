@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { ApiErrorResponseDto } from '@shared/models/api-response';
 import type { Request, Response } from 'express';
 import { AuthCookieService } from './auth.cookie';
@@ -23,6 +24,22 @@ import type {
   SessionContext,
 } from './types/auth-user';
 
+/** Sign-ups per client IP, far below the global 100/min. */
+const REGISTER_LIMIT = { limit: 10, ttl: 60_000 };
+
+/**
+ * Login attempts per client IP and email: slows password guessing on one account without locking
+ * out everyone who shares an IP (an office, or the web app's proxy).
+ */
+const LOGIN_LIMIT = {
+  limit: 10,
+  ttl: 60_000,
+  getTracker: (req: Record<string, any>) =>
+    `${req.ip}:${String(req.body?.email ?? '')
+      .trim()
+      .toLowerCase()}`,
+};
+
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
@@ -32,6 +49,7 @@ export class AuthController {
   ) {}
 
   @Post('register')
+  @Throttle({ default: REGISTER_LIMIT })
   @ApiOperation({ summary: 'Register a customer account' })
   @ApiResponse({ status: 201, description: 'Account created', type: AuthUserResponseDto })
   async register(@Body() dto: RegisterDto): Promise<AuthUserResponse> {
@@ -41,6 +59,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
+  @Throttle({ default: LOGIN_LIMIT })
   @ApiOperation({ summary: 'Authenticate with email and password' })
   @ApiResponse({
     status: 200,

@@ -18,6 +18,9 @@ import { isAssignmentActive } from './role-assignment.util';
 import { hashPassword, verifyPassword } from './session.util';
 import type { AuthMeResponse, AuthUser, SessionContext } from './types/auth-user';
 
+/** A well-formed hash no password matches; checked when the account is missing or inactive. */
+const DUMMY_PASSWORD_HASH = `scrypt$${'0'.repeat(32)}$${'0'.repeat(128)}`;
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -119,6 +122,8 @@ export class AuthService {
       .getOne();
 
     if (!user?.passwordHash || user.status !== UserStatus.ACTIVE) {
+      // Same scrypt cost as a real check, so the response time does not reveal which emails exist.
+      await verifyPassword(dto.password, DUMMY_PASSWORD_HASH);
       throw new DomainException(
         ErrorCode.INVALID_CREDENTIALS,
         'Invalid email or password',

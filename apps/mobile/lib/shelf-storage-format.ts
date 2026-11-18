@@ -113,7 +113,8 @@ export const pickupRequestBlockLabel = (reason: PickupRequestBlockReason): strin
 
 const DROP_OFF_REQUEST_BLOCK: Record<DropOffRequestBlockReason, string> = {
   CONTRACT_NOT_ACTIVE: 'Hợp đồng không còn hiệu lực',
-  OPEN_REQUEST_EXISTS: 'Bạn đã có một yêu cầu gửi đồ đang chờ',
+  TOO_MANY_OPEN_REQUESTS:
+    'Bạn đã có đủ số lịch hẹn gửi đồ đang chờ. Hủy bớt hoặc gửi xong một lần để hẹn thêm',
   INVOICE_OVERDUE: 'Thanh toán hóa đơn quá hạn để gửi đồ',
 };
 export const dropOffRequestBlockLabel = (reason: DropOffRequestBlockReason): string =>
@@ -268,7 +269,12 @@ export function shelfErrorMessage(
       return fallback;
     case 'DROP_OFF_REQUEST_NOT_ALLOWED':
       if (reason === 'CONTRACT_NOT_ACTIVE') return 'Hợp đồng không còn hiệu lực.';
-      if (reason === 'OPEN_REQUEST_EXISTS') return 'Đã có một yêu cầu gửi đồ đang chờ.';
+      if (reason === 'TOO_MANY_OPEN_REQUESTS') {
+        const max = details?.max;
+        return typeof max === 'number'
+          ? `Mỗi kệ chỉ có tối đa ${max} lịch hẹn gửi đồ đang chờ.`
+          : 'Bạn đã có đủ số lịch hẹn gửi đồ đang chờ.';
+      }
       if (reason === 'BEFORE_CONTRACT_START') {
         const date = effectiveDate(details);
         return date

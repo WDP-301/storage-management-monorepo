@@ -44,8 +44,10 @@ export type PickupRequestBlockReason =
   | 'INVOICE_OVERDUE';
 export type DropOffRequestBlockReason =
   | 'CONTRACT_NOT_ACTIVE'
-  | 'OPEN_REQUEST_EXISTS'
+  | 'TOO_MANY_OPEN_REQUESTS'
   | 'INVOICE_OVERDUE';
+/** Open (PENDING or CONFIRMED) drop-off requests a contract may have at once. */
+export const MAX_OPEN_DROP_OFF_REQUESTS = 5;
 
 export interface ShelfReceiptLineView {
   itemId: string;
@@ -165,6 +167,9 @@ export interface CounterContractView {
   /** Quantity > 0 only, name ascending. */
   items: ShelfItemView[];
   openRequest: PickupRequestView | null;
+  /** Earliest `requestedFor` first. */
+  openDropOffRequests: DropOffRequestView[];
+  /** @deprecated First of `openDropOffRequests`; kept for app builds from before several were allowed. */
   openDropOffRequest: DropOffRequestView | null;
   /** Newest 5 of this contract. */
   recentReceipts: ShelfReceiptView[];
@@ -195,6 +200,9 @@ export interface ShelfContractStorageView {
   openRequest: PickupRequestView | null;
   /** Null = the customer may create a request now. */
   pickupRequestBlock: PickupRequestBlockReason | null;
+  /** Earliest `requestedFor` first; at most `MAX_OPEN_DROP_OFF_REQUESTS`. */
+  openDropOffRequests: DropOffRequestView[];
+  /** @deprecated First of `openDropOffRequests`; kept for app builds from before several were allowed. */
   openDropOffRequest: DropOffRequestView | null;
   /** Null = the customer may create a drop-off request now. */
   dropOffRequestBlock: DropOffRequestBlockReason | null;

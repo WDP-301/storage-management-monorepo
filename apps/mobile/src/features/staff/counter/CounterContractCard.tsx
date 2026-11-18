@@ -1,6 +1,7 @@
 import type { CounterContractView } from '@storage/types';
 import { Pressable, View } from 'react-native';
 import { formatIsoDateTime } from '../../../../lib/format-vi';
+import { vietnamToday } from '../../../../lib/pickup-request-draft';
 import {
   dropOffBlockLabel,
   dropOffStatusLabel,
@@ -22,7 +23,19 @@ type Props = {
 
 /** One shelf contract of the customer at this warehouse: stock, what is blocked, and the actions. */
 export function CounterContractCard({ contract, onDropOff, onPickUp, onOpenReceipt }: Props) {
-  const { items, openRequest, openDropOffRequest, recentReceipts } = contract;
+  const { items, openRequest, openDropOffRequests, recentReceipts } = contract;
+  // The plain button serves the request the visit most likely belongs to: the only one, or else the
+  // only one booked for today. Otherwise staff pick it from the list below.
+  const today = vietnamToday(Date.now());
+  const todays = openDropOffRequests.filter(
+    (request) => vietnamToday(new Date(request.requestedFor).getTime()) === today,
+  );
+  const onlyDropOff =
+    openDropOffRequests.length === 1
+      ? openDropOffRequests[0]
+      : todays.length === 1
+        ? todays[0]
+        : undefined;
   return (
     <View className="gap-3.5 rounded-[20px] border border-border-default bg-bg-card p-4">
       <View className="flex-row items-center justify-between gap-2">
@@ -68,7 +81,7 @@ export function CounterContractCard({ contract, onDropOff, onPickUp, onOpenRecei
           className="flex-1"
           disabled={!!contract.dropOff}
           label="Nhận đồ"
-          onPress={() => onDropOff(openDropOffRequest?.id)}
+          onPress={() => onDropOff(onlyDropOff?.id)}
         />
         <Button
           className="flex-1"
@@ -79,30 +92,28 @@ export function CounterContractCard({ contract, onDropOff, onPickUp, onOpenRecei
         />
       </View>
 
-      {openDropOffRequest ? (
-        <View className="gap-2 rounded-2xl bg-bg-subtle p-3.5">
+      {openDropOffRequests.map((request) => (
+        <View key={request.id} className="gap-2 rounded-2xl bg-bg-subtle p-3.5">
           <View className="flex-row items-center justify-between gap-2">
             <Text className="text-body font-semibold text-text-primary">Khách yêu cầu gửi đồ</Text>
             <StatusPill
-              label={dropOffStatusLabel(openDropOffRequest.status)}
-              tone={openDropOffRequest.status === 'CONFIRMED' ? 'success' : 'accent'}
+              label={dropOffStatusLabel(request.status)}
+              tone={request.status === 'CONFIRMED' ? 'success' : 'accent'}
             />
           </View>
-          <Text className="text-body text-text-primary">
-            {linesSummary(openDropOffRequest.lines)}
-          </Text>
+          <Text className="text-body text-text-primary">{linesSummary(request.lines)}</Text>
           <Text className="text-caption text-text-secondary">
-            Hẹn gửi {formatIsoDateTime(String(openDropOffRequest.requestedFor))}
+            Hẹn gửi {formatIsoDateTime(String(request.requestedFor))}
           </Text>
           <Button
             disabled={!!contract.dropOff}
             fullWidth
             label="Nhận đồ theo yêu cầu"
-            onPress={() => onDropOff(openDropOffRequest.id)}
+            onPress={() => onDropOff(request.id)}
             size="sm"
           />
         </View>
-      ) : null}
+      ))}
 
       {openRequest ? (
         <View className="gap-2 rounded-2xl bg-bg-subtle p-3.5">

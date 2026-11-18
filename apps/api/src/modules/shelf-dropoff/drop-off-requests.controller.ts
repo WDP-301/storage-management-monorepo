@@ -52,13 +52,13 @@ export class DropOffRequestsController {
   @ApiOperation({
     summary: 'Tell staff ahead what I will bring to my shelf and when',
     description:
-      'Facility staff and managers are notified. One open request per contract. Each line is an item already on the shelf (itemId) or a new one (name). Stock changes only with the drop-off receipt at the counter.',
+      'Facility staff and managers are notified. Up to 5 open requests per contract. Each line is an item already on the shelf (itemId) or a new one (name). Stock changes only with the drop-off receipt at the counter.',
   })
   @ApiResponse({ status: 400, description: 'VALIDATION_FAILED', type: ApiErrorResponseDto })
   @ApiResponse({
     status: 409,
     description:
-      'DROP_OFF_REQUEST_NOT_ALLOWED (CONTRACT_NOT_ACTIVE, OPEN_REQUEST_EXISTS, BEFORE_CONTRACT_START, ITEM_NOT_IN_CONTRACT) or INVOICE_OVERDUE',
+      'DROP_OFF_REQUEST_NOT_ALLOWED (CONTRACT_NOT_ACTIVE, TOO_MANY_OPEN_REQUESTS, BEFORE_CONTRACT_START, ITEM_NOT_IN_CONTRACT) or INVOICE_OVERDUE',
     type: ApiErrorResponseDto,
   })
   create(

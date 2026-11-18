@@ -200,10 +200,10 @@ describe('buildCounterPanel', () => {
     expect(query.mock.calls.some(([sql]) => sql.includes('"pickup_requests"'))).toBe(false);
     expect(query.mock.calls.some(([sql]) => sql.includes('"drop_off_requests"'))).toBe(false);
   });
-  it('attaches each contract its open drop-off request, if any', async () => {
+  it('attaches each contract its open drop-off requests, earliest first', async () => {
     const { view, query } = await run({
       contracts: [contract('c1'), contract('c2')],
-      dropOffs: [dropOffRow('d1', 'c2')],
+      dropOffs: [dropOffRow('d1', 'c2'), dropOffRow('d2', 'c2')],
     });
     const [sql, params] = query.mock.calls.find(([s]) =>
       s.includes('FROM "drop_off_requests"'),
@@ -211,8 +211,12 @@ describe('buildCounterPanel', () => {
     expect(sql).toContain(`r."status" IN ('PENDING','CONFIRMED')`);
     expect(sql).toContain('r."requested_for" ASC');
     expect(params).toEqual([['c1', 'c2']]);
-    expect(view.contracts[0].openDropOffRequest).toBeNull();
-    expect(view.contracts[1].openDropOffRequest).toMatchObject({
+    expect(view.contracts[0].openDropOffRequests).toEqual([]);
+    expect(view.contracts[1].openDropOffRequests.map((request) => request.id)).toEqual([
+      'd1',
+      'd2',
+    ]);
+    expect(view.contracts[1].openDropOffRequests[0]).toMatchObject({
       id: 'd1',
       status: 'CONFIRMED',
       contractId: 'c2',

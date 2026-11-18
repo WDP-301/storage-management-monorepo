@@ -3,7 +3,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import { InvoicesApi } from '../../../lib/invoices-api';
+import { hasUnpaidInvoice } from '../../../lib/settlement-format';
 import type { ApiInvoice } from '../../types/invoice-api';
+
+/** Same cadence as the unit-change poll; settlement lands via the SePay webhook, not the app. */
+const POLL_MS = 15_000;
 
 export type ContractInvoicesState = {
   invoices: ApiInvoice[];
@@ -15,11 +19,19 @@ export type ContractInvoicesState = {
 type Loaded = ContractInvoicesState & { contractId: string | null };
 
 const EMPTY: Loaded = { contractId: null, invoices: [], isLoading: false, error: null };
+const LOAD_FAILED = 'Không tải được hoá đơn. Vui lòng thử lại.';
 
-/** Invoices of one contract, loaded on focus and on `reload`; null `contractId` loads nothing. */
+/**
+ * Invoices of one contract, loaded on focus, on `reload`, when the app returns to the foreground,
+ * and every `POLL_MS` while an invoice is still owed — a paid QR must drop off on its own.
+ */
 export function useContractInvoices(contractId: string | null) {
   const [state, setState] = useState<Loaded>(EMPTY);
   const [reloadToken, setReloadToken] = useState(0);
+
+  // Also guards the interval below: rows of another contract never drive this contract's poll.
+  const own = contractId !== null && state.contractId === contractId ? state : EMPTY;
+  const hasDue = hasUnpaidInvoice(own.invoices);
 
   useFocusEffect(
     useCallback(() => {
@@ -31,19 +43,34 @@ export function useContractInvoices(contractId: string | null) {
           ? { ...current, isLoading: true, error: null }
           : { contractId, invoices: [], isLoading: true, error: null },
       );
-      InvoicesApi.listForContract(contractId, controller.signal)
-        .then((invoices) => {
-          if (controller.signal.aborted) return;
-          setState({ contractId, invoices, isLoading: false, error: null });
-        })
-        .catch((error: unknown) => {
-          if (controller.signal.aborted) return;
-          const message =
-            error instanceof ApiError ? error.message : 'Không tải được hoá đơn. Vui lòng thử lại.';
-          setState((current) => ({ ...current, contractId, isLoading: false, error: message }));
-        });
-      return () => controller.abort();
-    }, [contractId, reloadToken]),
+
+      const load = () => {
+        InvoicesApi.listForContract(contractId, controller.signal)
+          .then((invoices) => {
+            if (controller.signal.aborted) return;
+            setState({ contractId, invoices, isLoading: false, error: null });
+          })
+          .catch((error: unknown) => {
+            if (controller.signal.aborted) return;
+            const message = error instanceof ApiError ? error.message : LOAD_FAILED;
+            // A failed background poll keeps showing the stale rows instead of flashing
+            // a banner over them every interval; only surface errors with nothing to show.
+            setState((current) => ({
+              ...current,
+              contractId,
+              isLoading: false,
+              error: current.invoices.length === 0 ? message : current.error,
+            }));
+          });
+      };
+
+      load();
+      const timer = hasDue ? setInterval(load, POLL_MS) : null;
+      return () => {
+        if (timer !== null) clearInterval(timer);
+        controller.abort();
+      };
+    }, [contractId, reloadToken, hasDue]),
   );
 
   const reload = useCallback(() => setReloadToken((token) => token + 1), []);
@@ -56,7 +83,5 @@ export function useContractInvoices(contractId: string | null) {
     });
     return () => subscription.remove();
   }, [contractId, reload]);
-  // Also guards the render between a contract change and the effect that resets the state.
-  const own = contractId !== null && state.contractId === contractId ? state : EMPTY;
   return { invoices: own.invoices, isLoading: own.isLoading, error: own.error, reload };
 }

@@ -91,3 +91,32 @@ test('CHANGE_REQUEST_OPEN_STATUSES mirrors the four open statuses', () => {
     'AWAITING_FINAL_APPROVAL',
   ]);
 });
+
+test('openChangeForContract scopes the open request to one contract, source or destination', () => {
+  const { openChangeForContract } = load('change-requests-api.ts', async () => null);
+  const requests = [
+    { id: 'r1', contract_id: 'c1', new_contract_id: null, status: 'REQUESTED' },
+    { id: 'r2', contract_id: 'c2', new_contract_id: 'c3', status: 'AWAITING_HANDOVER' },
+    { id: 'r3', contract_id: 'c3', new_contract_id: null, status: 'COMPLETED' },
+  ];
+  assert.equal(openChangeForContract(requests, 'c1')?.id, 'r1');
+  // The destination contract sees the in-flight request too.
+  assert.equal(openChangeForContract(requests, 'c3')?.id, 'r2');
+  assert.equal(openChangeForContract(requests, 'c2')?.id, 'r2');
+  // Another contract's open request does not leak in.
+  assert.equal(openChangeForContract(requests, 'c4'), null);
+});
+
+test('changeRequestSignature moves only when the open request itself changes', () => {
+  const { changeRequestSignature } = load('change-requests-api.ts', async () => null);
+  const requested = { id: 'r1', status: 'REQUESTED' };
+  const approved = { id: 'r1', status: 'AWAITING_PAYMENT' };
+  assert.equal(changeRequestSignature(null), 'none');
+  assert.equal(changeRequestSignature(requested), 'r1:REQUESTED');
+  // A status flip yields a different signature; re-polling the same state does not.
+  assert.notEqual(changeRequestSignature(approved), changeRequestSignature(requested));
+  assert.equal(
+    changeRequestSignature({ id: 'r1', status: 'REQUESTED', reason: 'edited' }),
+    changeRequestSignature(requested),
+  );
+});

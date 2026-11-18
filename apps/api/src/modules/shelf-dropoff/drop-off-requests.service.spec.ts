@@ -245,10 +245,10 @@ describe('drop-off requests', () => {
       openCount = MAX_OPEN_DROP_OFF_REQUESTS - 1;
       await customerService.create('c-1', body(), customer);
       expect(em.insert).toHaveBeenCalledTimes(1);
-      expect(em.query).toHaveBeenCalledWith(expect.stringContaining('COUNT(*)'), [
-        'c-1',
-        ['PENDING', 'CONFIRMED'],
-      ]);
+      expect(em.query).toHaveBeenCalledWith(
+        expect.stringContaining(`"status" IN ('PENDING','CONFIRMED')`),
+        ['c-1'],
+      );
     });
 
     it('refuses once the contract holds the maximum of open requests', async () => {

@@ -22,7 +22,7 @@ export class MultipleOpenDropOffRequests1792150000000 implements MigrationInterf
     // a NULL cancelled_by marks the others as cancelled by the system.
     await queryRunner.query(
       `UPDATE "drop_off_requests" r
-          SET "status" = 'CANCELLED', "cancelled_at" = now()
+          SET "status" = 'CANCELLED', "cancelled_at" = now(), "updated_at" = now()
         WHERE r."status" IN ('PENDING','CONFIRMED')
           AND EXISTS (
             SELECT 1 FROM "drop_off_requests" o

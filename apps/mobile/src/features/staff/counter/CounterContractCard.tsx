@@ -1,6 +1,7 @@
 import type { CounterContractView } from '@storage/types';
 import { Pressable, View } from 'react-native';
 import { formatIsoDateTime } from '../../../../lib/format-vi';
+import { vietnamToday } from '../../../../lib/pickup-request-draft';
 import {
   dropOffBlockLabel,
   dropOffStatusLabel,
@@ -23,8 +24,18 @@ type Props = {
 /** One shelf contract of the customer at this warehouse: stock, what is blocked, and the actions. */
 export function CounterContractCard({ contract, onDropOff, onPickUp, onOpenReceipt }: Props) {
   const { items, openRequest, openDropOffRequests, recentReceipts } = contract;
-  // With one request the plain button serves it; with several, staff pick the one the customer came for.
-  const onlyDropOff = openDropOffRequests.length === 1 ? openDropOffRequests[0] : undefined;
+  // The plain button serves the request the visit most likely belongs to: the only one, or else the
+  // only one booked for today. Otherwise staff pick it from the list below.
+  const today = vietnamToday(Date.now());
+  const todays = openDropOffRequests.filter(
+    (request) => vietnamToday(new Date(request.requestedFor).getTime()) === today,
+  );
+  const onlyDropOff =
+    openDropOffRequests.length === 1
+      ? openDropOffRequests[0]
+      : todays.length === 1
+        ? todays[0]
+        : undefined;
   return (
     <View className="gap-3.5 rounded-[20px] border border-border-default bg-bg-card p-4">
       <View className="flex-row items-center justify-between gap-2">

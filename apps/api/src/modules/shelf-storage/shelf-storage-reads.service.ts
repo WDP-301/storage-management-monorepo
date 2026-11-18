@@ -113,6 +113,7 @@ export class ShelfStorageReadsService {
         returnOpen: contract.returnOpen,
       }),
       openDropOffRequests: dropOffs,
+      openDropOffRequest: dropOffs[0] ?? null,
       dropOffRequestBlock: dropOffRequestBlock({
         status: contract.status,
         openRequestCount: dropOffs.length,

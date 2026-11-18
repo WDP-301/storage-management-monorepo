@@ -57,11 +57,12 @@ export function notAllowed(
   });
 }
 
+/** Literal statuses, matching IDX_drop_off_requests_open_contract's predicate so the index serves it. */
 async function countOpenDropOffRequests(em: EntityManager, contractId: string): Promise<number> {
   const rows: { count: string }[] = await em.query(
     `SELECT COUNT(*) AS "count" FROM "drop_off_requests"
-      WHERE "contract_id" = $1 AND "status" = ANY($2)`,
-    [contractId, OPEN_STATUSES],
+      WHERE "contract_id" = $1 AND "status" IN ('PENDING','CONFIRMED')`,
+    [contractId],
   );
   return Number(rows[0]?.count ?? 0);
 }

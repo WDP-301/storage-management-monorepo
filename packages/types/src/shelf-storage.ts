@@ -169,6 +169,8 @@ export interface CounterContractView {
   openRequest: PickupRequestView | null;
   /** Earliest `requestedFor` first. */
   openDropOffRequests: DropOffRequestView[];
+  /** @deprecated First of `openDropOffRequests`; kept for app builds from before several were allowed. */
+  openDropOffRequest: DropOffRequestView | null;
   /** Newest 5 of this contract. */
   recentReceipts: ShelfReceiptView[];
 }
@@ -200,6 +202,8 @@ export interface ShelfContractStorageView {
   pickupRequestBlock: PickupRequestBlockReason | null;
   /** Earliest `requestedFor` first; at most `MAX_OPEN_DROP_OFF_REQUESTS`. */
   openDropOffRequests: DropOffRequestView[];
+  /** @deprecated First of `openDropOffRequests`; kept for app builds from before several were allowed. */
+  openDropOffRequest: DropOffRequestView | null;
   /** Null = the customer may create a drop-off request now. */
   dropOffRequestBlock: DropOffRequestBlockReason | null;
 }

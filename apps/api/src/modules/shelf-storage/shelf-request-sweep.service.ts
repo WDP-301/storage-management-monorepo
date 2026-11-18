@@ -1,4 +1,4 @@
-import type { NotificationsService } from '@modules/notifications/notifications.service';
+import { NotificationsService } from '@modules/notifications/notifications.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { startOfVietnamDay } from '@shared/utils/calendar.util';

@@ -103,3 +103,23 @@ export const ChangeRequestsApi = {
 export function openChangeRequest(requests: UnitChangeRequest[]): UnitChangeRequest | null {
   return requests.find((r) => CHANGE_REQUEST_OPEN_STATUSES.includes(r.status as never)) ?? null;
 }
+
+/** The open request attached to one contract — as the move's source or its destination. */
+export function openChangeForContract(
+  requests: UnitChangeRequest[],
+  contractId: string,
+): UnitChangeRequest | null {
+  return openChangeRequest(
+    requests.filter(
+      (request) => request.contract_id === contractId || request.new_contract_id === contractId,
+    ),
+  );
+}
+
+/**
+ * id+status of the open request — the detail screen refetches when this moves, so a manager's
+ * decision picked up by the poll also pulls the contract and invoices it changed.
+ */
+export function changeRequestSignature(request: UnitChangeRequest | null): string {
+  return request ? `${request.id}:${request.status}` : 'none';
+}

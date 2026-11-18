@@ -1,9 +1,9 @@
 import { BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
 import { Headset, MapPin, SignOut, Swap } from 'phosphor-react-native';
-import { type ReactNode, useRef } from 'react';
+import { type ReactNode, useEffect, useRef } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { openChangeRequest } from '../../../lib/change-requests-api';
+import { changeRequestSignature, openChangeForContract } from '../../../lib/change-requests-api';
 import {
   Button,
   colors,
@@ -144,12 +144,7 @@ function ContractDetail({
   const changeRequests = useUnitChangeRequests(
     isActive || contract.status === 'DRAFT' || contract.status === 'CANCELLED',
   );
-  const openChange =
-    openChangeRequest(
-      changeRequests.requests.filter(
-        (r) => r.contract_id === contract.id || r.new_contract_id === contract.id,
-      ),
-    ) ?? null;
+  const openChange = openChangeForContract(changeRequests.requests, contract.id);
   // A pending return already blocks a change request server-side; hide the entry point too.
   const canRequestChange = isActive && !pending && !openChange;
   const canRequestAny = canRequestChange || canRequestReturn;
@@ -171,6 +166,23 @@ function ContractDetail({
     changeRequests.reload();
     onChanged();
   };
+
+  // The request list polls on its own; when a poll lands a new status (approved, settled,
+  // cancelled server-side), pull the rest of the screen along — the top-up invoice and the new
+  // unit live outside the card.
+  const onChangedRef = useRef(onChanged);
+  onChangedRef.current = onChanged;
+  const changeSignature = changeRequestSignature(openChange);
+  const seenSignature = useRef<string | null>(null);
+  useEffect(() => {
+    if (seenSignature.current === null) {
+      seenSignature.current = changeSignature;
+      return;
+    }
+    if (seenSignature.current === changeSignature) return;
+    seenSignature.current = changeSignature;
+    onChangedRef.current();
+  }, [changeSignature]);
   const showReturnSection = isActive || contract.status === 'ENDED' || contract.return !== null;
   // Matches the server: a deposit-paid (DRAFT) or ended contract still allows facility tickets.
   const canFileTicket = isActive || contract.status === 'DRAFT' || contract.status === 'ENDED';

@@ -12,6 +12,7 @@ import {
   cancelOpenDropOffRequests,
   cancelOpenPickupRequests,
 } from '@modules/shelf-storage/shelf-empty-guard.util';
+import { Logger } from '@nestjs/common';
 import { vietnamDate } from '@shared/utils/calendar.util';
 import {
   ChangeRequestStatus,
@@ -27,6 +28,7 @@ import type { EntityManager } from 'typeorm';
 import { UNIT_CHANGE_NOTE } from './change-request-settle.util';
 
 const DAY_MS = 86_400_000;
+const logger = new Logger('ChangeRequestHandover');
 
 /** Open (not voided, not yet terminal) rent invoices of the contract being retired. */
 interface RentInvoiceRow {
@@ -65,7 +67,8 @@ export async function settleOldContractRent(
                     GROUP BY "invoice_id") p ON p."invoice_id" = i."id"
       WHERE i."contract_id" = $1 AND i."kind" IN ('INITIAL', 'RENEWAL')
         AND i."status" <> 'VOID'
-      ORDER BY i."start_at" NULLS FIRST, i."created_at"`,
+      ORDER BY i."start_at" NULLS FIRST, i."created_at"
+      FOR UPDATE OF i`,
     [oldContractId],
   )) as RentInvoiceRow[];
 
@@ -116,6 +119,7 @@ export async function chargeMovedDepositDamage(
   const [link]: { newContractId: string | null }[] = await em.query(
     `SELECT "new_contract_id" AS "newContractId" FROM "unit_change_requests"
       WHERE "contract_id" = $1 AND "new_contract_id" IS NOT NULL
+        AND "status" IN ('${ChangeRequestStatus.AWAITING_FINAL_APPROVAL}', '${ChangeRequestStatus.COMPLETED}')
       ORDER BY "created_at" DESC, "id" DESC LIMIT 1`,
     [oldContract.id],
   );
@@ -179,6 +183,12 @@ export async function advanceChangeRequestToFinalApproval(
     // Rent on the old unit stops at the move day: what is still owed comes out of the deposit,
     // what was overpaid rides inside it — both before the row moves to the new contract.
     const rentNet = await settleOldContractRent(em, oldContract.id, now);
+    if (!rentNet.isZero() && !oldDeposit) {
+      logger.warn(
+        `Unit-change rent of contract ${oldContract.id} (${rentNet.toFixed(2)}) has no ` +
+          'deposit to ride — reconcile it by hand',
+      );
+    }
     if (!rentNet.isZero() && oldDeposit) {
       await em.query(
         `UPDATE "deposits"

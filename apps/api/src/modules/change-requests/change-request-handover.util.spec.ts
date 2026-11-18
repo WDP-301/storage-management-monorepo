@@ -235,8 +235,8 @@ describe('settleOldContractRent', () => {
   const MOVE = new Date('2026-07-01T02:00:00Z');
 
   const emWith = (invoices: unknown[]) => ({
-    calls: [] as { sql: string; params: unknown[] }[],
     query: jest.fn(async (sql: string, params: unknown[] = []) => {
+      void params;
       if (sql.includes('FROM "invoices" i')) return invoices;
       return [[], 0];
     }),

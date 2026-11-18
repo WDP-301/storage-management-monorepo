@@ -68,7 +68,7 @@ export function SettingsScreen({
               {user.email}
             </Text>
           </View>
-          <StatusPill label={primaryRoleLabel(user.roles)} tone="info" />
+          <StatusPill align="center" label={primaryRoleLabel(user.roles)} tone="info" />
         </View>
 
         {accessCard ? <View>{accessCard}</View> : null}

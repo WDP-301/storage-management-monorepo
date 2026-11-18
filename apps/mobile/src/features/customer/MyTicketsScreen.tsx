@@ -178,7 +178,13 @@ export function MyTicketsScreen({
           <View className="items-center gap-3 rounded-[20px] border border-dashed border-border-strong bg-bg-card px-5 py-10">
             <Text className="text-body font-semibold text-text-primary">Chưa có yêu cầu nào</Text>
             {canCreate ? (
-              <Button label="Tạo yêu cầu" onPress={onCreate} size="sm" variant="secondary" />
+              <Button
+                className="self-center"
+                label="Tạo yêu cầu"
+                onPress={onCreate}
+                size="sm"
+                variant="secondary"
+              />
             ) : null}
           </View>
         ) : null}

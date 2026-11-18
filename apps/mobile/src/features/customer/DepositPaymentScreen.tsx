@@ -507,6 +507,7 @@ function BankAppsSheet({ sheetRef }: { sheetRef: RefObject<BottomSheetModal | nu
             Không tải được danh sách ngân hàng.
           </Text>
           <Button
+            className="self-center"
             fullWidth={false}
             label="Thử lại"
             size="sm"

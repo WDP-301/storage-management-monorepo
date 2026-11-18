@@ -6,7 +6,6 @@ import type { ApiBooking } from '../../types/booking-api';
 import type { ApiContract } from '../../types/contract-api';
 import { BookingHoldCard, ClosedBookingRow } from './BookingHoldCard';
 import { ContractCard } from './ContractCard';
-import { ShelfAccessCard } from './ShelfAccessCard';
 
 type Props = {
   bookings: ApiBooking[];
@@ -127,8 +126,6 @@ export function MyStorageScreen({
         showsVerticalScrollIndicator={false}
       >
         <View className="gap-4 p-4">
-          <ShelfAccessCard contracts={contracts} />
-
           {error ? (
             <View className="gap-3 rounded-[20px] border border-danger-200 bg-bg-card p-4">
               <InlineMessage message={error} type="error" />

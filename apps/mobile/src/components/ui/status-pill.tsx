@@ -13,19 +13,33 @@ const TONE_CLASSES: Record<StatusTone, { bg: string; dot: string; text: string }
   danger: { bg: 'bg-danger-0', dot: 'bg-status-danger', text: 'text-status-danger' },
 };
 
+const ALIGN_CLASSES = {
+  start: 'self-start',
+  center: 'self-center',
+  end: 'self-end',
+} as const;
+
 type Props = {
   label: string;
   tone?: StatusTone;
+  /** Cross-axis alignment inside a column parent; 'start' keeps the pill hugging the left edge. */
+  align?: keyof typeof ALIGN_CLASSES;
   className?: string;
   testID?: string;
 };
 
 /** Status pill with colored indicator dot and semantic tint (Medipay History/Booking pattern). */
-export function StatusPill({ label, tone = 'neutral', className = '', testID }: Props) {
+export function StatusPill({
+  label,
+  tone = 'neutral',
+  align = 'start',
+  className = '',
+  testID,
+}: Props) {
   const style = TONE_CLASSES[tone];
   return (
     <View
-      className={`flex-row items-center gap-1.5 self-start rounded-full px-2.5 py-1 ${style.bg} ${className}`}
+      className={`flex-row items-center gap-1.5 ${ALIGN_CLASSES[align]} rounded-full px-2.5 py-1 ${style.bg} ${className}`}
       testID={testID}
     >
       <View className={`size-1.5 rounded-full ${style.dot}`} />

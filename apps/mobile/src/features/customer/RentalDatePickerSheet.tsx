@@ -213,6 +213,7 @@ export function RentalDatePickerSheet({ sheetRef, selectedDate, onSelect }: Prop
         </View>
         <View className="mt-4 items-center">
           <Button
+            className="self-center"
             fullWidth={false}
             label="Chọn hôm nay"
             size="sm"

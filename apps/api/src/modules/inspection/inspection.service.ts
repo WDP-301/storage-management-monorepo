@@ -84,7 +84,10 @@ export class InspectionService {
     return readableInspection(this.em, inspection, actor);
   }
 
-  /** Assigns an ACTIVE user holding an active FACILITY_STAFF role at the unit's facility. */
+  /**
+   * Assigns an ACTIVE user holding an active FACILITY_STAFF or FACILITY_MANAGER role at the
+   * unit's facility — a small branch may have no staff, so a manager must be able to inspect.
+   */
   async assignStaff(id: string, dto: AssignInspectionDto, actor: AuthUser): Promise<Inspection> {
     return this.dataSource.transaction(async (em) => {
       const inspection = await em.findOne(Inspection, {
@@ -103,7 +106,10 @@ export class InspectionService {
       }
 
       const staffAssignments = await em.find(UserRoleAssignment, {
-        where: { userId: dto.inspectedBy, role: UserRole.FACILITY_STAFF },
+        where: {
+          userId: dto.inspectedBy,
+          role: In([UserRole.FACILITY_STAFF, UserRole.FACILITY_MANAGER]),
+        },
       });
       const facilityId = await loadInspectionFacilityId(em, inspection);
       if (!facilityId || !activeFacilityIds(staffAssignments).includes(facilityId)) {

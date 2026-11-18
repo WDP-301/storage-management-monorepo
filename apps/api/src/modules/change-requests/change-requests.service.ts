@@ -8,6 +8,7 @@ import { ShiftTemplate } from '@entities/shift-template.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
+import { findOverdueInvoiceNos } from '@modules/access/overdue-invoices.query';
 import { activeFacilityIds, isAssignmentActive } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { officeTimeProblem } from '@modules/bookings/receiving-window.util';
@@ -276,6 +277,16 @@ export class ChangeRequestsService {
     }
     if (contract.status !== ContractStatus.ACTIVE) {
       throw this.fieldError('contractId', 'notActive', 'Contract is not active');
+    }
+    // Debt first: overdue rent must be settled before the customer can move units.
+    const overdueInvoiceNos = await findOverdueInvoiceNos(this.dataSource.manager, actor.id, now);
+    if (overdueInvoiceNos.length > 0) {
+      throw new DomainException(
+        ErrorCode.INVOICE_OVERDUE,
+        'Bạn còn hóa đơn quá hạn — thanh toán trước khi yêu cầu đổi kho',
+        HttpStatus.CONFLICT,
+        { invoiceNos: overdueInvoiceNos },
+      );
     }
     // A contract on its way out cannot move — re-checked under the contract lock on approval.
     const openReturns = await this.dataSource.getRepository(Inspection).count({

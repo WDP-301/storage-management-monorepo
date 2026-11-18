@@ -33,10 +33,12 @@ export const DEPOSIT_COLUMNS = `d.id, d.contract_id AS "contractId", d.payment_i
  * (item_id, amount, payment_id) for the booking items in the uuid[] parameter `param`: what the
  * customer paid as deposit for each item, derived from its CONFIRMED booking. A completed unit
  * change overwrites the item's deposit snapshot with the new unit's, while the booking total keeps
- * what was paid; so a single item takes the booking total, an unchanged item its own snapshot,
- * the only changed item the total minus the others' snapshots, and anything else has a NULL
- * amount (cannot be told apart). A COMPLETED change that minted a destination booking has already
- * moved the held deposit onto that new booking, so this item derives nothing (NULL).
+ * what was paid; so a single item takes what deposit payments actually came in (an overpayment
+ * counts too — the booking total only stands in when nothing is recorded), an unchanged item its
+ * own snapshot, the only changed item that paid total minus the others' snapshots, and anything
+ * else has a NULL amount (cannot be told apart). A COMPLETED change that minted a destination
+ * booking has already moved the held deposit onto that new booking, so this item derives nothing
+ * (NULL).
  * `payment_id` is the latest successful deposit transfer.
  *
  * The subtraction trusts the other items' snapshots only while every other item still has a
@@ -68,15 +70,21 @@ export function paidDepositByItemSql(param: string): string {
              count(*) FILTER (WHERE changed) AS changed_count,
              count(*) FILTER (WHERE NOT has_contract) AS contractless_count
         FROM items GROUP BY booking_id
+    ), paid AS (
+      SELECT booking_id, sum(amount) AS total
+        FROM payments
+       WHERE type = '${PaymentType.DEPOSIT}' AND status = '${PaymentStatus.SUCCEEDED}'
+         AND booking_id IN (SELECT booking_id FROM items)
+       GROUP BY booking_id
     )
     SELECT i.id AS item_id,
            CASE
              WHEN i.moved OR i.unsettled_destination THEN NULL
-             WHEN pb.item_count = 1 THEN b.deposit_total
+             WHEN pb.item_count = 1 THEN COALESCE(pd.total, b.deposit_total)
              WHEN NOT i.changed THEN i.deposit_snapshot
              WHEN pb.changed_count = 1 AND pb.contractless_count = 0
-              AND b.deposit_total - (pb.snapshot_sum - i.deposit_snapshot) >= 0
-               THEN b.deposit_total - (pb.snapshot_sum - i.deposit_snapshot)
+              AND COALESCE(pd.total, b.deposit_total) - (pb.snapshot_sum - i.deposit_snapshot) >= 0
+               THEN COALESCE(pd.total, b.deposit_total) - (pb.snapshot_sum - i.deposit_snapshot)
            END AS amount,
            (SELECT p.id FROM payments p
              WHERE p.booking_id = b.id AND p.type = '${PaymentType.DEPOSIT}'
@@ -85,6 +93,7 @@ export function paidDepositByItemSql(param: string): string {
       FROM items i
       JOIN per_booking pb ON pb.booking_id = i.booking_id
       JOIN bookings b ON b.id = i.booking_id AND b.status = '${BookingStatus.CONFIRMED}'
+      LEFT JOIN paid pd ON pd.booking_id = i.booking_id
      WHERE i.id = ANY(${param}::uuid[])`;
 }
 

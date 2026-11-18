@@ -410,6 +410,10 @@ export const NotificationType = {
   INVOICE_PAID: 'INVOICE_PAID',
   /** A bank transfer counted toward a booking deposit but did not cover it in full. */
   BOOKING_DEPOSIT_PARTIAL: 'BOOKING_DEPOSIT_PARTIAL',
+  /** To the customer: the deposit was not paid in time, so the unit hold was released. */
+  BOOKING_EXPIRED: 'BOOKING_EXPIRED',
+  /** To facility managers: a booking was cancelled or expired with money already paid — refund it. */
+  BOOKING_NEEDS_REFUND: 'BOOKING_NEEDS_REFUND',
   /** To facility managers: a contract past term end without a return request may be abandoned. */
   CONTRACT_MAY_BE_ABANDONED: 'CONTRACT_MAY_BE_ABANDONED',
   /** To facility managers: a DRAFT contract's handover day passed without the customer. */
@@ -465,10 +469,14 @@ export const NotificationType = {
   UNIT_CHANGE_MOVE_TODAY: 'UNIT_CHANGE_MOVE_TODAY',
   /** To the destination branch: the customer's handover is signed, awaiting the final approval. */
   UNIT_CHANGE_READY_FOR_FINAL_APPROVAL: 'UNIT_CHANGE_READY_FOR_FINAL_APPROVAL',
+  /** To the customer: the old unit's rent was reconciled at the move day into the moved deposit. */
+  UNIT_CHANGE_RENT_SETTLED: 'UNIT_CHANGE_RENT_SETTLED',
   /** To the old branch: the vacated unit is out of rotation and needs a maintenance check. */
   MAINTENANCE_CHECK_DUE: 'MAINTENANCE_CHECK_DUE',
   /** To the old branch: the maintenance check is done and the unit is back (or still out). */
   MAINTENANCE_COMPLETED: 'MAINTENANCE_COMPLETED',
+  /** To the customer: a damage fee found at a check was taken from their deposit. */
+  DEPOSIT_CHARGED: 'DEPOSIT_CHARGED',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 

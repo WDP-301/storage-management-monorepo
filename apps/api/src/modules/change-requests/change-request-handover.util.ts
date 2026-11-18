@@ -6,11 +6,13 @@ import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import { resolveContractDeposit } from '@modules/contracts/deposit-ledger.util';
 import type { HandoverAssignmentService } from '@modules/inspection/handover-assignment/handover-assignment.service';
+import { formatVndCurrency } from '@modules/invoices/invoice-pdf.service';
 import type { NotificationsService } from '@modules/notifications/notifications.service';
 import {
   cancelOpenDropOffRequests,
   cancelOpenPickupRequests,
 } from '@modules/shelf-storage/shelf-empty-guard.util';
+import { vietnamDate } from '@shared/utils/calendar.util';
 import {
   ChangeRequestStatus,
   ContractStatus,
@@ -20,8 +22,124 @@ import {
   StorageUnitStatus,
   UserRole,
 } from '@storage/types';
+import Decimal from 'decimal.js';
 import type { EntityManager } from 'typeorm';
 import { UNIT_CHANGE_NOTE } from './change-request-settle.util';
+
+const DAY_MS = 86_400_000;
+
+/** Open (not voided, not yet terminal) rent invoices of the contract being retired. */
+interface RentInvoiceRow {
+  id: string;
+  status: string;
+  startAt: Date | null;
+  endAt: Date | null;
+  total: string;
+  paid: string;
+}
+
+const dayDiff = (fromDay: string, toDay: string): number =>
+  Math.round((Date.parse(`${toDay}T00:00:00Z`) - Date.parse(`${fromDay}T00:00:00Z`)) / DAY_MS);
+
+/**
+ * The move day is the last day on the old unit: rent periods up to it are owed in full, the
+ * period covering it is pro-rated, and anything later is free. The net of what was paid versus
+ * what is owed rides the deposit that moves to the new contract — a shortfall is collected from
+ * it, an overpayment is parked in it (it comes back at the final settlement).
+ * Every open rent invoice is then VOID so none of it can be paid a second time or block the
+ * customer as "overdue" on a contract that no longer rents anything.
+ */
+export async function settleOldContractRent(
+  em: EntityManager,
+  oldContractId: string,
+  moveAt: Date,
+): Promise<Decimal> {
+  const moveDay = vietnamDate(moveAt);
+  const invoices = (await em.query(
+    `SELECT i."id", i."status", i."start_at" AS "startAt", i."end_at" AS "endAt",
+            i."total"::text AS "total",
+            COALESCE(p."paid", 0)::text AS "paid"
+       FROM "invoices" i
+       LEFT JOIN (SELECT "invoice_id", SUM("amount") AS "paid"
+                    FROM "payments" WHERE "status" = 'SUCCEEDED'
+                    GROUP BY "invoice_id") p ON p."invoice_id" = i."id"
+      WHERE i."contract_id" = $1 AND i."kind" IN ('INITIAL', 'RENEWAL')
+        AND i."status" <> 'VOID'
+      ORDER BY i."start_at" NULLS FIRST, i."created_at"`,
+    [oldContractId],
+  )) as RentInvoiceRow[];
+
+  let net = new Decimal(0);
+  const openIds: string[] = [];
+  for (const invoice of invoices) {
+    const startDay = invoice.startAt ? vietnamDate(invoice.startAt) : null;
+    const endDay = invoice.endAt ? vietnamDate(invoice.endAt) : null;
+    const total = new Decimal(invoice.total);
+    let owed = new Decimal(0);
+    if (startDay && startDay < moveDay) {
+      if (!endDay || endDay <= moveDay) {
+        owed = total; // Period already over by the move day — owed in full.
+      } else {
+        // Period covering the move day: charge only the days actually used.
+        const daysUsed = dayDiff(startDay, moveDay);
+        const daysTotal = Math.max(dayDiff(startDay, endDay), 1);
+        owed = total.times(daysUsed).div(daysTotal).toDecimalPlaces(2);
+      }
+    }
+    net = net.plus(new Decimal(invoice.paid)).minus(owed);
+    if (invoice.status !== 'PAID') openIds.push(invoice.id);
+  }
+
+  if (openIds.length > 0) {
+    await em.query(
+      `UPDATE "invoices" SET "status" = 'VOID', "updated_at" = now()
+        WHERE "id" = ANY($1::uuid[])`,
+      [openIds],
+    );
+  }
+  return net;
+}
+
+/**
+ * Damage found at the vacated unit's maintenance check still belongs to the customer — the
+ * deposit that covers it moved to the destination contract. Charges that row and tells the
+ * customer. A shortfall beyond the deposit is absorbed (floored at 0), same as a settlement
+ * that forfeits.
+ */
+export async function chargeMovedDepositDamage(
+  em: EntityManager,
+  oldContract: Pick<Contract, 'id' | 'customerId'>,
+  fee: Decimal,
+  inspectionId: string,
+  notifications: Pick<NotificationsService, 'createForUsers'>,
+): Promise<boolean> {
+  const [link]: { newContractId: string | null }[] = await em.query(
+    `SELECT "new_contract_id" AS "newContractId" FROM "unit_change_requests"
+      WHERE "contract_id" = $1 AND "new_contract_id" IS NOT NULL
+      ORDER BY "created_at" DESC, "id" DESC LIMIT 1`,
+    [oldContract.id],
+  );
+  if (!link?.newContractId) return false;
+  await em.query(
+    `UPDATE "deposits"
+        SET "held_amount" = GREATEST(0, "held_amount" - $1), "updated_at" = now()
+      WHERE "contract_id" = $2`,
+    [fee.toFixed(2), link.newContractId],
+  );
+  await notifications.createForUsers(em, [oldContract.customerId], {
+    type: NotificationType.DEPOSIT_CHARGED,
+    title: 'Phí hư hỏng kho cũ',
+    body:
+      `Kiểm tra kho cũ phát hiện hư hỏng — phí ${formatVndCurrency(fee.toFixed(0))} ` +
+      'đã được trừ vào tiền cọc của hợp đồng mới.',
+    data: {
+      contractId: link.newContractId,
+      inspectionId,
+      amount: fee.toFixed(2),
+    },
+  });
+  return true;
+}
 
 /**
  * A destination contract created by a unit change just became ACTIVE at handover — the customer
@@ -54,9 +172,32 @@ export async function advanceChangeRequestToFinalApproval(
   if (oldContract && oldContract.status === ContractStatus.ACTIVE) {
     // Materialise the old deposit row while oldContract is still ACTIVE so the transfer below
     // always finds a row even when no top-up was billed and the contract had only booking totals.
-    await resolveContractDeposit(em, oldContract, { create: true });
+    const oldDeposit = await resolveContractDeposit(em, oldContract, { create: true });
     await cancelOpenPickupRequests(em, oldContract.id);
     await cancelOpenDropOffRequests(em, oldContract.id);
+
+    // Rent on the old unit stops at the move day: what is still owed comes out of the deposit,
+    // what was overpaid rides inside it — both before the row moves to the new contract.
+    const rentNet = await settleOldContractRent(em, oldContract.id, now);
+    if (!rentNet.isZero() && oldDeposit) {
+      await em.query(
+        `UPDATE "deposits"
+            SET "held_amount" = GREATEST(0, "held_amount" + $1), "updated_at" = now()
+          WHERE "id" = $2`,
+        [rentNet.toFixed(2), oldDeposit.id],
+      );
+      await notifications.createForUsers(em, [oldContract.customerId], {
+        type: NotificationType.UNIT_CHANGE_RENT_SETTLED,
+        title: 'Quyết toán tiền thuê kho cũ',
+        body: rentNet.gt(0)
+          ? `Bạn đã trả dư ${formatVndCurrency(rentNet.toFixed(0))} tiền thuê kho cũ — ` +
+            'số tiền này được cộng vào tiền cọc theo hợp đồng mới.'
+          : `Tiền thuê còn thiếu của kho cũ ${formatVndCurrency(rentNet.abs().toFixed(0))} ` +
+            'đã được trừ vào tiền cọc chuyển sang hợp đồng mới.',
+        data: { contractId: oldContract.id, amount: rentNet.toFixed(2) },
+      });
+    }
+
     const oldUnit = await em.findOne(StorageUnit, { where: { id: request.oldUnitId } });
     if (oldUnit?.kind === StorageUnitKind.SHELF) {
       // Shelf stock and receipt history follow the customer's active rental onto the new shelf;

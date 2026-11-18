@@ -68,13 +68,22 @@ describe('InspectionService', () => {
         if (entity === ShiftTemplate) return [{ startTime: '08:00', endTime: '17:00' }];
         if (entity !== UserRoleAssignment) return [];
         const { userId, role } = options.where;
-        return assignments.filter((a) => a.userId === userId && a.role === role);
+        return assignments.filter((a) => {
+          if (a.userId !== userId) return false;
+          if (role == null) return true;
+          // A bare role value or a FindOperator In([...]).
+          const wanted = Array.isArray((role as { _value?: unknown[] })._value)
+            ? (role as { _value: unknown[] })._value
+            : [role];
+          return wanted.includes(a.role);
+        });
       }),
       findOne: jest.fn(async (entity, options) => {
         if (entity === Inspection) return inspection;
         if (entity === Contract)
           return { bookingItem: { storageUnit: { facilityId: 'facility-1' } } };
-        if (entity === AppUser) return options.where.id === 'staff-2' ? { id: 'staff-2' } : null;
+        if (entity === AppUser)
+          return options.where.id === 'ghost' ? null : { id: options.where.id };
         return null;
       }),
       save: jest.fn(async (_entity, data) => data),
@@ -266,6 +275,13 @@ describe('InspectionService', () => {
       await expect(
         service.assignStaff('inspection-1', { inspectedBy: 'staff-2' }, MANAGER),
       ).resolves.toMatchObject({ inspectedBy: 'staff-2' });
+    });
+
+    it('lets a manager take the inspection when the facility has no staff', async () => {
+      // manager-1 manages facility-1 already — they can inspect at a branch without staff.
+      await expect(
+        service.assignStaff('inspection-1', { inspectedBy: 'manager-1' }, MANAGER),
+      ).resolves.toMatchObject({ inspectedBy: 'manager-1' });
     });
 
     it('rejects staff of another facility', async () => {

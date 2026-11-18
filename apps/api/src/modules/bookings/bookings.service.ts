@@ -7,6 +7,9 @@ import { Payment } from '@entities/payment.entity';
 import { ShiftTemplate } from '@entities/shift-template.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
+import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
+import { findOverdueInvoiceNos } from '@modules/access/overdue-invoices.query';
+import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { persistContract } from '@modules/contracts/initial-contract.util';
 import { HandoverAssignmentService } from '@modules/inspection/handover-assignment/handover-assignment.service';
@@ -37,13 +40,28 @@ import {
   PaymentMethod,
   PaymentStatus,
   PaymentType,
+  SepayTransferOutcome,
   ShiftTemplateType,
   StorageUnitStatus,
+  UserRole,
 } from '@storage/types';
 import Decimal from 'decimal.js';
-import { DataSource, DeepPartial, In, LessThan, MoreThan, Not, Repository } from 'typeorm';
+import {
+  DataSource,
+  DeepPartial,
+  type EntityManager,
+  In,
+  LessThan,
+  MoreThan,
+  Not,
+  Repository,
+} from 'typeorm';
 import { extractBookingNos, generateBookingNo } from './booking-no.util';
-import { depositPartialNotification } from './deposit-notifications';
+import {
+  bookingExpiredNotification,
+  bookingNeedsRefundNotification,
+  depositPartialNotification,
+} from './deposit-notifications';
 import { BookingResponseDto, CreateBookingDto } from './dto/booking.dto';
 import type { ReceivingSlotsResponse } from './dto/receiving-slot.dto';
 import {
@@ -184,6 +202,21 @@ export class BookingsService implements OnApplicationBootstrap {
           'Validation failed',
           HttpStatus.BAD_REQUEST,
           { fields: fieldErrors },
+        );
+      }
+
+      // Debt first: a customer with overdue invoices cannot reserve more units.
+      const overdueInvoiceNos = await findOverdueInvoiceNos(
+        this.dataSource.manager,
+        user.id,
+        new Date(),
+      );
+      if (overdueInvoiceNos.length > 0) {
+        throw new DomainException(
+          ErrorCode.INVOICE_OVERDUE,
+          'Bạn còn hóa đơn quá hạn — thanh toán trước khi đặt kho mới',
+          HttpStatus.CONFLICT,
+          { invoiceNos: overdueInvoiceNos },
         );
       }
 
@@ -578,10 +611,8 @@ export class BookingsService implements OnApplicationBootstrap {
         );
       }
 
-      return em.getRepository(Payment).sum('amount', {
-        bookingId: locked.id,
-        status: PaymentStatus.SUCCEEDED,
-      });
+      // Money already paid does not vanish with the booking — flag it for a human refund.
+      return this.flagPaidBookingForRefund(em, locked, 'CANCELLED');
     });
 
     if (outcome === 'already-cancelled') {
@@ -681,11 +712,20 @@ export class BookingsService implements OnApplicationBootstrap {
               });
 
               if (remainingActiveHolds === 0) {
-                await em.update(
+                const expired = await em.update(
                   Booking,
                   { id: hold.bookingId, status: In(STATUSES_AWAITING_DEPOSIT) },
                   { status: BookingStatus.EXPIRED },
                 );
+                if (expired.affected) {
+                  await this.notifications.createForUsers(
+                    em,
+                    [booking.customerId],
+                    bookingExpiredNotification(booking),
+                  );
+                  // A partial deposit may already be in the bank — flag it for a refund.
+                  await this.flagPaidBookingForRefund(em, booking, 'EXPIRED');
+                }
               }
               released = true;
             });
@@ -721,6 +761,58 @@ export class BookingsService implements OnApplicationBootstrap {
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
+
+  /**
+   * A booking that died with money already paid (customer cancelled or the hold expired): every
+   * SePay transfer that fed it goes back into the reconciliation queue, and the managers of the
+   * booked facilities are told to refund — nothing returns the money automatically.
+   * Returns the paid total so the caller can log.
+   */
+  private async flagPaidBookingForRefund(
+    em: EntityManager,
+    booking: Booking,
+    cause: 'CANCELLED' | 'EXPIRED',
+  ): Promise<Decimal> {
+    const paid = new Decimal(
+      (await em.getRepository(Payment).sum('amount', {
+        bookingId: booking.id,
+        status: PaymentStatus.SUCCEEDED,
+      })) ?? 0,
+    );
+    if (paid.lte(0)) return paid;
+
+    // Transfers matched with a positive outcome (e.g. DEPOSIT_PARTIAL) are invisible to the
+    // attention queue — pull them back so a human resolves each one as refunded.
+    await em.query(
+      `UPDATE "sepay_transfers" SET "outcome" = $2
+        WHERE "booking_id" = $1 AND "outcome" <> $3`,
+      [booking.id, SepayTransferOutcome.NEEDS_REVIEW, SepayTransferOutcome.RESOLVED],
+    );
+
+    const facilityRows = (await em.query(
+      `SELECT DISTINCT su."facility_id" AS "facilityId"
+         FROM "booking_items" bi
+         JOIN "storage_units" su ON su."id" = bi."storage_unit_id"
+        WHERE bi."booking_id" = $1`,
+      [booking.id],
+    )) as Array<{ facilityId: string }>;
+    const facilityIds = facilityRows.map((row) => row.facilityId);
+    if (facilityIds.length === 0) return paid;
+    const assignments = await em.find(UserRoleAssignment, {
+      where: { role: UserRole.FACILITY_MANAGER, facilityId: In(facilityIds) },
+    });
+    const managerIds = [
+      ...new Set(assignments.filter((a) => isAssignmentActive(a)).map((a) => a.userId)),
+    ];
+    if (managerIds.length > 0) {
+      await this.notifications.createForUsers(
+        em,
+        managerIds,
+        bookingNeedsRefundNotification(booking, paid.toFixed(2), cause),
+      );
+    }
+    return paid;
+  }
 
   /**
    * Shapes a booking for API responses: payment QR only while the booking still awaits its

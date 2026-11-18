@@ -175,6 +175,8 @@ describe('ChangeRequestsService', () => {
   let succeededPayments: number;
   /** What `txManager.find` returns for UserRoleAssignment rows (manager lookups). */
   let managerAssignments: UserRoleAssignment[];
+  /** Raw-query results on the global manager (overdue invoice lookup). */
+  let overdueQuery: jest.Mock;
   let notifications: { createForUsers: jest.Mock };
   let handoverAssignment: { assignSafely: jest.Mock; assignPendingForFacility: jest.Mock };
   let settings: SettingsService;
@@ -193,6 +195,7 @@ describe('ChangeRequestsService', () => {
     openReturns = 0;
     succeededPayments = 0;
     managerAssignments = [activeAssignment()];
+    overdueQuery = jest.fn().mockResolvedValue([]);
     requests = {
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn(async () => {
@@ -295,6 +298,7 @@ describe('ChangeRequestsService', () => {
         getRepository: jest.fn().mockReturnValue({
           count: jest.fn(async () => openReturns),
         }),
+        manager: { query: overdueQuery },
       } as never,
       settings,
       notifications as never,
@@ -303,6 +307,16 @@ describe('ChangeRequestsService', () => {
   });
 
   describe('create', () => {
+    it('rejects a customer with overdue invoices', async () => {
+      overdueQuery.mockResolvedValue([{ invoiceNo: 'INV-7' }]);
+
+      await expect(service.create(createDto(), customer)).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'INVOICE_OVERDUE', details: { invoiceNos: ['INV-7'] } },
+      });
+      expect(requests.save).not.toHaveBeenCalled();
+    });
+
     it('rejects a target warehouse whose facility is not active', async () => {
       storageUnits.findOne.mockResolvedValue({
         id: 'unit-new',

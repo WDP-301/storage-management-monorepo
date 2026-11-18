@@ -1,11 +1,20 @@
+import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
+import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { SettingsService } from '@modules/settings/settings.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { ContractStatus, InspectionType, NotificationType, type ReturnRules } from '@storage/types';
-import { DataSource, type EntityManager } from 'typeorm';
+import {
+  ContractStatus,
+  InspectionType,
+  NotificationType,
+  type ReturnRules,
+  UserRole,
+} from '@storage/types';
+import { DataSource, type EntityManager, In } from 'typeorm';
 import { currentReturnRules } from './contract-return.util';
 import {
+  managerOverdueNotification,
   planTermEndReminder,
   TERM_END_TYPES,
   type TermEndCandidate,
@@ -21,6 +30,7 @@ interface CandidateRow {
   contractNo: string;
   customerId: string;
   unitCode: string;
+  facilityId: string;
   effectiveAt: Date;
   months: number;
   monthlyPrice: string;
@@ -75,14 +85,36 @@ export class TermEndReminderService {
       ]);
       const due = candidates.flatMap((candidate) => {
         const payload = planTermEndReminder(candidate, { now, currentRules, goLiveAt });
-        return payload ? [{ customerId: candidate.customerId, payload }] : [];
+        return payload ? [{ candidate, payload }] : [];
       });
-      const alreadySent = await this.loadSentKeys(em, [...new Set(due.map((d) => d.customerId))]);
+      // An overdue contract also tells its branch's managers — day one, not after the abandoned
+      // threshold — so someone can reach the customer while it is still early.
+      const overdueFacilityIds = [
+        ...new Set(
+          due
+            .filter((d) => d.payload.type === NotificationType.CONTRACT_OVERDUE)
+            .map((d) => d.candidate.facilityId),
+        ),
+      ];
+      const managerIdsByFacility = await this.loadManagerIds(em, overdueFacilityIds);
+      const sends = due.flatMap(({ candidate, payload }) => {
+        const recipients = [{ userId: candidate.customerId, payload }];
+        if (payload.type === NotificationType.CONTRACT_OVERDUE) {
+          for (const managerId of managerIdsByFacility.get(candidate.facilityId) ?? []) {
+            recipients.push({
+              userId: managerId,
+              payload: managerOverdueNotification(candidate),
+            });
+          }
+        }
+        return recipients;
+      });
+      const alreadySent = await this.loadSentKeys(em, [...new Set(sends.map((s) => s.userId))]);
 
-      for (const { customerId, payload } of due) {
-        const key = sentKey(customerId, payload.type, String(payload.data?.contractId));
+      for (const { userId, payload } of sends) {
+        const key = sentKey(userId, payload.type, String(payload.data?.contractId));
         if (alreadySent.has(key)) continue;
-        await this.notifications.createForUsers(em, [customerId], payload);
+        await this.notifications.createForUsers(em, [userId], payload);
         if (payload.type === NotificationType.CONTRACT_OVERDUE) result.overdue += 1;
         else result.ending += 1;
       }
@@ -94,7 +126,8 @@ export class TermEndReminderService {
   private async loadCandidates(em: EntityManager): Promise<TermEndCandidate[]> {
     const rows = (await em.query(
       `SELECT c.id AS "contractId", c.contract_no AS "contractNo", c.customer_id AS "customerId",
-              su.code AS "unitCode", c.effective_at AS "effectiveAt", c.months,
+              su.code AS "unitCode", su.facility_id AS "facilityId",
+              c.effective_at AS "effectiveAt", c.months,
               c.monthly_price_snapshot AS "monthlyPrice", (r.id IS NOT NULL) AS "hasOpenReturn",
               r.scheduled_at AS "returnScheduledAt", r.return_rules AS "returnRules"
          FROM contracts c
@@ -114,6 +147,7 @@ export class TermEndReminderService {
       contractNo: row.contractNo,
       customerId: row.customerId,
       unitCode: row.unitCode,
+      facilityId: row.facilityId,
       effectiveAt: new Date(row.effectiveAt),
       months: Number(row.months),
       monthlyPrice: String(row.monthlyPrice),
@@ -124,6 +158,25 @@ export class TermEndReminderService {
           }
         : null,
     }));
+  }
+
+  /** Active FACILITY_MANAGER user ids grouped by facility, for the overdue escalation. */
+  private async loadManagerIds(
+    em: EntityManager,
+    facilityIds: string[],
+  ): Promise<Map<string, string[]>> {
+    const byFacility = new Map<string, string[]>();
+    if (facilityIds.length === 0) return byFacility;
+    const assignments = await em.find(UserRoleAssignment, {
+      where: { role: UserRole.FACILITY_MANAGER, facilityId: In(facilityIds) },
+    });
+    for (const a of assignments) {
+      if (!a.facilityId || !isAssignmentActive(a)) continue;
+      const list = byFacility.get(a.facilityId) ?? [];
+      if (!list.includes(a.userId)) list.push(a.userId);
+      byFacility.set(a.facilityId, list);
+    }
+    return byFacility;
   }
 
   private async loadSentKeys(em: EntityManager, customerIds: string[]): Promise<Set<string>> {

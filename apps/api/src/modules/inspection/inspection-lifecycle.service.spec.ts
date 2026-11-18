@@ -169,7 +169,11 @@ describe('InspectionLifecycleService.finalize', () => {
     expect(em.update).toHaveBeenCalledWith(
       Contract,
       { id: 'contract-1' },
-      { status: ContractStatus.ACTIVE, signedAt: expect.any(Date) },
+      {
+        status: ContractStatus.ACTIVE,
+        signedAt: expect.any(Date),
+        effectiveAt: expect.any(Date),
+      },
     );
     expect(result.finalizedAt).toBeInstanceOf(Date);
     expect(result.inspectedAt).toBe(result.finalizedAt);
@@ -219,6 +223,56 @@ describe('InspectionLifecycleService.finalize', () => {
       status: HttpStatus.CONFLICT,
     });
     expect(em.update).not.toHaveBeenCalled();
+  });
+
+  it('charges a vacated unit’s damage fee into the deposit that moved to the new contract', async () => {
+    stubRows(
+      buildInspection({
+        type: InspectionType.MAINTENANCE,
+        damages: [
+          { description: 'Nứt tường', severity: DamageSeverity.MAJOR, proposedFee: 500000 },
+          { description: 'Trầy sơn', severity: DamageSeverity.MINOR, proposedFee: 100000 },
+        ],
+      }),
+      buildContract({ status: ContractStatus.CANCELLED, customerId: 'customer-1' }),
+    );
+    em.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('unit_change_requests')) return [{ newContractId: 'contract-new' }];
+      if (sql.includes('"shelf_items"')) return shelfRows;
+      return sql.startsWith('UPDATE invoices') ? [[], 0] : [{ id: 'deposit-1' }];
+    });
+
+    await service.finalize('insp-1', actor('staff-1'));
+
+    const charge = em.query.mock.calls.find(
+      ([sql]: [string]) => sql.includes('UPDATE "deposits"') && sql.includes('held_amount'),
+    );
+    expect(charge?.[1]).toEqual(['600000.00', 'contract-new']);
+    expect(notifications.createForUsers).toHaveBeenCalledWith(
+      em,
+      ['customer-1'],
+      expect.objectContaining({ type: NotificationType.DEPOSIT_CHARGED }),
+    );
+  });
+
+  it('leaves a maintenance check’s damage uncharged when no unit change moved the deposit', async () => {
+    stubRows(
+      buildInspection({
+        type: InspectionType.MAINTENANCE,
+        damages: [
+          { description: 'Nứt tường', severity: DamageSeverity.MAJOR, proposedFee: 500000 },
+        ],
+      }),
+      buildContract({ status: ContractStatus.CANCELLED }),
+    );
+
+    await service.finalize('insp-1', actor('staff-1'));
+
+    expect(
+      em.query.mock.calls.some(
+        ([sql]: [string]) => sql.includes('UPDATE "deposits"') && sql.includes('held_amount'),
+      ),
+    ).toBe(false);
   });
 
   it('tells the old facility managers when a maintenance check is finalized', async () => {
@@ -284,6 +338,31 @@ describe('InspectionLifecycleService.finalize', () => {
       { id: 'inv-1' },
       { startAt: result.finalizedAt, endAt },
     );
+  });
+
+  it('anchors the term to the actual handover day, not the booked day', async () => {
+    stubRows(buildInspection());
+
+    const result = await service.finalize('insp-1', actor('staff-1'));
+
+    // effectiveAt feeds recurringRentPeriods and the term end — both must count from the day
+    // the customer took the unit so period 2 starts exactly when the paid first month ends.
+    const contractUpdate = em.update.mock.calls.find(([entity]) => entity === Contract);
+    expect(contractUpdate?.[2]).toEqual(
+      expect.objectContaining({ effectiveAt: result.finalizedAt }),
+    );
+  });
+
+  it('does not move effectiveAt on a return finalize', async () => {
+    stubRows(
+      buildInspection({ type: InspectionType.RETURN }),
+      buildContract({ status: ContractStatus.ACTIVE }),
+    );
+
+    await service.finalize('insp-1', actor('staff-1'));
+
+    const contractUpdate = em.update.mock.calls.find(([entity]) => entity === Contract);
+    expect(contractUpdate?.[2]).not.toHaveProperty('effectiveAt');
   });
 
   it('does not require the first month to finalize a return', async () => {

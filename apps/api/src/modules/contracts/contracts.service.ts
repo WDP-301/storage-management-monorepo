@@ -18,7 +18,7 @@ import {
   InspectionType,
   StorageUnitStatus,
 } from '@storage/types';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { DataSource, In, IsNull, Repository } from 'typeorm';
 import { assertContractDeletable } from './contract-delete-guard.util';
 import { loadContractInspections } from './contract-inspections.util';
 import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
@@ -121,6 +121,25 @@ export class ContractsService {
           status: ContractStatus.CANCELLED,
           deletedAt: IsNull(),
         });
+      }
+      // A renewal while the old contract still lives is a dead end: its unit stays RENTED, so
+      // the handover can never claim it. Rent the unit again from a fresh booking instead.
+      if (kind === ContractKind.RENEWAL) {
+        const liveOnItem = await manager.count(Contract, {
+          where: {
+            bookingItemId: item.id,
+            status: In([ContractStatus.DRAFT, ContractStatus.ACTIVE]),
+            deletedAt: IsNull(),
+          },
+        });
+        if (liveOnItem > 0) {
+          throw new DomainException(
+            ErrorCode.CONFLICT,
+            'Hợp đồng hiện tại chưa kết thúc — trả kho xong hãy tạo hợp đồng mới',
+            HttpStatus.CONFLICT,
+            { bookingItemId: item.id },
+          );
+        }
       }
 
       return persistContract(manager, {

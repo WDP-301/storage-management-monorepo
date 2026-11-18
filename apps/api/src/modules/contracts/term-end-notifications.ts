@@ -15,6 +15,7 @@ export interface TermEndCandidate {
   contractNo: string;
   customerId: string;
   unitCode: string;
+  facilityId: string;
   effectiveAt: Date;
   months: number;
   /** Monthly rent as stored (numeric columns arrive as strings). */
@@ -115,5 +116,20 @@ function overduePayload(f: Facts, data: Record<string, unknown>): NotificationPa
       `HĐ ${f.contractNo} đã hết hạn ngày ${f.lastDay}. Phí quá hạn ${f.penaltyPerDay}/ngày ` +
       `tính từ ngày ${f.penaltyFromDay} và trừ vào tiền cọc khi quyết toán. Hãy đặt lịch trả kho.`,
     data,
+  };
+}
+
+/**
+ * Same event, manager side: the branch learns a contract went overdue the day it happens, not
+ * only after the abandoned threshold — so it can reach the customer while it is early.
+ */
+export function managerOverdueNotification(candidate: TermEndCandidate): NotificationPayload {
+  return {
+    type: NotificationType.CONTRACT_OVERDUE,
+    title: `Kho ${candidate.unitCode} quá hạn trả`,
+    body:
+      `HĐ ${candidate.contractNo} đã hết hạn mà khách chưa đặt lịch trả — phí quá hạn đang chạy. ` +
+      'Liên hệ khách để thu hồi kho.',
+    data: { contractId: candidate.contractId },
   };
 }

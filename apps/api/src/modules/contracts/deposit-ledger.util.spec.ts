@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { ChangeRequestStatus, ContractStatus, DepositStatus } from '@storage/types';
+import { paidDepositByItemSql } from './deposit-ledger.query';
 import {
   captureDepositSafely,
   type DepositContract,
@@ -374,5 +375,16 @@ describe('creditDepositTopUp', () => {
       'contract-1',
       DepositStatus.HELD,
     ]);
+  });
+});
+
+describe('paidDepositByItemSql', () => {
+  it('sums the deposit payments that actually arrived, not just the booking total', () => {
+    const sql = paidDepositByItemSql('$1');
+    // The paid CTE aggregates succeeded DEPOSIT payments per booking.
+    expect(sql).toContain(`FROM payments`);
+    expect(sql).toContain(`sum(amount) AS total`);
+    // And the per-item CASE prefers it, falling back to the charged total only when absent.
+    expect(sql).toContain('COALESCE(pd.total, b.deposit_total)');
   });
 });

@@ -10,7 +10,10 @@ import {
   StorageUnitKind,
   StorageUnitStatus,
 } from '@storage/types';
-import { advanceChangeRequestToFinalApproval } from './change-request-handover.util';
+import {
+  advanceChangeRequestToFinalApproval,
+  settleOldContractRent,
+} from './change-request-handover.util';
 import { UNIT_CHANGE_NOTE } from './change-request-settle.util';
 
 const NOW = new Date('2026-07-01T02:00:00Z');
@@ -183,5 +186,114 @@ describe('advanceChangeRequestToFinalApproval', () => {
       params: ['contract-new', 'contract-old'],
     });
     expect(request?.status).toBe(ChangeRequestStatus.AWAITING_FINAL_APPROVAL);
+  });
+
+  it('settles the old rent into the moved deposit and tells the customer', async () => {
+    // Paid month covering the move day: 2026-06-15 → 2026-07-15, move on 2026-07-01.
+    em.query.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      queries.push({ sql, params });
+      if (sql.includes('FROM "invoices" i')) {
+        return [
+          {
+            id: 'inv-1',
+            status: 'PAID',
+            startAt: new Date('2026-06-15T00:00:00+07:00'),
+            endAt: new Date('2026-07-15T00:00:00+07:00'),
+            total: '1500000',
+            paid: '1500000',
+          },
+        ];
+      }
+      // The deposit row already exists on the old contract.
+      if (sql.includes('deposits')) return [{ id: 'dep-1' }];
+      return [];
+    });
+
+    await advanceChangeRequestToFinalApproval(
+      em as never,
+      'contract-new',
+      NOW,
+      notifications as never,
+      handoverAssignment as never,
+    );
+
+    // 16 of 30 days used → 800,000 owed → 700,000 credit rides the deposit.
+    const depositBump = queries.find(
+      (q) => q.sql.includes('UPDATE "deposits"') && q.sql.includes('GREATEST'),
+    );
+    expect(depositBump?.params[0]).toBe('700000.00');
+    expect(notifications.createForUsers).toHaveBeenCalledWith(
+      em,
+      expect.anything(),
+      expect.objectContaining({ type: 'UNIT_CHANGE_RENT_SETTLED' }),
+    );
+  });
+});
+
+describe('settleOldContractRent', () => {
+  // Move day in Vietnam: 2026-07-01 (NOW is 09:00 VN that day).
+  const MOVE = new Date('2026-07-01T02:00:00Z');
+
+  const emWith = (invoices: unknown[]) => ({
+    calls: [] as { sql: string; params: unknown[] }[],
+    query: jest.fn(async (sql: string, params: unknown[] = []) => {
+      if (sql.includes('FROM "invoices" i')) return invoices;
+      return [[], 0];
+    }),
+  });
+
+  const inv = (over: Record<string, unknown>) => ({
+    id: 'inv-1',
+    status: 'PAID',
+    startAt: new Date('2026-06-15T00:00:00+07:00'),
+    endAt: new Date('2026-07-15T00:00:00+07:00'),
+    total: '1500000',
+    paid: '1500000',
+    ...over,
+  });
+
+  it('pro-rates the period covering the move day', async () => {
+    const em = emWith([inv({})]);
+    // 16 used days of a 30-day period → 800,000 owed, 700,000 credited back.
+    const net = await settleOldContractRent(em as never, 'contract-1', MOVE);
+    expect(net.toFixed(2)).toBe('700000.00');
+    // A PAID invoice is kept as history — nothing is voided.
+    expect(
+      em.query.mock.calls.some(([sql]) => (sql as string).includes(`SET "status" = 'VOID'`)),
+    ).toBe(false);
+  });
+
+  it('collects an unpaid elapsed period in full and voids it', async () => {
+    const em = emWith([
+      inv({
+        status: 'ISSUED',
+        paid: '0',
+        startAt: new Date('2026-05-15T00:00:00+07:00'),
+        endAt: new Date('2026-06-15T00:00:00+07:00'),
+      }),
+    ]);
+    const net = await settleOldContractRent(em as never, 'contract-1', MOVE);
+    expect(net.toFixed(2)).toBe('-1500000.00');
+    const voidCall = em.query.mock.calls.find(([sql]) =>
+      (sql as string).includes(`SET "status" = 'VOID'`),
+    );
+    expect(voidCall?.[1][0]).toEqual(['inv-1']);
+  });
+
+  it('charges nothing for an invoice that starts on or after the move day', async () => {
+    const em = emWith([
+      inv({
+        status: 'ISSUED',
+        paid: '0',
+        startAt: new Date('2026-07-01T00:00:00+07:00'),
+        endAt: new Date('2026-08-01T00:00:00+07:00'),
+      }),
+    ]);
+    const net = await settleOldContractRent(em as never, 'contract-1', MOVE);
+    expect(net.toFixed(2)).toBe('0.00');
+    // Still voided — the time it billed will never be used.
+    expect(
+      em.query.mock.calls.some(([sql]) => (sql as string).includes(`SET "status" = 'VOID'`)),
+    ).toBe(true);
   });
 });

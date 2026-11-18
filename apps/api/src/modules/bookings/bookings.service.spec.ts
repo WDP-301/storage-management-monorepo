@@ -450,6 +450,7 @@ describe('BookingsService.cancel', () => {
   let bookingRepo: { findOne: jest.Mock };
   let em: {
     findOne: jest.Mock;
+    find: jest.Mock;
     update: jest.Mock;
     query: jest.Mock;
     getRepository: jest.Mock;
@@ -469,6 +470,7 @@ describe('BookingsService.cancel', () => {
   };
   let service: BookingsService;
   let warnSpy: jest.SpyInstance;
+  let notifications: { createForUsers: jest.Mock };
 
   const user = { id: 'customer-1' } as AuthUser;
 
@@ -484,8 +486,10 @@ describe('BookingsService.cancel', () => {
     };
     em = {
       findOne: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
-      query: jest.fn(async () => [[], 0]),
+      // SELECTs return bare rows; UPDATEs return [rows, affected] like pg.
+      query: jest.fn(async (sql: string) => (sql.trimStart().startsWith('SELECT') ? [] : [[], 0])),
       getRepository: jest.fn((entity: unknown) =>
         entity === Payment ? paymentRepo : { createQueryBuilder: () => unitHoldQb },
       ),
@@ -495,13 +499,14 @@ describe('BookingsService.cancel', () => {
       manager: em,
       getRepository: jest.fn(() => paymentRepo),
     };
+    notifications = { createForUsers: jest.fn() };
     service = new BookingsService(
       bookingRepo as never,
       {} as never,
       dataSource as never,
       { get: jest.fn() } as never,
       {} as never,
-      { createForUsers: jest.fn() } as never,
+      notifications as never,
       { assignSafely: jest.fn() } as never,
       { find: jest.fn().mockResolvedValue([]) } as never,
     );
@@ -570,6 +575,51 @@ describe('BookingsService.cancel', () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('manual reconciliation needed'));
   });
 
+  it('pulls the booking’s transfers back to review and tells the facility managers to refund', async () => {
+    bookingRepo.findOne.mockResolvedValue(buildBooking());
+    em.findOne.mockResolvedValue(buildBooking());
+    paymentRepo.sum.mockResolvedValue('500000');
+    em.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('booking_items')) return [{ facilityId: 'facility-1' }];
+      return [[], 0];
+    });
+    em.find.mockResolvedValue([
+      {
+        role: 'FACILITY_MANAGER',
+        facilityId: 'facility-1',
+        userId: 'manager-1',
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: null,
+      },
+    ]);
+
+    await service.cancel('booking-1', user);
+
+    const sepayUpdate = em.query.mock.calls.find(([sql]) =>
+      (sql as string).includes('sepay_transfers'),
+    );
+    expect(sepayUpdate?.[1]).toEqual(['booking-1', 'NEEDS_REVIEW', 'RESOLVED']);
+    expect(notifications.createForUsers).toHaveBeenCalledWith(
+      em,
+      ['manager-1'],
+      expect.objectContaining({ type: 'BOOKING_NEEDS_REFUND' }),
+    );
+  });
+
+  it('flags nothing when the cancelled booking was never paid', async () => {
+    bookingRepo.findOne.mockResolvedValue(buildBooking());
+    em.findOne.mockResolvedValue(buildBooking());
+    paymentRepo.sum.mockResolvedValue(null);
+
+    await service.cancel('booking-1', user);
+
+    expect(em.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('sepay_transfers'),
+      expect.anything(),
+    );
+    expect(notifications.createForUsers).not.toHaveBeenCalled();
+  });
+
   it('rejects a booking owned by someone else', async () => {
     bookingRepo.findOne.mockResolvedValue(buildBooking({ customerId: 'other-customer' }));
 
@@ -605,6 +655,7 @@ describe('BookingsService.create — shelf rules', () => {
   const parent = (status: StorageUnitStatus) => ({ id: 'parent-1', status });
 
   let preCheckFind: jest.Mock;
+  let overdueQuery: jest.Mock;
   let lockedUnits: unknown[];
   let em: {
     find: jest.Mock;
@@ -617,6 +668,7 @@ describe('BookingsService.create — shelf rules', () => {
 
   beforeEach(() => {
     preCheckFind = jest.fn();
+    overdueQuery = jest.fn().mockResolvedValue([]);
     lockedUnits = [];
     const unitQuery = {
       innerJoinAndSelect: jest.fn().mockReturnThis(),
@@ -652,6 +704,8 @@ describe('BookingsService.create — shelf rules', () => {
       transaction: jest.fn((cb: (e: unknown) => unknown) =>
         cb({ ...em, createQueryBuilder: () => updateQuery }),
       ),
+      // findOverdueInvoiceNos runs a raw query on the global manager.
+      manager: { query: overdueQuery },
     };
     const settings = {
       getIdempotencyTtlHours: jest.fn().mockResolvedValue(24),
@@ -681,6 +735,17 @@ describe('BookingsService.create — shelf rules', () => {
   });
 
   afterEach(() => jest.restoreAllMocks());
+
+  it('refuses a customer with overdue invoices before touching any unit', async () => {
+    overdueQuery.mockResolvedValue([{ invoiceNo: 'INV-7' }]);
+
+    await expect(service.create(dto('wh-1'), user, 'key-1')).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'INVOICE_OVERDUE', details: { invoiceNos: ['INV-7'] } },
+    });
+    // The hold transaction never starts.
+    expect(preCheckFind).not.toHaveBeenCalled();
+  });
 
   it('refuses a shelf warehouse before taking any lock', async () => {
     preCheckFind.mockResolvedValue([unit('wh-1', { kind: StorageUnitKind.SHELF_WAREHOUSE })]);
@@ -773,12 +838,22 @@ describe('BookingsService.releaseExpiredHolds', () => {
       release: jest.fn(),
     };
     const em = {
-      findOne: jest
-        .fn()
-        .mockResolvedValue({ id: 'booking-1', status: BookingStatus.PENDING_DEPOSIT }),
+      findOne: jest.fn().mockResolvedValue({
+        id: 'booking-1',
+        status: BookingStatus.PENDING_DEPOSIT,
+        customerId: 'customer-1',
+        bookingNo: 'BK-1',
+      }),
+      find: jest.fn().mockResolvedValue([]),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
-      getRepository: jest.fn(() => ({ count: jest.fn().mockResolvedValue(0) })),
+      query: jest.fn(async (sql: string) => (sql.trimStart().startsWith('SELECT') ? [] : [[], 0])),
+      getRepository: jest.fn((entity: unknown) =>
+        entity === Payment
+          ? { sum: jest.fn().mockResolvedValue(null) }
+          : { count: jest.fn().mockResolvedValue(0) },
+      ),
     };
+    const notifications = { createForUsers: jest.fn() };
     const dataSource = {
       createQueryRunner: jest.fn(() => runner),
       getRepository: jest.fn(() => ({
@@ -794,7 +869,7 @@ describe('BookingsService.releaseExpiredHolds', () => {
       dataSource as never,
       { get: jest.fn() } as never,
       {} as never,
-      { createForUsers: jest.fn() } as never,
+      notifications as never,
       { assignSafely: jest.fn() } as never,
       { find: jest.fn().mockResolvedValue([]) } as never,
     );
@@ -812,6 +887,12 @@ describe('BookingsService.releaseExpiredHolds', () => {
       Booking,
       { id: 'booking-1', status: In([BookingStatus.HOLDING, BookingStatus.PENDING_DEPOSIT]) },
       { status: BookingStatus.EXPIRED },
+    );
+    // The customer hears the hold died instead of discovering it in the app.
+    expect(notifications.createForUsers).toHaveBeenCalledWith(
+      em,
+      ['customer-1'],
+      expect.objectContaining({ type: 'BOOKING_EXPIRED' }),
     );
   });
 

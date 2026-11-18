@@ -1,3 +1,4 @@
+import { DropOffRequest } from '@entities/drop-off-request.entity';
 import { PickupRequest } from '@entities/pickup-request.entity';
 import { ShelfItem } from '@entities/shelf-item.entity';
 import { ShelfReceipt } from '@entities/shelf-receipt.entity';
@@ -12,11 +13,18 @@ import { ShelfCounterController } from './shelf-counter.controller';
 import { ShelfReceiptsService } from './shelf-receipts.service';
 import { ShelfRecordsController } from './shelf-records.controller';
 import { ShelfRecoveryService } from './shelf-recovery.service';
+import { ShelfRequestSweepService } from './shelf-request-sweep.service';
 import { ShelfStorageReadsService } from './shelf-storage-reads.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ShelfItem, ShelfReceipt, ShelfReceiptLine, PickupRequest]),
+    TypeOrmModule.forFeature([
+      ShelfItem,
+      ShelfReceipt,
+      ShelfReceiptLine,
+      PickupRequest,
+      DropOffRequest,
+    ]),
     AuthModule,
     NotificationsModule,
   ],
@@ -26,6 +34,7 @@ import { ShelfStorageReadsService } from './shelf-storage-reads.service';
     ShelfReceiptsService,
     ReceiptVoidService,
     ShelfRecoveryService,
+    ShelfRequestSweepService,
     ShelfStorageReadsService,
   ],
 })

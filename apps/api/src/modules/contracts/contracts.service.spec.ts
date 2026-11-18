@@ -47,6 +47,7 @@ describe('ContractsService', () => {
     save: jest.Mock;
     update: jest.Mock;
     softDelete: jest.Mock;
+    count: jest.Mock;
     query: jest.Mock;
     transaction: jest.Mock;
   };
@@ -90,6 +91,8 @@ describe('ContractsService', () => {
       findOneOrFail: jest.fn(async (entity) => (entity === Contract ? { id: 'contract-1' } : null)),
       update: jest.fn(async () => ({ affected: 1 })),
       softDelete: jest.fn(async () => ({ affected: 0 })),
+      // No live contract on the item — the RENEWAL guard sees a clear item by default.
+      count: jest.fn().mockResolvedValue(0),
       // Amenity snapshot and deposit ledger reads return no rows; UPDATE answers [rows, count].
       query: jest.fn(async (sql: string) => (sql.trimStart().startsWith('UPDATE') ? [[], 0] : [])),
       // A nested transaction is a savepoint on the same manager.
@@ -310,6 +313,16 @@ describe('ContractsService', () => {
   it('keeps cancelled contracts when the new contract is a renewal', async () => {
     await service.create({ bookingItemId: item.id, kind: ContractKind.RENEWAL });
     expect(manager.softDelete).not.toHaveBeenCalled();
+  });
+
+  it('rejects a renewal while the item still has a live contract', async () => {
+    // Its unit is RENTED, so the new contract could never be handed over — a dead end.
+    manager.count.mockResolvedValue(1);
+
+    await expect(
+      service.create({ bookingItemId: item.id, kind: ContractKind.RENEWAL }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(manager.save).not.toHaveBeenCalledWith(Contract, expect.anything());
   });
 
   it("moves the cancelled contract's held deposit to the re-created contract", async () => {

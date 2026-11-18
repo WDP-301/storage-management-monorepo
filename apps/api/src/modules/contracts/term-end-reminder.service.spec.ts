@@ -24,6 +24,7 @@ const row = (overrides: Record<string, unknown> = {}) => ({
   contractNo: 'CT-1',
   customerId: 'customer-1',
   unitCode: 'A-01',
+  facilityId: 'facility-1',
   effectiveAt: EFFECTIVE_AT,
   months: 12,
   monthlyPrice: '3000000.00',
@@ -39,7 +40,8 @@ describe('TermEndReminderService.run', () => {
   let lockAcquired: boolean;
   let noticeDays: number;
   let goLiveAt: Date;
-  let em: { query: jest.Mock };
+  let em: { query: jest.Mock; find: jest.Mock };
+  let managerAssignments: unknown[];
   let createForUsers: jest.Mock;
   let service: TermEndReminderService;
 
@@ -49,6 +51,7 @@ describe('TermEndReminderService.run', () => {
     lockAcquired = true;
     noticeDays = 30;
     goLiveAt = GO_LIVE;
+    managerAssignments = [];
     em = {
       query: jest.fn(async (sql: string) => {
         if (sql.includes('pg_try_advisory_xact_lock')) return [{ acquired: lockAcquired }];
@@ -56,6 +59,7 @@ describe('TermEndReminderService.run', () => {
         if (sql.includes('FROM notifications')) return stored;
         throw new Error(`unexpected query: ${sql}`);
       }),
+      find: jest.fn(async () => managerAssignments),
     };
     createForUsers = jest.fn(async (_em, userIds: string[], payload) => {
       for (const userId of userIds) {
@@ -123,6 +127,30 @@ describe('TermEndReminderService.run', () => {
       NotificationType.CONTRACT_OVERDUE,
     ]);
     expect(stored[1].title).toBe('Hợp đồng A-01 đã hết hạn');
+  });
+
+  it('tells the facility managers on the day a contract goes overdue, once', async () => {
+    managerAssignments = [
+      {
+        role: 'FACILITY_MANAGER',
+        facilityId: 'facility-1',
+        userId: 'manager-1',
+        startsAt: new Date('2026-01-01T00:00:00Z'),
+        endsAt: null,
+      },
+    ];
+
+    const onTermEnd = await service.run(at('2027-01-10T01:00:00.000Z'));
+    const rerun = await service.run(at('2027-01-11T01:00:00.000Z'));
+
+    expect(onTermEnd.overdue).toBe(2); // customer + manager
+    expect(rerun.overdue).toBe(0);
+    const managerNote = stored.find((n) => n.userId === 'manager-1');
+    expect(managerNote).toMatchObject({
+      type: NotificationType.CONTRACT_OVERDUE,
+      contractId: 'contract-1',
+      title: 'Kho A-01 quá hạn trả',
+    });
   });
 
   it('sends only the overdue notice to a contract already past its term at the first run', async () => {

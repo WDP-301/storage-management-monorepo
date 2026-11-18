@@ -6,7 +6,10 @@ import { StorageUnit } from '@entities/storage-unit.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { advanceChangeRequestToFinalApproval } from '@modules/change-requests/change-request-handover.util';
+import {
+  advanceChangeRequestToFinalApproval,
+  chargeMovedDepositDamage,
+} from '@modules/change-requests/change-request-handover.util';
 import { lockUnitClaimedOnlyBy } from '@modules/contracts/unit-claim.util';
 import { queueInvoicePdf } from '@modules/invoices/rent-period-invoice.util';
 import { NotificationsService } from '@modules/notifications/notifications.service';
@@ -28,6 +31,7 @@ import {
   StorageUnitStatus,
   UserRole,
 } from '@storage/types';
+import Decimal from 'decimal.js';
 import { DataSource, type EntityManager, In } from 'typeorm';
 import { HandoverAssignmentService } from './handover-assignment/handover-assignment.service';
 import { assertReadyForHandover } from './handover-ready.util';
@@ -179,6 +183,9 @@ export class InspectionLifecycleService {
           {
             status: transition.contractTo,
             ...(transition.stamp ? { [transition.stamp]: now } : {}),
+            // The term starts the day the unit is actually handed over, not the booked day —
+            // recurring periods and the term end are both anchored to effectiveAt.
+            ...(inspection.type === InspectionType.PRE_HANDOVER ? { effectiveAt: now } : {}),
           },
         );
       }
@@ -194,6 +201,21 @@ export class InspectionLifecycleService {
       }
       if (inspection.type === InspectionType.MAINTENANCE) {
         await this.notifyMaintenanceCompleted(em, contract, inspection, storageUnitId);
+        // A vacated unit's damage is still the customer's — charge the deposit that moved on.
+        const damageFee = (inspection.damages ?? []).reduce(
+          (sum, d) =>
+            sum + (typeof d?.proposedFee === 'number' && d.proposedFee > 0 ? d.proposedFee : 0),
+          0,
+        );
+        if (damageFee > 0) {
+          await chargeMovedDepositDamage(
+            em,
+            contract,
+            new Decimal(damageFee),
+            inspection.id,
+            this.notifications,
+          );
+        }
       }
       inspection.finalizedAt = now;
       inspection.inspectedAt ??= now;

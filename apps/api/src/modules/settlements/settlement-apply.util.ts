@@ -7,6 +7,7 @@ import { issueFeeInvoice } from '@modules/invoices/fee-invoice.util';
 import { generatePaymentNo } from '@modules/payments/payment-no.util';
 import {
   InvoiceItemType,
+  InvoiceKind,
   InvoiceStatus,
   PaymentMethod,
   PaymentStatus,
@@ -27,8 +28,8 @@ export interface ApplySettlementInput {
   /** Lines as approved; debts are already ordered oldest due first. */
   lines: SettlementLine[];
   totals: SettlementTotals;
-  /** Rent invoices of the contract by id, for their total and due date. */
-  invoices: Map<string, { total: Decimal.Value; dueAt: Date | null }>;
+  /** Invoices of the contract by id, for their total, due date and kind. */
+  invoices: Map<string, { total: Decimal.Value; dueAt: Date | null; kind?: InvoiceKind }>;
   now: Date;
 }
 
@@ -121,7 +122,9 @@ export async function applySettlement(
     const amount = Decimal.min(pool, debt.amount);
     if (amount.gt(0)) {
       const total = invoice?.total ?? debt.amount;
-      await takeFromDeposit(em, { invoiceId, total, amount, type: PaymentType.RENT }, input);
+      // A fee invoice billed before the return (unit-change shortfall, damage) is paid as a fee.
+      const type = invoice?.kind === InvoiceKind.SETTLEMENT ? PaymentType.FEE : PaymentType.RENT;
+      await takeFromDeposit(em, { invoiceId, total, amount, type }, input);
       pool = pool.minus(amount);
     }
     // Rent the deposit could not cover stays on its own invoice, never on the fee invoice.

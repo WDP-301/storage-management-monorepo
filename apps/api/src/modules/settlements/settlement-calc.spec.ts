@@ -154,6 +154,33 @@ describe('computeSettlement', () => {
     expect(outcome(result)).toEqual([2200000, 0]);
   });
 
+  it('offsets an unpaid fee invoice billed before the return, without crediting a paid one', () => {
+    const fee = invoice({
+      id: 'inv-fee',
+      invoiceNo: 'INV-FEE',
+      kind: InvoiceKind.SETTLEMENT,
+      startAt: null,
+      dueAt: new Date('2027-03-10T00:00:00+07:00'),
+      total: 600000,
+    });
+    const paidFee = invoice({
+      ...fee,
+      id: 'inv-fee-paid',
+      invoiceNo: 'INV-FEE-PAID',
+      status: InvoiceStatus.PAID,
+    });
+    const result = computeSettlement(
+      input({
+        invoices: [fee, paidFee],
+        payments: [payment({ id: 'p-fee', invoiceId: 'inv-fee-paid', amount: 600000 })],
+      }),
+    );
+    expect(result.lines.map((l) => [l.type, l.invoice_no, l.amount, l.description])).toEqual([
+      [SettlementLineType.UNPAID_INVOICE, 'INV-FEE', 600000, 'Phí còn nợ — hoá đơn INV-FEE'],
+    ]);
+    expect(outcome(result)).toEqual([1400000, 0]);
+  });
+
   it('treats a period starting on the return day as unused even before it is voided', () => {
     const unstarted = { ...voided, status: InvoiceStatus.PARTIALLY_PAID };
     const result = computeSettlement(input({ invoices: [unstarted], payments: [payment()] }));

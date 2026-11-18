@@ -1,4 +1,5 @@
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { MAX_OPEN_DROP_OFF_REQUESTS } from '@storage/types';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import {
@@ -41,17 +42,15 @@ function ShelfStorageBody({ contract }: { contract: ApiContract }) {
   // Finished requests already show as receipts below, so only cancelled ones are listed.
   const past = data?.requests.filter((request) => request.status === 'CANCELLED') ?? [];
   const block = storage?.pickupRequestBlock ?? null;
-  const openDropOff = storage?.openDropOffRequest ?? null;
+  const openDropOffs = storage?.openDropOffRequests ?? [];
   const pastDropOffs =
     data?.dropOffRequests.filter((request) => request.status === 'CANCELLED') ?? [];
   const dropOffBlock = storage?.dropOffRequestBlock ?? null;
   const canRequest = contract.status === 'ACTIVE';
   const pastCount = past.length + pastDropOffs.length;
-  // An open request is already on screen and an empty shelf is obvious; only other reasons need words.
+  // An open pick-up request is already on screen and an empty shelf is obvious; only other reasons need words.
   const blockNote = [
-    dropOffBlock && dropOffBlock !== 'OPEN_REQUEST_EXISTS'
-      ? dropOffRequestBlockLabel(dropOffBlock)
-      : null,
+    dropOffBlock ? dropOffRequestBlockLabel(dropOffBlock) : null,
     block && block !== 'OPEN_REQUEST_EXISTS' && block !== 'NO_STOCK'
       ? pickupRequestBlockLabel(block)
       : null,
@@ -76,7 +75,18 @@ function ShelfStorageBody({ contract }: { contract: ApiContract }) {
         <>
           <ShelfStockList items={storage.items} />
 
-          {openDropOff ? <DropOffRequestCard request={openDropOff} onCancelled={reload} /> : null}
+          {openDropOffs.length > 0 ? (
+            <View className="gap-2">
+              {openDropOffs.length > 1 ? (
+                <Text className="text-body-sm font-semibold text-text-primary">
+                  Lịch hẹn gửi đồ ({openDropOffs.length}/{MAX_OPEN_DROP_OFF_REQUESTS})
+                </Text>
+              ) : null}
+              {openDropOffs.map((request) => (
+                <DropOffRequestCard key={request.id} request={request} onCancelled={reload} />
+              ))}
+            </View>
+          ) : null}
           {storage.openRequest ? (
             <PickupRequestCard request={storage.openRequest} onCancelled={reload} />
           ) : null}

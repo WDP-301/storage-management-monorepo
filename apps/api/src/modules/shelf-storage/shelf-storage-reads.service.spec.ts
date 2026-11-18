@@ -95,7 +95,7 @@ describe('ShelfStorageReadsService', () => {
         items,
         openRequest: null,
         pickupRequestBlock: null,
-        openDropOffRequest: null,
+        openDropOffRequests: [],
         dropOffRequestBlock: null,
       });
     });

@@ -97,7 +97,6 @@ export class ShelfStorageReadsService {
     ]);
     const items = stock.get(contract.id) ?? [];
     const openRequest = requests[0] ?? null;
-    const openDropOffRequest = dropOffs[0] ?? null;
     return {
       contractId: contract.id,
       contractNo: contract.contractNo,
@@ -113,10 +112,10 @@ export class ShelfStorageReadsService {
         overdue: invoiceNos.length > 0,
         returnOpen: contract.returnOpen,
       }),
-      openDropOffRequest,
+      openDropOffRequests: dropOffs,
       dropOffRequestBlock: dropOffRequestBlock({
         status: contract.status,
-        hasOpenRequest: openDropOffRequest !== null,
+        openRequestCount: dropOffs.length,
         overdue: invoiceNos.length > 0,
       }),
     };

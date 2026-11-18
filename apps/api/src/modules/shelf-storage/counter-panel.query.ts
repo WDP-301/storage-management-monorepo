@@ -86,7 +86,7 @@ export async function buildCounterPanel(
       pickUp: pickUpBlock(total, overdue, contract.returnOpen),
       items,
       openRequest: requests.find((request) => request.contractId === contract.id) ?? null,
-      openDropOffRequest: dropOffs.find((request) => request.contractId === contract.id) ?? null,
+      openDropOffRequests: dropOffs.filter((request) => request.contractId === contract.id),
       recentReceipts: recent.receipts.filter((receipt) => receipt.contractId === contract.id),
     };
   });

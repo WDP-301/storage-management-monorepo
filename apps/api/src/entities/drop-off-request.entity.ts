@@ -22,13 +22,13 @@ export interface DropOffRequestLine {
 }
 
 /**
- * A customer's notice, made ahead in the app, that they will bring goods to the shelf. At most
- * one is open (PENDING or CONFIRMED) per contract. Stock changes only with the drop-off receipt
+ * A customer's notice, made ahead in the app, that they will bring goods to the shelf. Up to
+ * `MAX_OPEN_DROP_OFF_REQUESTS` may be open (PENDING or CONFIRMED) per contract. Stock changes only with the drop-off receipt
  * that completes it. A cancelled row with no `cancelledBy` was cancelled by the system.
  */
 @Entity('drop_off_requests')
-// The one-open-request partial index and the DESC lookup index are created in the migration.
-@Index('UQ_drop_off_requests_open_contract', { synchronize: false })
+// The open-request partial index and the DESC lookup index are created in migrations.
+@Index('IDX_drop_off_requests_open_contract', { synchronize: false })
 @Index('IDX_drop_off_requests_contract_created', { synchronize: false })
 export class DropOffRequest {
   @PrimaryGeneratedColumn('uuid')

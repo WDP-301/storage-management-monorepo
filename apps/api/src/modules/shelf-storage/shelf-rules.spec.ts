@@ -1,3 +1,4 @@
+import { MAX_OPEN_DROP_OFF_REQUESTS } from '@storage/types';
 import {
   dropOffBlock,
   dropOffRequestBlock,
@@ -125,18 +126,22 @@ describe('linesSummary', () => {
 });
 
 describe('dropOffRequestBlock', () => {
-  const base = { status: 'ACTIVE' as const, hasOpenRequest: false, overdue: false };
+  const base = { status: 'ACTIVE' as const, openRequestCount: 0, overdue: false };
 
-  it('allows an active contract without an open request or debt', () => {
+  it('allows an active contract without debt, below the open-request cap', () => {
     expect(dropOffRequestBlock(base)).toBeNull();
+    expect(
+      dropOffRequestBlock({ ...base, openRequestCount: MAX_OPEN_DROP_OFF_REQUESTS - 1 }),
+    ).toBeNull();
   });
 
   it('applies the refusals in order', () => {
+    const full = MAX_OPEN_DROP_OFF_REQUESTS;
     expect(
-      dropOffRequestBlock({ ...base, status: 'ENDED', hasOpenRequest: true, overdue: true }),
+      dropOffRequestBlock({ ...base, status: 'ENDED', openRequestCount: full, overdue: true }),
     ).toBe('CONTRACT_NOT_ACTIVE');
-    expect(dropOffRequestBlock({ ...base, hasOpenRequest: true, overdue: true })).toBe(
-      'OPEN_REQUEST_EXISTS',
+    expect(dropOffRequestBlock({ ...base, openRequestCount: full, overdue: true })).toBe(
+      'TOO_MANY_OPEN_REQUESTS',
     );
     expect(dropOffRequestBlock({ ...base, overdue: true })).toBe('INVOICE_OVERDUE');
   });

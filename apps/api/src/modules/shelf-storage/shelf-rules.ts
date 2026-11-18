@@ -4,6 +4,7 @@ import {
   ContractStatus,
   type DropOffBlockReason,
   type DropOffRequestBlockReason,
+  MAX_OPEN_DROP_OFF_REQUESTS,
   type PickUpBlockReason,
   type PickupRequestBlockReason,
   SHELF_ITEM_UNIT_LABEL,
@@ -80,14 +81,18 @@ export function pickupRequestBlock(input: {
   return input.overdue && !input.returnOpen ? 'INVOICE_OVERDUE' : null;
 }
 
-/** Why the customer cannot announce a drop-off now, or null. A return in progress does not matter. */
+/**
+ * Why the customer cannot announce a drop-off now, or null. A return in progress does not matter.
+ * Several may be open at once (one visit on Monday, another on Thursday): bringing more goods can
+ * never overdraw the shelf, so only a cap keeps the list manageable.
+ */
 export function dropOffRequestBlock(input: {
   status: ContractStatus;
-  hasOpenRequest: boolean;
+  openRequestCount: number;
   overdue: boolean;
 }): DropOffRequestBlockReason | null {
   if (input.status !== ContractStatus.ACTIVE) return 'CONTRACT_NOT_ACTIVE';
-  if (input.hasOpenRequest) return 'OPEN_REQUEST_EXISTS';
+  if (input.openRequestCount >= MAX_OPEN_DROP_OFF_REQUESTS) return 'TOO_MANY_OPEN_REQUESTS';
   return input.overdue ? 'INVOICE_OVERDUE' : null;
 }
 

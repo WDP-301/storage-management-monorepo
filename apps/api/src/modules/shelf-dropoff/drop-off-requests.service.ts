@@ -18,10 +18,11 @@ import {
 import {
   DropOffRequestStatus,
   type DropOffRequestView,
+  MAX_OPEN_DROP_OFF_REQUESTS,
   type ShelfItemUnit,
   ShelfReceiptType,
 } from '@storage/types';
-import { DataSource, type EntityManager, QueryFailedError } from 'typeorm';
+import { DataSource, type EntityManager } from 'typeorm';
 import { loadDropOffRequests } from '../shelf-storage/drop-off-request.read';
 import { type NormalizedLine, normalizeLines } from '../shelf-storage/receipt-input.util';
 import { assertUnits } from '../shelf-storage/receipt-stock.util';
@@ -40,7 +41,6 @@ const PAST_GRACE_MS = 5 * 60 * 1000;
 const lastDayEnd = (now: Date) =>
   fromVietnamDate(addVietnamDays(vietnamToday(now), DROP_OFF_REQUEST_MAX_DAYS_AHEAD + 1));
 const CONTRACT_LIST_LIMIT = 20;
-const UNIQUE_VIOLATION = '23505';
 const OPEN_STATUSES: readonly DropOffRequestStatus[] = [
   DropOffRequestStatus.PENDING,
   DropOffRequestStatus.CONFIRMED,
@@ -55,6 +55,15 @@ export function notAllowed(
     reason,
     ...extra,
   });
+}
+
+async function countOpenDropOffRequests(em: EntityManager, contractId: string): Promise<number> {
+  const rows: { count: string }[] = await em.query(
+    `SELECT COUNT(*) AS "count" FROM "drop_off_requests"
+      WHERE "contract_id" = $1 AND "status" = ANY($2)`,
+    [contractId, OPEN_STATUSES],
+  );
+  return Number(rows[0]?.count ?? 0);
 }
 
 /** Locks the request row after the contract and returns its status, or 404 if it vanished. */
@@ -109,20 +118,9 @@ export class DropOffRequestsService {
     // Same line rules as a drop-off receipt: an existing item or a name, no repeats.
     const lines = normalizeLines(dto.lines, ShelfReceiptType.DROP_OFF);
 
-    try {
-      return await this.dataSource.transaction((em) =>
-        this.createIn(em, contractId, lines, dto.note, actor, requestedFor, now),
-      );
-    } catch (error) {
-      // The partial unique index is the backstop for two requests racing past the lock.
-      if (error instanceof QueryFailedError && error.driverError?.code === UNIQUE_VIOLATION) {
-        throw notAllowed(
-          'OPEN_REQUEST_EXISTS',
-          'This contract already has an open drop-off request',
-        );
-      }
-      throw error;
-    }
+    return this.dataSource.transaction((em) =>
+      this.createIn(em, contractId, lines, dto.note, actor, requestedFor, now),
+    );
   }
 
   private async createIn(
@@ -134,18 +132,14 @@ export class DropOffRequestsService {
     requestedFor: Date,
     now: Date,
   ): Promise<DropOffRequestView> {
+    // The contract row lock serialises creates, so the open count cannot race past the cap.
     const [contract] = await findShelfContracts(em, { contractId, lock: true });
     if (!contract || contract.customerId !== actor.id) notFound('Contract', contractId);
-    const [open] = await loadDropOffRequests(em, {
-      contractIds: [contract.id],
-      open: true,
-      order: 'newest',
-      limit: 1,
-    });
+    const openRequestCount = await countOpenDropOffRequests(em, contract.id);
     const invoiceNos = await findOverdueInvoiceNos(em, actor.id, now);
     const block = dropOffRequestBlock({
       status: contract.status,
-      hasOpenRequest: Boolean(open),
+      openRequestCount,
       overdue: invoiceNos.length > 0,
     });
     if (block === 'INVOICE_OVERDUE') {
@@ -158,7 +152,7 @@ export class DropOffRequestsService {
     }
     if (block) {
       throw notAllowed(block, 'A drop-off request cannot be made for this contract', {
-        ...(open ? { requestId: open.id } : {}),
+        ...(block === 'TOO_MANY_OPEN_REQUESTS' ? { max: MAX_OPEN_DROP_OFF_REQUESTS } : {}),
       });
     }
     // Goods are only received from 00:00 Vietnam time on the start day.

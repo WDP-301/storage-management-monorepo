@@ -53,9 +53,9 @@ export function useReceiptFormSource(params: {
         requestLines:
           requestId && contract.openRequest?.id === requestId ? contract.openRequest.lines : [],
         dropOffLines:
-          requestId && contract.openDropOffRequest?.id === requestId
-            ? contract.openDropOffRequest.lines
-            : [],
+          (requestId &&
+            contract.openDropOffRequests.find((request) => request.id === requestId)?.lines) ||
+          [],
         shelfCode: contract.shelf.code,
         contractNo: contract.contractNo,
         customerName: session.customer.fullName ?? session.customer.phone ?? '',

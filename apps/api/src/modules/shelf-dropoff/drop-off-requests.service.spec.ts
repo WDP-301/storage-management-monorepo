@@ -4,7 +4,12 @@ import { findOverdueInvoiceNos } from '@modules/access/overdue-invoices.query';
 import { assertWorksAtFacility } from '@modules/access/staff-facility.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { addVietnamDays, vietnamToday } from '@shared/utils/calendar.util';
-import { ContractStatus, type ShelfItemUnit, StorageUnitKind } from '@storage/types';
+import {
+  ContractStatus,
+  MAX_OPEN_DROP_OFF_REQUESTS,
+  type ShelfItemUnit,
+  StorageUnitKind,
+} from '@storage/types';
 import { QueryFailedError } from 'typeorm';
 import { loadDropOffRequests } from '../shelf-storage/drop-off-request.read';
 import { findShelfContracts, loadStock } from '../shelf-storage/shelf-contract.query';
@@ -60,6 +65,7 @@ describe('drop-off requests', () => {
   let staffService: DropOffRequestsStaffService;
   let lockedStatus: string;
   let lockedRows: () => unknown[];
+  let openCount: number;
 
   const mockedContracts = jest.mocked(findShelfContracts);
   const mockedRequests = jest.mocked(loadDropOffRequests);
@@ -67,13 +73,16 @@ describe('drop-off requests', () => {
   beforeEach(() => {
     lockedStatus = 'PENDING';
     lockedRows = () => [{ status: lockedStatus }];
+    openCount = 0;
     em = {
       insert: jest.fn().mockResolvedValue({ identifiers: [{ id: 'req-1' }] }),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       query: jest.fn(async (sql: string) =>
         sql.includes('FOR UPDATE') && sql.includes('drop_off_requests')
           ? lockedRows()
-          : [{ userId: 'staff-9' }],
+          : sql.includes('COUNT(*)') && sql.includes('drop_off_requests')
+            ? [{ count: String(openCount) }]
+            : [{ userId: 'staff-9' }],
       ),
       findOne: jest.fn(),
     };
@@ -109,10 +118,6 @@ describe('drop-off requests', () => {
       requestedFor: FUTURE(),
       ...patch,
     });
-    const openRequestExists = () =>
-      mockedRequests.mockImplementation(async (_em, q) =>
-        q.open ? ([requestView({ id: 'open-1' })] as never) : ([requestView()] as never),
-      );
 
     it('stores lines by item or by name and notifies the facility staff on the same transaction', async () => {
       const lines = [
@@ -236,27 +241,25 @@ describe('drop-off requests', () => {
       });
     });
 
-    it('refuses a second open request and names it', async () => {
-      openRequestExists();
+    it('accepts more open requests up to the cap', async () => {
+      openCount = MAX_OPEN_DROP_OFF_REQUESTS - 1;
+      await customerService.create('c-1', body(), customer);
+      expect(em.insert).toHaveBeenCalledTimes(1);
+      expect(em.query).toHaveBeenCalledWith(expect.stringContaining('COUNT(*)'), [
+        'c-1',
+        ['PENDING', 'CONFIRMED'],
+      ]);
+    });
+
+    it('refuses once the contract holds the maximum of open requests', async () => {
+      openCount = MAX_OPEN_DROP_OFF_REQUESTS;
       await expect(customerService.create('c-1', body(), customer)).rejects.toMatchObject({
         response: {
           code: 'DROP_OFF_REQUEST_NOT_ALLOWED',
-          details: { reason: 'OPEN_REQUEST_EXISTS', requestId: 'open-1' },
+          details: { reason: 'TOO_MANY_OPEN_REQUESTS', max: MAX_OPEN_DROP_OFF_REQUESTS },
         },
       });
       expect(em.insert).not.toHaveBeenCalled();
-    });
-
-    it('maps the unique index violation to OPEN_REQUEST_EXISTS', async () => {
-      em.insert.mockRejectedValue(
-        new QueryFailedError('INSERT', [], Object.assign(new Error('dup'), { code: '23505' })),
-      );
-      await expect(customerService.create('c-1', body(), customer)).rejects.toMatchObject({
-        response: {
-          code: 'DROP_OFF_REQUEST_NOT_ALLOWED',
-          details: { reason: 'OPEN_REQUEST_EXISTS' },
-        },
-      });
     });
 
     it('passes other database errors through', async () => {

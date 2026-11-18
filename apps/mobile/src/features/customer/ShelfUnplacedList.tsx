@@ -12,6 +12,8 @@ export function ShelfUnplacedList({
   selectedIds,
   focusedId,
   onShelfPress,
+  isAvailable = (shelf) => shelf.status === 'AVAILABLE',
+  currentId = null,
 }: {
   title: string;
   shelves: Warehouse[];
@@ -19,20 +21,27 @@ export function ShelfUnplacedList({
   selectedIds: readonly string[];
   focusedId: string | null;
   onShelfPress: (id: string) => void;
+  /** Which shelves can be picked; defaults to status AVAILABLE. */
+  isAvailable?: (shelf: Warehouse) => boolean;
+  /** The customer's own shelf (shelf-change form), labelled instead of its status. */
+  currentId?: string | null;
 }) {
   return (
     <View className="gap-2.5 rounded-[20px] border border-border-default bg-bg-card p-4">
       <Text className="text-body-md font-semibold text-text-primary">{title}</Text>
       {shelves.map((shelf) => {
         const selected = selectedIds.includes(shelf.id);
-        const available = shelf.status === 'AVAILABLE';
+        const available = isAvailable(shelf);
+        const current = shelf.id === currentId;
         const tone = selected
           ? 'border-border-selected bg-secondary-0'
           : shelf.id === focusedId
             ? 'border-border-focus bg-bg-subtle'
-            : available
-              ? 'border-success-200 bg-success-0'
-              : 'border-border-default bg-bg-subtle';
+            : current
+              ? 'border-warning-600 bg-warning-0'
+              : available
+                ? 'border-success-200 bg-success-0'
+                : 'border-border-default bg-bg-subtle';
         return (
           <Pressable
             key={shelf.id}
@@ -45,7 +54,7 @@ export function ShelfUnplacedList({
             <View className="flex-1 gap-0.5">
               <Text
                 className={`text-body-sm font-semibold tabular-nums ${
-                  available || selected ? 'text-text-primary' : 'text-text-secondary'
+                  available || selected || current ? 'text-text-primary' : 'text-text-secondary'
                 }`}
               >
                 {shortShelfCode(shelf.code, warehouseCode)}
@@ -55,8 +64,18 @@ export function ShelfUnplacedList({
               </Text>
             </View>
             <StatusPill
-              label={selected ? 'Đã chọn' : (shelfStatusLabel[shelf.status] ?? shelf.status)}
-              tone={selected ? 'info' : available ? 'success' : 'neutral'}
+              label={
+                selected
+                  ? 'Đã chọn'
+                  : current
+                    ? 'Kệ hiện tại'
+                    : available
+                      ? 'Còn trống'
+                      : shelf.status === 'AVAILABLE'
+                        ? 'Không khả dụng'
+                        : (shelfStatusLabel[shelf.status] ?? shelf.status)
+              }
+              tone={selected ? 'info' : current ? 'warning' : available ? 'success' : 'neutral'}
             />
           </Pressable>
         );

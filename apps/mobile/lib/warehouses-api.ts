@@ -32,6 +32,13 @@ export const WarehousesApi = {
   get: (id: string, signal?: AbortSignal) =>
     request<Warehouse>(`/warehouses/${encodeURIComponent(id)}`, { signal }),
 
+  /** Rentable shelf warehouses (buildings with a free shelf) of one branch. */
+  shelfWarehouses: (facilityId: string, signal?: AbortSignal) =>
+    request<WarehousesPage>(
+      `/warehouses?facilityId=${encodeURIComponent(facilityId)}&includeShelfWarehouses=true&limit=${FACET_LIMIT}`,
+      { signal },
+    ).then((page) => page.warehouses.filter((item) => item.kind === 'SHELF_WAREHOUSE')),
+
   shelves: (id: string, signal?: AbortSignal) =>
     request<Warehouse[]>(`/warehouses/${encodeURIComponent(id)}/shelves`, { signal }),
 

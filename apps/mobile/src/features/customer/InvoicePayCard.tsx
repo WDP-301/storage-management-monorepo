@@ -1,16 +1,11 @@
-import { Image, View } from 'react-native';
+import { View } from 'react-native';
 import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
-import { saveRemoteImage } from '../../../lib/save-image-to-library';
 import { invoiceTitle, vietnamDayIso, willBeVoidedOnReturn } from '../../../lib/settlement-format';
 import { Dashed, Text } from '../../components/ui';
 import type { ApiInvoice } from '../../types/invoice-api';
 import { StatusPill } from './contract-display';
 import { InfoRow } from './info-row';
-import { SaveImageButton } from './SaveImageButton';
-
-/** VietQR's "compact2" template is taller than it is wide; locking the ratio stops it stretching. */
-const QR_WIDTH = 220;
-const QR_ASPECT_RATIO = 0.84;
+import { PaymentQr, TransferContent } from './payment-qr';
 
 const dayLabel = (instant: string | null) => {
   const day = instant ? vietnamDayIso(instant) : null;
@@ -62,23 +57,13 @@ export function InvoicePayCard({
       ) : qrUrl ? (
         <>
           <Dashed />
-          <View className="items-center gap-2.5 pt-1">
-            <View className="rounded-2xl bg-secondary-0 p-3">
-              <Image
-                accessibilityLabel={`Mã VietQR thanh toán hoá đơn ${invoice.invoiceNo}`}
-                source={{ uri: qrUrl }}
-                style={{ width: QR_WIDTH, aspectRatio: QR_ASPECT_RATIO }}
-                resizeMode="contain"
-              />
-            </View>
-            <SaveImageButton
-              label="Lưu mã QR"
-              isCompact
-              onSave={() => saveRemoteImage(qrUrl, invoice.invoiceNo)}
+          <View className="items-center gap-3 pt-1">
+            <PaymentQr
+              label={`Mã VietQR thanh toán hoá đơn ${invoice.invoiceNo}`}
+              saveName={invoice.invoiceNo}
+              url={qrUrl}
             />
-            <Text className="text-center text-caption text-text-secondary tabular-nums">
-              Nội dung chuyển khoản: {invoice.invoiceNo}
-            </Text>
+            <TransferContent value={invoice.invoiceNo} />
           </View>
         </>
       ) : null}

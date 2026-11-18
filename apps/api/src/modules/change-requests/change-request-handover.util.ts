@@ -6,7 +6,6 @@ import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import { resolveContractDeposit } from '@modules/contracts/deposit-ledger.util';
 import type { HandoverAssignmentService } from '@modules/inspection/handover-assignment/handover-assignment.service';
-import { formatVndCurrency } from '@modules/invoices/invoice-pdf.service';
 import type { NotificationsService } from '@modules/notifications/notifications.service';
 import {
   cancelOpenDropOffRequests,
@@ -25,6 +24,7 @@ import {
 } from '@storage/types';
 import Decimal from 'decimal.js';
 import type { EntityManager } from 'typeorm';
+import { settleRentNetOnDeposit } from './change-request-charges.util';
 import { UNIT_CHANGE_NOTE } from './change-request-settle.util';
 
 const DAY_MS = 86_400_000;
@@ -47,7 +47,8 @@ const dayDiff = (fromDay: string, toDay: string): number =>
  * The move day is the last day on the old unit: rent periods up to it are owed in full, the
  * period covering it is pro-rated, and anything later is free. The net of what was paid versus
  * what is owed rides the deposit that moves to the new contract — a shortfall is collected from
- * it, an overpayment is parked in it (it comes back at the final settlement).
+ * it (what it cannot cover is billed), an overpayment is parked in it (it comes back at the final
+ * settlement).
  * Every open rent invoice is then VOID so none of it can be paid a second time or block the
  * customer as "overdue" on a contract that no longer rents anything.
  */
@@ -104,48 +105,6 @@ export async function settleOldContractRent(
 }
 
 /**
- * Damage found at the vacated unit's maintenance check still belongs to the customer — the
- * deposit that covers it moved to the destination contract. Charges that row and tells the
- * customer. A shortfall beyond the deposit is absorbed (floored at 0), same as a settlement
- * that forfeits.
- */
-export async function chargeMovedDepositDamage(
-  em: EntityManager,
-  oldContract: Pick<Contract, 'id' | 'customerId'>,
-  fee: Decimal,
-  inspectionId: string,
-  notifications: Pick<NotificationsService, 'createForUsers'>,
-): Promise<boolean> {
-  const [link]: { newContractId: string | null }[] = await em.query(
-    `SELECT "new_contract_id" AS "newContractId" FROM "unit_change_requests"
-      WHERE "contract_id" = $1 AND "new_contract_id" IS NOT NULL
-        AND "status" IN ('${ChangeRequestStatus.AWAITING_FINAL_APPROVAL}', '${ChangeRequestStatus.COMPLETED}')
-      ORDER BY "created_at" DESC, "id" DESC LIMIT 1`,
-    [oldContract.id],
-  );
-  if (!link?.newContractId) return false;
-  await em.query(
-    `UPDATE "deposits"
-        SET "held_amount" = GREATEST(0, "held_amount" - $1), "updated_at" = now()
-      WHERE "contract_id" = $2`,
-    [fee.toFixed(2), link.newContractId],
-  );
-  await notifications.createForUsers(em, [oldContract.customerId], {
-    type: NotificationType.DEPOSIT_CHARGED,
-    title: 'Phí hư hỏng kho cũ',
-    body:
-      `Kiểm tra kho cũ phát hiện hư hỏng — phí ${formatVndCurrency(fee.toFixed(0))} ` +
-      'đã được trừ vào tiền cọc của hợp đồng mới.',
-    data: {
-      contractId: link.newContractId,
-      inspectionId,
-      amount: fee.toFixed(2),
-    },
-  });
-  return true;
-}
-
-/**
  * A destination contract created by a unit change just became ACTIVE at handover — the customer
  * has physically taken the new unit. This is the moment the move really happens, so:
  * - the OLD contract is retired (CANCELLED + note), its unit → MAINTENANCE, its held deposit
@@ -183,30 +142,20 @@ export async function advanceChangeRequestToFinalApproval(
     // Rent on the old unit stops at the move day: what is still owed comes out of the deposit,
     // what was overpaid rides inside it — both before the row moves to the new contract.
     const rentNet = await settleOldContractRent(em, oldContract.id, now);
-    if (!rentNet.isZero() && !oldDeposit) {
+    if (rentNet.gt(0) && !oldDeposit) {
       logger.warn(
         `Unit-change rent of contract ${oldContract.id} (${rentNet.toFixed(2)}) has no ` +
           'deposit to ride — reconcile it by hand',
       );
     }
-    if (!rentNet.isZero() && oldDeposit) {
-      await em.query(
-        `UPDATE "deposits"
-            SET "held_amount" = GREATEST(0, "held_amount" + $1), "updated_at" = now()
-          WHERE "id" = $2`,
-        [rentNet.toFixed(2), oldDeposit.id],
-      );
-      await notifications.createForUsers(em, [oldContract.customerId], {
-        type: NotificationType.UNIT_CHANGE_RENT_SETTLED,
-        title: 'Quyết toán tiền thuê kho cũ',
-        body: rentNet.gt(0)
-          ? `Bạn đã trả dư ${formatVndCurrency(rentNet.toFixed(0))} tiền thuê kho cũ — ` +
-            'số tiền này được cộng vào tiền cọc theo hợp đồng mới.'
-          : `Tiền thuê còn thiếu của kho cũ ${formatVndCurrency(rentNet.abs().toFixed(0))} ` +
-            'đã được trừ vào tiền cọc chuyển sang hợp đồng mới.',
-        data: { contractId: oldContract.id, amount: rentNet.toFixed(2) },
-      });
-    }
+    await settleRentNetOnDeposit(em, {
+      oldContract,
+      newContractId,
+      oldDeposit,
+      rentNet,
+      notifications,
+      now,
+    });
 
     const oldUnit = await em.findOne(StorageUnit, { where: { id: request.oldUnitId } });
     if (oldUnit?.kind === StorageUnitKind.SHELF) {

@@ -1,6 +1,7 @@
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import type { RefObject } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRefreshBookingSettings, useUnitChangeSettings } from '../../../lib/client-settings';
 import { colors, renderCoatBackdrop } from '../../components/ui';
 import type { ApiContract } from '../../types/contract-api';
 import { UnitChangeRequestForm } from './UnitChangeRequestForm';
@@ -14,6 +15,9 @@ type Props = {
 /** Sheet for asking to change storage unit. The form remounts per presentation. */
 export function UnitChangeRequestSheet({ sheetRef, contract, onSubmitted }: Props) {
   const insets = useSafeAreaInsets();
+  // Read here, outside the modal: its content portals above ClientSettingsProvider.
+  const settings = useUnitChangeSettings();
+  const refreshSettings = useRefreshBookingSettings();
 
   return (
     <BottomSheetModal
@@ -32,6 +36,8 @@ export function UnitChangeRequestSheet({ sheetRef, contract, onSubmitted }: Prop
       >
         <UnitChangeRequestForm
           contract={contract}
+          settings={settings}
+          refreshSettings={refreshSettings}
           onDone={() => {
             sheetRef.current?.dismiss();
             onSubmitted();

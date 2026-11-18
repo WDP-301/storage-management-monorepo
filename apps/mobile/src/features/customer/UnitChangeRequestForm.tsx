@@ -1,10 +1,10 @@
 import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
+import type { ClientUnitChangeSettings } from '@storage/types';
 import { CalendarBlank, CaretLeft, CaretRight, MagnifyingGlass } from 'phosphor-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import { ChangeRequestsApi, type UnitChangeOption } from '../../../lib/change-requests-api';
-import { useRefreshBookingSettings, useUnitChangeSettings } from '../../../lib/client-settings';
 import { formatIsoDate } from '../../../lib/format-vi';
 import { formatVnTime } from '../../../lib/receiving-time';
 import { fromIsoDate, todayIso, toIsoDate } from '../../../lib/rental-schedule';
@@ -31,11 +31,19 @@ function normText(s: string): string {
 }
 
 /** New unit-change request: pick the destination, the move day, then send. */
+/**
+ * Settings arrive as props: the form renders inside a BottomSheetModal, which portals to the root
+ * BottomSheetModalProvider above ClientSettingsProvider, so it cannot read that context itself.
+ */
 export function UnitChangeRequestForm({
   contract,
+  settings,
+  refreshSettings,
   onDone,
 }: {
   contract: ApiContract;
+  settings: ClientUnitChangeSettings;
+  refreshSettings: () => void;
   onDone: () => void;
 }) {
   const [options, setOptions] = useState<UnitChangeOption[] | null>(null);
@@ -55,8 +63,7 @@ export function UnitChangeRequestForm({
   const noun = isShelf ? 'kệ' : 'kho';
 
   // The admin-configured window: minimum notice and furthest day a move can be booked.
-  const { minLeadDays, maxDaysAhead } = useUnitChangeSettings();
-  const refreshSettings = useRefreshBookingSettings();
+  const { minLeadDays, maxDaysAhead } = settings;
   const minIso = useMemo(() => addDays(todayIso(), minLeadDays), [minLeadDays]);
   const maxIso = useMemo(() => addDays(todayIso(), maxDaysAhead), [maxDaysAhead]);
 

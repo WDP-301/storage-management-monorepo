@@ -85,6 +85,7 @@ export function BrowseResultsList({
           {isLoadingMore ? <ActivityIndicator color={colors.semantic.actionPrimary} /> : null}
           {hasMore && !isLoadingMore ? (
             <Button
+              className="self-center"
               fullWidth={false}
               label="Xem thêm kho"
               onPress={onLoadMore}

@@ -122,6 +122,7 @@ export function ShelfAccessCard({ contracts }: { contracts: ApiContract[] }) {
 
       {eligible ? (
         <Button
+          className="self-center"
           disabled={busy}
           label={busy ? 'Đang tạo mã…' : error ? 'Thử lại' : 'Đổi mã'}
           leftIcon="refresh"

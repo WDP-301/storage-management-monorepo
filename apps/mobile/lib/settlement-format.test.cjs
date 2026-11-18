@@ -63,6 +63,17 @@ test('isInvoiceDue only counts issued invoices with money still owed', () => {
   assert.equal(format.invoiceTitle({ kind: 'INITIAL', periodNo: 3 }), 'Tiền thuê kỳ 3');
 });
 
+test('hasUnpaidInvoice is true only while a payable invoice remains', () => {
+  const unpaid = { status: 'ISSUED', amountDue: 600000 };
+  const paid = { status: 'PAID', amountDue: 0 };
+  assert.equal(format.hasUnpaidInvoice([]), false);
+  assert.equal(format.hasUnpaidInvoice([paid]), false);
+  assert.equal(format.hasUnpaidInvoice([paid, unpaid]), true);
+  // A voided invoice can keep a positive amountDue — it must not keep the poll alive.
+  assert.equal(format.hasUnpaidInvoice([{ status: 'VOID', amountDue: 600000 }]), false);
+  assert.equal(format.hasUnpaidInvoice([{ status: 'DRAFT', amountDue: 600000 }]), false);
+});
+
 const totals = (refund, shortfall = 0) => ({
   deposit_amount: 2000000,
   credits_total: 0,

@@ -25,14 +25,6 @@ export const InvoicesApi = {
   },
 };
 
-/**
- * Any invoice still owed. While true the contract screen keeps polling so a settled QR
- * drops off without the customer reloading — SePay confirms through a webhook, not the app.
- */
-export function hasUnpaidInvoice(invoices: { amountDue: string | number }[]): boolean {
-  return invoices.some((invoice) => Number(invoice.amountDue) > 0);
-}
-
 export function normaliseInvoice(row: InvoiceResponse): ApiInvoice {
   return {
     id: row.id,

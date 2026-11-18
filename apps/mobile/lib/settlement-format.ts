@@ -72,6 +72,14 @@ export function isInvoiceDue(invoice: Pick<ApiInvoice, 'status' | 'amountDue'>):
   );
 }
 
+/**
+ * Any invoice still due. While true the contract screen keeps polling so a settled QR drops
+ * off without the customer reloading — SePay confirms through a webhook, not the app.
+ */
+export function hasUnpaidInvoice(invoices: Pick<ApiInvoice, 'status' | 'amountDue'>[]): boolean {
+  return invoices.some(isInvoiceDue);
+}
+
 export function invoiceTitle(invoice: Pick<ApiInvoice, 'kind' | 'periodNo'>): string {
   if (invoice.kind === 'SETTLEMENT') return 'Phí quyết toán cọc';
   if (invoice.kind === 'DEPOSIT_TOPUP') return 'Bù tiền cọc';

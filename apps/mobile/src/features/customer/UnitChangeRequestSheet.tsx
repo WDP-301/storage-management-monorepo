@@ -15,7 +15,7 @@ type Props = {
 /**
  * Sheet for asking to change storage unit. BottomSheetModal keeps its children mounted
  * between presentations, so the form is keyed by contract plus a round bumped on every
- * dismiss — each opening starts blank and nothing leaks in from another contract.
+ * presentation — each opening starts blank from the contract as it is now.
  */
 export function UnitChangeRequestSheet({ sheetRef, contract, onSubmitted }: Props) {
   const insets = useSafeAreaInsets();
@@ -35,7 +35,11 @@ export function UnitChangeRequestSheet({ sheetRef, contract, onSubmitted }: Prop
       handleIndicatorStyle={{ backgroundColor: colors.neutral[300] }}
       keyboardBlurBehavior="restore"
       snapPoints={['92%']}
-      onDismiss={() => setRound((current) => current + 1)}
+      onChange={(index) => {
+        // Mount the form as the sheet slides up, so it reads this contract's state now —
+        // bumping on dismiss instead would remount it against a stale contract snapshot.
+        if (index >= 0) setRound((current) => current + 1);
+      }}
     >
       <BottomSheetScrollView
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) + 16 }}

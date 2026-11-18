@@ -171,7 +171,9 @@ function ContractDetail({
   // cancelled server-side), pull the rest of the screen along — the top-up invoice and the new
   // unit live outside the card.
   const onChangedRef = useRef(onChanged);
-  onChangedRef.current = onChanged;
+  useEffect(() => {
+    onChangedRef.current = onChanged;
+  });
   const changeSignature = changeRequestSignature(openChange);
   const seenSignature = useRef<string | null>(null);
   useEffect(() => {

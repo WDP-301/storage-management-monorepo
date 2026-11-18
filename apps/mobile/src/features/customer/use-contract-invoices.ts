@@ -2,7 +2,8 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { ApiError } from '../../../lib/api';
-import { hasUnpaidInvoice, InvoicesApi } from '../../../lib/invoices-api';
+import { InvoicesApi } from '../../../lib/invoices-api';
+import { hasUnpaidInvoice } from '../../../lib/settlement-format';
 import type { ApiInvoice } from '../../types/invoice-api';
 
 /** Same cadence as the unit-change poll; settlement lands via the SePay webhook, not the app. */
@@ -52,7 +53,14 @@ export function useContractInvoices(contractId: string | null) {
           .catch((error: unknown) => {
             if (controller.signal.aborted) return;
             const message = error instanceof ApiError ? error.message : LOAD_FAILED;
-            setState((current) => ({ ...current, contractId, isLoading: false, error: message }));
+            // A failed background poll keeps showing the stale rows instead of flashing
+            // a banner over them every interval; only surface errors with nothing to show.
+            setState((current) => ({
+              ...current,
+              contractId,
+              isLoading: false,
+              error: current.invoices.length === 0 ? message : current.error,
+            }));
           });
       };
 

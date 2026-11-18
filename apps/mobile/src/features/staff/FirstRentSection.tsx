@@ -1,12 +1,12 @@
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
-import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState } from 'react';
-import { Image, Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import { formatIsoDateTime, formatMoney } from '../../../lib/format-vi';
 import { type FirstRent, StaffContractsApi } from '../../../lib/staff-contracts-api';
-import { AlertSheet, Button, colors, Icon, InlineMessage, Text } from '../../components/ui';
+import { AlertSheet, Button, InlineMessage, Text } from '../../components/ui';
 import { SectionCard } from '../customer/contract-sections';
+import { PaymentQr, TransferContent } from '../customer/payment-qr';
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -116,25 +116,16 @@ export function FirstRentSection({
               Còn phải thu: {formatMoney(current.amountDue)}
             </Text>
             {current.paymentQrUrl ? (
-              <View className="items-center rounded-2xl bg-secondary-0 p-4">
-                <Image
-                  accessibilityLabel="VietQR thanh toán tiền thuê tháng đầu"
-                  resizeMode="contain"
-                  source={{ uri: current.paymentQrUrl }}
-                  style={{ width: 240, height: 300 }}
-                />
-              </View>
+              <PaymentQr
+                label="Mã VietQR thanh toán tiền thuê tháng đầu"
+                url={current.paymentQrUrl}
+              />
             ) : (
               <Text className="text-body text-text-secondary">
                 Chưa có mã VietQR. Có thể thu tiền mặt và xác nhận bên dưới.
               </Text>
             )}
-            <View className="gap-1.5">
-              <Text className="text-caption text-text-secondary">
-                Nội dung chuyển khoản — khách cần ghi đúng để hệ thống tự đối soát:
-              </Text>
-              <CopyableText value={current.invoiceNo} />
-            </View>
+            <TransferContent value={current.invoiceNo} />
             <InlineMessage
               message="Trạng thái tự cập nhật khi hệ thống ghi nhận chuyển khoản."
               type="info"
@@ -184,46 +175,5 @@ export function FirstRentSection({
         title="Xác nhận đã nhận tiền mặt?"
       />
     </SectionCard>
-  );
-}
-
-/** The transfer reference staff reads out or sends to the customer, one tap to copy. */
-function CopyableText({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) return;
-    const timer = setTimeout(() => setCopied(false), 1500);
-    return () => clearTimeout(timer);
-  }, [copied]);
-
-  return (
-    <View className="w-full flex-row items-center gap-2 rounded-2xl border border-border-default bg-bg-subtle px-3.5 py-2.5">
-      <Text selectable className="flex-1 text-caption font-semibold text-text-primary tabular-nums">
-        {value}
-      </Text>
-      <Pressable
-        accessibilityLabel="Sao chép nội dung chuyển khoản"
-        accessibilityRole="button"
-        hitSlop={8}
-        onPress={() => {
-          void Clipboard.setStringAsync(value);
-          setCopied(true);
-        }}
-        style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-      >
-        <View className="flex-row items-center gap-1 rounded-full border border-border-default bg-bg-card px-2.5 py-1.5">
-          <Icon
-            color={copied ? colors.semantic.statusSuccess : colors.semantic.textSecondary}
-            name={copied ? 'check' : 'content-copy'}
-            size={14}
-          />
-          <Text
-            className={`text-caption font-medium ${copied ? 'text-status-success' : 'text-text-secondary'}`}
-          >
-            {copied ? 'Đã chép' : 'Chép'}
-          </Text>
-        </View>
-      </Pressable>
-    </View>
   );
 }

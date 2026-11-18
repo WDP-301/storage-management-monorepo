@@ -1,17 +1,11 @@
 import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import type { ClientUnitChangeSettings } from '@storage/types';
-import {
-  CalendarBlank,
-  CaretLeft,
-  CaretRight,
-  Check,
-  MagnifyingGlass,
-} from 'phosphor-react-native';
+import { CalendarBlank, CaretLeft, CaretRight, MagnifyingGlass } from 'phosphor-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import { ChangeRequestsApi, type UnitChangeOption } from '../../../lib/change-requests-api';
-import { formatArea, formatIsoDate, formatMoney } from '../../../lib/format-vi';
+import { formatIsoDate } from '../../../lib/format-vi';
 import { formatVnTime } from '../../../lib/receiving-time';
 import { fromIsoDate, todayIso, toIsoDate } from '../../../lib/rental-schedule';
 import { unitChangeErrorMessage } from '../../../lib/unit-change-errors';
@@ -21,6 +15,8 @@ import { contractWarehouseName } from './contract-display';
 import { ChipButton } from './FilterChips';
 import { MonthCalendar } from './MonthCalendar';
 import { OfficeTimeChips } from './OfficeTimeChips';
+import { ShelfChangePicker } from './ShelfChangePicker';
+import { UnitChangeOptionRow } from './UnitChangeOptionRow';
 import { useOfficeTimeSlots } from './use-office-time-slots';
 
 const PAGE_SIZE = 5;
@@ -37,14 +33,14 @@ function normText(s: string): string {
 /** New unit-change request: pick the destination, the move day, then send. */
 export function UnitChangeRequestForm({
   contract,
-  onSettingsRefresh,
   onDone,
+  onSettingsRefresh,
   unitChange,
 }: {
   contract: ApiContract;
+  onDone: () => void;
   /** Refresh the admin rules, e.g. after the API rejected a request under a changed window. */
   onSettingsRefresh: () => void;
-  onDone: () => void;
   unitChange: ClientUnitChangeSettings;
 }) {
   const [options, setOptions] = useState<UnitChangeOption[] | null>(null);
@@ -59,6 +55,9 @@ export function UnitChangeRequestForm({
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // A shelf moves to another shelf, picked on the floor plan; other units keep the list.
+  const isShelf = contract.unit?.kind === 'SHELF';
+  const noun = isShelf ? 'kệ' : 'kho';
 
   // The admin-configured window: minimum notice and furthest day a move can be booked.
   const { minLeadDays, maxDaysAhead } = unitChange;
@@ -140,7 +139,7 @@ export function UnitChangeRequestForm({
       <View>
         <View className="flex-row items-baseline justify-between gap-2">
           <Text className="flex-1 text-title font-bold text-text-primary">
-            Đổi kho {contractWarehouseName(contract)}
+            Đổi {noun} {contractWarehouseName(contract)}
           </Text>
           <Text className="text-caption font-semibold text-text-secondary">
             Bước {step === 'details' ? 1 : 2}/2
@@ -148,8 +147,10 @@ export function UnitChangeRequestForm({
         </View>
         <Text className="mt-1 text-caption leading-5 text-text-secondary">
           {step === 'details'
-            ? 'Chọn ngày, giờ hành chính bạn sẽ qua chuyển đồ và lý do đổi kho. Kho mới được giữ chỗ sau khi quản lý duyệt.'
-            : 'Chọn kho muốn chuyển tới. Kho mới được giữ chỗ sau khi quản lý duyệt.'}
+            ? `Chọn ngày, giờ hành chính bạn sẽ qua chuyển đồ và lý do đổi ${noun}. ${isShelf ? 'Kệ' : 'Kho'} mới được giữ chỗ sau khi quản lý duyệt.`
+            : isShelf
+              ? 'Chạm vào kệ trên sơ đồ để chọn kệ muốn chuyển tới. Kệ mới được giữ chỗ sau khi quản lý duyệt.'
+              : 'Chọn kho muốn chuyển tới. Kho mới được giữ chỗ sau khi quản lý duyệt.'}
         </Text>
       </View>
 
@@ -159,7 +160,7 @@ export function UnitChangeRequestForm({
             <Text className="text-body-sm font-semibold text-text-primary">Ngày chuyển đồ</Text>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Chọn ngày chuyển kho"
+              accessibilityLabel={`Chọn ngày chuyển ${noun}`}
               className="flex-row items-center gap-2 rounded-xl border border-border-default bg-bg-subtle px-3.5 py-3"
               onPress={() => setCalendarOpen((open) => !open)}
             >
@@ -188,10 +189,10 @@ export function UnitChangeRequestForm({
           <OfficeTimeChips label="Giờ chuyển đồ" slots={slots} />
 
           <View className="gap-2">
-            <Text className="text-body-sm font-semibold text-text-primary">Lý do đổi kho</Text>
+            <Text className="text-body-sm font-semibold text-text-primary">Lý do đổi {noun}</Text>
             <BottomSheetTextInput
               className="min-h-20 rounded-xl border border-border-default bg-bg-subtle px-4 py-3 font-inter text-body text-text-primary"
-              placeholder="VD: cần kho rộng hơn, muốn chuyển gần nhà…"
+              placeholder={`VD: cần ${noun} rộng hơn, muốn chuyển gần nhà…`}
               placeholderTextColor={colors.semantic.textPlaceholder}
               value={reason}
               onChangeText={setReason}
@@ -204,7 +205,7 @@ export function UnitChangeRequestForm({
           <Button
             disabled={!canContinue}
             fullWidth
-            label="Tiếp tục chọn kho"
+            label={`Tiếp tục chọn ${noun}`}
             onPress={() => setStep('unit')}
           />
         </>
@@ -225,9 +226,9 @@ export function UnitChangeRequestForm({
 
           <View className="gap-2">
             <Text className="text-body-sm font-semibold text-text-primary">
-              Kho muốn chuyển tới
+              {isShelf ? 'Kệ' : 'Kho'} muốn chuyển tới
             </Text>
-            {options !== null && options.length > 1 ? (
+            {!isShelf && options !== null && options.length > 1 ? (
               <>
                 <View className="flex-row items-center gap-2 rounded-xl border border-border-default bg-bg-subtle px-3.5">
                   <MagnifyingGlass color={colors.semantic.textSecondary} size={16} weight="bold" />
@@ -264,59 +265,37 @@ export function UnitChangeRequestForm({
             {options === null && loadError === null ? (
               <ActivityIndicator color={colors.semantic.actionPrimary} />
             ) : loadError !== null || options === null ? (
-              <InlineMessage message={loadError ?? 'Không tải được danh sách kho.'} type="error" />
+              <InlineMessage
+                message={loadError ?? `Không tải được danh sách ${noun}.`}
+                type="error"
+              />
             ) : options.length === 0 ? (
               <Text className="text-body-sm text-text-secondary">
-                Hiện không còn kho cùng loại nào trống.
+                {isShelf
+                  ? 'Hiện không còn kệ nào trống để chuyển tới.'
+                  : 'Hiện không còn kho cùng loại nào trống.'}
               </Text>
+            ) : isShelf ? (
+              <ShelfChangePicker
+                contract={contract}
+                options={options}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+              />
             ) : visible.length === 0 ? (
               <Text className="text-body-sm text-text-secondary">
                 Không có kho nào khớp tìm kiếm — thử từ khoá hoặc chi nhánh khác.
               </Text>
             ) : (
               <>
-                {pageItems.map((option) => {
-                  const isSelected = option.unit.id === selectedId;
-                  return (
-                    <Pressable
-                      key={option.unit.id}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: isSelected }}
-                      className={`flex-row items-center gap-3 rounded-2xl border px-3.5 py-3 ${
-                        isSelected
-                          ? 'border-border-selected bg-secondary-0'
-                          : 'border-border-default bg-bg-subtle'
-                      }`}
-                      onPress={() => setSelectedId(option.unit.id)}
-                    >
-                      <View className="flex-1 gap-0.5">
-                        <Text className="text-body-sm font-semibold text-text-primary">
-                          {option.unit.name}
-                        </Text>
-                        <Text className="text-caption text-text-secondary">
-                          {option.unit.facility_name}
-                          {option.unit.area_m2 !== null
-                            ? ` · ${formatArea(option.unit.area_m2)}`
-                            : ''}
-                        </Text>
-                        <Text className="text-caption text-text-secondary tabular-nums">
-                          {formatMoney(option.unit.monthly_price)}/tháng
-                          {option.rent_difference !== 0
-                            ? ` (${option.rent_difference > 0 ? '+' : '−'}${formatMoney(Math.abs(option.rent_difference))}/tháng)`
-                            : ''}
-                        </Text>
-                        {option.deposit_difference > 0 ? (
-                          <Text className="text-caption font-medium text-warning-700">
-                            Bù cọc thêm {formatMoney(option.deposit_difference)}
-                          </Text>
-                        ) : null}
-                      </View>
-                      {isSelected ? (
-                        <Check color={colors.semantic.actionPrimary} size={20} weight="bold" />
-                      ) : null}
-                    </Pressable>
-                  );
-                })}
+                {pageItems.map((option) => (
+                  <UnitChangeOptionRow
+                    key={option.unit.id}
+                    option={option}
+                    isSelected={option.unit.id === selectedId}
+                    onPress={() => setSelectedId(option.unit.id)}
+                  />
+                ))}
                 {pageCount > 1 ? (
                   <View className="flex-row items-center justify-center gap-4 pt-1">
                     <Pressable
@@ -358,7 +337,7 @@ export function UnitChangeRequestForm({
           <Button
             disabled={!canSubmit}
             fullWidth
-            label={isSubmitting ? 'Đang gửi…' : 'Gửi yêu cầu đổi kho'}
+            label={isSubmitting ? 'Đang gửi…' : `Gửi yêu cầu đổi ${noun}`}
             loading={isSubmitting}
             onPress={() => void submit()}
           />

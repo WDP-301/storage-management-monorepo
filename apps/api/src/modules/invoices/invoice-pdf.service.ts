@@ -443,7 +443,8 @@ export class InvoicePdfService {
 
             const qrX = pageLeft + Math.round((pageWidth - qrSize) / 2);
             const qrY = infoY + 114;
-            doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
+            // VietQR's "compact2" image is taller than wide; `fit` keeps its ratio instead of squashing it.
+            doc.image(qrBuffer, qrX, qrY, { fit: [qrSize, qrSize], align: 'center' });
 
             doc
               .font(fontRegular)

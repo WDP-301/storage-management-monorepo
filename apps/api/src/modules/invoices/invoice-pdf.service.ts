@@ -27,10 +27,12 @@ export function formatVndCurrency(amount: number | string): string {
 export function formatDateStr(date: Date | string | null | undefined): string {
   if (!date) return 'N/A';
   const d = new Date(date);
+  // The server runs in UTC; a due date of 00:00 Vietnam time would otherwise print a day early.
   return d.toLocaleDateString('vi-VN', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
+    timeZone: 'Asia/Ho_Chi_Minh',
   });
 }
 

@@ -1,6 +1,11 @@
 import { Invoice } from '@entities/invoice.entity';
 import { InvoiceStatus } from '@storage/types';
-import { formatVndCurrency, InvoicePdfService, sanitizePdfText } from './invoice-pdf.service';
+import {
+  formatDateStr,
+  formatVndCurrency,
+  InvoicePdfService,
+  sanitizePdfText,
+} from './invoice-pdf.service';
 
 describe('InvoicePdfService', () => {
   let service: InvoicePdfService;
@@ -63,5 +68,12 @@ describe('InvoicePdfService', () => {
     expect(uploadedBuffer.length).toBeGreaterThan(0);
     // PDF magic bytes %PDF
     expect(uploadedBuffer.subarray(0, 4).toString()).toBe('%PDF');
+  });
+});
+
+describe('formatDateStr', () => {
+  it('prints the Vietnam calendar day whatever the server time zone', () => {
+    // 00:30 on 21/11 in Vietnam is still 20/11 in UTC, where the server runs.
+    expect(formatDateStr(new Date('2026-11-20T17:30:00Z'))).toBe('21/11/2026');
   });
 });

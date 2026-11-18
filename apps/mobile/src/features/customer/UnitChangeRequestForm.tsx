@@ -1,4 +1,5 @@
 import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
+import type { ClientUnitChangeSettings } from '@storage/types';
 import {
   CalendarBlank,
   CaretLeft,
@@ -10,7 +11,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { ApiError } from '../../../lib/api';
 import { ChangeRequestsApi, type UnitChangeOption } from '../../../lib/change-requests-api';
-import { useRefreshBookingSettings, useUnitChangeSettings } from '../../../lib/client-settings';
 import { formatArea, formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import { formatVnTime } from '../../../lib/receiving-time';
 import { fromIsoDate, todayIso, toIsoDate } from '../../../lib/rental-schedule';
@@ -37,10 +37,15 @@ function normText(s: string): string {
 /** New unit-change request: pick the destination, the move day, then send. */
 export function UnitChangeRequestForm({
   contract,
+  onSettingsRefresh,
   onDone,
+  unitChange,
 }: {
   contract: ApiContract;
+  /** Refresh the admin rules, e.g. after the API rejected a request under a changed window. */
+  onSettingsRefresh: () => void;
   onDone: () => void;
+  unitChange: ClientUnitChangeSettings;
 }) {
   const [options, setOptions] = useState<UnitChangeOption[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -56,8 +61,7 @@ export function UnitChangeRequestForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // The admin-configured window: minimum notice and furthest day a move can be booked.
-  const { minLeadDays, maxDaysAhead } = useUnitChangeSettings();
-  const refreshSettings = useRefreshBookingSettings();
+  const { minLeadDays, maxDaysAhead } = unitChange;
   const minIso = useMemo(() => addDays(todayIso(), minLeadDays), [minLeadDays]);
   const maxIso = useMemo(() => addDays(todayIso(), maxDaysAhead), [maxDaysAhead]);
 
@@ -127,7 +131,7 @@ export function UnitChangeRequestForm({
       setError(unitChangeErrorMessage(e, 'Gửi yêu cầu thất bại. Vui lòng thử lại.'));
       setIsSubmitting(false);
       // The window may have changed since it was loaded; the calendar picks up the live one.
-      refreshSettings();
+      onSettingsRefresh();
     }
   };
 

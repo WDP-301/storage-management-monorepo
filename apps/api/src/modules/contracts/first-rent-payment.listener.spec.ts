@@ -220,6 +220,47 @@ describe('FirstRentPaymentListener', () => {
     );
   });
 
+  it('settles an overpaid invoice but flags the transfer so the extra can be refunded', async () => {
+    await listener.handlePaymentReceived(transfer({ amount: 2000000 }));
+
+    expect(em.update).toHaveBeenCalledWith(
+      Invoice,
+      { id: 'inv-1' },
+      { status: InvoiceStatus.PAID },
+    );
+    const flag = em.query.mock.calls.find(
+      ([sql]: [string]) => sql.includes('UPDATE "payments"') && sql.includes('"provider_ref"'),
+    );
+    expect(flag?.[1][0]).toBe('42');
+    expect(JSON.parse(flag?.[1][1])).toEqual({
+      needsReview: `trả dư 500000 cho ${INVOICE_NO}`,
+      overpaidAmount: '500000',
+    });
+    // The transfer stays in the reconciliation queue instead of disappearing as INVOICE_PAID.
+    const outcome = em.query.mock.calls.find(([sql]: [string]) =>
+      sql.includes('UPDATE "sepay_transfers"'),
+    );
+    expect(outcome?.[1].slice(0, 2)).toEqual(['42', 'NEEDS_REVIEW']);
+  });
+
+  it('does not flag an overpaid deposit top-up — the deposit already holds all of it', async () => {
+    invoice.kind = InvoiceKind.DEPOSIT_TOPUP;
+
+    await listener.handlePaymentReceived(transfer({ amount: 2000000 }));
+
+    expect(em.query.mock.calls.some(([sql]: [string]) => sql.includes('UPDATE "payments"'))).toBe(
+      false,
+    );
+  });
+
+  it('does not flag an invoice paid to the exact amount', async () => {
+    await listener.handlePaymentReceived(transfer());
+
+    expect(em.query.mock.calls.some(([sql]: [string]) => sql.includes('UPDATE "payments"'))).toBe(
+      false,
+    );
+  });
+
   it('keeps money sent to a void invoice for review without touching it', async () => {
     invoice.status = InvoiceStatus.VOID;
 

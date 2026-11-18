@@ -219,7 +219,7 @@ describe('advanceChangeRequestToFinalApproval', () => {
 
     // 16 of 30 days used → 800,000 owed → 700,000 credit rides the deposit.
     const depositBump = queries.find(
-      (q) => q.sql.includes('UPDATE "deposits"') && q.sql.includes('GREATEST'),
+      (q) => q.sql.includes('UPDATE "deposits"') && q.sql.includes('"held_amount" + $1'),
     );
     expect(depositBump?.params[0]).toBe('700000.00');
     expect(notifications.createForUsers).toHaveBeenCalledWith(

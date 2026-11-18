@@ -2,6 +2,7 @@ import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { Invoice } from '@entities/invoice.entity';
+import { InvoiceItem } from '@entities/invoice-item.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
@@ -15,6 +16,8 @@ import {
   ContractStatus,
   DamageSeverity,
   InspectionType,
+  InvoiceItemType,
+  InvoiceKind,
   InvoiceStatus,
   NotificationType,
   StorageUnitStatus,
@@ -225,16 +228,26 @@ describe('InspectionLifecycleService.finalize', () => {
     expect(em.update).not.toHaveBeenCalled();
   });
 
-  it('charges a vacated unit’s damage fee into the deposit that moved to the new contract', async () => {
+  it('bills a vacated unit’s damage on its own invoice of the new contract, deposit untouched', async () => {
     stubRows(
       buildInspection({
         type: InspectionType.MAINTENANCE,
         damages: [
           { description: 'Nứt tường', severity: DamageSeverity.MAJOR, proposedFee: 500000 },
           { description: 'Trầy sơn', severity: DamageSeverity.MINOR, proposedFee: 100000 },
+          { description: 'Bụi', severity: DamageSeverity.MINOR, proposedFee: 0 },
         ],
       }),
       buildContract({ status: ContractStatus.CANCELLED, customerId: 'customer-1' }),
+    );
+    em.findOneOrFail.mockImplementation(async (entity) =>
+      entity === Contract
+        ? buildContract({
+            id: 'contract-new',
+            status: ContractStatus.ACTIVE,
+            customerId: 'customer-1',
+          })
+        : { id: 'item-1', storageUnitId: 'unit-1' },
     );
     em.query.mockImplementation(async (sql: string) => {
       if (sql.includes('unit_change_requests')) return [{ newContractId: 'contract-new' }];
@@ -244,18 +257,35 @@ describe('InspectionLifecycleService.finalize', () => {
 
     await service.finalize('insp-1', actor('staff-1'));
 
-    const charge = em.query.mock.calls.find(
-      ([sql]: [string]) => sql.includes('UPDATE "deposits"') && sql.includes('held_amount'),
+    const invoice = em.save.mock.calls.find(([entity]) => entity === Invoice)?.[1];
+    expect(invoice).toEqual(
+      expect.objectContaining({
+        contractId: 'contract-new',
+        customerId: 'customer-1',
+        kind: InvoiceKind.SETTLEMENT,
+        status: InvoiceStatus.ISSUED,
+        total: 600000,
+      }),
     );
-    expect(charge?.[1]).toEqual(['600000.00', 'contract-new']);
+    const items = em.save.mock.calls.find(([entity]) => entity === InvoiceItem)?.[1];
+    expect(items).toEqual([
+      expect.objectContaining({ itemType: InvoiceItemType.DAMAGE, amount: 500000 }),
+      expect.objectContaining({ itemType: InvoiceItemType.DAMAGE, amount: 100000 }),
+    ]);
+    expect(em.query.mock.calls.some(([sql]: [string]) => sql.includes('UPDATE "deposits"'))).toBe(
+      false,
+    );
     expect(notifications.createForUsers).toHaveBeenCalledWith(
       em,
       ['customer-1'],
-      expect.objectContaining({ type: NotificationType.DEPOSIT_CHARGED }),
+      expect.objectContaining({
+        type: NotificationType.INVOICE_ISSUED,
+        data: expect.objectContaining({ contractId: 'contract-new' }),
+      }),
     );
   });
 
-  it('leaves a maintenance check’s damage uncharged when no unit change moved the deposit', async () => {
+  it('leaves a maintenance check’s damage unbilled when no unit change retired the contract', async () => {
     stubRows(
       buildInspection({
         type: InspectionType.MAINTENANCE,
@@ -268,11 +298,7 @@ describe('InspectionLifecycleService.finalize', () => {
 
     await service.finalize('insp-1', actor('staff-1'));
 
-    expect(
-      em.query.mock.calls.some(
-        ([sql]: [string]) => sql.includes('UPDATE "deposits"') && sql.includes('held_amount'),
-      ),
-    ).toBe(false);
+    expect(em.save).not.toHaveBeenCalledWith(Invoice, expect.anything());
   });
 
   it('tells the old facility managers when a maintenance check is finalized', async () => {

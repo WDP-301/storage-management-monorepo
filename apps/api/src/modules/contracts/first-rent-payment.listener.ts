@@ -193,6 +193,25 @@ export class FirstRentPaymentListener {
         const status = paid.gte(invoice.total) ? InvoiceStatus.PAID : InvoiceStatus.PARTIALLY_PAID;
         await em.update(Invoice, { id: invoice.id }, { status });
 
+        // Money beyond the invoice total is the customer's, and nothing else returns it: flag
+        // this transfer so it stays in the reconciliation queue until someone refunds it. A
+        // deposit top-up is the exception — all of it is held in the deposit and comes back at
+        // settlement, so flagging it would invite a second refund.
+        const overpaid =
+          invoice.kind === InvoiceKind.DEPOSIT_TOPUP ? new Decimal(0) : paid.minus(invoice.total);
+        if (overpaid.gt(0)) {
+          await em.query(
+            `UPDATE "payments" SET "metadata" = "metadata" || $2::jsonb WHERE "provider_ref" = $1`,
+            [
+              providerRef,
+              JSON.stringify({
+                needsReview: `trả dư ${overpaid.toFixed(0)} cho ${invoice.invoiceNo}`,
+                overpaidAmount: overpaid.toFixed(0),
+              }),
+            ],
+          );
+        }
+
         if (status === InvoiceStatus.PAID) {
           await this.notificationsService.createForUsers(
             em,
@@ -204,7 +223,7 @@ export class FirstRentPaymentListener {
           await settleIfTopUpInvoicePaid(em, invoice, this.settleDeps, null);
         }
 
-        return status;
+        return overpaid.gt(0) ? 'overpaid' : status;
       });
       this.logger.log(
         `Payment sepayId=${event.sepayId} amount=${event.amount} for ${invoices[0].invoiceNo}: ${outcome}`,
@@ -216,7 +235,7 @@ export class FirstRentPaymentListener {
             ? SepayTransferOutcome.INVOICE_PARTIAL
             : outcome === 'recorded-by-hand'
               ? SepayTransferOutcome.RESOLVED
-              : outcome === 'needs-review'
+              : outcome === 'needs-review' || outcome === 'overpaid'
                 ? SepayTransferOutcome.NEEDS_REVIEW
                 : null;
       if (transferOutcome) {

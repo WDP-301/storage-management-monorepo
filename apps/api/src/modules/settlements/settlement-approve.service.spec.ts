@@ -236,6 +236,32 @@ describe('SettlementApproveService', () => {
     );
   });
 
+  it('takes an unpaid fee invoice billed before the return from the deposit as a fee', async () => {
+    input = build({
+      invoices: [
+        rent('moved-fee', 600000, '2027-03-10T00:00:00+07:00', {
+          kind: InvoiceKind.SETTLEMENT,
+          startAt: null,
+        }),
+      ],
+    });
+
+    await service.approve(
+      'contract-1',
+      { expectedVersion: versionOf(), bankAccount: ACCOUNT },
+      OPS,
+    );
+
+    expect(payments().map((p) => [p.invoiceId, p.amount, p.type, p.method])).toEqual([
+      ['moved-fee', 600000, PaymentType.FEE, PaymentMethod.DEPOSIT],
+    ]);
+    expect(em.update).toHaveBeenCalledWith(
+      Invoice,
+      { id: 'moved-fee' },
+      { status: InvoiceStatus.PAID },
+    );
+  });
+
   it('bills the shortfall and completes at once when nothing is left to refund', async () => {
     input = build({
       depositRecord: {

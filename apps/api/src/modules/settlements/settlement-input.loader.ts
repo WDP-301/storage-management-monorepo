@@ -19,7 +19,6 @@ import {
   type DamageSeverity,
   type EvidenceFile,
   InspectionType,
-  InvoiceKind,
   PaymentStatus,
   type RefundBankAccount,
   type ReturnRules,
@@ -91,8 +90,10 @@ export async function loadSettlementInput(
   const depositRecord = options.lock
     ? await resolveContractDeposit(em, contract, { create: true })
     : await resolveContractDeposit(em, contract);
+  // Fee invoices count too: one approval per contract means any found here were billed before the
+  // return (unit-change rent shortfall or damage), and unpaid ones are offset like rent.
   const invoices = await em.find(Invoice, {
-    where: { contractId: contract.id, kind: Not(InvoiceKind.SETTLEMENT) },
+    where: { contractId: contract.id },
     order: { id: 'ASC' },
     ...(options.lock ? { lock: { mode: 'pessimistic_write' as const } } : {}),
   });

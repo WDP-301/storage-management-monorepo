@@ -1,12 +1,10 @@
 import type { Contract } from '@entities/contract.entity';
 import { Deposit } from '@entities/deposit.entity';
 import { Invoice } from '@entities/invoice.entity';
-import { InvoiceItem } from '@entities/invoice-item.entity';
 import { Payment } from '@entities/payment.entity';
 import { sumInvoicePayments } from '@modules/contracts/first-rent.util';
-import { generateInvoiceNo } from '@modules/payments/invoice-no.util';
+import { issueFeeInvoice } from '@modules/invoices/fee-invoice.util';
 import { generatePaymentNo } from '@modules/payments/payment-no.util';
-import { addVietnamDays, fromVietnamDate, vietnamToday } from '@shared/utils/calendar.util';
 import {
   InvoiceItemType,
   InvoiceKind,
@@ -23,9 +21,6 @@ import Decimal from 'decimal.js';
 import type { EntityManager } from 'typeorm';
 import { settledDepositStatus } from './settlement-totals';
 
-/** Days the customer has to pay what the deposit did not cover. */
-export const SETTLEMENT_INVOICE_DUE_DAYS = 7;
-
 export interface ApplySettlementInput {
   settlementId: string;
   contract: Pick<Contract, 'id' | 'contractNo' | 'customerId' | 'monthlyPriceSnapshot'>;
@@ -33,8 +28,8 @@ export interface ApplySettlementInput {
   /** Lines as approved; debts are already ordered oldest due first. */
   lines: SettlementLine[];
   totals: SettlementTotals;
-  /** Rent invoices of the contract by id, for their total and due date. */
-  invoices: Map<string, { total: Decimal.Value; dueAt: Date | null }>;
+  /** Invoices of the contract by id, for their total, due date and kind. */
+  invoices: Map<string, { total: Decimal.Value; dueAt: Date | null; kind?: InvoiceKind }>;
   now: Date;
 }
 
@@ -82,49 +77,26 @@ async function takeFromDeposit(
 }
 
 /** One invoice for the approved fees (tax 0, due in 7 Vietnam days), one item per fee. */
-async function issueSettlementInvoice(
+function issueSettlementInvoice(
   em: EntityManager,
   input: ApplySettlementInput,
   fees: SettlementLine[],
-  total: Decimal,
 ): Promise<Invoice> {
-  const invoice = await em.save(
-    Invoice,
-    em.create(Invoice, {
-      invoiceNo: generateInvoiceNo(),
-      customerId: input.contract.customerId,
-      contractId: input.contract.id,
-      periodNo: 1,
-      kind: InvoiceKind.SETTLEMENT,
-      months: 1,
-      monthlyPriceSnapshot: input.contract.monthlyPriceSnapshot,
-      status: InvoiceStatus.ISSUED,
-      currency: 'VND',
-      subtotal: total.toNumber(),
-      taxAmount: 0,
-      total: total.toNumber(),
-      issuedAt: input.now,
-      dueAt: fromVietnamDate(addVietnamDays(vietnamToday(input.now), SETTLEMENT_INVOICE_DUE_DAYS)),
-      billingInfo: { settlementId: input.settlementId },
-    }),
-  );
-  await em.save(
-    InvoiceItem,
-    fees.map((fee) =>
-      em.create(InvoiceItem, {
-        invoiceId: invoice.id,
-        itemType:
-          fee.type === SettlementLineType.DAMAGE
-            ? InvoiceItemType.DAMAGE
-            : InvoiceItemType.ADJUSTMENT,
-        description: fee.description.slice(0, 255),
-        quantity: fee.quantity,
-        unitAmount: fee.unit_amount,
-        amount: fee.amount,
-      }),
-    ),
-  );
-  return invoice;
+  return issueFeeInvoice(em, {
+    contract: input.contract,
+    lines: fees.map((fee) => ({
+      itemType:
+        fee.type === SettlementLineType.DAMAGE
+          ? InvoiceItemType.DAMAGE
+          : InvoiceItemType.ADJUSTMENT,
+      description: fee.description,
+      quantity: fee.quantity,
+      unitAmount: fee.unit_amount,
+      amount: fee.amount,
+    })),
+    billingInfo: { settlementId: input.settlementId },
+    now: input.now,
+  });
 }
 
 /**
@@ -150,7 +122,9 @@ export async function applySettlement(
     const amount = Decimal.min(pool, debt.amount);
     if (amount.gt(0)) {
       const total = invoice?.total ?? debt.amount;
-      await takeFromDeposit(em, { invoiceId, total, amount, type: PaymentType.RENT }, input);
+      // A fee invoice billed before the return (unit-change shortfall, damage) is paid as a fee.
+      const type = invoice?.kind === InvoiceKind.SETTLEMENT ? PaymentType.FEE : PaymentType.RENT;
+      await takeFromDeposit(em, { invoiceId, total, amount, type }, input);
       pool = pool.minus(amount);
     }
     // Rent the deposit could not cover stays on its own invoice, never on the fee invoice.
@@ -172,7 +146,7 @@ export async function applySettlement(
   let feeInvoice: Invoice | null = null;
   if (fees.length > 0) {
     const total = fees.reduce((sum, fee) => sum.plus(fee.amount), new Decimal(0));
-    feeInvoice = await issueSettlementInvoice(em, input, fees, total);
+    feeInvoice = await issueSettlementInvoice(em, input, fees);
     const amount = Decimal.min(pool, total);
     if (amount.gt(0)) {
       const args = { invoiceId: feeInvoice.id, total, amount, type: PaymentType.FEE };

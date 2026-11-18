@@ -70,6 +70,7 @@ import {
   validateReceivingTimes,
 } from './receiving-window.util';
 import { findUnrentable, lockShelfParents } from './rentable-units.util';
+import { strandedDepositBlocker } from './stranded-deposit.util';
 
 const STATUSES_AWAITING_DEPOSIT: BookingStatus[] = [
   BookingStatus.HOLDING,
@@ -936,10 +937,13 @@ export class BookingsService implements OnApplicationBootstrap {
    * covered, confirms the booking and creates the DRAFT contracts. Shared by the webhook
    * listener and the manual reconciliation endpoint (a transfer assigned by hand replays the
    * same path). Returns what happened; the caller decides how to log or mark it.
+   * `moveStranded` (manual assign only): a transfer already recorded on a booking that died is
+   * moved onto this booking instead of being reported as already recorded.
    */
   async applyDepositTransfer(
     booking: Booking,
     event: PaymentReceivedEvent,
+    options: { moveStranded?: boolean } = {},
   ): Promise<{
     outcome:
       | 'confirmed'
@@ -956,7 +960,7 @@ export class BookingsService implements OnApplicationBootstrap {
 
     // Fast-path dedupe — the partial unique index UQ_payments_provider_ref is the
     // real guard if two deliveries race past this check.
-    if (await paymentRepo.exists({ where: { providerRef } })) {
+    if (!options.moveStranded && (await paymentRepo.exists({ where: { providerRef } }))) {
       this.logger.log(`Payment sepayId=${event.sepayId} already recorded, skipping`);
       return { outcome: 'already-recorded', contractNos: [], reviewReason: '' };
     }
@@ -1000,8 +1004,19 @@ export class BookingsService implements OnApplicationBootstrap {
         if (!locked || !STATUSES_AWAITING_DEPOSIT.includes(locked.status)) {
           return 'status-changed' as const;
         }
-        if (await em.getRepository(Payment).exists({ where: { providerRef } })) {
+        const recorded = await em.getRepository(Payment).findOne({
+          where: { providerRef },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (recorded && (recorded.bookingId === booking.id || !options.moveStranded)) {
           return 'already-recorded' as const;
+        }
+        const blocker = recorded ? await strandedDepositBlocker(em, recorded) : null;
+        if (blocker) {
+          throw new DomainException(ErrorCode.CONFLICT, blocker, HttpStatus.CONFLICT, {
+            paymentId: recorded?.id,
+            bookingId: recorded?.bookingId,
+          });
         }
 
         // Earlier partial transfers count toward the deposit so a top-up can complete it.
@@ -1012,9 +1027,21 @@ export class BookingsService implements OnApplicationBootstrap {
           })) ?? 0,
         );
 
-        // The transfer is real money regardless of outcome — record it first so every
-        // path (partial, confirm, rollback) leaves a receipt for reconciliation.
-        await em.save(Payment, payment);
+        if (recorded) {
+          // Moved, not duplicated: the money stranded on a dead booking now counts once, on the
+          // booking staff assigned it to. A rollback below puts it back where it was.
+          await em.query(
+            `UPDATE "payments"
+                SET "booking_id" = $2, "customer_id" = $3,
+                    "metadata" = "metadata" || jsonb_build_object('movedFromBookingId', $4::text)
+              WHERE "id" = $1`,
+            [recorded.id, booking.id, booking.customerId, recorded.bookingId],
+          );
+        } else {
+          // The transfer is real money regardless of outcome — record it first so every
+          // path (partial, confirm, rollback) leaves a receipt for reconciliation.
+          await em.save(Payment, payment);
+        }
 
         if (paidAmount.plus(priorPaid).lt(depositRequired)) {
           partialRemaining = depositRequired.minus(paidAmount.plus(priorPaid));

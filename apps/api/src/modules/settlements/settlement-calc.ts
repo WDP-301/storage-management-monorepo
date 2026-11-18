@@ -44,7 +44,7 @@ export interface SettlementCalcInput {
   /** Deposit still held; null when it cannot be determined. */
   deposit: { amount: Decimal.Value; paymentId: string | null } | null;
   timing: ReturnTiming;
-  /** Rent invoices of the contract (never settlement invoices). */
+  /** Invoices of the contract: rent periods, top-ups and fee invoices billed before the return. */
   invoices: CalcInvoice[];
   /** Succeeded payments on those invoices. */
   payments: CalcPayment[];
@@ -133,7 +133,10 @@ export function computeSettlement(
     lines.push(
       line({
         type: SettlementLineType.UNPAID_INVOICE,
-        description: `Tiền thuê còn nợ — hoá đơn ${invoice.invoiceNo}`,
+        description:
+          invoice.kind === InvoiceKind.SETTLEMENT
+            ? `Phí còn nợ — hoá đơn ${invoice.invoiceNo}`
+            : `Tiền thuê còn nợ — hoá đơn ${invoice.invoiceNo}`,
         unit_amount: outstanding.toNumber(),
         amount: outstanding.toNumber(),
         invoice_id: invoice.id,

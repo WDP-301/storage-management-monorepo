@@ -80,6 +80,18 @@ test('normaliseInvoice keeps no QR when the API sends none', () => {
   assert.equal(invoice.startAt, null);
 });
 
+test('hasUnpaidInvoice is true only while an invoice still has amount due', () => {
+  const { hasUnpaidInvoice } = loadInvoicesApi(async () => null);
+  const unpaid = { amountDue: 600000 };
+  const paid = { amountDue: 0 };
+  assert.equal(hasUnpaidInvoice([]), false);
+  assert.equal(hasUnpaidInvoice([paid]), false);
+  assert.equal(hasUnpaidInvoice([paid, unpaid]), true);
+  // Amounts arrive as strings from the API before normalisation.
+  assert.equal(hasUnpaidInvoice([{ amountDue: '0.00' }]), false);
+  assert.equal(hasUnpaidInvoice([{ amountDue: '250000.00' }]), true);
+});
+
 test('getById fetches one invoice and normalises its amounts', async () => {
   const paths = [];
   const { InvoicesApi } = loadInvoicesApi(async (p) => {

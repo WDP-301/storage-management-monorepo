@@ -1,6 +1,5 @@
 import { BottomSheetFlatList, BottomSheetModal, BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import { BookingStatus } from '@storage/types';
-import * as Clipboard from 'expo-clipboard';
 import { Timer } from 'phosphor-react-native';
 import { type RefObject, useRef, useState } from 'react';
 import {
@@ -28,6 +27,7 @@ import { saveRemoteImage, saveViewAsImage } from '../../../lib/save-image-to-lib
 import {
   AlertSheet,
   Button,
+  CopyableCode,
   colors,
   Dashed,
   FlowScreen,
@@ -603,33 +603,6 @@ function CancelBookingButton({ onCancel }: { onCancel: () => Promise<void> }) {
         primaryLabel="Hủy giữ chỗ"
         secondaryLabel="Không hủy"
         title="Hủy giữ chỗ này?"
-      />
-    </View>
-  );
-}
-
-/** Booking transfer note is long and must match exactly. */
-function CopyableCode({ value }: { value: string }) {
-  const [isCopied, setIsCopied] = useState(false);
-
-  return (
-    <View className="flex-row items-center justify-between gap-3 rounded-xl border border-border-default bg-bg-subtle py-2 pr-2 pl-3.5">
-      <Text
-        className="flex-1 text-body-lg font-semibold text-text-primary tabular-nums"
-        numberOfLines={1}
-      >
-        {value}
-      </Text>
-      <Button
-        fullWidth={false}
-        label={isCopied ? 'Đã chép' : 'Chép'}
-        leftIcon={isCopied ? 'check' : 'content-copy'}
-        size="sm"
-        variant="secondary"
-        onPress={async () => {
-          await Clipboard.setStringAsync(value);
-          setIsCopied(true);
-        }}
       />
     </View>
   );

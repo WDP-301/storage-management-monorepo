@@ -2,7 +2,7 @@ import { Image, View } from 'react-native';
 import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
 import { saveRemoteImage } from '../../../lib/save-image-to-library';
 import { invoiceTitle, vietnamDayIso, willBeVoidedOnReturn } from '../../../lib/settlement-format';
-import { Dashed, Text } from '../../components/ui';
+import { CopyableCode, Dashed, Text } from '../../components/ui';
 import type { ApiInvoice } from '../../types/invoice-api';
 import { StatusPill } from './contract-display';
 import { InfoRow } from './info-row';
@@ -76,9 +76,10 @@ export function InvoicePayCard({
               isCompact
               onSave={() => saveRemoteImage(qrUrl, invoice.invoiceNo)}
             />
-            <Text className="text-center text-caption text-text-secondary tabular-nums">
-              Nội dung chuyển khoản: {invoice.invoiceNo}
-            </Text>
+            <View className="w-full gap-1.5">
+              <Text className="text-caption text-text-secondary">Nội dung chuyển khoản</Text>
+              <CopyableCode value={invoice.invoiceNo} />
+            </View>
           </View>
         </>
       ) : null}

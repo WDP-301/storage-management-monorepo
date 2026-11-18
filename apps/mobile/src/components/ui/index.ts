@@ -4,6 +4,7 @@ export * from './booking-parts';
 export * from './button';
 export * from './card-tabs';
 export { default as colors } from './colors';
+export * from './copyable-code';
 export * from './dialog';
 export * from './divider';
 export * from './field-label';

@@ -88,7 +88,10 @@ export class SepayTransfersService {
     event.transactionDate = transfer.transactionDate?.toISOString() ?? '';
     event.gateway = transfer.gateway ?? '';
 
-    const { outcome, reviewReason } = await this.bookings.applyDepositTransfer(booking, event);
+    // A transfer that arrived after its booking died was recorded there; assigning it moves it.
+    const { outcome, reviewReason } = await this.bookings.applyDepositTransfer(booking, event, {
+      moveStranded: true,
+    });
 
     // The transfer is settled only when the deposit path accepted it — confirmed means the
     // booking went CONFIRMED, partial/recorded means the money reached the deposit ledger.

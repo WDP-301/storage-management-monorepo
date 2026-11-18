@@ -94,7 +94,7 @@ describe('BookingsService.handlePaymentReceived', () => {
     getRepository: jest.Mock;
     transaction: jest.Mock;
   };
-  let paymentRepo: { exists: jest.Mock; sum: jest.Mock; save: jest.Mock };
+  let paymentRepo: { exists: jest.Mock; findOne: jest.Mock; sum: jest.Mock; save: jest.Mock };
   let dataSource: {
     manager: { query: jest.Mock };
     transaction: jest.Mock;
@@ -110,6 +110,7 @@ describe('BookingsService.handlePaymentReceived', () => {
     handoverAssignment = { assignSafely: jest.fn() };
     paymentRepo = {
       exists: jest.fn().mockResolvedValue(false),
+      findOne: jest.fn().mockResolvedValue(null),
       sum: jest.fn().mockResolvedValue(null),
       save: jest.fn().mockResolvedValue({}),
     };
@@ -431,6 +432,67 @@ describe('BookingsService.handlePaymentReceived', () => {
     expect(paymentRepo.save).toHaveBeenCalledWith(expect.objectContaining({ providerRef: '42' }));
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('status changed concurrently'));
     expect(em.find).not.toHaveBeenCalledWith(BookingItem, expect.anything());
+  });
+
+  describe('manual assign of a stranded transfer (moveStranded)', () => {
+    const stranded = {
+      id: 'pay-1',
+      bookingId: 'booking-old',
+      invoiceId: null,
+      type: PaymentType.DEPOSIT,
+    };
+
+    it('moves a deposit left on an expired booking instead of reporting it recorded', async () => {
+      paymentRepo.findOne.mockResolvedValue(stranded);
+      em.findOne
+        .mockResolvedValueOnce(buildBooking()) // the target booking, locked
+        .mockResolvedValueOnce(buildBooking({ id: 'booking-old', status: BookingStatus.EXPIRED }));
+      em.update.mockResolvedValue({ affected: 1 });
+      em.count.mockResolvedValue(0);
+
+      const result = await service.applyDepositTransfer(buildBooking(), buildEvent(), {
+        moveStranded: true,
+      });
+
+      expect(result.outcome).toBe('confirmed');
+      expect(paymentRepo.exists).not.toHaveBeenCalled();
+      expect(em.save).not.toHaveBeenCalledWith(Payment, expect.anything());
+      expect(em.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE "payments"'), [
+        'pay-1',
+        'booking-1',
+        'customer-1',
+        'booking-old',
+      ]);
+    });
+
+    it('refuses to move money that still belongs to a live booking', async () => {
+      paymentRepo.findOne.mockResolvedValue(stranded);
+      em.findOne
+        .mockResolvedValueOnce(buildBooking())
+        .mockResolvedValueOnce(
+          buildBooking({ id: 'booking-old', bookingNo: 'BK-OLD', status: BookingStatus.CONFIRMED }),
+        );
+
+      const result = await service.applyDepositTransfer(buildBooking(), buildEvent(), {
+        moveStranded: true,
+      });
+
+      expect(result.outcome).toBe('needs-review');
+      expect(result.reviewReason).toContain('BK-OLD');
+      expect(em.query).not.toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE "payments"'),
+        expect.anything(),
+      );
+    });
+
+    it('still reports a webhook redelivery as already recorded', async () => {
+      paymentRepo.exists.mockResolvedValue(true);
+
+      const result = await service.applyDepositTransfer(buildBooking(), buildEvent());
+
+      expect(result.outcome).toBe('already-recorded');
+      expect(dataSource.transaction).not.toHaveBeenCalled();
+    });
   });
 
   it('treats a unique-violation on provider_ref as a duplicate delivery', async () => {

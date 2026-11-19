@@ -12,6 +12,8 @@ import {
   MagicWand,
   MagnifyingGlassMinus,
   MagnifyingGlassPlus,
+  Plus,
+  Rows,
   Trash,
   WarningCircle,
   X,
@@ -34,6 +36,10 @@ interface Props {
   warehouse: Warehouse;
   /** Latest shelves list from parent dialog so codes/statuses stay fresh. */
   shelves: Warehouse[];
+  /** Opens the parent's create-shelf form; omitted for roles that cannot create shelves. */
+  onAddShelves?: (mode: 'single' | 'bulk') => void;
+  /** Shelf just created from this tab, preselected so it can be dropped onto a cell right away. */
+  focusShelfId?: string | null;
 }
 
 /** Pointer travel before a press becomes a drag-to-pan instead of a click. */
@@ -126,7 +132,12 @@ export function describeLayoutError(err: unknown): string {
   return err.message || 'Không thể lưu sơ đồ mặt bằng.';
 }
 
-export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
+export const ShelfLayoutEditor: React.FC<Props> = ({
+  warehouse,
+  shelves,
+  onAddShelves,
+  focusShelfId,
+}) => {
   const toast = useAppToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -441,6 +452,51 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
     }
   }, [activeShelfId, placedIds, unplacedShelves]);
 
+  // A shelf deleted from the list tab leaves the plan, like the server drops it on read;
+  // a placement for it would be invisible yet fail the save as an unknown shelf.
+  const prevShelfIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const ids = new Set(shelves.map((s) => s.id));
+    const gone = [...prevShelfIdsRef.current].filter((id) => !ids.has(id));
+    prevShelfIdsRef.current = ids;
+    if (gone.length > 0) setPlacements((prev) => prev.filter((p) => !gone.includes(p.shelfId)));
+  }, [shelves]);
+
+  // Runs only when a new shelf arrives, so erasing it later does not re-arm the place tool.
+  useEffect(() => {
+    if (focusShelfId && shelves.some((s) => s.id === focusShelfId)) {
+      setActiveShelfId(focusShelfId);
+      setTool('PLACE_SHELF');
+    }
+  }, [focusShelfId]);
+
+  const requestAddShelves = (mode: 'single' | 'bulk') => {
+    // The create form lives in the dialog behind the fullscreen overlay.
+    setIsFullscreen(false);
+    onAddShelves?.(mode);
+  };
+
+  const addShelfButtons = onAddShelves ? (
+    <div className="flex items-center gap-1.5">
+      <Button
+        size="xs"
+        variant="secondary"
+        icon={<Plus className="w-3 h-3" />}
+        onClick={() => requestAddShelves('single')}
+      >
+        Kệ lẻ
+      </Button>
+      <Button
+        size="xs"
+        variant="secondary"
+        icon={<Rows className="w-3 h-3" />}
+        onClick={() => requestAddShelves('bulk')}
+      >
+        Dãy kệ
+      </Button>
+    </div>
+  ) : null;
+
   const isCellBlocked = (r: number, c: number, ignoreShelfId?: string, ignoreElemIdx?: number) => {
     const candidate: LayoutRect = { row: r, col: c, rowSpan: 1, colSpan: 1 };
     for (const p of placements) {
@@ -753,8 +809,9 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
       {/* Floating Unplaced Shelves Popover (in modal when tool === 'PLACE_SHELF') */}
       {isModal && tool === 'PLACE_SHELF' && (
         <div className="absolute top-14 left-3 z-20 w-64 max-h-80 p-3 bg-kumo-base/95 backdrop-blur rounded-xl border border-kumo-line shadow-lg flex flex-col gap-2">
-          <div className="flex items-center justify-between text-xs font-semibold text-kumo-default border-b border-kumo-line pb-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-kumo-default border-b border-kumo-line pb-1.5">
             <span>Chọn kệ cần đặt ({unplacedShelves.length})</span>
+            {addShelfButtons}
           </div>
           {unplacedShelves.length === 0 ? (
             <p className="text-xs text-kumo-subtle py-2">Tất cả kệ đã được đặt lên sơ đồ.</p>
@@ -1395,16 +1452,19 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
           {/* Left Column: Unplaced shelves + Inspector */}
           <div className="space-y-4 lg:col-span-1">
             <LayerCard className="p-3.5 ring ring-kumo-line space-y-2.5">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <Text as="strong" bold size="sm">
                   Kệ chưa đặt ({unplacedShelves.length})
                 </Text>
+                {addShelfButtons}
               </div>
               {unplacedShelves.length === 0 ? (
                 <p className="text-xs text-kumo-subtle">
-                  {shelves.length === 0
-                    ? 'Kho chưa có kệ nào. Hãy tạo kệ ở tab Danh sách kệ trước.'
-                    : 'Tất cả kệ của kho đã được đặt lên sơ đồ.'}
+                  {shelves.length > 0
+                    ? 'Tất cả kệ của kho đã được đặt lên sơ đồ.'
+                    : onAddShelves
+                      ? 'Kho chưa có kệ nào. Bấm "Kệ lẻ" hoặc "Dãy kệ" để tạo kệ.'
+                      : 'Kho chưa có kệ nào. Hãy nhờ quản lý vận hành tạo kệ trước.'}
                 </p>
               ) : (
                 <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">

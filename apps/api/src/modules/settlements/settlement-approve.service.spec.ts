@@ -44,7 +44,7 @@ const ACCOUNT = {
 };
 const TIMING = {
   effectiveReturnDay: E,
-  shortNotice: false,
+  early: false,
   overstayDays: 0,
   termEndAt: new Date('2027-04-01T00:00:00+07:00'),
 } as ReturnTiming;

@@ -2,7 +2,7 @@ import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { CalendarBlank, CaretRight } from 'phosphor-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { useBookingSettings, useReturnSettings } from '../../../lib/client-settings';
+import { useBookingSettings } from '../../../lib/client-settings';
 import { formatIsoDate, formatMoney, formatNumber } from '../../../lib/format-vi';
 import type { RentalSchedule } from '../../../lib/hold';
 import { ReceivingSlotsApi } from '../../../lib/receiving-slots-api';
@@ -49,7 +49,6 @@ type Props = {
 export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, onConfirm }: Props) {
   const { rentalMonthsOptions, defaultRentalMonths, minRentalMonths, maxRentalMonths, leadDays } =
     useBookingSettings();
-  const { noticeDays } = useReturnSettings();
   const [pickedStart, setStartDate] = useState(todayIso);
   const [pickedMonths, setPickedMonths] = useState(defaultRentalMonths);
   const [slots, setSlots] = useState<ReceivingDay[]>([]);
@@ -225,7 +224,7 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
         <View className="gap-3 rounded-[20px] border border-border-default bg-bg-card p-4">
           <Text className="text-body-md font-semibold text-text-primary">Chi tiết thanh toán</Text>
           <CostRow
-            caption="Hoàn khi trả kho, sau khi trừ công nợ/phí phát sinh (nếu có)"
+            caption="Hoàn khi trả kho đúng hạn, sau khi trừ công nợ/phí phát sinh (nếu có)"
             label={`Tiền cọc giữ ${warehouses.length} ${unitNoun}`}
             value={formatMoney(deposit)}
           />
@@ -250,7 +249,7 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
           </View>
 
           <InlineMessage
-            message={`Tiền cọc được giữ an toàn. Trả trước hạn cần báo trước ${noticeDays} ngày, nếu không sẽ trừ 1 tháng tiền thuê.`}
+            message="Trả kho trước ngày hết hạn hợp đồng sẽ mất toàn bộ tiền cọc."
             type="info"
           />
 

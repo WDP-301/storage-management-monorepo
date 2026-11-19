@@ -31,6 +31,7 @@ export interface MaskedRefundBankAccount {
 
 /** The return rules in force when the request was made; later setting changes do not apply. */
 export interface ReturnRules {
+  /** How many days before the last day the customer is reminded the term ends. */
   noticeDays: number;
   penaltyPercent: number;
 }
@@ -50,13 +51,8 @@ export interface ReturnTimingRecord {
   scheduled_day: string;
   /** Day money is counted to: the finalize day, or the scheduled day until the return is finalized. */
   effective_return_day: string;
-  /** Since when the notice runs: when the return was requested. */
-  notice_from: string | Date;
-  notice_days: number;
-  required_notice_days: number;
+  /** Before the last day of the term: the whole deposit is forfeited. */
   early: boolean;
-  short_notice: boolean;
-  short_notice_deduction: number;
   overstay_from_day: string;
   overstay_days: number;
   overstay_penalty_per_day: number;

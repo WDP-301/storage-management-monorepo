@@ -30,7 +30,7 @@ export function InspectionEditor({ detail, finalizeBlockedReason, onFinalized }:
   const today = formatIsoDate(vietnamDayIso(new Date()));
   // A return is recorded on the day it is finalized; staff see that day before confirming.
   const finalizeMessage = isReturn
-    ? `${consequence}\n\nNgày trả ghi nhận là hôm nay (${today}) — tiền thuê, thời hạn báo trước và phí quá hạn tính tới ngày này.`
+    ? `${consequence}\n\nNgày trả ghi nhận là hôm nay (${today}) — tiền thuê, trả trước hạn (mất cọc) và phí quá hạn tính theo ngày này.`
     : consequence;
 
   return (

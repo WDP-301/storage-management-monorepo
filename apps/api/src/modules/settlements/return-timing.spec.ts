@@ -13,7 +13,6 @@ const base = (overrides: Partial<ReturnTimingInput> = {}): ReturnTimingInput => 
   effectiveAt: new Date('2026-10-01T12:00:00.000Z'),
   months: 6,
   monthlyPrice: '1500000.00',
-  noticeFrom: at('2027-01-01'),
   scheduledAt: at('2027-03-31'),
   rules: { noticeDays: 30, penaltyPercent: 100 },
   goLiveAt: new Date('2026-06-01T00:00:00.000Z'),
@@ -33,73 +32,14 @@ describe('returnTiming', () => {
     ['on the last day of the term', '2027-03-31'],
     ['on the term end day', '2027-04-01'],
   ])('treats a return %s as on time', (_label, day) => {
-    const timing = returnTiming(base({ scheduledAt: at(day), noticeFrom: at('2027-03-30') }));
+    const timing = returnTiming(base({ scheduledAt: at(day) }));
 
-    expect(timing).toMatchObject({
-      early: false,
-      shortNotice: false,
-      shortNoticeDeduction: 0,
-      overstayDays: 0,
-      overstayPenalty: 0,
-    });
+    expect(timing).toMatchObject({ early: false, overstayDays: 0, overstayPenalty: 0 });
   });
 
-  it('accepts an early return with enough notice', () => {
-    const timing = returnTiming(
-      base({ noticeFrom: at('2027-01-01'), scheduledAt: at('2027-02-15') }),
-    );
-
-    expect(timing).toMatchObject({
-      early: true,
-      noticeDays: 45,
-      requiredNoticeDays: 30,
-      shortNotice: false,
-      shortNoticeDeduction: 0,
-    });
-  });
-
-  it('deducts one month of rent for an early return on short notice', () => {
-    const timing = returnTiming(
-      base({ noticeFrom: at('2027-02-01'), scheduledAt: at('2027-02-15') }),
-    );
-
-    expect(timing).toMatchObject({
-      early: true,
-      noticeDays: 14,
-      shortNotice: true,
-      shortNoticeDeduction: 1500000,
-    });
-  });
-
-  it.each([
-    ['exactly the required notice', '2027-02-01', 30, false],
-    ['one day short of it', '2027-02-02', 29, true],
-  ])('counts %s', (_label, anchor, noticeDays, shortNotice) => {
-    const timing = returnTiming(base({ noticeFrom: at(anchor), scheduledAt: at('2027-03-03') }));
-
-    expect(timing.noticeDays).toBe(noticeDays);
-    expect(timing.shortNotice).toBe(shortNotice);
-  });
-
-  it('counts the notice from the Vietnam day of the anchor', () => {
-    // 00:30 on 02/02 in Vietnam, still 01/02 in UTC.
-    const timing = returnTiming(
-      base({ noticeFrom: new Date('2027-02-01T17:30:00.000Z'), scheduledAt: at('2027-03-03') }),
-    );
-
-    expect(timing.noticeDays).toBe(29);
-  });
-
-  it('does not deduct for a notice that started before the rules went live', () => {
-    const timing = returnTiming(
-      base({
-        noticeFrom: at('2027-02-01'),
-        scheduledAt: at('2027-02-15'),
-        goLiveAt: new Date('2027-02-10T00:00:00.000Z'),
-      }),
-    );
-
-    expect(timing).toMatchObject({ early: true, shortNotice: false, shortNoticeDeduction: 0 });
+  it('treats any return before the last day as early, however long the notice', () => {
+    expect(returnTiming(base({ scheduledAt: at('2027-02-15') })).early).toBe(true);
+    expect(returnTiming(base({ scheduledAt: at('2026-10-02') })).early).toBe(true);
   });
 
   it('charges each day past the term end', () => {
@@ -136,40 +76,19 @@ describe('returnTiming', () => {
   });
 
   it('counts to the finalize day, not to a later appointment', () => {
-    const timing = returnTiming(
-      base({
-        noticeFrom: at('2027-02-01'),
-        scheduledAt: at('2027-03-20'),
-        returnedOn: '2027-02-10',
-      }),
-    );
+    const timing = returnTiming(base({ scheduledAt: at('2027-04-05'), returnedOn: '2027-02-10' }));
 
-    // Forty-seven days to the appointment, but only nine to the finalize: a short notice.
     expect(timing).toMatchObject({
       effectiveReturnDay: '2027-02-10',
-      noticeDays: 9,
       early: true,
-      shortNotice: true,
-      shortNoticeDeduction: 1500000,
+      overstayDays: 0,
     });
   });
 
   it('counts to the finalize day, not to an earlier appointment', () => {
-    const timing = returnTiming(
-      base({
-        noticeFrom: at('2027-02-01'),
-        scheduledAt: at('2027-02-10'),
-        returnedOn: '2027-03-05',
-      }),
-    );
+    const timing = returnTiming(base({ scheduledAt: at('2027-02-10'), returnedOn: '2027-03-31' }));
 
-    // Nine days to the appointment, thirty-two to the finalize: enough notice.
-    expect(timing).toMatchObject({
-      effectiveReturnDay: '2027-03-05',
-      noticeDays: 32,
-      shortNotice: false,
-      shortNoticeDeduction: 0,
-    });
+    expect(timing).toMatchObject({ effectiveReturnDay: '2027-03-31', early: false });
   });
 
   it.each([
@@ -203,14 +122,11 @@ describe('returnTiming', () => {
   });
 
   it.each([
-    ['the day before the last day', '2027-03-30', true, 1500000],
-    ['the last day', '2027-03-31', false, 0],
-    ['the term end day', '2027-04-01', false, 0],
-  ])('is early only before the last day: %s', (_label, day, early, deduction) => {
-    // Eleven days of notice, short of the required thirty whenever the return counts as early.
-    const timing = returnTiming(base({ noticeFrom: at('2027-03-20'), scheduledAt: at(day) }));
-
-    expect(timing).toMatchObject({ early, shortNoticeDeduction: deduction });
+    ['the day before the last day', '2027-03-30', true],
+    ['the last day', '2027-03-31', false],
+    ['the term end day', '2027-04-01', false],
+  ])('is early only before the last day: %s', (_label, day, early) => {
+    expect(returnTiming(base({ scheduledAt: at(day) })).early).toBe(early);
   });
 
   it.each([
@@ -232,9 +148,7 @@ describe('returnTiming', () => {
     ['starts the term end day', '2027-03-31T17:00:00.000Z', false, 0],
     ['starts the day after the term end', '2027-04-01T17:00:00.000Z', false, 1],
   ])('reads the appointment in Vietnam time: %s', (_label, scheduledAt, early, overstay) => {
-    const timing = returnTiming(
-      base({ noticeFrom: at('2027-03-20'), scheduledAt: new Date(scheduledAt) }),
-    );
+    const timing = returnTiming(base({ scheduledAt: new Date(scheduledAt) }));
 
     expect(timing.early).toBe(early);
     expect(timing.overstayDays).toBe(overstay);
@@ -259,47 +173,15 @@ describe('returnTiming', () => {
     expect(timing.overstayDays).toBe(10);
   });
 
-  it('deducts for a notice that started exactly when the rules went live, not before', () => {
-    const noticeFrom = at('2027-02-01');
-    const input = { noticeFrom, scheduledAt: at('2027-02-15') };
-
-    expect(returnTiming(base({ ...input, goLiveAt: noticeFrom })).shortNotice).toBe(true);
-    expect(
-      returnTiming(base({ ...input, goLiveAt: new Date(noticeFrom.getTime() + 1) })).shortNotice,
-    ).toBe(false);
-  });
-
-  it('deducts one month of the rent as stored, not the penalty rate', () => {
-    const timing = returnTiming(
-      base({
-        monthlyPrice: '2345678.00',
-        noticeFrom: at('2027-02-01'),
-        scheduledAt: at('2027-02-15'),
-        rules: { noticeDays: 30, penaltyPercent: 250 },
-      }),
-    );
-
-    expect(timing.shortNoticeDeduction).toBe(2345678);
-    expect(timing.overstayPenaltyPerDay).toBe(195473);
-  });
-
   it('maps to the snake_case record shared with clients', () => {
-    const noticeFrom = at('2027-02-01');
-    const record = toReturnTimingRecord(
-      returnTiming(base({ noticeFrom, scheduledAt: at('2027-02-15') })),
-    );
+    const record = toReturnTimingRecord(returnTiming(base({ scheduledAt: at('2027-02-15') })));
 
     expect(record).toEqual({
       term_end_at: new Date('2027-03-31T17:00:00.000Z'),
       last_day: '2027-03-31',
       scheduled_day: '2027-02-15',
       effective_return_day: '2027-02-15',
-      notice_from: noticeFrom,
-      notice_days: 14,
-      required_notice_days: 30,
       early: true,
-      short_notice: true,
-      short_notice_deduction: 1500000,
       overstay_from_day: '2027-04-01',
       overstay_days: 0,
       overstay_penalty_per_day: 50000,

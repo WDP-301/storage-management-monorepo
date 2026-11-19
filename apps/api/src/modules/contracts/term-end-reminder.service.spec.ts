@@ -112,7 +112,9 @@ describe('TermEndReminderService.run', () => {
     });
     expect(payload.body).toContain('hết hạn ngày 09/01/2027');
     expect(payload.body).toContain(`Từ ngày 11/01/2027 phí quá hạn ${formatVndCurrency(100000)}`);
-    expect(payload.body).toContain('ít nhất 30 ngày');
+    expect(payload.body).toContain(
+      'Trả kho trước ngày 09/01/2027 là trả trước hạn và sẽ mất tiền cọc',
+    );
   });
 
   it('turns to an overdue notice once the term end day arrives, once', async () => {

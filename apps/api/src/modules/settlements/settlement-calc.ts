@@ -1,4 +1,4 @@
-import { fromVietnamDate } from '@shared/utils/calendar.util';
+import { formatVietnamDate, fromVietnamDate } from '@shared/utils/calendar.util';
 import {
   type DamageSeverity,
   InvoiceKind,
@@ -113,7 +113,7 @@ export function computeSettlement(
     reviewPaymentIds: credits.filter((c) => c.review).map((c) => c.payment.id),
     creditPaymentIds: credits.filter((c) => !c.review).map((c) => c.payment.id),
     waivableTypes: [
-      ...(timing.shortNotice ? [SettlementLineType.EARLY_RETURN_SHORT_NOTICE] : []),
+      ...(timing.early ? [SettlementLineType.EARLY_RETURN_FORFEIT] : []),
       ...(timing.overstayDays > 0 ? [SettlementLineType.OVERSTAY] : []),
     ],
   });
@@ -159,12 +159,14 @@ export function computeSettlement(
       }),
     );
   };
-  if (timing.shortNotice) {
+  // Leaving before the term ends breaks the contract: the deposit is kept whole, so whatever else
+  // is owed is billed on top of it rather than taken out of it.
+  if (timing.early) {
     waivable(
-      SettlementLineType.EARLY_RETURN_SHORT_NOTICE,
+      SettlementLineType.EARLY_RETURN_FORFEIT,
       1,
-      timing.shortNoticeDeduction,
-      `Trả kho sớm, báo trước ${timing.noticeDays}/${timing.requiredNoticeDays} ngày — trừ 1 tháng thuê`,
+      num(input.deposit?.amount ?? 0),
+      `Trả kho trước hạn hợp đồng (${formatVietnamDate(timing.lastDay)}) — mất tiền cọc`,
     );
   }
   if (timing.overstayDays > 0) {

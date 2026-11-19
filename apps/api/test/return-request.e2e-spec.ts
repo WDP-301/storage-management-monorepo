@@ -29,7 +29,6 @@ const previewRecord = () => ({
       effectiveAt: new Date('2026-10-01T12:00:00.000Z'),
       months: 6,
       monthlyPrice: '1500000.00',
-      noticeFrom: new Date('2027-02-01T05:00:00.000Z'),
       scheduledAt: new Date('2027-02-15T05:00:00.000Z'),
       rules: { noticeDays: 30, penaltyPercent: 100 },
       goLiveAt: new Date('2026-06-01T00:00:00.000Z'),
@@ -223,7 +222,7 @@ describe('Return request endpoints (e2e response contract)', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.data).toMatchObject({ short_notice: true, short_notice_deduction: 1500000 });
+    expect(body.data).toMatchObject({ early: true, deposit_held: 3000000 });
     expect(Object.keys(body.data).sort()).toEqual(documented('ReturnPreviewResponseDto'));
   });
 

@@ -244,7 +244,9 @@ export type SettlementStatus = (typeof SettlementStatus)[keyof typeof Settlement
 export const SettlementLineType = {
   /** Rent still owed for a period that started before the return day. */
   UNPAID_INVOICE: 'UNPAID_INVOICE',
-  /** Returned before the term ended without the required notice: one month of rent. */
+  /** Returned before the term ended: the whole deposit is forfeited (breach of the term). */
+  EARLY_RETURN_FORFEIT: 'EARLY_RETURN_FORFEIT',
+  /** No longer produced (replaced by EARLY_RETURN_FORFEIT); older settlements keep it. */
   EARLY_RETURN_SHORT_NOTICE: 'EARLY_RETURN_SHORT_NOTICE',
   /** Days kept past the end of the term, charged per day. */
   OVERSTAY: 'OVERSTAY',
@@ -420,10 +422,10 @@ export const NotificationType = {
   CONTRACT_NO_SHOW: 'CONTRACT_NO_SHOW',
   /** To the customer: the branch cancelled the contract before handover. */
   CONTRACT_CANCELLED: 'CONTRACT_CANCELLED',
-  /** A return appointment moved: to the customer when the branch moved it, to its inspector always. */
-  RETURN_RESCHEDULED: 'RETURN_RESCHEDULED',
   /** To the customer: a shelf contract took effect (signed files in, first month paid). */
   CONTRACT_ACTIVATED: 'CONTRACT_ACTIVATED',
+  /** A return appointment moved: to the customer when the branch moved it, to its inspector always. */
+  RETURN_RESCHEDULED: 'RETURN_RESCHEDULED',
   RETURN_FINALIZED: 'RETURN_FINALIZED',
   SETTLEMENT_APPROVED: 'SETTLEMENT_APPROVED',
   REFUND_COMPLETED: 'REFUND_COMPLETED',

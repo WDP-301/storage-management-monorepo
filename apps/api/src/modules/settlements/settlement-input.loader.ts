@@ -118,7 +118,6 @@ export async function loadSettlementInput(
     effectiveAt: contract.effectiveAt,
     months: contract.months,
     monthlyPrice: contract.monthlyPriceSnapshot,
-    noticeFrom: inspection.noticeFrom ?? inspection.createdAt,
     scheduledAt: inspection.scheduledAt ?? fromVietnamDate(returnedOn),
     returnedOn,
     rules,

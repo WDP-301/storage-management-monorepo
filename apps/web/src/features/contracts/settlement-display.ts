@@ -27,6 +27,7 @@ export const SETTLEMENT_FILTER_OPTIONS: { value: SettlementStatusFilter; label: 
 
 export const LINE_TYPE_LABEL: Record<SettlementLine['type'], string> = {
   UNPAID_INVOICE: 'Tiền thuê còn nợ',
+  EARLY_RETURN_FORFEIT: 'Trả trước hạn — mất cọc',
   EARLY_RETURN_SHORT_NOTICE: 'Trả sớm, báo trước không đủ',
   OVERSTAY: 'Quá hạn trả kho',
   DAMAGE: 'Hư hỏng',

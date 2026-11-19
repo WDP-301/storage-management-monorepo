@@ -27,8 +27,8 @@ export const InspectionFinalizeConfirm: React.FC<Props> = ({
     </p>
     {inspection.type === 'RETURN' && (
       <p role="status" className="text-kumo-default">
-        Ngày trả ghi nhận là hôm nay ({formatVnDay(vnToday())}) — tiền thuê, thời hạn báo trước và
-        phí quá hạn tính tới ngày này.
+        Ngày trả ghi nhận là hôm nay ({formatVnDay(vnToday())}) — tiền thuê, trả trước hạn (mất cọc)
+        và phí quá hạn tính theo ngày này.
       </p>
     )}
     <div className="flex justify-end gap-2">

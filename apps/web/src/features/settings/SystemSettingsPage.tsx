@@ -114,9 +114,9 @@ const SETTINGS_METADATA: Record<string, SettingMetadata> = {
     group: 'contract',
   },
   'contract.return_notice_days': {
-    label: 'Số ngày báo trước khi trả kho sớm',
+    label: 'Nhắc trước khi hết hạn hợp đồng',
     description:
-      'Khách trả kho trước khi hết hạn hợp đồng phải báo trước ít nhất số ngày này; báo trễ hơn sẽ bị trừ 1 tháng tiền thuê vào tiền cọc. Áp dụng cho yêu cầu trả kho tạo sau khi đổi.',
+      'Từ số ngày này trước ngày cuối hợp đồng, khách được nhắc hợp đồng sắp hết hạn. Trả kho trước ngày cuối hợp đồng là trả trước hạn và mất toàn bộ tiền cọc.',
     unit: 'ngày',
     group: 'contract',
   },

@@ -13,14 +13,10 @@ function requestSource(record: SettlementDetailRecord): string {
   return source !== 'CUSTOMER' && by ? `${label} · ${by}` : label;
 }
 
-/** The facts the settlement rests on: deposit, term, return days, notice and overstay. */
+/** The facts the settlement rests on: deposit, term, return days, early return and overstay. */
 export const SettlementOverview: React.FC<{ record: SettlementDetailRecord }> = ({ record }) => {
   const { timing } = record;
-  const notice = timing?.early
-    ? `${timing.notice_days}/${timing.required_notice_days} ngày${
-        timing.short_notice ? ' — không đủ' : ''
-      }`
-    : 'Không trả sớm';
+  const early = timing?.early ? 'Có — mất tiền cọc' : 'Không';
   const overstay =
     timing && timing.overstay_days > 0
       ? `${timing.overstay_days} ngày (từ ${formatVnDay(timing.overstay_from_day)})`
@@ -44,7 +40,7 @@ export const SettlementOverview: React.FC<{ record: SettlementDetailRecord }> = 
               value={record.return ? formatVnDay(record.return.returned_on) : '—'}
             />
             <Fact label="Ngày tính tiền" value={formatVnDay(timing.effective_return_day)} />
-            <Fact label="Báo trước" value={notice} />
+            <Fact label="Trả trước hạn" value={early} />
             <Fact label="Quá hạn" value={overstay} />
             <Fact label="Nguồn yêu cầu" value={requestSource(record)} />
           </>

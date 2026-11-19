@@ -150,7 +150,7 @@ function ContractDetail({
   );
   const openChange = openChangeForContract(changeRequests.requests, contract.id);
   const renewals = useContractRenewals(isActive);
-  const shownRenewal = renewalToShow(renewals.renewals, contract.id);
+  const shownRenewal = renewalToShow(renewals.renewals, contract.id, now);
   // While the branch weighs a renewal, a return or a move would contradict it.
   const renewalPending = shownRenewal?.status === 'PENDING';
   // A pending return already blocks a change request server-side; hide the entry point too.

@@ -28,7 +28,7 @@ export async function lockContractForRenewal(
   if (!locked) notFound('Contract', contractId);
   return em.findOneOrFail(Contract, {
     where: { id: contractId },
-    relations: { bookingItem: { storageUnit: { facility: true } }, customer: true },
+    relations: { bookingItem: { storageUnit: { facility: true } } },
   });
 }
 

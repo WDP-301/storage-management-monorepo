@@ -1,13 +1,17 @@
 import type { ContractRenewalView } from '@storage/types';
 
+/** How long a rejection stays on the contract screen, so the customer sees why. */
+const REJECTION_SHOWN_MS = 14 * 24 * 60 * 60 * 1000;
+
 /**
  * The renewal worth showing on a contract: the request still waiting for the branch, else a
- * rejection newer than any approval (so the customer sees why). Approved and withdrawn requests
- * need no card — the contract's own term already shows the outcome.
+ * recent rejection newer than any approval. Approved and withdrawn requests need no card — the
+ * contract's own term already shows the outcome.
  */
 export function renewalToShow(
   renewals: readonly ContractRenewalView[],
   contractId: string,
+  now: number,
 ): ContractRenewalView | null {
   const mine = renewals
     .filter((renewal) => renewal.contract_id === contractId)
@@ -15,7 +19,8 @@ export function renewalToShow(
   const pending = mine.find((renewal) => renewal.status === 'PENDING');
   if (pending) return pending;
   const latest = mine.find((renewal) => renewal.status !== 'CANCELLED');
-  return latest?.status === 'REJECTED' ? latest : null;
+  if (latest?.status !== 'REJECTED' || !latest.decided_at) return null;
+  return now - Date.parse(latest.decided_at) <= REJECTION_SHOWN_MS ? latest : null;
 }
 
 /**

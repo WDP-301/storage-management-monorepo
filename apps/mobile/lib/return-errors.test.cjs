@@ -38,7 +38,7 @@ test('returnErrorMessage shows conflicts verbatim and words 400 and 404 for the 
   assert.equal(returnErrorMessage(new ApiError(locked, 409, 'RETURN_REQUEST_LOCKED'), 'f'), locked);
   assert.equal(
     returnErrorMessage(new ApiError('Validation failed', 400, 'V', fields('scheduledAt')), 'f'),
-    'Chọn ngày trong 365 ngày tới',
+    'Chọn ngày trả trong khoảng cho phép',
   );
   // Appointment rules come with a message written for the customer.
   const outOfShift = {

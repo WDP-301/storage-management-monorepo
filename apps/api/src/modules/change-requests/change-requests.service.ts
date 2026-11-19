@@ -69,8 +69,6 @@ import { toChangeRequestRecord } from './types/change-request';
 
 const DEFAULT_PAGE_SIZE = 20;
 const OPTIONS_PAGE_SIZE = 50;
-/** A deposit top-up is due the sooner of the move day or this many days after approval. */
-const TOP_UP_DUE_DAYS = 7;
 /** Statuses where the request still occupies the contract's open slot — mirrors UQ_open_change_request. */
 const OPEN_STATUSES: readonly ChangeRequestStatus[] = OPEN_CHANGE_REQUEST_STATUSES;
 /** A customer withdraws their own request only before any money or contract is committed. */
@@ -547,11 +545,10 @@ export class ChangeRequestsService {
       request.rentDifference = newPrice - Number(item?.monthlyPriceSnapshot ?? 0);
       request.depositDifference = depositTopUp;
       if (depositTopUp > 0) {
-        // Due on the move day, but never more than TOP_UP_DUE_DAYS out — a move booked
-        // months ahead cannot defer the deposit to match.
-        const dueAt = new Date(
-          Math.min(moveAt.getTime(), now.getTime() + TOP_UP_DUE_DAYS * 86_400_000),
-        );
+        // Due on the move day, but never more than the configured top-up days out — a move
+        // booked months ahead cannot defer the deposit to match.
+        const dueDays = await this.settings.getUnitChangeTopUpDueDays();
+        const dueAt = new Date(Math.min(moveAt.getTime(), now.getTime() + dueDays * 86_400_000));
         const invoice = await manager.save(
           Invoice,
           manager.create(Invoice, {

@@ -295,6 +295,9 @@ describe('SettingsService', () => {
       'billing.overdue_penalty_percent': 100,
       'contract.unit_change_min_lead_days': 1,
       'contract.unit_change_max_days_ahead': 90,
+      'contract.return_max_days_ahead': 365,
+      'contract.early_return_forfeit_percent': 100,
+      'shelf.request_max_days_ahead': 30,
     };
 
     const serve = (overrides: Record<string, unknown> = {}) =>
@@ -314,8 +317,14 @@ describe('SettingsService', () => {
           leadDays: 30,
           maxUnitsPerBooking: 4,
         },
-        return: { noticeDays: 30, overduePenaltyPercent: 100 },
+        return: {
+          noticeDays: 30,
+          overduePenaltyPercent: 100,
+          maxDaysAhead: 365,
+          earlyForfeitPercent: 100,
+        },
         unitChange: { minLeadDays: 1, maxDaysAhead: 90 },
+        shelf: { requestMaxDaysAhead: 30 },
       });
     });
 

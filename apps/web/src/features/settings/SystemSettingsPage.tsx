@@ -21,6 +21,7 @@ import {
 import type { SystemSettingRecord } from '@storage/types';
 import React, { useEffect, useMemo, useState } from 'react';
 import { SettingsApi } from '../../lib/api';
+import { GROUP_LABELS, SETTINGS_METADATA } from './settings-metadata';
 
 export type ConfigCategory =
   | 'all'
@@ -30,166 +31,6 @@ export type ConfigCategory =
   | 'deposit'
   | 'idempotency'
   | 'security';
-
-interface SettingMetadata {
-  label?: string;
-  description?: string;
-  unit?: string;
-  group?: string;
-}
-
-/**
- * Metadata dictionary mapping keys to friendly Vietnamese labels, descriptions,
- * units, and logical category groups.
- */
-const SETTINGS_METADATA: Record<string, SettingMetadata> = {
-  'booking.hold_minutes': {
-    label: 'Thời gian giữ chỗ tạm thời (Hold timeout)',
-    description:
-      'Thời gian tối đa hệ thống tạm giữ kho cho khách hàng hoàn tất đặt cọc trước khi tự động giải phóng kho (Mục 3 tài liệu nghiệp vụ).',
-    unit: 'phút',
-    group: 'booking',
-  },
-  'booking.lead_days': {
-    label: 'Số ngày đặt trước tối đa (Max lead days)',
-    description:
-      'Khoảng thời gian tối đa tính từ ngày đặt chỗ đến ngày bắt đầu nhận kho thực tế của khách hàng.',
-    unit: 'ngày',
-    group: 'booking',
-  },
-  'booking.min_rental_months': {
-    label: 'Thời hạn thuê tối thiểu cho hợp đồng mới',
-    description:
-      'Đơn vị thời gian thuê tối thiểu được chấp nhận khi khách hàng tạo lượt thuê kho mới.',
-    unit: 'tháng',
-    group: 'booking',
-  },
-  'booking.max_rental_months': {
-    label: 'Thời hạn thuê tối đa cho hợp đồng mới',
-    description:
-      'Giới hạn thời gian thuê tối đa của một hợp đồng thuê kho (ràng buộc DB tối đa 60 tháng).',
-    unit: 'tháng',
-    group: 'booking',
-  },
-  'booking.default_rental_months': {
-    label: 'Thời hạn thuê mặc định',
-    description:
-      'Giá trị thời hạn thuê được chọn sẵn khi khách hàng lần đầu chọn kho trong giao diện.',
-    unit: 'tháng',
-    group: 'booking',
-  },
-  'booking.rental_months_options': {
-    label: 'Gợi ý các gói kỳ hạn thuê kho',
-    description:
-      'Danh sách các gói kỳ hạn thuê đề xuất hiển thị trên giao diện người dùng (phân tách bởi dấu phẩy).',
-    unit: 'tháng',
-    group: 'booking',
-  },
-  'booking.max_units_per_booking': {
-    label: 'Số kho tối đa trong một lượt đặt',
-    description:
-      'Giới hạn số lượng kho một khách hàng có thể chọn trong cùng một lượt đặt giữ chỗ.',
-    unit: 'kho',
-    group: 'booking',
-  },
-  'booking.search_radius_km': {
-    label: 'Bán kính tìm kiếm kho lân cận',
-    description:
-      'Khoảng cách địa lý tối đa theo tọa độ (kinh độ, vĩ độ) để tự động đề xuất các kho gần nhau khi thuê nhiều kho.',
-    unit: 'km',
-    group: 'booking',
-  },
-  'contract.abandoned_after_days': {
-    label: 'Ngưỡng ngày gợi ý kho bị bỏ hoang',
-    description:
-      'Số ngày sau khi hết hạn hợp đồng mà khách vẫn chưa yêu cầu trả kho thì hệ thống gợi ý quản lý chi nhánh mở thu hồi kho hộ (ABANDONED).',
-    unit: 'ngày',
-    group: 'contract',
-  },
-  'contract.no_show_after_days': {
-    label: 'Ngưỡng ngày nhắc khách không đến nhận kho',
-    description:
-      'Số ngày sau ngày bắt đầu hợp đồng mà khách vẫn chưa đến bàn giao (hợp đồng còn ở trạng thái nháp) thì hệ thống nhắc quản lý chi nhánh liên hệ và hủy hợp đồng để giải phóng kho.',
-    unit: 'ngày',
-    group: 'contract',
-  },
-  'contract.return_notice_days': {
-    label: 'Nhắc trước khi hết hạn hợp đồng',
-    description:
-      'Từ số ngày này trước ngày cuối hợp đồng, khách được nhắc hợp đồng sắp hết hạn. Trả kho trước ngày cuối hợp đồng là trả trước hạn và mất toàn bộ tiền cọc.',
-    unit: 'ngày',
-    group: 'contract',
-  },
-  'contract.unit_change_min_lead_days': {
-    label: 'Đổi kho — số ngày báo trước tối thiểu',
-    description:
-      'Ngày chuyển đồ sang kho mới khách chọn phải cách hôm nay ít nhất số ngày này, để quản lý kịp duyệt và khách kịp thanh toán bù cọc (0 = cho chọn ngay hôm nay, giờ còn lại trong ca hành chính). Giờ chuyển đồ lấy theo các ca hành chính (OFFICE).',
-    unit: 'ngày',
-    group: 'contract',
-  },
-  'contract.unit_change_max_days_ahead': {
-    label: 'Đổi kho — chọn ngày chuyển xa nhất',
-    description:
-      'Ngày chuyển đồ sang kho mới chỉ được hẹn (hoặc quản lý xác nhận) trong vòng số ngày này kể từ hôm nay; kho đích được giữ chỗ đến ngày chuyển. Nếu nhỏ hơn số ngày báo trước, hệ thống tự nới bằng số ngày báo trước.',
-    unit: 'ngày',
-    group: 'contract',
-  },
-  'deposit.default_months': {
-    label: 'Tỷ lệ tiền đặt cọc tối thiểu (Tháng thuê)',
-    description:
-      'Áp dụng cho kho chưa cấu hình số tháng cọc riêng; kho đã cấu hình sẽ dùng số tháng của nó.',
-    unit: 'tháng thuê',
-    group: 'deposit',
-  },
-  'billing.vat_tax_rate_percent': {
-    label: 'Thuế giá trị gia tăng (VAT)',
-    description:
-      'Mức thuế suất VAT áp dụng khi xuất hóa đơn thanh toán cho tiền thuê kho và các dịch vụ đi kèm.',
-    unit: '%',
-    group: 'billing',
-  },
-  'billing.overdue_penalty_percent': {
-    label: 'Phí quá hạn (% tiền thuê một ngày)',
-    description:
-      'Mỗi ngày giữ kho quá hạn hợp đồng bị tính phí bằng tỷ lệ này của tiền thuê một ngày (giá thuê tháng / 30), trừ vào tiền cọc khi quyết toán.',
-    unit: '%',
-    group: 'billing',
-  },
-  'idempotency.ttl_hours': {
-    label: 'Thời gian lưu trữ Idempotency Key',
-    description:
-      'Thời gian tồn tại của khóa chống gửi lặp giao dịch trước khi tác vụ tự động dọn dẹp.',
-    unit: 'giờ',
-    group: 'idempotency',
-  },
-  'idempotency.stale_seconds': {
-    label: 'Thời gian giải phóng khóa xử lý treo',
-    description:
-      'Ngưỡng thời gian để thu hồi khóa giao dịch bị kẹt trong trạng thái đang xử lý (sau sự cố máy chủ).',
-    unit: 'giây',
-    group: 'idempotency',
-  },
-  'security.session_max_age_days': {
-    label: 'Thời hạn hiệu lực phiên đăng nhập (Session TTL)',
-    description:
-      'Thời gian tồn tại tối đa của cookie phiên bảo mật (sid) trên trình duyệt trước khi người dùng cần đăng nhập lại.',
-    unit: 'ngày',
-    group: 'security',
-  },
-  'security.max_login_failed_attempts': {
-    label: 'Giới hạn số lần đăng nhập sai tối đa',
-    description:
-      'Số lần nhập sai mật khẩu liên tiếp cho phép trước khi tạm khóa địa chỉ IP hoặc tài khoản trong 15 phút.',
-    unit: 'lần',
-    group: 'security',
-  },
-  'security.system_maintenance_mode': {
-    label: 'Chế độ bảo trì hệ thống toàn diện',
-    description:
-      'Tạm dừng các thao tác đặt kho và thanh toán từ phía khách hàng (chỉ quản trị viên mới có thể truy cập hệ thống).',
-    group: 'security',
-  },
-};
 
 const enhanceSetting = (item: SystemSettingRecord): SystemSettingRecord => {
   const meta = SETTINGS_METADATA[item.key];
@@ -354,15 +195,6 @@ const INITIAL_SETTINGS: SystemSettingRecord[] = [
     updated_at: new Date().toISOString(),
   },
 ];
-
-const GROUP_LABELS: Record<string, string> = {
-  booking: 'Đặt kho & Giữ chỗ',
-  deposit: 'Tiền cọc & Đặt cọc',
-  billing: 'Tài chính & Phí',
-  contract: 'Hợp đồng & Đổi kho',
-  idempotency: 'Bảo mật & Phiên (Idempotency)',
-  security: 'Bảo mật & Phiên',
-};
 
 const normalizeCategory = (group: string): string => {
   if (group === 'booking') return 'booking';

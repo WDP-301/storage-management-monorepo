@@ -30,8 +30,9 @@ export interface ReturnTiming {
   lastDay: string;
   scheduledDay: string;
   effectiveReturnDay: string;
-  /** Before the last day of the term: the whole deposit is forfeited. */
+  /** Before the last day of the term: `earlyForfeitPercent` of the deposit is forfeited. */
   early: boolean;
+  earlyForfeitPercent: number;
   overstayFromDay: string;
   overstayDays: number;
   overstayPenaltyPerDay: number;
@@ -55,7 +56,7 @@ export function effectiveReturnDay(scheduledDay: string, returnedOn?: string | n
  * Early-return and overstay consequences of a return, in Vietnam calendar days, counted to the
  * effective return day. Returning on the last day of the term or on the day after it (the term
  * end) is on time: overstay is charged from the term end + 1. Early means before the last day,
- * which forfeits the deposit however long the notice. Overstay never reaches back before go-live.
+ * which forfeits the captured share of the deposit however long the notice. Overstay never reaches back before go-live.
  */
 export function returnTiming(input: ReturnTimingInput): ReturnTiming {
   const termEndAt = addVietnamMonths(input.effectiveAt, input.months);
@@ -79,6 +80,8 @@ export function returnTiming(input: ReturnTimingInput): ReturnTiming {
     scheduledDay,
     effectiveReturnDay: returnDay,
     early,
+    // Requests captured before the share was configurable forfeited the whole deposit.
+    earlyForfeitPercent: input.rules.earlyForfeitPercent ?? 100,
     overstayFromDay,
     overstayDays,
     overstayPenaltyPerDay: penaltyPerDay.toNumber(),
@@ -93,6 +96,7 @@ export function toReturnTimingRecord(timing: ReturnTiming): ReturnTimingRecord {
     scheduled_day: timing.scheduledDay,
     effective_return_day: timing.effectiveReturnDay,
     early: timing.early,
+    early_forfeit_percent: timing.earlyForfeitPercent,
     overstay_from_day: timing.overstayFromDay,
     overstay_days: timing.overstayDays,
     overstay_penalty_per_day: timing.overstayPenaltyPerDay,

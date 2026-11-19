@@ -19,9 +19,6 @@ import {
 } from '@storage/types';
 import { type EntityManager, In, IsNull } from 'typeorm';
 
-/** How far ahead a return can be booked, in days. */
-export const RETURN_MAX_DAYS_AHEAD = 365;
-
 export const RETURN_MESSAGES = {
   notActive: 'Chỉ hợp đồng đang thuê mới yêu cầu trả kho được',
   alreadyOpen: 'Hợp đồng đã có yêu cầu trả kho đang mở',
@@ -29,7 +26,6 @@ export const RETURN_MESSAGES = {
   finalized: 'Biên trả đã chốt — không sửa được',
   locked: 'Chi nhánh đã bắt đầu kiểm tra kho — không huỷ được yêu cầu trả kho',
   notFound: 'Không tìm thấy yêu cầu trả kho đang mở',
-  dayOutOfRange: `Chọn ngày trả trong khoảng từ hôm nay đến ${RETURN_MAX_DAYS_AHEAD} ngày tới`,
   pastTime: 'Giờ trả kho phải ở tương lai',
   notInShift: 'Giờ trả kho phải nằm trong khung giờ hành chính',
 } as const;
@@ -50,12 +46,21 @@ export function returnConflict(
   return new DomainException(code, message, HttpStatus.CONFLICT, details);
 }
 
-/** 400 unless `at` falls on a Vietnam day from today to RETURN_MAX_DAYS_AHEAD days ahead. */
-export function assertReturnDayInRange(field: string, at: Date, now: Date = new Date()): void {
+/** 400 unless `at` falls on a Vietnam day from today to `maxDaysAhead` days ahead. */
+export function assertReturnDayInRange(
+  field: string,
+  at: Date,
+  maxDaysAhead: number,
+  now: Date = new Date(),
+): void {
   const day = vietnamDate(at);
   const today = vietnamToday(now);
-  if (day < today || day > addVietnamDays(today, RETURN_MAX_DAYS_AHEAD)) {
-    throw fieldValidationError(field, 'outOfRange', RETURN_MESSAGES.dayOutOfRange);
+  if (day < today || day > addVietnamDays(today, maxDaysAhead)) {
+    throw fieldValidationError(
+      field,
+      'outOfRange',
+      `Chọn ngày trả trong khoảng từ hôm nay đến ${maxDaysAhead} ngày tới`,
+    );
   }
 }
 
@@ -86,11 +91,12 @@ export const staffStarted = (inspection: Inspection): boolean =>
 
 /** The return rules in force now, to be captured on a return request. */
 export async function currentReturnRules(settings: SettingsService): Promise<ReturnRules> {
-  const [noticeDays, penaltyPercent] = await Promise.all([
+  const [noticeDays, penaltyPercent, earlyForfeitPercent] = await Promise.all([
     settings.getReturnNoticeDays(),
     settings.getOverduePenaltyPercent(),
+    settings.getEarlyReturnForfeitPercent(),
   ]);
-  return { noticeDays, penaltyPercent };
+  return { noticeDays, penaltyPercent, earlyForfeitPercent };
 }
 
 export function assertContractActive(contract: Contract): void {
@@ -190,10 +196,11 @@ export function moveReturn(
   inspection: Inspection,
   scheduledAt: Date,
   templates: readonly ShiftWindow[],
+  maxDaysAhead: number,
   now: Date,
 ): boolean {
   if (!changesAppointment(inspection, scheduledAt)) return false;
-  assertReturnDayInRange('scheduledAt', scheduledAt, now);
+  assertReturnDayInRange('scheduledAt', scheduledAt, maxDaysAhead, now);
   assertReturnTimeInOfficeShift('scheduledAt', scheduledAt, templates, now);
   inspection.scheduledAt = scheduledAt;
   return true;

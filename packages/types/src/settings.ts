@@ -52,6 +52,10 @@ export interface ClientReturnSettings {
   noticeDays: number;
   /** Per-day overstay charge as a percentage of one day's rent (monthly rent / 30). */
   overduePenaltyPercent: number;
+  /** Furthest return day, in days after today. */
+  maxDaysAhead: number;
+  /** Share (%) of the deposit an early return forfeits, for requests made now. */
+  earlyForfeitPercent: number;
 }
 
 /** When a unit-change move may be booked, in Vietnam days from today; mirrors the settings. */
@@ -62,8 +66,15 @@ export interface ClientUnitChangeSettings {
   maxDaysAhead: number;
 }
 
+/** Shelf drop-off / pick-up request rules; mirrors the `shelf.*` settings. */
+export interface ClientShelfSettings {
+  /** Furthest day a drop-off or pick-up may be requested for, in days after today. */
+  requestMaxDaysAhead: number;
+}
+
 export interface ClientSettingsResponse {
   booking: ClientBookingSettings;
   return: ClientReturnSettings;
   unitChange: ClientUnitChangeSettings;
+  shelf: ClientShelfSettings;
 }

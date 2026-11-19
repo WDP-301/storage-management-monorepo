@@ -14,7 +14,10 @@ export async function loadClientSettings(
     maxUnitsPerBooking,
     noticeDays,
     overduePenaltyPercent,
+    returnMaxDaysAhead,
+    earlyForfeitPercent,
     unitChange,
+    shelfRequestMaxDaysAhead,
   ] = await Promise.all([
     settings.getBookingRentalMonthsOptions(),
     settings.getBookingDefaultRentalMonths(),
@@ -24,7 +27,10 @@ export async function loadClientSettings(
     settings.getBookingMaxUnitsPerBooking(),
     settings.getReturnNoticeDays(),
     settings.getOverduePenaltyPercent(),
+    settings.getReturnMaxDaysAhead(),
+    settings.getEarlyReturnForfeitPercent(),
     settings.getUnitChangeMoveWindow(),
+    settings.getShelfRequestMaxDaysAhead(),
   ]);
   return {
     booking: toClientBookingSettings({
@@ -35,8 +41,14 @@ export async function loadClientSettings(
       leadDays,
       maxUnitsPerBooking,
     }),
-    return: { noticeDays, overduePenaltyPercent },
+    return: {
+      noticeDays,
+      overduePenaltyPercent,
+      maxDaysAhead: returnMaxDaysAhead,
+      earlyForfeitPercent,
+    },
     unitChange,
+    shelf: { requestMaxDaysAhead: shelfRequestMaxDaysAhead },
   };
 }
 

@@ -24,6 +24,11 @@ import {
 import { In } from 'typeorm';
 import { ChangeRequestsService } from './change-requests.service';
 
+jest.mock(
+  '@modules/settings/setting-read.util',
+  () => jest.requireActual('../../../test/seeded-settings').seededSettingReader,
+);
+
 const FACILITY_ID = 'facility-1';
 const CUSTOMER_ID = 'customer-1';
 // `HH:mm` Vietnam time on the Vietnam day `days` after today, whatever the machine timezone.
@@ -287,6 +292,7 @@ describe('ChangeRequestsService', () => {
     settings = Object.assign(Object.create(SettingsService.prototype), {
       getDepositDefaultMonths: jest.fn().mockResolvedValue(2),
       getUnitChangeMoveWindow: jest.fn().mockResolvedValue({ minLeadDays: 1, maxDaysAhead: 90 }),
+      getUnitChangeTopUpDueDays: jest.fn().mockResolvedValue(7),
     });
 
     service = new ChangeRequestsService(
@@ -714,6 +720,18 @@ describe('ChangeRequestsService', () => {
       );
       expect(managerCall).toBeDefined();
       expect(handoverAssignment.assignSafely).not.toHaveBeenCalled();
+    });
+
+    it('approve defers the top-up no further than the configured days out', async () => {
+      (settings.getUnitChangeTopUpDueDays as jest.Mock).mockResolvedValue(3);
+      requestRow = buildRequest();
+      const moveAt = vnDayAt(60, '09:00');
+
+      await service.decide('req-1', { decision: 'APPROVED', moveAt }, manager);
+
+      const invoice = txManager.save.mock.calls.find((c) => c[0] === Invoice)?.[1];
+      expect(invoice.dueAt.getTime()).toBeLessThanOrEqual(Date.now() + 3 * 86400_000 + 60_000);
+      expect(invoice.dueAt.getTime()).toBeGreaterThan(Date.now() + 2 * 86400_000);
     });
 
     it('approve defers the top-up no further than a week out', async () => {

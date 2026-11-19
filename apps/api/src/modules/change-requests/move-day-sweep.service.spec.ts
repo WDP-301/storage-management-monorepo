@@ -108,6 +108,7 @@ describe('MoveDaySweepService', () => {
       } as never,
       notifications as never,
       { assignSafely: jest.fn() } as never,
+      { getUnitChangeMoveOverdueDays: jest.fn().mockResolvedValue(7) } as never,
     );
   });
 

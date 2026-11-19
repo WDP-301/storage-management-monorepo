@@ -1,6 +1,7 @@
 import type { StorageUnit } from '@entities/storage-unit.entity';
 import { SystemSetting } from '@entities/system-setting.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import type { OverdueReminderSchedule } from '@modules/invoices/overdue-reminder.util';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, fieldValidationError } from '@shared/exceptions/domain.exception';
@@ -136,6 +137,55 @@ export class SettingsService {
       this.getNumber('contract.unit_change_max_days_ahead'),
     ]);
     return { minLeadDays, maxDaysAhead: Math.max(maxDaysAhead, minLeadDays) };
+  }
+
+  /** Furthest day ahead (Vietnam days from today) a return can be booked or rescheduled. */
+  async getReturnMaxDaysAhead(): Promise<number> {
+    return this.getNumber('contract.return_max_days_ahead');
+  }
+
+  /** Share (%) of the deposit an early return forfeits; captured on each return request. */
+  async getEarlyReturnForfeitPercent(): Promise<number> {
+    return this.getNumber('contract.early_return_forfeit_percent');
+  }
+
+  /** Days after a booking item is created during which its contract may be created. */
+  async getContractCreationWindowDays(): Promise<number> {
+    return this.getNumber('contract.creation_window_days');
+  }
+
+  /** Cap (days from approval) on when a unit-change deposit top-up falls due. */
+  async getUnitChangeTopUpDueDays(): Promise<number> {
+    return this.getNumber('contract.unit_change_top_up_due_days');
+  }
+
+  /** Days past the booked move day before a unit change awaiting its top-up is auto-cancelled. */
+  async getUnitChangeMoveOverdueDays(): Promise<number> {
+    return this.getNumber('contract.unit_change_move_overdue_days');
+  }
+
+  /** Which overdue days remind the customer, and from when (and how often) managers hear of it. */
+  async getOverdueReminderSchedule(): Promise<OverdueReminderSchedule> {
+    const [customerDays, repeatDays, managerFromDays] = await Promise.all([
+      this.get('billing.overdue_reminder_days'),
+      this.getNumber('billing.overdue_reminder_repeat_days'),
+      this.getNumber('billing.overdue_manager_alert_from_days'),
+    ]);
+    return {
+      customerDays: Array.isArray(customerDays) ? customerDays.map(Number) : [],
+      repeatDays,
+      managerFromDays,
+    };
+  }
+
+  /** Furthest day ahead a shelf drop-off or pick-up may be requested. */
+  async getShelfRequestMaxDaysAhead(): Promise<number> {
+    return this.getNumber('shelf.request_max_days_ahead');
+  }
+
+  /** Minutes before a shift starts that its check-in opens. */
+  async getCheckInOpensBeforeMinutes(): Promise<number> {
+    return this.getNumber('staff.check_in_opens_before_minutes');
   }
 
   /** Go-live of the return rules; a missing or unreadable value is an error, never a guess. */

@@ -17,6 +17,8 @@ describe('ReturnPreviewService.preview', () => {
   const settings = {
     getReturnNoticeDays: jest.fn().mockResolvedValue(30),
     getOverduePenaltyPercent: jest.fn().mockResolvedValue(100),
+    getEarlyReturnForfeitPercent: jest.fn().mockResolvedValue(100),
+    getReturnMaxDaysAhead: jest.fn().mockResolvedValue(365),
     getReturnRulesEffectiveAt: jest.fn().mockResolvedValue(new Date('2026-01-01T00:00:00.000Z')),
   };
 

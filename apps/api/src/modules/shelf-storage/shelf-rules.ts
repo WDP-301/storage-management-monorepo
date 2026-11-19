@@ -1,5 +1,11 @@
 import { randomBytes } from 'node:crypto';
-import { startOfVietnamDay, vietnamToday } from '@shared/utils/calendar.util';
+import { fieldValidationError } from '@shared/exceptions/domain.exception';
+import {
+  addVietnamDays,
+  fromVietnamDate,
+  startOfVietnamDay,
+  vietnamToday,
+} from '@shared/utils/calendar.util';
 import {
   ContractStatus,
   type DropOffBlockReason,
@@ -12,12 +18,29 @@ import {
   type ShelfReceiptType,
 } from '@storage/types';
 
-/** How long a scanned pass keeps the counter session open. */
-export const COUNTER_SESSION_MINUTES = 30;
-/** A pick-up request may be made for a time at most this many days ahead. */
-export const PICKUP_REQUEST_MAX_DAYS_AHEAD = 30;
-/** A drop-off request may be made for a time at most this many days ahead. */
-export const DROP_OFF_REQUEST_MAX_DAYS_AHEAD = 30;
+/** Setting: how long (minutes) a scanned pass keeps the counter session open. */
+export const COUNTER_SESSION_MINUTES_KEY = 'shelf.counter_session_minutes';
+
+/** A request time this little in the past still passes: the form was filled a moment ago. */
+const PAST_GRACE_MS = 5 * 60 * 1000;
+
+/**
+ * 400 unless a drop-off or pick-up request lands from just now to the end of the Vietnam day
+ * `maxDaysAhead` days from today (the whole last allowed day is open).
+ */
+export function assertRequestedForInRange(requestedFor: Date, now: Date, maxDaysAhead: number) {
+  const lastDayEnd = fromVietnamDate(addVietnamDays(vietnamToday(now), maxDaysAhead + 1));
+  if (
+    requestedFor.getTime() < now.getTime() - PAST_GRACE_MS ||
+    requestedFor.getTime() >= lastDayEnd.getTime()
+  ) {
+    throw fieldValidationError(
+      'requestedFor',
+      'outOfRange',
+      `requestedFor must be within the next ${maxDaysAhead} days`,
+    );
+  }
+}
 
 /**
  * Trims, collapses inner whitespace and composes to NFC, so "  Thùng   sách " and "Thùng sách" —

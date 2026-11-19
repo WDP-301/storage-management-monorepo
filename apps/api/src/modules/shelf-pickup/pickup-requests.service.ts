@@ -2,6 +2,7 @@ import { PickupRequest } from '@entities/pickup-request.entity';
 import { findOverdueInvoiceNos } from '@modules/access/overdue-invoices.query';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { NotificationsService } from '@modules/notifications/notifications.service';
+import { SettingsService } from '@modules/settings/settings.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import {
   DomainException,
@@ -9,20 +10,15 @@ import {
   notFound,
 } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import { addVietnamDays, fromVietnamDate, vietnamToday } from '@shared/utils/calendar.util';
 import { PickupRequestStatus, type PickupRequestView } from '@storage/types';
 import { DataSource, type EntityManager, QueryFailedError } from 'typeorm';
 import { loadPickupRequests } from '../shelf-storage/pickup-request.read';
 import { findShelfContracts, loadStock } from '../shelf-storage/shelf-contract.query';
 import { assignShelfRequestSafely } from '../shelf-storage/shelf-request-assignment';
-import { PICKUP_REQUEST_MAX_DAYS_AHEAD, pickupRequestBlock } from '../shelf-storage/shelf-rules';
+import { assertRequestedForInRange, pickupRequestBlock } from '../shelf-storage/shelf-rules';
 import type { CreatePickupRequestDto } from './dto/pickup-request.dto';
 import { notifyFacilityStaff, notifyRequestCancelled } from './pickup-notifications';
 
-const PAST_GRACE_MS = 5 * 60 * 1000;
-/** The first instant no request may reach: the whole last allowed Vietnam day is open. */
-const lastDayEnd = (now: Date) =>
-  fromVietnamDate(addVietnamDays(vietnamToday(now), PICKUP_REQUEST_MAX_DAYS_AHEAD + 1));
 const CONTRACT_LIST_LIMIT = 20;
 const UNIQUE_VIOLATION = '23505';
 
@@ -56,6 +52,7 @@ export class PickupRequestsService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly notifications: NotificationsService,
+    private readonly settings: SettingsService,
   ) {}
 
   async listForContract(contractId: string, actor: AuthUser): Promise<PickupRequestView[]> {
@@ -76,16 +73,7 @@ export class PickupRequestsService {
   ): Promise<PickupRequestView> {
     const requestedFor = new Date(dto.requestedFor);
     const now = new Date();
-    if (
-      requestedFor.getTime() < now.getTime() - PAST_GRACE_MS ||
-      requestedFor.getTime() >= lastDayEnd(now).getTime()
-    ) {
-      throw fieldValidationError(
-        'requestedFor',
-        'outOfRange',
-        `requestedFor must be within the next ${PICKUP_REQUEST_MAX_DAYS_AHEAD} days`,
-      );
-    }
+    assertRequestedForInRange(requestedFor, now, await this.settings.getShelfRequestMaxDaysAhead());
     const seen = new Set<string>();
     dto.lines.forEach((line, index) => {
       if (seen.has(line.itemId)) {

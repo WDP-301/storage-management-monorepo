@@ -76,6 +76,7 @@ describe('TermEndReminderService.run', () => {
     const settings = {
       getReturnNoticeDays: jest.fn(async () => noticeDays),
       getOverduePenaltyPercent: jest.fn().mockResolvedValue(100),
+      getEarlyReturnForfeitPercent: jest.fn().mockResolvedValue(100),
       getReturnRulesEffectiveAt: jest.fn(async () => goLiveAt),
     };
     service = new TermEndReminderService(

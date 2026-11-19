@@ -1,5 +1,7 @@
-import { COUNTER_SESSION_MINUTES } from '@modules/shelf-storage/shelf-rules';
+import { readNumberSetting } from '@modules/settings/setting-read.util';
+import { COUNTER_SESSION_MINUTES_KEY } from '@modules/shelf-storage/shelf-rules';
 import { HttpStatus } from '@nestjs/common';
+
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { AccessEventType } from '@storage/types';
@@ -32,6 +34,7 @@ export const invalidPass = (reason: string, details: Record<string, unknown> = {
  * not now(): the transaction may have started before waiting on this lock.
  */
 export async function lockPass(em: EntityManager, tokenHash: string): Promise<PassRow> {
+  const sessionMinutes = await readNumberSetting(em, COUNTER_SESSION_MINUTES_KEY);
   const [pass]: PassRow[] = await em.query(
     `SELECT "id", "customer_id" AS "customerId", "used_at" AS "usedAt",
             "verified_by" AS "verifiedBy", "event_type" AS "eventType",
@@ -42,7 +45,7 @@ export async function lockPass(em: EntityManager, tokenHash: string): Promise<Pa
        FROM "access_events"
       WHERE "qr_token_hash" = $1
       FOR UPDATE`,
-    [tokenHash, COUNTER_SESSION_MINUTES],
+    [tokenHash, sessionMinutes],
   );
   if (!pass) throw invalidPass('NOT_FOUND');
   return pass;

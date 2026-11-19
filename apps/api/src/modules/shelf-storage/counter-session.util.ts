@@ -1,10 +1,11 @@
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { readNumberSetting } from '@modules/settings/setting-read.util';
 import { HttpStatus } from '@nestjs/common';
 import { DomainException } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
 import { AccessEventType } from '@storage/types';
 import type { EntityManager } from 'typeorm';
-import { COUNTER_SESSION_MINUTES } from './shelf-rules';
+import { COUNTER_SESSION_MINUTES_KEY } from './shelf-rules';
 
 /** A scanned pass that still lets its scanner record receipts. */
 export interface CounterSession {
@@ -38,6 +39,7 @@ export async function assertLiveSession(
   sessionId: string,
   contract?: { customerId: string; warehouse: { id: string } },
 ): Promise<CounterSession> {
+  const sessionMinutes = await readNumberSetting(em, COUNTER_SESSION_MINUTES_KEY);
   const [row]: (CounterSession & { live: boolean })[] = await em.query(
     `SELECT "id", "customer_id" AS "customerId", "warehouse_id" AS "warehouseId",
             "facility_id" AS "facilityId", "used_at" AS "startedAt",
@@ -45,7 +47,7 @@ export async function assertLiveSession(
             ("used_at" + make_interval(mins => $3) > clock_timestamp()) AS "live"
        FROM "access_events"
       WHERE "id" = $1 AND "verified_by" = $2 AND "event_type" = $4 AND "used_at" IS NOT NULL`,
-    [sessionId, actor.id, COUNTER_SESSION_MINUTES, AccessEventType.COUNTER_SCAN],
+    [sessionId, actor.id, sessionMinutes, AccessEventType.COUNTER_SCAN],
   );
   if (!row) throw invalidSession('NOT_FOUND');
   if (!row.live) throw invalidSession('EXPIRED');

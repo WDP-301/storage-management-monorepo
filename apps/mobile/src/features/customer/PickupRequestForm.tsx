@@ -4,6 +4,7 @@ import { CalendarBlank, Minus, Plus } from 'phosphor-react-native';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { ApiError } from '../../../lib/api';
+import { useShelfRequestSettings } from '../../../lib/client-settings';
 import { formatIsoDate } from '../../../lib/format-vi';
 import {
   availableHours,
@@ -66,6 +67,7 @@ export function PickupRequestForm({
   onDone: () => void;
 }) {
   const [today] = useState(() => vietnamToday(Date.now()));
+  const { requestMaxDaysAhead } = useShelfRequestSettings();
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [dayIso, setDayIso] = useState<string | null>(null);
   const [hour, setHour] = useState<number | null>(null);
@@ -151,7 +153,7 @@ export function PickupRequestForm({
           <View className="rounded-2xl border border-border-default bg-bg-card p-3.5">
             <MonthCalendar
               minIso={today}
-              maxIso={lastRequestDay(today)}
+              maxIso={lastRequestDay(today, requestMaxDaysAhead)}
               selectedIso={dayIso}
               onSelect={pickDay}
             />

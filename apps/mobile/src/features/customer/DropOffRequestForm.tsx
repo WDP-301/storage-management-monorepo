@@ -4,6 +4,7 @@ import { CalendarBlank, Plus, X } from 'phosphor-react-native';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { ApiError } from '../../../lib/api';
+import { useShelfRequestSettings } from '../../../lib/client-settings';
 import {
   addNewLine,
   type NewItemLine,
@@ -43,6 +44,7 @@ export function DropOffRequestForm({
   onDone: () => void;
 }) {
   const [today] = useState(() => vietnamToday(Date.now()));
+  const { requestMaxDaysAhead } = useShelfRequestSettings();
   const effectiveDay = contractEffectiveAt
     ? vietnamToday(new Date(contractEffectiveAt).getTime())
     : today;
@@ -208,7 +210,7 @@ export function DropOffRequestForm({
           <View className="rounded-2xl border border-border-default bg-bg-card p-3.5">
             <MonthCalendar
               minIso={minDay}
-              maxIso={lastRequestDay(today)}
+              maxIso={lastRequestDay(today, requestMaxDaysAhead)}
               selectedIso={dayIso}
               onSelect={pickDay}
             />

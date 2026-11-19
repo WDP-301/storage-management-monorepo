@@ -1,11 +1,9 @@
 import { View } from 'react-native';
+import { useReturnSettings } from '../../../lib/client-settings';
 import { formatIsoDate } from '../../../lib/format-vi';
 import { addDaysIso } from '../../../lib/settlement-format';
 import { Text } from '../../components/ui';
 import { MonthCalendar } from './MonthCalendar';
-
-/** The API accepts a return day from today (Vietnam) to this many days ahead. */
-export const RETURN_MAX_DAYS_AHEAD = 365;
 
 type Props = {
   todayIso: string;
@@ -21,7 +19,9 @@ type Props = {
  * Nothing is pre-selected: the customer has to pick a day.
  */
 export function ReturnDatePicker({ todayIso, selectedIso, lastDayIso, onSelect }: Props) {
-  const maxIso = addDaysIso(todayIso, RETURN_MAX_DAYS_AHEAD);
+  // The API accepts a return day from today (Vietnam) to the configured horizon.
+  const { maxDaysAhead } = useReturnSettings();
+  const maxIso = addDaysIso(todayIso, maxDaysAhead);
   return (
     <View className="rounded-2xl border border-border-default bg-bg-card p-3.5">
       {lastDayIso ? (

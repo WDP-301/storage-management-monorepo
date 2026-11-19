@@ -2,13 +2,11 @@ import type { Contract } from '@entities/contract.entity';
 import { Invoice } from '@entities/invoice.entity';
 import { InvoiceItem } from '@entities/invoice-item.entity';
 import { generateInvoiceNo } from '@modules/payments/invoice-no.util';
+import { readNumberSetting } from '@modules/settings/setting-read.util';
 import { addVietnamDays, fromVietnamDate, vietnamToday } from '@shared/utils/calendar.util';
 import { InvoiceItemType, InvoiceKind, InvoiceStatus } from '@storage/types';
 import Decimal from 'decimal.js';
 import type { EntityManager } from 'typeorm';
-
-/** Days the customer has to pay a fee invoice. */
-export const FEE_INVOICE_DUE_DAYS = 7;
 
 export interface FeeInvoiceLine {
   itemType: InvoiceItemType;
@@ -20,7 +18,7 @@ export interface FeeInvoiceLine {
 
 /**
  * Bills charges that are not a rent period (deposit shortfall, damage) on a SETTLEMENT invoice:
- * tax 0, due in 7 Vietnam days, one item per line. The kind sits outside the (contract_id,
+ * tax 0, due in `billing.fee_invoice_due_days` Vietnam days, one item per line. The kind sits outside the (contract_id,
  * period_no) unique index, so a contract may carry several; once overdue it blocks the customer
  * like an overdue rent invoice.
  */
@@ -34,6 +32,7 @@ export async function issueFeeInvoice(
   },
 ): Promise<Invoice> {
   const total = input.lines.reduce((sum, line) => sum.plus(line.amount), new Decimal(0));
+  const dueDays = await readNumberSetting(em, 'billing.fee_invoice_due_days');
   const invoice = await em.save(
     Invoice,
     em.create(Invoice, {
@@ -50,7 +49,7 @@ export async function issueFeeInvoice(
       taxAmount: 0,
       total: total.toNumber(),
       issuedAt: input.now,
-      dueAt: fromVietnamDate(addVietnamDays(vietnamToday(input.now), FEE_INVOICE_DUE_DAYS)),
+      dueAt: fromVietnamDate(addVietnamDays(vietnamToday(input.now), dueDays)),
       billingInfo: input.billingInfo,
     }),
   );

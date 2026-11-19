@@ -1,5 +1,10 @@
 import { assertLiveSession } from './counter-session.util';
 
+jest.mock(
+  '@modules/settings/setting-read.util',
+  () => jest.requireActual('../../../test/seeded-settings').seededSettingReader,
+);
+
 const row = (over: Record<string, unknown> = {}) => ({
   id: 'ses-1',
   customerId: 'cust-1',

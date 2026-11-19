@@ -6,6 +6,7 @@ import { DateField } from '../../components/DateField';
 import { OfficeTimeSelect } from '../../components/OfficeTimeSelect';
 import { ContractsApi } from '../../lib/api';
 import { useOfficeTimeSlots } from '../../lib/use-office-time-slots';
+import { useReturnMaxDaysAhead } from '../../lib/use-return-max-days-ahead';
 import { addDays, vnToday } from '../../lib/vn-day';
 import type { ContractRecord } from '../../types/contract';
 import type { ManagedReturnRequestInput } from '../../types/settlement';
@@ -20,7 +21,6 @@ import {
 import { describeApiError } from './settlement-display';
 import { MAX_NOTE_LENGTH } from './settlement-form';
 
-const MAX_DAYS_AHEAD = 365;
 type Source = ManagedReturnRequestInput['source'];
 
 interface Props {
@@ -43,16 +43,17 @@ export const ManagedReturnForm: React.FC<Props> = ({ contract, canRequest, onCha
   const [error, setError] = useState<string | null>(null);
   // No slot lookups while the form is closed.
   const slots = useOfficeTimeSlots(open ? day : '', null, 'hẹn trả');
+  const maxDaysAhead = useReturnMaxDaysAhead();
 
   const openReturn = contract.return && !contract.return.finalized_at;
   if (!canRequest || contract.status !== 'ACTIVE' || openReturn) return null;
-  const lastDay = addDays(today, MAX_DAYS_AHEAD);
+  const lastDay = addDays(today, maxDaysAhead);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const problem =
       !day || day < today || day > lastDay
-        ? 'Ngày hẹn trả phải từ hôm nay đến 365 ngày tới.'
+        ? `Ngày hẹn trả phải từ hôm nay đến ${maxDaysAhead} ngày tới.`
         : note.trim().length > MAX_NOTE_LENGTH
           ? `Ghi chú tối đa ${MAX_NOTE_LENGTH} ký tự.`
           : withAccount

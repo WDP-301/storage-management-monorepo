@@ -347,6 +347,20 @@ export class InvoicePdfService {
           .stroke();
         currentY += 8;
 
+        if (Number(invoice.taxAmount) > 0) {
+          const amountRow = (label: string, amount: number) => {
+            doc.font(fontRegular).fontSize(9).fillColor('#000000');
+            doc.text(t(label), pageLeft + 120, currentY, { width: 250, align: 'right' });
+            doc.text(formatVndCurrency(amount), pageRight - 120, currentY, {
+              width: 120,
+              align: 'right',
+            });
+            currentY += 16;
+          };
+          amountRow('Tạm tính:', Number(invoice.subtotal));
+          amountRow('Thuế GTGT (VAT):', Number(invoice.taxAmount));
+        }
+
         doc.font(fontBold).fontSize(9.5).fillColor('#000000');
         doc.text(t('TỔNG CỘNG TIỀN PHẢI THANH TOÁN:'), pageLeft + 120, currentY, {
           width: 250,

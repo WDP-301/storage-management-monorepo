@@ -23,6 +23,7 @@ const ON_TIME: ReturnTiming = {
   scheduledDay: E,
   effectiveReturnDay: E,
   early: false,
+  earlyForfeitPercent: 100,
   overstayFromDay: E,
   overstayDays: 0,
   overstayPenaltyPerDay: 0,
@@ -99,6 +100,21 @@ describe('computeSettlement', () => {
     const timing = { ...ON_TIME, early: true };
     const result = computeSettlement(input({ timing, invoices: [invoice()] }));
     expect(outcome(result)).toEqual([0, 800000]);
+  });
+
+  it('forfeits only the captured share of the deposit; the rest covers debts, then is refunded', () => {
+    const timing = { ...ON_TIME, early: true, earlyForfeitPercent: 30 };
+    const result = computeSettlement(input({ timing }));
+    expect(result.lines[0]).toMatchObject({
+      type: SettlementLineType.EARLY_RETURN_FORFEIT,
+      amount: 600000,
+      description: expect.stringContaining('mất 30% tiền cọc'),
+    });
+    expect(outcome(result)).toEqual([1400000, 0]);
+    // The 800,000 still owed comes out of the part of the deposit that is not forfeited.
+    expect(outcome(computeSettlement(input({ timing, invoices: [invoice()] })))).toEqual([
+      600000, 0,
+    ]);
   });
 
   it('charges each overstay day at the daily rent times the captured percent', () => {

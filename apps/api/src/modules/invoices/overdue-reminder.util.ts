@@ -3,8 +3,14 @@ import type { NotificationPayload } from '@modules/notifications/types/notificat
 import { formatVietnamDate, vietnamDate, vietnamDayIndex } from '@shared/utils/calendar.util';
 import { NotificationType } from '@storage/types';
 
-/** From this many days overdue the branch's managers are told as well, weekly. */
-export const MANAGER_ALERT_FROM_DAYS = 7;
+/** When overdue reminders go out, in days overdue; mirrors the `billing.overdue_*` settings. */
+export interface OverdueReminderSchedule {
+  /** Days the customer is reminded on; after the last one, every `repeatDays`. */
+  customerDays: number[];
+  repeatDays: number;
+  /** From this day the branch's managers are told as well, then every `repeatDays`. */
+  managerFromDays: number;
+}
 
 /** An unpaid invoice past its due day, with what is still owed on it. */
 export interface OverdueInvoice {
@@ -28,14 +34,21 @@ export function daysOverdue(dueAt: Date, now: Date): number {
   return vietnamDayIndex(vietnamDate(now)) - vietnamDayIndex(vietnamDate(dueAt));
 }
 
-/** The customer is reminded on days 1, 3 and 7 overdue, then every 7 days. */
-export function isCustomerReminderDay(days: number): boolean {
-  return days === 1 || days === 3 || (days >= 7 && days % 7 === 0);
+/** `days` is `from` or a whole number of `every` steps after it. */
+const isRepeatDay = (days: number, from: number, every: number): boolean =>
+  days >= from && (days - from) % Math.max(every, 1) === 0;
+
+/** The customer is reminded on each listed day, then every `repeatDays` after the last one. */
+export function isCustomerReminderDay(days: number, schedule: OverdueReminderSchedule): boolean {
+  if (days < 1) return false;
+  if (schedule.customerDays.includes(days)) return true;
+  const last = Math.max(0, ...schedule.customerDays);
+  return last > 0 && days > last && isRepeatDay(days, last, schedule.repeatDays);
 }
 
-/** The managers are told from day 7 overdue, then every 7 days. */
-export function isManagerAlertDay(days: number): boolean {
-  return days >= MANAGER_ALERT_FROM_DAYS && days % 7 === 0;
+/** The managers are told from `managerFromDays` overdue, then every `repeatDays`. */
+export function isManagerAlertDay(days: number, schedule: OverdueReminderSchedule): boolean {
+  return isRepeatDay(days, Math.max(schedule.managerFromDays, 1), schedule.repeatDays);
 }
 
 function data(invoice: OverdueInvoice, days: number): Record<string, unknown> {

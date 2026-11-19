@@ -173,6 +173,12 @@ describe('returnTiming', () => {
     expect(timing.overstayDays).toBe(10);
   });
 
+  it('forfeits the whole deposit for rules captured before the share was configurable', () => {
+    expect(returnTiming(base()).earlyForfeitPercent).toBe(100);
+    const rules = { noticeDays: 30, penaltyPercent: 100, earlyForfeitPercent: 40 };
+    expect(returnTiming(base({ rules })).earlyForfeitPercent).toBe(40);
+  });
+
   it('maps to the snake_case record shared with clients', () => {
     const record = toReturnTimingRecord(returnTiming(base({ scheduledAt: at('2027-02-15') })));
 
@@ -182,6 +188,7 @@ describe('returnTiming', () => {
       scheduled_day: '2027-02-15',
       effective_return_day: '2027-02-15',
       early: true,
+      early_forfeit_percent: 100,
       overstay_from_day: '2027-04-01',
       overstay_days: 0,
       overstay_penalty_per_day: 50000,

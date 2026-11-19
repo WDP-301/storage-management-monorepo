@@ -16,14 +16,14 @@ describe('assertReturnDayInRange', () => {
     ['the first moment of today in Vietnam', '2026-10-21T17:00:00.000Z'],
     ['the last moment of the 365th day ahead in Vietnam', '2027-10-22T16:59:59.999Z'],
   ])('accepts %s', (_label, at) => {
-    expect(() => assertReturnDayInRange('scheduledAt', new Date(at), NOW)).not.toThrow();
+    expect(() => assertReturnDayInRange('scheduledAt', new Date(at), 365, NOW)).not.toThrow();
   });
 
   it.each([
     ['the last moment of yesterday in Vietnam', '2026-10-21T16:59:59.999Z'],
     ['the first moment of the 366th day ahead in Vietnam', '2027-10-22T17:00:00.000Z'],
   ])('rejects %s with a field error on the day', (_label, at) => {
-    expect(() => assertReturnDayInRange('scheduledAt', new Date(at), NOW)).toThrow(
+    expect(() => assertReturnDayInRange('scheduledAt', new Date(at), 365, NOW)).toThrow(
       expect.objectContaining({
         status: 400,
         response: expect.objectContaining({
@@ -49,7 +49,7 @@ describe('moveReturn', () => {
   ])('moves %s without touching the notice anchor or the rules', (_label, at) => {
     const inspection = build('2027-03-15T05:00:00.000Z');
 
-    expect(moveReturn(inspection, new Date(at), OFFICE, NOW)).toBe(true);
+    expect(moveReturn(inspection, new Date(at), OFFICE, 365, NOW)).toBe(true);
 
     expect(inspection.scheduledAt).toEqual(new Date(at));
     expect(inspection.noticeFrom).toBe(ANCHOR);
@@ -60,7 +60,9 @@ describe('moveReturn', () => {
     // 15/03/2026 in Vietnam is long before NOW (22/10/2026).
     const inspection = build('2026-03-15T05:00:00.000Z');
 
-    expect(moveReturn(inspection, new Date('2026-03-15T05:00:00.000Z'), OFFICE, NOW)).toBe(false);
+    expect(moveReturn(inspection, new Date('2026-03-15T05:00:00.000Z'), OFFICE, 365, NOW)).toBe(
+      false,
+    );
 
     expect(inspection.scheduledAt).toEqual(new Date('2026-03-15T05:00:00.000Z'));
   });
@@ -68,18 +70,18 @@ describe('moveReturn', () => {
   it('rejects moving to a past Vietnam day', () => {
     const inspection = build('2027-03-15T05:00:00.000Z');
 
-    expect(() => moveReturn(inspection, new Date('2026-10-21T16:59:59.999Z'), OFFICE, NOW)).toThrow(
-      expect.objectContaining({ status: 400 }),
-    );
+    expect(() =>
+      moveReturn(inspection, new Date('2026-10-21T16:59:59.999Z'), OFFICE, 365, NOW),
+    ).toThrow(expect.objectContaining({ status: 400 }));
   });
 
   it('rejects moving to a time outside the OFFICE shift', () => {
     const inspection = build('2027-03-15T05:00:00.000Z');
 
     // 20:00 on 15/03 in Vietnam.
-    expect(() => moveReturn(inspection, new Date('2027-03-15T13:00:00.000Z'), OFFICE, NOW)).toThrow(
-      expect.objectContaining({ status: 400 }),
-    );
+    expect(() =>
+      moveReturn(inspection, new Date('2027-03-15T13:00:00.000Z'), OFFICE, 365, NOW),
+    ).toThrow(expect.objectContaining({ status: 400 }));
     expect(inspection.scheduledAt).toEqual(new Date('2027-03-15T05:00:00.000Z'));
   });
 });

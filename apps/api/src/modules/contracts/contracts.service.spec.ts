@@ -52,7 +52,10 @@ describe('ContractsService', () => {
     transaction: jest.Mock;
   };
   let repo: { find: jest.Mock; findOne: jest.Mock; update: jest.Mock; softDelete: jest.Mock };
-  const settings = { getOverduePenaltyPercent: jest.fn(async () => 100) };
+  const settings = {
+    getOverduePenaltyPercent: jest.fn(async () => 100),
+    getContractCreationWindowDays: jest.fn(async () => 7),
+  };
   /** Read side of /contracts/mine: inspections from the repository, the rest by SQL. */
   const readSide = (inspectionRepo: unknown, query = jest.fn(async () => []), find = jest.fn()) =>
     ({

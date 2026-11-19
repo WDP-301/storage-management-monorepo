@@ -2,7 +2,7 @@ import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { CalendarBlank, CaretRight } from 'phosphor-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { useBookingSettings } from '../../../lib/client-settings';
+import { useBookingSettings, useReturnSettings } from '../../../lib/client-settings';
 import { formatIsoDate, formatMoney, formatNumber } from '../../../lib/format-vi';
 import type { RentalSchedule } from '../../../lib/hold';
 import { ReceivingSlotsApi } from '../../../lib/receiving-slots-api';
@@ -14,6 +14,7 @@ import {
   timeOptionsForDate,
 } from '../../../lib/receiving-time';
 import { latestStartIso, rentalEndIso, todayIso } from '../../../lib/rental-schedule';
+import { earlyForfeitLabel } from '../../../lib/settlement-format';
 import { rentalName } from '../../../lib/shelf-rental';
 import { warehouseDeposit } from '../../../lib/warehouse-query';
 import {
@@ -49,6 +50,7 @@ type Props = {
 export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, onConfirm }: Props) {
   const { rentalMonthsOptions, defaultRentalMonths, minRentalMonths, maxRentalMonths, leadDays } =
     useBookingSettings();
+  const earlyForfeit = earlyForfeitLabel(useReturnSettings().earlyForfeitPercent);
   const [pickedStart, setStartDate] = useState(todayIso);
   const [pickedMonths, setPickedMonths] = useState(defaultRentalMonths);
   const [slots, setSlots] = useState<ReceivingDay[]>([]);
@@ -248,10 +250,12 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
             </Text>
           </View>
 
-          <InlineMessage
-            message="Trả kho trước ngày hết hạn hợp đồng sẽ mất toàn bộ tiền cọc."
-            type="info"
-          />
+          {earlyForfeit ? (
+            <InlineMessage
+              message={`Trả kho trước ngày hết hạn hợp đồng sẽ mất ${earlyForfeit}.`}
+              type="info"
+            />
+          ) : null}
 
           <Text className="text-caption text-text-secondary tabular-nums">
             Tổng tiền thuê dự kiến {durationMonths} tháng là {formatMoney(totalRent)}, thu theo từng

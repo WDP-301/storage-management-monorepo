@@ -4,6 +4,7 @@ import { ShelfReceipt } from '@entities/shelf-receipt.entity';
 import { ShelfReceiptLine } from '@entities/shelf-receipt-line.entity';
 import { AuthModule } from '@modules/auth/auth.module';
 import { NotificationsModule } from '@modules/notifications/notifications.module';
+import { SettingsModule } from '@modules/settings/settings.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PickupRequestsController } from './pickup-requests.controller';
@@ -15,6 +16,7 @@ import { PickupRequestsStaffService } from './pickup-requests-staff.service';
     TypeOrmModule.forFeature([ShelfItem, ShelfReceipt, ShelfReceiptLine, PickupRequest]),
     AuthModule,
     NotificationsModule,
+    SettingsModule,
   ],
   controllers: [PickupRequestsController],
   providers: [PickupRequestsService, PickupRequestsStaffService],

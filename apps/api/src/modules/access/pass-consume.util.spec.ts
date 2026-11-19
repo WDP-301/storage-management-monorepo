@@ -5,6 +5,11 @@ import {
   type PassRow,
 } from './pass-consume.util';
 
+jest.mock(
+  '@modules/settings/setting-read.util',
+  () => jest.requireActual('../../../test/seeded-settings').seededSettingReader,
+);
+
 const pass = (over: Partial<PassRow> = {}): PassRow => ({
   id: 'p-1',
   customerId: 'u-1',

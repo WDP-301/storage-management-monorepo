@@ -1,5 +1,6 @@
 import { ActivityIndicator, View } from 'react-native';
 import { formatIsoDate, formatMoney } from '../../../lib/format-vi';
+import { earlyForfeitLabel } from '../../../lib/settlement-format';
 import { colors, InlineMessage, Text } from '../../components/ui';
 import type { ReturnPreviewRecord } from '../../types/contract-api';
 
@@ -23,10 +24,14 @@ export function ReturnPreviewNotice({ preview, isLoading, error }: Props) {
   if (!preview) return null;
 
   const warnings: string[] = [];
-  if (preview.early) {
-    const deposit = preview.deposit_held === null ? '' : ` (${formatMoney(preview.deposit_held)})`;
+  // Previews from before the share was configurable forfeited the whole deposit.
+  const percent = preview.early_forfeit_percent ?? 100;
+  const forfeit = preview.early ? earlyForfeitLabel(percent) : null;
+  if (forfeit) {
+    const whole = percent >= 100 && preview.deposit_held !== null;
+    const deposit = whole ? ` (${formatMoney(preview.deposit_held ?? 0)})` : '';
     warnings.push(
-      `Trả trước hạn hợp đồng (${formatIsoDate(preview.last_day)}) — mất toàn bộ tiền cọc` +
+      `Trả trước hạn hợp đồng (${formatIsoDate(preview.last_day)}) — mất ${forfeit}` +
         `${deposit}. Tiền thuê còn nợ và phí phát sinh vẫn phải trả thêm.`,
     );
   }

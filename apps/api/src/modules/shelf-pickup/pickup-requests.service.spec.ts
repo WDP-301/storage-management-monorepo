@@ -73,7 +73,13 @@ describe('pickup requests', () => {
       manager: em,
       transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)),
     };
-    customerService = new PickupRequestsService(dataSource as never, notifications as never);
+    customerService = new PickupRequestsService(
+      dataSource as never,
+      notifications as never,
+      {
+        getShelfRequestMaxDaysAhead: jest.fn().mockResolvedValue(30),
+      } as never,
+    );
     staffService = new PickupRequestsStaffService(dataSource as never, notifications as never);
     mockedContracts.mockResolvedValue([contractRow()] as never);
     jest.mocked(loadStock).mockResolvedValue(new Map([['c-1', [item('i-1', 'Sách', 5)] as never]]));

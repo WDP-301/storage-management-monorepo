@@ -45,7 +45,12 @@ export class ContractReturnService {
   ): Promise<Inspection> {
     const now = new Date();
     const scheduledAt = new Date(dto.scheduledAt);
-    assertReturnDayInRange('scheduledAt', scheduledAt, now);
+    assertReturnDayInRange(
+      'scheduledAt',
+      scheduledAt,
+      await this.settings.getReturnMaxDaysAhead(),
+      now,
+    );
     const templates = await officeShiftTemplates(this.dataSource.manager);
     assertReturnTimeInOfficeShift('scheduledAt', scheduledAt, templates, now);
     const rules = await currentReturnRules(this.settings);
@@ -95,11 +100,12 @@ export class ContractReturnService {
       ? await this.banks.verifyAccount(dto.refundAccount)
       : null;
 
+    const maxDaysAhead = await this.settings.getReturnMaxDaysAhead();
     const saved = await this.dataSource.transaction(async (em) => {
       const inspection = await this.lockOpenReturn(em, contractId, customerId);
       const moved =
         scheduledAt !== null &&
-        moveReturn(inspection, scheduledAt, await officeShiftTemplates(em), now);
+        moveReturn(inspection, scheduledAt, await officeShiftTemplates(em), maxDaysAhead, now);
       if (dto.note !== undefined) inspection.requestNote = dto.note.trim() || null;
       if (refundAccount) {
         inspection.refundAccount = refundAccount;

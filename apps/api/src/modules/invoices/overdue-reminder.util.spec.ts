@@ -6,6 +6,7 @@ import {
   isManagerAlertDay,
   managerOverdueAlert,
   type OverdueInvoice,
+  type OverdueReminderSchedule,
 } from './overdue-reminder.util';
 
 // Due 2027-03-01 at 12:00 Vietnam time.
@@ -35,13 +36,35 @@ describe('daysOverdue', () => {
 
 describe('reminder schedule', () => {
   const days = Array.from({ length: 30 }, (_, i) => i);
+  const seeded: OverdueReminderSchedule = {
+    customerDays: [1, 3, 7],
+    repeatDays: 7,
+    managerFromDays: 7,
+  };
 
   it('reminds the customer on days 1, 3, 7 and then weekly', () => {
-    expect(days.filter(isCustomerReminderDay)).toEqual([1, 3, 7, 14, 21, 28]);
+    expect(days.filter((d) => isCustomerReminderDay(d, seeded))).toEqual([1, 3, 7, 14, 21, 28]);
   });
 
   it('alerts the managers from day 7, weekly', () => {
-    expect(days.filter(isManagerAlertDay)).toEqual([7, 14, 21, 28]);
+    expect(days.filter((d) => isManagerAlertDay(d, seeded))).toEqual([7, 14, 21, 28]);
+  });
+
+  it('follows a configured schedule, repeating after the last listed day', () => {
+    const custom: OverdueReminderSchedule = {
+      customerDays: [2, 5],
+      repeatDays: 3,
+      managerFromDays: 10,
+    };
+    expect(days.filter((d) => isCustomerReminderDay(d, custom))).toEqual([
+      2, 5, 8, 11, 14, 17, 20, 23, 26, 29,
+    ]);
+    expect(days.filter((d) => isManagerAlertDay(d, custom))).toEqual([10, 13, 16, 19, 22, 25, 28]);
+  });
+
+  it('sends no customer reminder when no day is listed', () => {
+    const none: OverdueReminderSchedule = { customerDays: [], repeatDays: 7, managerFromDays: 7 };
+    expect(days.filter((d) => isCustomerReminderDay(d, none))).toEqual([]);
   });
 });
 

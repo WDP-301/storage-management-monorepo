@@ -9,6 +9,7 @@ import {
 import { assertWorksAtFacility } from '@modules/access/staff-facility.util';
 import { hashSessionToken } from '@modules/auth/session.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { readNumberSetting } from '@modules/settings/setting-read.util';
 import { Injectable } from '@nestjs/common';
 import { notFound } from '@shared/exceptions/domain.exception';
 import {
@@ -21,7 +22,7 @@ import { DataSource } from 'typeorm';
 import { buildCounterPanel } from './counter-panel.query';
 import { assertLiveSession, type CounterSession } from './counter-session.util';
 import { findShelfContracts } from './shelf-contract.query';
-import { COUNTER_SESSION_MINUTES } from './shelf-rules';
+import { COUNTER_SESSION_MINUTES_KEY } from './shelf-rules';
 
 @Injectable()
 export class CounterSessionsService {
@@ -71,7 +72,9 @@ export class CounterSessionsService {
         warehouseId: warehouse.id,
         facilityId: warehouse.facilityId,
         startedAt,
-        expiresAt: new Date(startedAt.getTime() + COUNTER_SESSION_MINUTES * 60_000),
+        expiresAt: new Date(
+          startedAt.getTime() + (await readNumberSetting(em, COUNTER_SESSION_MINUTES_KEY)) * 60_000,
+        ),
       };
       return buildCounterPanel(em, session);
     });

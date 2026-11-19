@@ -4,7 +4,6 @@ import type { CreatePickupRequestInput } from '@storage/types';
 
 export const FIRST_HOUR = 8;
 export const LAST_HOUR = 20;
-export const MAX_DAYS_AHEAD = 30;
 export const NOTE_MAX = 500;
 const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -17,9 +16,9 @@ export const requestedForIso = (dayIso: string, hour: number): string =>
 
 export const hourLabel = (hour: number): string => `${pad(hour)}:00`;
 
-/** Last day a request may be made for, counted from today in Vietnam. */
-export function lastRequestDay(todayIso: string): string {
-  return new Date(Date.parse(`${todayIso}T00:00:00.000Z`) + MAX_DAYS_AHEAD * MS_PER_DAY)
+/** Last day a request may be made for: `maxDaysAhead` days after today in Vietnam. */
+export function lastRequestDay(todayIso: string, maxDaysAhead: number): string {
+  return new Date(Date.parse(`${todayIso}T00:00:00.000Z`) + maxDaysAhead * MS_PER_DAY)
     .toISOString()
     .slice(0, 10);
 }

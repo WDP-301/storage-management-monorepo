@@ -51,7 +51,7 @@ export function PaymentQr({
             </View>
             <View className="flex-1">
               <Button
-                label="Mở app ngân hàng"
+                label="App ngân hàng"
                 leftIcon="account-balance"
                 size="sm"
                 variant="secondary"
@@ -84,10 +84,13 @@ function CopyableCode({ value }: { value: string }) {
 
   return (
     <View className="flex-row items-center justify-between gap-3 rounded-xl border border-border-default bg-bg-subtle py-2 pr-2 pl-3.5">
+      {/* Long invoice numbers shrink to fit: the note must be read in full to be typed right. */}
       <Text
-        selectable
+        adjustsFontSizeToFit
         className="flex-1 text-body-lg font-semibold text-text-primary tabular-nums"
+        minimumFontScale={0.6}
         numberOfLines={1}
+        selectable
       >
         {value}
       </Text>

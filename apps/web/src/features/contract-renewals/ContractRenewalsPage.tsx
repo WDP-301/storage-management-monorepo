@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ContractRenewalsApi } from '../../lib/contract-renewals-api';
 import { useAppToast } from '../../lib/toast';
 import { formatVnDateTime, formatVnDay, lastDayBefore } from '../../lib/vn-day';
+import { shortContractNo } from '../contracts/contract-display';
 import { formatVnd } from '../warehouses/warehouse-display';
 import { RenewalDecisionDialog } from './RenewalDecisionDialog';
 
@@ -69,7 +70,7 @@ export const ContractRenewalsPage: React.FC = () => {
     setDeciding(null);
     toast.success(
       renewal.status === ContractRenewalStatus.APPROVED ? 'Đã duyệt gia hạn' : 'Đã từ chối',
-      `Hợp đồng ${renewal.contract_no}`,
+      `Hợp đồng ${shortContractNo(renewal.contract_no)}`,
     );
     void load();
   };
@@ -142,7 +143,9 @@ export const ContractRenewalsPage: React.FC = () => {
               rows.map((r) => (
                 <Table.Row key={r.id}>
                   <Table.Cell>
-                    <div className="font-medium text-kumo-default">{r.contract_no}</div>
+                    <div className="font-medium text-kumo-default" title={r.contract_no}>
+                      {shortContractNo(r.contract_no)}
+                    </div>
                     <div className="text-xs text-kumo-subtle">
                       {r.unit_code ?? '—'}
                       {r.facility_name ? ` · ${r.facility_name}` : ''}

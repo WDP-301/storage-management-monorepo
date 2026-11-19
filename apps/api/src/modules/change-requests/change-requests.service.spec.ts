@@ -171,6 +171,7 @@ describe('ChangeRequestsService', () => {
   let shelfRows: { id: string; name: string; quantity: number }[];
   /** Open RETURN inspections reported by the standalone count in `create`. */
   let openReturns: number;
+  let pendingRenewals = 0;
   /** Succeeded payments on the top-up invoice reported in `cancel`. */
   let succeededPayments: number;
   /** What `txManager.find` returns for UserRoleAssignment rows (manager lookups). */
@@ -193,6 +194,7 @@ describe('ChangeRequestsService', () => {
     persistedStatus = undefined;
     requestStatus = undefined;
     openReturns = 0;
+    pendingRenewals = 0;
     succeededPayments = 0;
     managerAssignments = [activeAssignment()];
     overdueQuery = jest.fn().mockResolvedValue([]);
@@ -298,7 +300,7 @@ describe('ChangeRequestsService', () => {
         getRepository: jest.fn().mockReturnValue({
           count: jest.fn(async () => openReturns),
         }),
-        manager: { query: overdueQuery },
+        manager: { query: overdueQuery, count: jest.fn(async () => pendingRenewals) },
       } as never,
       settings,
       notifications as never,
@@ -355,6 +357,15 @@ describe('ChangeRequestsService', () => {
 
     it('rejects when the contract has a return in progress', async () => {
       openReturns = 1;
+
+      await expect(service.create(createDto(), customer)).rejects.toMatchObject({
+        status: 409,
+      });
+      expect(storageUnits.findOne).not.toHaveBeenCalled();
+    });
+
+    it('rejects while a renewal of the contract awaits the branch', async () => {
+      pendingRenewals = 1;
 
       await expect(service.create(createDto(), customer)).rejects.toMatchObject({
         status: 409,

@@ -208,7 +208,8 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
           </DialogHeader>
 
           {/* A fixed floor keeps the frame from jumping as tabs of different length switch. */}
-          <DialogBody className="min-h-[60vh]">
+          {/* The steady height stops tab switches from jumping; a confirm in the footer needs the room. */}
+          <DialogBody className={confirm ? undefined : 'min-h-[60vh]'}>
             <TabPanel id="info" active={activeTab}>
               <ContractInfoPanel contract={contract} />
             </TabPanel>

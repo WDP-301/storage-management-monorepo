@@ -10,6 +10,7 @@ import {
 } from '../../components/dialog-layout';
 import { ContractRenewalsApi } from '../../lib/contract-renewals-api';
 import { formatVnDay, lastDayBefore } from '../../lib/vn-day';
+import { shortContractNo } from '../contracts/contract-display';
 import { formatVnd } from '../warehouses/warehouse-display';
 
 interface Props {
@@ -49,7 +50,8 @@ export const RenewalDecisionDialog: React.FC<Props> = ({ renewal, action, onClos
           <div className="flex items-center gap-2.5">
             <ArrowsClockwise className="w-5 h-5 text-kumo-brand" />
             <Dialog.Title className="text-base font-semibold text-kumo-default">
-              {approving ? 'Duyệt gia hạn' : 'Từ chối gia hạn'} — {renewal.contract_no}
+              {approving ? 'Duyệt gia hạn' : 'Từ chối gia hạn'} —{' '}
+              {shortContractNo(renewal.contract_no)}
             </Dialog.Title>
           </div>
           <Dialog.Close
@@ -89,7 +91,7 @@ export const RenewalDecisionDialog: React.FC<Props> = ({ renewal, action, onClos
             </Text>
           )}
           <Textarea
-            label={approving ? 'Ghi chú (không bắt buộc)' : 'Lý do từ chối (khách sẽ thấy)'}
+            label={approving ? 'Ghi chú' : 'Lý do từ chối (khách sẽ thấy)'}
             required={!approving}
             value={note}
             maxLength={500}

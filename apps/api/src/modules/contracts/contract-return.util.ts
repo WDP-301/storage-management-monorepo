@@ -2,6 +2,7 @@ import type { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { UnitChangeRequest } from '@entities/unit-change-request.entity';
 import { officeTimeProblem } from '@modules/bookings/receiving-window.util';
+import { closePendingRenewal } from '@modules/contract-renewals/pending-renewal.util';
 import type { SettingsService } from '@modules/settings/settings.service';
 import type { ShiftWindow } from '@modules/shift-templates/shift-time';
 import { HttpStatus } from '@nestjs/common';
@@ -115,7 +116,8 @@ export interface OpenReturnInput {
 /**
  * Opens a RETURN inspection for staff to carry out on the requested day. The caller holds the
  * contract row lock, which serializes concurrent requests so at most one return is open per
- * contract. The notice runs from now, under the rules in force now.
+ * contract. The notice runs from now, under the rules in force now. A renewal still waiting for
+ * the branch is closed: the customer is leaving instead.
  */
 export async function openReturnInspection(
   em: EntityManager,
@@ -149,7 +151,7 @@ export async function openReturnInspection(
       requestStatus: openChange.status,
     });
   }
-  return em.save(
+  const inspection = await em.save(
     Inspection,
     em.create(Inspection, {
       contractId: contract.id,
@@ -163,6 +165,13 @@ export async function openReturnInspection(
       requestSource: input.source,
     }),
   );
+  await closePendingRenewal(
+    em,
+    contract.id,
+    input.requestedBy,
+    'Tự động đóng: hợp đồng đã có yêu cầu trả kho',
+  );
+  return inspection;
 }
 
 /** Whether `scheduledAt` is another instant than the current appointment (day or time). */

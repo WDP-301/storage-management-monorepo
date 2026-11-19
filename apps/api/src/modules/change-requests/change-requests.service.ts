@@ -13,6 +13,7 @@ import { activeFacilityIds, isAssignmentActive } from '@modules/auth/role-assign
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { officeTimeProblem } from '@modules/bookings/receiving-window.util';
 import { findUnrentable, lockShelfParents } from '@modules/bookings/rentable-units.util';
+import { hasPendingRenewal } from '@modules/contract-renewals/pending-renewal.util';
 import { HandoverAssignmentService } from '@modules/inspection/handover-assignment/handover-assignment.service';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { generateInvoiceNo } from '@modules/payments/invoice-no.util';
@@ -296,6 +297,13 @@ export class ChangeRequestsService {
       throw new DomainException(
         ErrorCode.CONFLICT,
         'Contract has a return in progress',
+        HttpStatus.CONFLICT,
+      );
+    }
+    if (await hasPendingRenewal(this.dataSource.manager, contract.id)) {
+      throw new DomainException(
+        ErrorCode.CONFLICT,
+        'Hợp đồng đang có yêu cầu gia hạn chờ duyệt — hủy yêu cầu gia hạn trước khi đổi kho',
         HttpStatus.CONFLICT,
       );
     }

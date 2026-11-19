@@ -104,6 +104,9 @@ export const ShelfManagementDialog: React.FC<Props> = ({
 }) => {
   const toast = useAppToast();
   const [tab, setTab] = useState<ActiveTab>(initialTab);
+  // Once opened, the layout editor stays mounted (just hidden) so switching tabs keeps unsaved edits.
+  const [layoutOpened, setLayoutOpened] = useState(initialTab === 'layout');
+  const [focusShelfId, setFocusShelfId] = useState<string | null>(null);
   const [shelves, setShelves] = useState<Warehouse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,15 +123,17 @@ export const ShelfManagementDialog: React.FC<Props> = ({
 
   const warehouseId = warehouse?.id;
 
-  const loadShelves = useCallback(async () => {
-    if (!warehouseId) return;
+  const loadShelves = useCallback(async (): Promise<Warehouse[] | null> => {
+    if (!warehouseId) return null;
     setIsLoading(true);
     setError(null);
     try {
       const list = await WarehousesApi.listShelvesAdmin(warehouseId);
       setShelves(list);
+      return list;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không tải được danh sách kệ.');
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -137,6 +142,8 @@ export const ShelfManagementDialog: React.FC<Props> = ({
   useEffect(() => {
     if (!warehouseId) return;
     setTab(initialTab);
+    setLayoutOpened(initialTab === 'layout');
+    setFocusShelfId(null);
     setFormMode('none');
     setEditingShelf(null);
     setDeletingShelf(null);
@@ -184,6 +191,14 @@ export const ShelfManagementDialog: React.FC<Props> = ({
     setFormMode('bulk');
   };
 
+  const openCreateFromLayout = (mode: 'single' | 'bulk') =>
+    mode === 'single' ? openCreateSingle() : openBulkCreate();
+
+  const openLayoutTab = () => {
+    setTab('layout');
+    setLayoutOpened(true);
+  };
+
   const handleSaveSingle = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!warehouse) return;
@@ -196,16 +211,23 @@ export const ShelfManagementDialog: React.FC<Props> = ({
     }
     setIsSubmitting(true);
     try {
+      let createdId: string | null = null;
       if (formMode === 'edit' && editingShelf) {
         await WarehousesApi.update(editingShelf.id, buildShelfUpdatePatch(shelfForm, editingShelf));
         toast.notifyUpdated('kệ', editingShelf.code);
       } else {
-        await WarehousesApi.createShelf(warehouse.id, buildShelfCreatePayload(shelfForm));
+        const created = await WarehousesApi.createShelf(
+          warehouse.id,
+          buildShelfCreatePayload(shelfForm),
+        );
+        createdId = created.id;
         toast.notifyCreated('kệ', shelfForm.code.trim());
       }
       setFormMode('none');
       setEditingShelf(null);
       await loadShelves();
+      // Set after the reload so the editor already sees the new shelf when it preselects it.
+      if (createdId && tab === 'layout') setFocusShelfId(createdId);
       onChanged?.();
     } catch (err) {
       toast.error(
@@ -236,7 +258,10 @@ export const ShelfManagementDialog: React.FC<Props> = ({
         `Đã tạo thành công ${res.created} kệ (${res.codes[0] ?? ''} → ${res.codes[res.codes.length - 1] ?? ''}).`,
       );
       setFormMode('none');
-      await loadShelves();
+      const list = await loadShelves();
+      if (tab === 'layout') {
+        setFocusShelfId(list?.find((s) => s.code === res.codes[0])?.id ?? null);
+      }
       onChanged?.();
     } catch (err) {
       toast.error(
@@ -437,6 +462,129 @@ export const ShelfManagementDialog: React.FC<Props> = ({
     </LayerCard>
   );
 
+  const renderBulkShelfForm = () =>
+    warehouse && (
+      <LayerCard className="p-4 ring ring-kumo-line space-y-4">
+        <div className="flex items-center justify-between border-b border-kumo-line pb-2.5">
+          <Text as="strong" bold>
+            Tạo dãy kệ hàng loạt (tối đa 200 kệ/lần)
+          </Text>
+          <Button size="xs" variant="ghost" onClick={() => setFormMode('none')}>
+            Đóng biểu mẫu
+          </Button>
+        </div>
+
+        <form onSubmit={handleSaveBulk} className="space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Input
+              label="Tiền tố dãy (VD: A, B1)"
+              value={bulkForm.prefix}
+              onChange={(e) =>
+                setBulkForm((prev) =>
+                  withNextBulkRange({ ...prev, prefix: e.target.value }, shelves, warehouse.code),
+                )
+              }
+            />
+            <Input
+              label="Từ số thứ tự"
+              type="number"
+              min="0"
+              value={bulkForm.from}
+              onChange={(e) => setBulkForm((prev) => ({ ...prev, from: e.target.value }))}
+            />
+            <Input
+              label="Đến số thứ tự"
+              type="number"
+              min="0"
+              value={bulkForm.to}
+              onChange={(e) => setBulkForm((prev) => ({ ...prev, to: e.target.value }))}
+            />
+            <Input
+              label="Độ dài số (pad)"
+              type="number"
+              min="0"
+              max="6"
+              value={bulkForm.pad}
+              onChange={(e) => setBulkForm((prev) => ({ ...prev, pad: e.target.value }))}
+            />
+          </div>
+
+          {bulkPreview && (
+            <div className="p-2.5 rounded-lg bg-kumo-tint text-xs text-kumo-default ring ring-kumo-line">
+              Sẽ tạo <strong>{bulkPreview.count} kệ</strong> với mã từ{' '}
+              <code className="font-mono font-semibold">{bulkPreview.firstCode}</code> đến{' '}
+              <code className="font-mono font-semibold">{bulkPreview.lastCode}</code>.
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Input
+              label="Chiều rộng mỗi kệ (m)"
+              type="number"
+              step="any"
+              min="0"
+              value={bulkForm.widthM}
+              onChange={(e) => setBulkForm((prev) => ({ ...prev, widthM: e.target.value }))}
+            />
+            <Input
+              label="Chiều dài mỗi kệ (m)"
+              type="number"
+              step="any"
+              min="0"
+              value={bulkForm.lengthM}
+              onChange={(e) => setBulkForm((prev) => ({ ...prev, lengthM: e.target.value }))}
+            />
+            <Input
+              label="Chiều cao mỗi kệ (m, tùy chọn)"
+              type="number"
+              step="any"
+              min="0"
+              value={bulkForm.heightM}
+              onChange={(e) => setBulkForm((prev) => ({ ...prev, heightM: e.target.value }))}
+            />
+          </div>
+
+          <div className="flex gap-6 text-xs p-2.5 rounded-lg bg-kumo-control ring ring-kumo-line">
+            <span>
+              <span className="text-kumo-subtle">Diện tích mỗi kệ: </span>
+              <strong>{bulkDerived.area === null ? '—' : formatArea(bulkDerived.area)}</strong>
+            </span>
+            <span>
+              <span className="text-kumo-subtle">Thể tích mỗi kệ: </span>
+              <strong>
+                {bulkDerived.volume === null ? '—' : formatVolume(bulkDerived.volume)}
+              </strong>
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              label="Giá thuê mỗi kệ / tháng (VND)"
+              type="number"
+              min="0"
+              value={bulkForm.monthlyPrice}
+              onChange={(e) => setBulkForm((prev) => ({ ...prev, monthlyPrice: e.target.value }))}
+            />
+            <Select
+              label="Số tháng đặt cọc"
+              value={bulkForm.depositMonths}
+              onValueChange={(v) => setBulkForm((prev) => ({ ...prev, depositMonths: String(v) }))}
+              items={DEPOSIT_ITEMS}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" onClick={() => setFormMode('none')} disabled={isSubmitting}>
+              Hủy
+            </Button>
+            <Button type="submit" variant="primary" loading={isSubmitting}>
+              Tạo hàng loạt
+            </Button>
+          </div>
+        </form>
+      </LayerCard>
+    );
+
   return (
     <Dialog.Root open={Boolean(warehouse)} onOpenChange={(next) => !next && onClose()}>
       <Dialog size="xl" className={`${DIALOG_SHELL} max-w-6xl sm:w-[1100px] w-full`}>
@@ -468,7 +616,7 @@ export const ShelfManagementDialog: React.FC<Props> = ({
               size="sm"
               variant={tab === 'layout' ? 'primary' : 'secondary'}
               icon={<GridFour className="w-4 h-4" />}
-              onClick={() => setTab('layout')}
+              onClick={openLayoutTab}
             >
               Sơ đồ mặt bằng
             </Button>
@@ -488,9 +636,19 @@ export const ShelfManagementDialog: React.FC<Props> = ({
         </DialogHeader>
 
         <DialogBody>
-          {warehouse && tab === 'layout' ? (
-            <ShelfLayoutEditor warehouse={warehouse} shelves={shelves} />
-          ) : warehouse ? (
+          {warehouse && layoutOpened && (
+            <div hidden={tab !== 'layout'} className="space-y-4">
+              {tab === 'layout' && formMode === 'create' && renderSingleShelfForm()}
+              {tab === 'layout' && formMode === 'bulk' && renderBulkShelfForm()}
+              <ShelfLayoutEditor
+                warehouse={warehouse}
+                shelves={shelves}
+                onAddShelves={canManageShelves ? openCreateFromLayout : undefined}
+                focusShelfId={focusShelfId}
+              />
+            </div>
+          )}
+          {warehouse && tab === 'shelves' ? (
             <div className="space-y-4">
               {/* KPI Summary */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -597,147 +755,7 @@ export const ShelfManagementDialog: React.FC<Props> = ({
               {formMode === 'create' && renderSingleShelfForm()}
 
               {/* Bulk Create Shelves Form (opened from top toolbar) */}
-              {formMode === 'bulk' && (
-                <LayerCard className="p-4 ring ring-kumo-line space-y-4">
-                  <div className="flex items-center justify-between border-b border-kumo-line pb-2.5">
-                    <Text as="strong" bold>
-                      Tạo dãy kệ hàng loạt (tối đa 200 kệ/lần)
-                    </Text>
-                    <Button size="xs" variant="ghost" onClick={() => setFormMode('none')}>
-                      Đóng biểu mẫu
-                    </Button>
-                  </div>
-
-                  <form onSubmit={handleSaveBulk} className="space-y-3">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <Input
-                        label="Tiền tố dãy (VD: A, B1)"
-                        value={bulkForm.prefix}
-                        onChange={(e) =>
-                          setBulkForm((prev) =>
-                            withNextBulkRange(
-                              { ...prev, prefix: e.target.value },
-                              shelves,
-                              warehouse.code,
-                            ),
-                          )
-                        }
-                      />
-                      <Input
-                        label="Từ số thứ tự"
-                        type="number"
-                        min="0"
-                        value={bulkForm.from}
-                        onChange={(e) => setBulkForm((prev) => ({ ...prev, from: e.target.value }))}
-                      />
-                      <Input
-                        label="Đến số thứ tự"
-                        type="number"
-                        min="0"
-                        value={bulkForm.to}
-                        onChange={(e) => setBulkForm((prev) => ({ ...prev, to: e.target.value }))}
-                      />
-                      <Input
-                        label="Độ dài số (pad)"
-                        type="number"
-                        min="0"
-                        max="6"
-                        value={bulkForm.pad}
-                        onChange={(e) => setBulkForm((prev) => ({ ...prev, pad: e.target.value }))}
-                      />
-                    </div>
-
-                    {bulkPreview && (
-                      <div className="p-2.5 rounded-lg bg-kumo-tint text-xs text-kumo-default ring ring-kumo-line">
-                        Sẽ tạo <strong>{bulkPreview.count} kệ</strong> với mã từ{' '}
-                        <code className="font-mono font-semibold">{bulkPreview.firstCode}</code> đến{' '}
-                        <code className="font-mono font-semibold">{bulkPreview.lastCode}</code>.
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <Input
-                        label="Chiều rộng mỗi kệ (m)"
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={bulkForm.widthM}
-                        onChange={(e) =>
-                          setBulkForm((prev) => ({ ...prev, widthM: e.target.value }))
-                        }
-                      />
-                      <Input
-                        label="Chiều dài mỗi kệ (m)"
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={bulkForm.lengthM}
-                        onChange={(e) =>
-                          setBulkForm((prev) => ({ ...prev, lengthM: e.target.value }))
-                        }
-                      />
-                      <Input
-                        label="Chiều cao mỗi kệ (m, tùy chọn)"
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={bulkForm.heightM}
-                        onChange={(e) =>
-                          setBulkForm((prev) => ({ ...prev, heightM: e.target.value }))
-                        }
-                      />
-                    </div>
-
-                    <div className="flex gap-6 text-xs p-2.5 rounded-lg bg-kumo-control ring ring-kumo-line">
-                      <span>
-                        <span className="text-kumo-subtle">Diện tích mỗi kệ: </span>
-                        <strong>
-                          {bulkDerived.area === null ? '—' : formatArea(bulkDerived.area)}
-                        </strong>
-                      </span>
-                      <span>
-                        <span className="text-kumo-subtle">Thể tích mỗi kệ: </span>
-                        <strong>
-                          {bulkDerived.volume === null ? '—' : formatVolume(bulkDerived.volume)}
-                        </strong>
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <Input
-                        label="Giá thuê mỗi kệ / tháng (VND)"
-                        type="number"
-                        min="0"
-                        value={bulkForm.monthlyPrice}
-                        onChange={(e) =>
-                          setBulkForm((prev) => ({ ...prev, monthlyPrice: e.target.value }))
-                        }
-                      />
-                      <Select
-                        label="Số tháng đặt cọc"
-                        value={bulkForm.depositMonths}
-                        onValueChange={(v) =>
-                          setBulkForm((prev) => ({ ...prev, depositMonths: String(v) }))
-                        }
-                        items={DEPOSIT_ITEMS}
-                      />
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-2">
-                      <Button
-                        variant="secondary"
-                        onClick={() => setFormMode('none')}
-                        disabled={isSubmitting}
-                      >
-                        Hủy
-                      </Button>
-                      <Button type="submit" variant="primary" loading={isSubmitting}>
-                        Tạo hàng loạt
-                      </Button>
-                    </div>
-                  </form>
-                </LayerCard>
-              )}
+              {formMode === 'bulk' && renderBulkShelfForm()}
 
               {error && (
                 <div

@@ -347,6 +347,109 @@ describe('ShelfManagementDialog & ShelfLayoutEditor', () => {
     );
   });
 
+  it('keeps unsaved floor plan edits when switching to the shelf list and back', async () => {
+    render(
+      <ShelfManagementDialog
+        warehouse={parentWarehouse}
+        canManageShelves={true}
+        initialTab="layout"
+        onClose={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText('Phiên bản v1')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /HCM-KE-01-A-02/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ô (1, 0)' }));
+    expect(screen.getByRole('button', { name: 'Ô (1, 0) - Kệ HCM-KE-01-A-02' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Danh sách kệ (2)' }));
+    expect(screen.queryByRole('button', { name: 'Ô (1, 0) - Kệ HCM-KE-01-A-02' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Sơ đồ mặt bằng' }));
+
+    expect(screen.getByRole('button', { name: 'Ô (1, 0) - Kệ HCM-KE-01-A-02' })).toBeTruthy();
+    expect(WarehousesApi.getLayoutAdmin).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops a shelf deleted from the list tab off the unsaved floor plan', async () => {
+    vi.spyOn(WarehousesApi, 'listShelvesAdmin')
+      .mockResolvedValueOnce([shelfA1, shelfA2])
+      .mockResolvedValue([shelfA1]);
+    vi.spyOn(WarehousesApi, 'remove').mockResolvedValue();
+    const saveSpy = vi.spyOn(WarehousesApi, 'saveLayout').mockResolvedValue(sampleLayoutView);
+
+    render(
+      <ShelfManagementDialog
+        warehouse={parentWarehouse}
+        canManageShelves={true}
+        initialTab="layout"
+        onClose={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText('Phiên bản v1')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /HCM-KE-01-A-02/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ô (1, 0)' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Danh sách kệ (2)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xóa kệ HCM-KE-01-A-02' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận xóa kệ' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Sơ đồ mặt bằng' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Ô (1, 0)' })).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu sơ đồ' }));
+    await waitFor(() =>
+      expect(saveSpy).toHaveBeenCalledWith(
+        parentWarehouse.id,
+        expect.objectContaining({ placements: [expect.objectContaining({ shelfId: shelfA1.id })] }),
+      ),
+    );
+  });
+
+  it('creates a shelf from the floor plan and preselects it for placing', async () => {
+    const shelfA3: Warehouse = { ...shelfA1, id: 'sh-3', code: 'HCM-KE-01-A-03' };
+    vi.spyOn(WarehousesApi, 'listShelvesAdmin')
+      .mockResolvedValueOnce([shelfA1, shelfA2])
+      .mockResolvedValue([shelfA1, shelfA2, shelfA3]);
+    const createShelfSpy = vi.spyOn(WarehousesApi, 'createShelf').mockResolvedValue(shelfA3);
+
+    render(
+      <ShelfManagementDialog
+        warehouse={parentWarehouse}
+        canManageShelves={true}
+        initialTab="layout"
+        onClose={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText('Phiên bản v1')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kệ lẻ' }));
+    expect((screen.getByLabelText('Mã kệ') as HTMLInputElement).value).toBe('HCM-KE-01-A-03');
+    fireEvent.change(screen.getByLabelText('Chiều rộng kệ (m)'), { target: { value: '1.5' } });
+    fireEvent.change(screen.getByLabelText('Chiều dài kệ (m)'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('Giá thuê kệ / tháng (VND)'), {
+      target: { value: '450000' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo kệ' }));
+    await waitFor(() => expect(createShelfSpy).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByLabelText('Mã kệ')).toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ô (1, 0)' }));
+    expect(screen.getByRole('button', { name: 'Ô (1, 0) - Kệ HCM-KE-01-A-03' })).toBeTruthy();
+  });
+
+  it('hides floor plan shelf creation from roles that cannot create shelves', async () => {
+    render(
+      <ShelfManagementDialog
+        warehouse={parentWarehouse}
+        canManageShelves={false}
+        initialTab="layout"
+        onClose={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText('Phiên bản v1')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Kệ lẻ' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Dãy kệ' })).toBeNull();
+  });
+
   it('loads, auto-drafts, saves, and deletes the floor plan layout', async () => {
     const draftSpy = vi.spyOn(WarehousesApi, 'draftLayout').mockResolvedValue({
       rows: 1,

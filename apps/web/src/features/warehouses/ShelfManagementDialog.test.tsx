@@ -301,6 +301,52 @@ describe('ShelfManagementDialog & ShelfLayoutEditor', () => {
     expect(canvas.style.backgroundPosition).toBe('60px 30px');
   });
 
+  it('reaches a label lying on a shelf by clicking the shared cell again', async () => {
+    vi.spyOn(WarehousesApi, 'getLayoutAdmin').mockResolvedValue({
+      ...sampleLayoutView,
+      layout: {
+        ...baseLayout,
+        elements: [
+          { type: LayoutElementType.LABEL, row: 0, col: 1, rowSpan: 1, colSpan: 2, text: 'Lối ra' },
+        ],
+      },
+    });
+    const saveSpy = vi.spyOn(WarehousesApi, 'saveLayout').mockResolvedValue(sampleLayoutView);
+
+    render(
+      <ShelfManagementDialog
+        warehouse={parentWarehouse}
+        canManageShelves={true}
+        initialTab="layout"
+        onClose={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText('Phiên bản v1')).toBeTruthy();
+
+    // The label runs past the shelf; that cell must still be drawn and clickable.
+    expect(screen.getByRole('button', { name: 'Ô (0, 2) - Nhãn Lối ra' })).toBeTruthy();
+
+    const sharedCell = screen.getByRole('button', {
+      name: 'Ô (0, 1) - Kệ HCM-KE-01-A-01 - Nhãn Lối ra',
+    });
+    fireEvent.click(sharedCell);
+    expect(screen.getByText('Kệ HCM-KE-01-A-01')).toBeTruthy();
+    fireEvent.click(sharedCell);
+    expect(screen.getByText('Thành phần: Nhãn khu vực')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Nội dung nhãn'), { target: { value: 'Cửa sau' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu sơ đồ' }));
+    await waitFor(() =>
+      expect(saveSpy).toHaveBeenCalledWith(
+        parentWarehouse.id,
+        expect.objectContaining({
+          elements: [expect.objectContaining({ type: LayoutElementType.LABEL, text: 'Cửa sau' })],
+          placements: [expect.objectContaining({ shelfId: shelfA1.id })],
+        }),
+      ),
+    );
+  });
+
   it('loads, auto-drafts, saves, and deletes the floor plan layout', async () => {
     const draftSpy = vi.spyOn(WarehousesApi, 'draftLayout').mockResolvedValue({
       rows: 1,

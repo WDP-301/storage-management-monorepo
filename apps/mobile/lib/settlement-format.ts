@@ -110,6 +110,12 @@ export function settlementHeadline(summary: SettlementSummaryRecord): string {
   return refund > 0 ? `Đã hoàn ${formatMoney(refund)}${on}` : `Đã quyết toán cọc${on}`;
 }
 
+/** What an early return costs, e.g. "toàn bộ tiền cọc" or "40% tiền cọc"; null when nothing. */
+export function earlyForfeitLabel(percent: number): string | null {
+  if (percent <= 0) return null;
+  return percent >= 100 ? 'toàn bộ tiền cọc' : `${percent}% tiền cọc`;
+}
+
 /** `+ 1.000.000 ₫` for a credit, `− 500.000 ₫` for a deduction, `Miễn` when waived. */
 export function settlementLineAmount(
   line: Pick<SettlementLine, 'direction' | 'amount' | 'waived'>,

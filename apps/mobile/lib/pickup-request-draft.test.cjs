@@ -32,8 +32,9 @@ test('requested time carries the Vietnam offset', () => {
   assert.equal(requestedForIso('2026-11-08', 9), '2026-11-08T09:00:00+07:00');
 });
 
-test('last day is 30 days after today', () => {
-  assert.equal(lastRequestDay('2026-11-07'), '2026-12-07');
+test('last day is the configured number of days after today', () => {
+  assert.equal(lastRequestDay('2026-11-07', 30), '2026-12-07');
+  assert.equal(lastRequestDay('2026-11-07', 7), '2026-11-14');
 });
 
 test('vietnam day rolls over at 17:00 UTC', () => {

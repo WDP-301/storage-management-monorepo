@@ -1,6 +1,7 @@
 import type {
   ClientBookingSettings,
   ClientReturnSettings,
+  ClientShelfSettings,
   ClientUnitChangeSettings,
 } from '@storage/types';
 import {
@@ -34,6 +35,8 @@ const INITIAL_BOOKING_SETTINGS: ClientBookingSettings = {
 const INITIAL_RETURN_SETTINGS: ClientReturnSettings = {
   noticeDays: 30,
   overduePenaltyPercent: 100,
+  maxDaysAhead: 365,
+  earlyForfeitPercent: 100,
 };
 
 /** Seeded unit-change move window; the API re-checks the picked day against the live rules. */
@@ -42,10 +45,16 @@ const INITIAL_UNIT_CHANGE_SETTINGS: ClientUnitChangeSettings = {
   maxDaysAhead: 90,
 };
 
+/** Seeded shelf drop-off / pick-up horizon; the API re-checks the picked day. */
+const INITIAL_SHELF_SETTINGS: ClientShelfSettings = {
+  requestMaxDaysAhead: 30,
+};
+
 type ClientSettings = {
   booking: ClientBookingSettings;
   return: ClientReturnSettings;
   unitChange: ClientUnitChangeSettings;
+  shelf: ClientShelfSettings;
   /** Refetches the rules, e.g. after the API rejected a booking under rules that have changed. */
   refresh: () => void;
 };
@@ -75,7 +84,11 @@ function isReturnSettings(value: unknown): value is ClientReturnSettings {
     Number.isInteger(settings?.noticeDays) &&
     (settings?.noticeDays ?? -1) >= 0 &&
     Number.isFinite(settings?.overduePenaltyPercent) &&
-    (settings?.overduePenaltyPercent ?? -1) >= 0
+    (settings?.overduePenaltyPercent ?? -1) >= 0 &&
+    Number.isInteger(settings?.maxDaysAhead) &&
+    (settings?.maxDaysAhead ?? -1) >= 0 &&
+    Number.isFinite(settings?.earlyForfeitPercent) &&
+    (settings?.earlyForfeitPercent ?? -1) >= 0
   );
 }
 
@@ -86,6 +99,13 @@ function isUnitChangeSettings(value: unknown): value is ClientUnitChangeSettings
     (settings?.minLeadDays ?? -1) >= 0 &&
     Number.isInteger(settings?.maxDaysAhead) &&
     (settings?.maxDaysAhead ?? -1) >= (settings?.minLeadDays ?? 0)
+  );
+}
+
+function isShelfSettings(value: unknown): value is ClientShelfSettings {
+  const settings = value as Partial<ClientShelfSettings> | null | undefined;
+  return (
+    Number.isInteger(settings?.requestMaxDaysAhead) && (settings?.requestMaxDaysAhead ?? 0) > 0
   );
 }
 
@@ -101,6 +121,7 @@ export function ClientSettingsProvider({ children }: { children: ReactNode }) {
   const [booking, setBooking] = useState(INITIAL_BOOKING_SETTINGS);
   const [returnRules, setReturnRules] = useState(INITIAL_RETURN_SETTINGS);
   const [unitChange, setUnitChange] = useState(INITIAL_UNIT_CHANGE_SETTINGS);
+  const [shelf, setShelf] = useState(INITIAL_SHELF_SETTINGS);
   const inFlight = useRef<AbortController | null>(null);
 
   const refresh = useCallback(() => {
@@ -122,6 +143,10 @@ export function ClientSettingsProvider({ children }: { children: ReactNode }) {
         const nextUnitChange = result?.unitChange;
         if (isUnitChangeSettings(nextUnitChange)) {
           setUnitChange((current) => keepIfSame(current, nextUnitChange));
+        }
+        const nextShelf = result?.shelf;
+        if (isShelfSettings(nextShelf)) {
+          setShelf((current) => keepIfSame(current, nextShelf));
         }
       })
       // Keep the last known rules; the next return from background or booking rejection retries.
@@ -147,8 +172,8 @@ export function ClientSettingsProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const value = useMemo(
-    () => ({ booking, return: returnRules, unitChange, refresh }),
-    [booking, returnRules, unitChange, refresh],
+    () => ({ booking, return: returnRules, unitChange, shelf, refresh }),
+    [booking, returnRules, unitChange, shelf, refresh],
   );
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
@@ -163,7 +188,7 @@ export function useBookingSettings(): ClientBookingSettings {
   return useClientSettings().booking;
 }
 
-/** Notice and overstay rules, for copy shown before the customer asks to move out. */
+/** Notice, overstay, early-forfeit and booking-horizon rules for the move-out screens. */
 export function useReturnSettings(): ClientReturnSettings {
   return useClientSettings().return;
 }
@@ -171,6 +196,11 @@ export function useReturnSettings(): ClientReturnSettings {
 /** The days a unit-change move may be booked on, counted from today. */
 export function useUnitChangeSettings(): ClientUnitChangeSettings {
   return useClientSettings().unitChange;
+}
+
+/** How far ahead a shelf drop-off or pick-up may be requested. */
+export function useShelfRequestSettings(): ClientShelfSettings {
+  return useClientSettings().shelf;
 }
 
 export function useRefreshBookingSettings(): () => void {

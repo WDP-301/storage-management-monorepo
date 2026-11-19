@@ -2,7 +2,7 @@ import { ApiError } from '../../../lib/api';
 import { bankCheckErrorMessage, isBankCheckError } from './bank-verify-errors';
 
 const NOT_FOUND = 'Yêu cầu trả kho không còn — tải lại trang';
-const DAY_OUT_OF_RANGE = 'Chọn ngày trong 365 ngày tới';
+const DAY_OUT_OF_RANGE = 'Chọn ngày trả trong khoảng cho phép';
 const BAD_ACCOUNT = 'Kiểm tra lại tài khoản nhận hoàn';
 
 /** Field paths of a VALIDATION_FAILED body (`details.fields[].field`), e.g. `refundAccount.accountNo`. */

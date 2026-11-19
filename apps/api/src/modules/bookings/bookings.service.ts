@@ -17,6 +17,7 @@ import { generatePaymentNo } from '@modules/payments/payment-no.util';
 import { markSepayOutcome } from '@modules/payments/sepay-transfers.util';
 import { PAYMENT_EVENTS, PaymentReceivedEvent } from '@modules/payments/types/payment';
 import { buildPaymentQrUrl, paymentQrConfigured } from '@modules/payments/vietqr.util';
+import { rentalTermsFor } from '@modules/settings/rental-terms.util';
 import { SettingsService } from '@modules/settings/settings.service';
 import { assertDateRange, eachDate } from '@modules/staff-shifts/shift-calendar';
 import { HttpStatus, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
@@ -151,15 +152,13 @@ export class BookingsService implements OnApplicationBootstrap {
     let isCommitted = false;
     try {
       // Business rules are admin-configurable — load them per request (60s cached inside).
-      const [holdMinutes, leadDays, minRentalMonths, maxRentalMonths, maxUnits, depositMonths] =
-        await Promise.all([
-          this.settings.getBookingHoldMinutes(),
-          this.settings.getBookingLeadDays(),
-          this.settings.getBookingMinRentalMonths(),
-          this.settings.getBookingMaxRentalMonths(),
-          this.settings.getBookingMaxUnitsPerBooking(),
-          this.settings.getDepositDefaultMonths(),
-        ]);
+      const [holdMinutes, leadDays, systemTerms, maxUnits, depositMonths] = await Promise.all([
+        this.settings.getBookingHoldMinutes(),
+        this.settings.getBookingLeadDays(),
+        this.settings.getBookingRentalMonthsOptions(),
+        this.settings.getBookingMaxUnitsPerBooking(),
+        this.settings.getDepositDefaultMonths(),
+      ]);
 
       const fieldErrors: Array<{ field: string; code: string; message: string }> = [];
       if (dto.items.length > maxUnits) {
@@ -172,13 +171,6 @@ export class BookingsService implements OnApplicationBootstrap {
       const startOfToday = startOfVietnamDay(new Date());
       const maxStartAt = new Date(startOfToday.getTime() + leadDays * 86_400_000 + 86_399_999);
       dto.items.forEach((item, i) => {
-        if (item.rentalMonths < minRentalMonths || item.rentalMonths > maxRentalMonths) {
-          fieldErrors.push({
-            field: `items.${i}.rentalMonths`,
-            code: 'range',
-            message: `Kỳ thuê phải từ ${minRentalMonths} đến ${maxRentalMonths} tháng`,
-          });
-        }
         if (new Date(item.requestedStartAt) > maxStartAt) {
           fieldErrors.push({
             field: `items.${i}.requestedStartAt`,
@@ -232,6 +224,28 @@ export class BookingsService implements OnApplicationBootstrap {
           ErrorCode.RESOURCE_NOT_FOUND,
           'Một hoặc nhiều storage unit không tồn tại',
           HttpStatus.NOT_FOUND,
+        );
+      }
+
+      // Terms are the warehouse's packages (a shelf's come from its shelf warehouse, loaded above).
+      const termErrors = dto.items.flatMap((item, i) => {
+        const unit = preCheckUnits.find((u) => u.id === item.storageUnitId);
+        const terms = unit ? rentalTermsFor(unit, systemTerms) : [];
+        if (!unit || terms.includes(item.rentalMonths)) return [];
+        return [
+          {
+            field: `items.${i}.rentalMonths`,
+            code: 'notAPackage',
+            message: `${unit.name} chỉ nhận các gói ${terms.join(', ')} tháng`,
+          },
+        ];
+      });
+      if (termErrors.length > 0) {
+        throw new DomainException(
+          ErrorCode.VALIDATION_FAILED,
+          'Validation failed',
+          HttpStatus.BAD_REQUEST,
+          { fields: termErrors },
         );
       }
 

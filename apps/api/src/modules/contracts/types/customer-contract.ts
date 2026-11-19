@@ -78,6 +78,8 @@ export interface CustomerContractRecord {
   return: CustomerInspectionSummary | null;
   /** Deposit settlement of an ENDED contract (PENDING until approved); null otherwise. */
   settlement: SettlementSummaryRecord | null;
+  /** Months a renewal may add — the warehouse's rental term packages; null when not loaded. */
+  renewal_months_options: number[] | null;
 }
 
 /** Figures loaded in batch beside the contract rows; absent ones read as unknown (null). */
@@ -106,7 +108,7 @@ export function toCustomerInspectionSummary(inspection: Inspection): CustomerIns
 export function toCustomerContractRecord(
   contract: Contract,
   inspections: { handover?: Inspection; return?: Inspection } = {},
-  extras: Partial<CustomerContractExtras> = {},
+  extras: Partial<CustomerContractExtras & { renewalMonthsOptions: number[] | null }> = {},
 ): CustomerContractRecord {
   const unit = contract.bookingItem?.storageUnit;
   return {
@@ -154,5 +156,6 @@ export function toCustomerContractRecord(
     handover: inspections.handover ? toCustomerInspectionSummary(inspections.handover) : null,
     return: inspections.return ? toCustomerInspectionSummary(inspections.return) : null,
     settlement: extras.settlement ?? null,
+    renewal_months_options: extras.renewalMonthsOptions ?? null,
   };
 }

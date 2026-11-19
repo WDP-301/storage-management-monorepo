@@ -20,7 +20,7 @@ export class CreateContractRenewalDto {
   @IsUUID('all')
   contractId: string;
 
-  @ApiProperty({ description: 'Months to add, within the booking min/max rental months' })
+  @ApiProperty({ description: 'Months to add; one of the warehouse rental term packages' })
   @Type(() => Number)
   @IsInt()
   @Min(1)

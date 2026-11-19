@@ -5,6 +5,7 @@ import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { findUnrentable, lockShelfParents } from '@modules/bookings/rentable-units.util';
+import { rentalTermsFor } from '@modules/settings/rental-terms.util';
 import { SettingsService } from '@modules/settings/settings.service';
 import { loadCustomerContractExtras } from '@modules/settlements/settlement-summary.util';
 import { HttpStatus, Injectable } from '@nestjs/common';
@@ -160,12 +161,13 @@ export class ContractsService {
       order: { effectiveAt: 'DESC' },
     });
     if (contracts.length === 0) return [];
-    const [byContract, penaltyPercent] = await Promise.all([
+    const [byContract, penaltyPercent, systemTerms] = await Promise.all([
       loadContractInspections(
         this.dataSource,
         contracts.map((c) => c.id),
       ),
       this.settings.getOverduePenaltyPercent(),
+      this.settings.getBookingRentalMonthsOptions(),
     ]);
     const extras = await loadCustomerContractExtras(
       this.dataSource.manager,
@@ -173,9 +175,13 @@ export class ContractsService {
       byContract,
       penaltyPercent,
     );
-    return contracts.map((c) =>
-      toCustomerContractRecord(c, byContract.get(c.id), extras.get(c.id)),
-    );
+    return contracts.map((c) => {
+      const unit = c.bookingItem?.storageUnit;
+      return toCustomerContractRecord(c, byContract.get(c.id), {
+        ...extras.get(c.id),
+        renewalMonthsOptions: unit ? rentalTermsFor(unit, systemTerms) : null,
+      });
+    });
   }
 
   async findById(id: string): Promise<Contract> {

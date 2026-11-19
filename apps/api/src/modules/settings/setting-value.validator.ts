@@ -40,6 +40,10 @@ export function validateSettingValue(row: SystemSetting, value: unknown): string
       ) {
         return 'Value must be an array of integers';
       }
+      // Customers can only book one of the packages, so an empty list would close booking.
+      if (row.key === 'booking.rental_months_options' && value.length === 0) {
+        return 'At least one rental term is required';
+      }
       if (min != null && value.some((v) => v < min)) {
         return `Each item must be >= ${min}`;
       }

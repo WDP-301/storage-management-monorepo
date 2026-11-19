@@ -88,7 +88,10 @@ function build(options: {
     },
   };
   const roleAssignments = { find: jest.fn().mockResolvedValue(options.assignments ?? []) };
-  const settings = { getDepositMonthsFor: jest.fn().mockResolvedValue(2) };
+  const settings = {
+    getDepositMonthsFor: jest.fn().mockResolvedValue(2),
+    getRentalTermsFor: jest.fn().mockResolvedValue([6, 12]),
+  };
   const uploads = { generatePresignedDownloadUrl: jest.fn(async (key: string) => `signed/${key}`) };
   const service = new WarehouseQueryService(
     units as never,
@@ -133,7 +136,9 @@ describe('WarehouseQueryService', () => {
     await build({ main }).service.findOne('unit-1');
 
     expect(main.called('leftJoin')[0][1]).toEqual(['unit.parent', 'parent']);
-    expect(main.called('addSelect')[0][1]).toEqual([['parent.id', 'parent.code', 'parent.name']]);
+    expect(main.called('addSelect')[0][1]).toEqual([
+      ['parent.id', 'parent.code', 'parent.name', 'parent.rentalMonthsOptions'],
+    ]);
     expect(main.called('setLock')).toHaveLength(0);
   });
 

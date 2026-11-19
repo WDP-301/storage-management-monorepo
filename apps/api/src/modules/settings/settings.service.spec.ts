@@ -28,17 +28,10 @@ const ROW_META: Record<
     min: 1,
     max: 1440,
   },
-  'booking.min_rental_months': {
+  'booking.default_rental_months': {
     valueType: 'int',
     group: 'booking',
-    label: 'Minimum rental term (months)',
-    min: 1,
-    max: 60,
-  },
-  'booking.max_rental_months': {
-    valueType: 'int',
-    group: 'booking',
-    label: 'Maximum rental term (months)',
+    label: 'Default rental term (months)',
     min: 1,
     max: 60,
   },
@@ -241,14 +234,14 @@ describe('SettingsService', () => {
     it('rejects out-of-range values', async () => {
       repo.find.mockResolvedValue([
         buildSetting('booking.hold_minutes', 15),
-        buildSetting('booking.max_rental_months', 60),
+        buildSetting('booking.default_rental_months', 6),
       ]);
 
       await expect(
         service.update({ 'booking.hold_minutes': 0 }, buildAdmin()),
       ).rejects.toMatchObject({ status: 400, response: { code: 'VALIDATION_FAILED' } });
       await expect(
-        service.update({ 'booking.max_rental_months': 61 }, buildAdmin()),
+        service.update({ 'booking.default_rental_months': 61 }, buildAdmin()),
       ).rejects.toMatchObject({ status: 400, response: { code: 'VALIDATION_FAILED' } });
     });
 
@@ -271,6 +264,14 @@ describe('SettingsService', () => {
       ).rejects.toMatchObject({ status: 400, response: { code: 'VALIDATION_FAILED' } });
     });
 
+    it('refuses an empty rental term package list', async () => {
+      repo.find.mockResolvedValue([buildSetting('booking.rental_months_options', [6, 12, 18])]);
+
+      await expect(
+        service.update({ 'booking.rental_months_options': [] }, buildAdmin()),
+      ).rejects.toMatchObject({ status: 400, response: { code: 'VALIDATION_FAILED' } });
+    });
+
     it('invalidates the cache after a successful update', async () => {
       repo.findOne.mockResolvedValue(buildSetting('booking.hold_minutes', 15));
       await service.get('booking.hold_minutes');
@@ -287,8 +288,6 @@ describe('SettingsService', () => {
     const stored: Record<string, unknown> = {
       'booking.rental_months_options': [18, 6, 12],
       'booking.default_rental_months': 6,
-      'booking.min_rental_months': 6,
-      'booking.max_rental_months': 60,
       'booking.lead_days': 30,
       'booking.max_units_per_booking': 4,
       'contract.return_notice_days': 30,
@@ -312,8 +311,6 @@ describe('SettingsService', () => {
         booking: {
           rentalMonthsOptions: [6, 12, 18],
           defaultRentalMonths: 6,
-          minRentalMonths: 6,
-          maxRentalMonths: 60,
           leadDays: 30,
           maxUnitsPerBooking: 4,
         },
@@ -349,22 +346,13 @@ describe('SettingsService', () => {
       });
     });
 
-    it('drops options the booking endpoint would reject and re-picks the default', async () => {
-      serve({ 'booking.min_rental_months': 12, 'booking.max_rental_months': 12 });
+    it('pre-selects the shortest package when the default is not one of them', async () => {
+      serve({ 'booking.rental_months_options': [12, 3], 'booking.default_rental_months': 8 });
 
       const { booking } = await service.getClientSettings();
 
-      expect(booking.rentalMonthsOptions).toEqual([12]);
-      expect(booking.defaultRentalMonths).toBe(12);
-    });
-
-    it('falls back to the minimum term when no option is in range', async () => {
-      serve({ 'booking.min_rental_months': 24, 'booking.default_rental_months': 6 });
-
-      const { booking } = await service.getClientSettings();
-
-      expect(booking.rentalMonthsOptions).toEqual([24]);
-      expect(booking.defaultRentalMonths).toBe(24);
+      expect(booking.rentalMonthsOptions).toEqual([3, 12]);
+      expect(booking.defaultRentalMonths).toBe(3);
     });
   });
 

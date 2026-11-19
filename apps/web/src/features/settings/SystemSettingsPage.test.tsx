@@ -36,8 +36,8 @@ describe('SystemSettingsPage Component', () => {
   it('filters configuration items and updates footer count by category dropdown', async () => {
     await renderComponent();
 
-    // Initially all configs are shown (10 items)
-    expect(screen.getByText('Tổng số tham số: 10 mục')).toBeTruthy();
+    // Initially all configs are shown (8 items)
+    expect(screen.getByText('Tổng số tham số: 8 mục')).toBeTruthy();
     expect(screen.getByText('Thời gian giữ chỗ tạm thời (Hold timeout)')).toBeTruthy();
     expect(screen.getByText('Tỷ lệ tiền đặt cọc tối thiểu (Tháng thuê)')).toBeTruthy();
 
@@ -71,7 +71,7 @@ describe('SystemSettingsPage Component', () => {
     fireEvent.pointerUp(bookingOption);
     fireEvent.click(bookingOption);
     await waitFor(() => {
-      expect(screen.getByText('Tổng số tham số: 7 mục')).toBeTruthy();
+      expect(screen.getByText('Tổng số tham số: 5 mục')).toBeTruthy();
     });
   });
 

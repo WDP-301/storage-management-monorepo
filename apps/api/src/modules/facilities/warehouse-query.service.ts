@@ -144,12 +144,12 @@ export class WarehouseQueryService {
 
   private baseQuery(): SelectQueryBuilder<StorageUnit> {
     // Inner join: a soft-deleted facility hides its warehouses too. The shelf's building is joined
-    // without a lock, only to name it in the view.
+    // without a lock, to name it in the view and lend the shelf its rental term packages.
     return this.units
       .createQueryBuilder('unit')
       .innerJoinAndSelect('unit.facility', 'facility')
       .leftJoin('unit.parent', 'parent')
-      .addSelect(['parent.id', 'parent.code', 'parent.name']);
+      .addSelect(['parent.id', 'parent.code', 'parent.name', 'parent.rentalMonthsOptions']);
   }
 
   private availableQuery(
@@ -209,7 +209,10 @@ export class WarehouseQueryService {
       units.map(async (unit) =>
         toWarehouseView(
           unit,
-          await this.settings.getDepositMonthsFor(unit),
+          {
+            depositMonths: await this.settings.getDepositMonthsFor(unit),
+            rentalMonthsOptions: await this.settings.getRentalTermsFor(unit),
+          },
           await this.signImages(unit),
           summaries.get(unit.id) ?? null,
           amenities.get(unit.id) ?? [],

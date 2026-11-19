@@ -26,6 +26,7 @@ export const UNIT_FIELDS = [
   'lengthM',
   'heightM',
   'depositMonths',
+  'rentalMonthsOptions',
   'notes',
   'status',
   'facilityId',
@@ -44,7 +45,7 @@ export function pick<T extends object, K extends keyof T>(
 }
 
 /** Fields a client may clear with `null`; every other field must be omitted or given a value. */
-const CLEARABLE_FIELDS = new Set(['depositMonths', 'notes', 'wardCode']);
+const CLEARABLE_FIELDS = new Set(['depositMonths', 'rentalMonthsOptions', 'notes', 'wardCode']);
 /** A shelf may be created without a height, so its height can be cleared again. */
 const SHELF_CLEARABLE_FIELDS = new Set([...CLEARABLE_FIELDS, 'heightM']);
 

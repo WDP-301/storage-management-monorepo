@@ -59,6 +59,10 @@ export interface WarehouseView {
   depositMonths: number | null;
   /** Deposit months actually charged. */
   effectiveDepositMonths: number;
+  /** The warehouse's own rental term packages; null follows the system-wide setting. */
+  rentalMonthsOptions: number[] | null;
+  /** The only terms it can be booked or renewed for — a shelf's come from its shelf warehouse. */
+  effectiveRentalMonthsOptions: number[];
   status: StorageUnitStatus;
   notes: string | null;
   /** Display order; the first one is the cover. */
@@ -77,7 +81,7 @@ const toNumberOrNull = (value: unknown): number | null =>
 /** `unit.facility` must be loaded; `unit.parent` is read only when loaded. Postgres decimals arrive as strings and are normalised. */
 export function toWarehouseView(
   unit: StorageUnit,
-  effectiveDepositMonths: number,
+  effective: { depositMonths: number; rentalMonthsOptions: number[] },
   images: WarehouseImageView[] = [],
   shelfSummary: ShelfSummary | null = null,
   amenities: WarehouseAmenityView[] = [],
@@ -105,7 +109,9 @@ export function toWarehouseView(
     volumeM3: toNumberOrNull(unit.volumeM3),
     monthlyPrice: Number(unit.monthlyPrice),
     depositMonths: unit.depositMonths ?? null,
-    effectiveDepositMonths,
+    effectiveDepositMonths: effective.depositMonths,
+    rentalMonthsOptions: unit.rentalMonthsOptions ?? null,
+    effectiveRentalMonthsOptions: effective.rentalMonthsOptions,
     status: unit.status,
     notes: unit.notes ?? null,
     images,

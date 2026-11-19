@@ -46,22 +46,20 @@ export class ContractRenewalsService {
   ) {}
 
   async create(dto: CreateContractRenewalDto, actor: AuthUser): Promise<ContractRenewalView> {
-    const [minMonths, maxMonths] = await Promise.all([
-      this.settings.getBookingMinRentalMonths(),
-      this.settings.getBookingMaxRentalMonths(),
-    ]);
-    if (dto.months < minMonths || dto.months > maxMonths) {
-      throw new DomainException(
-        ErrorCode.VALIDATION_FAILED,
-        `Số tháng gia hạn phải từ ${minMonths} đến ${maxMonths}`,
-        HttpStatus.BAD_REQUEST,
-        { field: 'months', min: minMonths, max: maxMonths },
-      );
-    }
     const now = new Date();
     return this.dataSource.transaction(async (em) => {
       const contract = await lockContractForRenewal(em, dto.contractId);
       if (contract.customerId !== actor.id) notFound('Contract', dto.contractId);
+      // A renewal adds one of the warehouse's rental term packages, like a new booking would.
+      const terms = await this.settings.getRentalTermsFor(contract.bookingItem.storageUnit);
+      if (!terms.includes(dto.months)) {
+        throw new DomainException(
+          ErrorCode.VALIDATION_FAILED,
+          `Chỉ gia hạn được theo các gói ${terms.join(', ')} tháng`,
+          HttpStatus.BAD_REQUEST,
+          { field: 'months', options: terms },
+        );
+      }
       await assertRenewable(em, contract);
       assertBeforeTermEnd(contract, now);
       const overdue = await findOverdueInvoiceNos(em, actor.id, now);

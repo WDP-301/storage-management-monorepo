@@ -9,6 +9,7 @@ import { ErrorCode } from '@shared/models/api-response';
 import type { ClientSettingsResponse, ClientUnitChangeSettings } from '@storage/types';
 import { In, Not, Repository } from 'typeorm';
 import { loadClientSettings } from './client-settings';
+import { rentalTermsFor, sortRentalTerms } from './rental-terms.util';
 import { validateSettingValue } from './setting-value.validator';
 import {
   type SystemSettingsResponse,
@@ -70,21 +71,14 @@ export class SettingsService {
     return this.getNumber('booking.lead_days');
   }
 
-  async getBookingMinRentalMonths(): Promise<number> {
-    return this.getNumber('booking.min_rental_months');
-  }
-
-  async getBookingMaxRentalMonths(): Promise<number> {
-    return this.getNumber('booking.max_rental_months');
-  }
-
   async getBookingDefaultRentalMonths(): Promise<number> {
     return this.getNumber('booking.default_rental_months');
   }
 
+  /** System-wide rental term packages, ascending; warehouses without their own follow these. */
   async getBookingRentalMonthsOptions(): Promise<number[]> {
     const value = await this.get('booking.rental_months_options');
-    return Array.isArray(value) ? value.map((v) => Number(v)) : [];
+    return Array.isArray(value) ? sortRentalTerms(value) : [];
   }
 
   async getBookingMaxUnitsPerBooking(): Promise<number> {
@@ -205,6 +199,11 @@ export class SettingsService {
   /** A unit's own deposit level wins; units without one follow the system-wide setting. */
   async getDepositMonthsFor(unit: Pick<StorageUnit, 'depositMonths'>): Promise<number> {
     return unit.depositMonths ?? this.getDepositDefaultMonths();
+  }
+
+  /** The only terms a unit may be booked or renewed for; see `rentalTermsFor`. */
+  async getRentalTermsFor(unit: Parameters<typeof rentalTermsFor>[0]): Promise<number[]> {
+    return rentalTermsFor(unit, await this.getBookingRentalMonthsOptions());
   }
 
   /** The subset of settings clients need to drive their own UI — safe to expose to any user. */

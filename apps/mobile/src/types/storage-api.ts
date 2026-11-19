@@ -77,6 +77,8 @@ export type Warehouse = {
   depositMonths: number | null;
   /** Months of rent charged as deposit; deposit in VND is `monthlyPrice × effectiveDepositMonths`. */
   effectiveDepositMonths: number;
+  /** The only terms it can be booked for; absent on older APIs, which follow the system-wide list. */
+  effectiveRentalMonthsOptions?: number[];
   status: WarehouseStatus;
   notes: string | null;
   /** Display order; the first one is the cover. */

@@ -77,6 +77,10 @@ export function normaliseContract(contract: CustomerContractResponse): ApiContra
     termEndAt: contract.term_end_at ?? null,
     overduePenaltyPerDay: toOptionalNumber(contract.overdue_penalty_per_day),
     settlement: normaliseSettlement(contract.settlement),
+    renewalMonthsOptions:
+      Array.isArray(contract.renewal_months_options) && contract.renewal_months_options.length > 0
+        ? contract.renewal_months_options
+        : null,
     unit: contract.unit
       ? {
           kind: contract.unit.kind,

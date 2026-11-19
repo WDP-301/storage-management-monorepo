@@ -774,8 +774,7 @@ describe('BookingsService.create — shelf rules', () => {
       getIdempotencyStaleSeconds: jest.fn().mockResolvedValue(60),
       getBookingHoldMinutes: jest.fn().mockResolvedValue(30),
       getBookingLeadDays: jest.fn().mockResolvedValue(30),
-      getBookingMinRentalMonths: jest.fn().mockResolvedValue(1),
-      getBookingMaxRentalMonths: jest.fn().mockResolvedValue(12),
+      getBookingRentalMonthsOptions: jest.fn().mockResolvedValue([3, 6, 12]),
       getBookingMaxUnitsPerBooking: jest.fn().mockResolvedValue(4),
       getDepositDefaultMonths: jest.fn().mockResolvedValue(1),
     };
@@ -807,6 +806,33 @@ describe('BookingsService.create — shelf rules', () => {
     });
     // The hold transaction never starts.
     expect(preCheckFind).not.toHaveBeenCalled();
+  });
+
+  it('refuses a term that is not one of the warehouse packages before taking any lock', async () => {
+    preCheckFind.mockResolvedValue([unit('wh-1', { rentalMonthsOptions: [6, 12] })]);
+
+    await expect(service.create(dto('wh-1'), user, 'key-1')).rejects.toMatchObject({
+      status: 400,
+      response: {
+        code: ErrorCode.VALIDATION_FAILED,
+        details: { fields: [expect.objectContaining({ field: 'items.0.rentalMonths' })] },
+      },
+    });
+    expect(em.getRepository).not.toHaveBeenCalled();
+  });
+
+  it('checks a shelf term against its shelf warehouse packages', async () => {
+    preCheckFind.mockResolvedValue([
+      unit('shelf-1', {
+        kind: StorageUnitKind.SHELF,
+        parent: { ...parent(StorageUnitStatus.AVAILABLE), rentalMonthsOptions: [1, 2] },
+      }),
+    ]);
+
+    await expect(service.create(dto('shelf-1'), user, 'key-1')).rejects.toMatchObject({
+      status: 400,
+      response: { code: ErrorCode.VALIDATION_FAILED },
+    });
   });
 
   it('refuses a shelf warehouse before taking any lock', async () => {

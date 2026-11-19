@@ -25,8 +25,6 @@ import { SettingsApi } from './settings-api';
 const INITIAL_BOOKING_SETTINGS: ClientBookingSettings = {
   rentalMonthsOptions: [6, 12, 18],
   defaultRentalMonths: 6,
-  minRentalMonths: 6,
-  maxRentalMonths: 60,
   leadDays: 30,
   maxUnitsPerBooking: 4,
 };
@@ -68,13 +66,9 @@ function isBookingSettings(value: unknown): value is ClientBookingSettings {
     Array.isArray(settings?.rentalMonthsOptions) &&
     settings.rentalMonthsOptions.length > 0 &&
     settings.rentalMonthsOptions.every(Number.isFinite) &&
-    [
-      settings.defaultRentalMonths,
-      settings.minRentalMonths,
-      settings.maxRentalMonths,
-      settings.leadDays,
-      settings.maxUnitsPerBooking,
-    ].every(Number.isFinite)
+    [settings.defaultRentalMonths, settings.leadDays, settings.maxUnitsPerBooking].every(
+      Number.isFinite,
+    )
   );
 }
 

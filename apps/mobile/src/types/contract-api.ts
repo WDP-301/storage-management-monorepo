@@ -66,6 +66,8 @@ export type CustomerContractResponse = {
   overdue_penalty_per_day?: string | number | null;
   /** Deposit settlement of an ENDED contract; null otherwise. */
   settlement?: SettlementSummaryRecord | null;
+  /** Months a renewal may add — the warehouse's rental term packages. */
+  renewal_months_options?: number[] | null;
   unit: {
     kind: StorageUnitKind;
     parent: { id: string; code: string; name: string } | null;
@@ -134,6 +136,8 @@ export type ApiContract = {
   overduePenaltyPerDay: number | null;
   /** Deposit settlement of an ENDED contract; null otherwise or on older APIs. */
   settlement: SettlementSummaryRecord | null;
+  /** Months a renewal may add; null on older APIs, which follow the system-wide packages. */
+  renewalMonthsOptions: number[] | null;
   unit: {
     kind: StorageUnitKind;
     parent: { id: string; code: string; name: string } | null;

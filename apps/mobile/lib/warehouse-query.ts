@@ -176,6 +176,20 @@ export function warehouseDeposit(
 }
 
 /**
+ * Terms every picked warehouse can be booked for, ascending — one term covers the whole booking,
+ * so warehouses with different packages may share none.
+ */
+export function sharedRentalTerms(
+  warehouses: readonly Pick<Warehouse, 'effectiveRentalMonthsOptions'>[],
+  systemTerms: readonly number[],
+): number[] {
+  const [first = systemTerms, ...rest] = warehouses.map(
+    (warehouse) => warehouse.effectiveRentalMonthsOptions ?? systemTerms,
+  );
+  return first.filter((months) => rest.every((terms) => terms.includes(months)));
+}
+
+/**
  * Items for `POST /bookings`: each warehouse is booked through its hidden unit id.
  * `requestedStartAt` is the receiving instant picked inside an OFFICE window — the API refuses a
  * time outside the administrative working hours.

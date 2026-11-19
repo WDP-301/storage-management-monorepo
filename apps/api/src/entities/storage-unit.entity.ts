@@ -113,6 +113,13 @@ export class StorageUnit extends AuditWithTimezone {
   @Column({ type: 'smallint', nullable: true, name: 'deposit_months' })
   depositMonths: number | null;
 
+  /**
+   * Rental terms (months) a customer may book or renew this warehouse for, ascending; null follows
+   * the `booking.rental_months_options` setting. A shelf uses its shelf warehouse's list.
+   */
+  @Column({ type: 'smallint', array: true, nullable: true, name: 'rental_months_options' })
+  rentalMonthsOptions: number[] | null;
+
   /** Photos shown to customers, in display order; the first one is the cover. */
   @Column({ type: 'jsonb', default: () => "'[]'" })
   images: WarehouseImage[];

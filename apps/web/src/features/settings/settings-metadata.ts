@@ -24,31 +24,17 @@ export const SETTINGS_METADATA: Record<string, SettingMetadata> = {
     unit: 'ngày',
     group: 'booking',
   },
-  'booking.min_rental_months': {
-    label: 'Thời hạn thuê tối thiểu cho hợp đồng mới',
-    description:
-      'Đơn vị thời gian thuê tối thiểu được chấp nhận khi khách hàng tạo lượt thuê kho mới.',
-    unit: 'tháng',
-    group: 'booking',
-  },
-  'booking.max_rental_months': {
-    label: 'Thời hạn thuê tối đa cho hợp đồng mới',
-    description:
-      'Giới hạn thời gian thuê tối đa của một hợp đồng thuê kho (ràng buộc DB tối đa 60 tháng).',
-    unit: 'tháng',
-    group: 'booking',
-  },
   'booking.default_rental_months': {
     label: 'Thời hạn thuê mặc định',
     description:
-      'Giá trị thời hạn thuê được chọn sẵn khi khách hàng lần đầu chọn kho trong giao diện.',
+      'Gói được chọn sẵn khi khách đặt kho; nếu kho không có gói này thì chọn sẵn gói ngắn nhất.',
     unit: 'tháng',
     group: 'booking',
   },
   'booking.rental_months_options': {
-    label: 'Gợi ý các gói kỳ hạn thuê kho',
+    label: 'Các gói kỳ hạn thuê kho',
     description:
-      'Danh sách các gói kỳ hạn thuê đề xuất hiển thị trên giao diện người dùng (phân tách bởi dấu phẩy).',
+      'Khách chỉ đặt và gia hạn được theo đúng các gói này trên app. Kho có cấu hình gói riêng sẽ dùng gói của kho đó.',
     unit: 'tháng',
     group: 'booking',
   },

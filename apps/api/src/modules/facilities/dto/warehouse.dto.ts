@@ -5,6 +5,7 @@ import { StorageUnitKind, StorageUnitStatus } from '@storage/types';
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayNotEmpty,
   ArrayUnique,
   IsArray,
   IsBoolean,
@@ -33,6 +34,8 @@ export const MAX_SIDE_M = 1000;
 export const MAX_MONTHLY_PRICE = 100_000_000_000;
 
 export const MAX_WAREHOUSE_IMAGES = 10;
+
+export const MAX_RENTAL_TERM_PACKAGES = 12;
 
 export const WAREHOUSE_IMAGE_MIME_TYPES = [
   'image/jpeg',
@@ -152,6 +155,31 @@ export class CreateWarehouseDto {
   @Max(12)
   @IsOptional()
   depositMonths?: number | null;
+
+  @ApiPropertyOptional({
+    type: [Number],
+    example: [3, 6, 12],
+    nullable: true,
+    maxItems: MAX_RENTAL_TERM_PACKAGES,
+    description:
+      'Rental term packages in months (1–60): the only terms a customer can book or renew for. ' +
+      'Omit or send null to follow booking.rental_months_options. Not accepted on a shelf, which ' +
+      'uses its shelf warehouse’s.',
+  })
+  @Transform(({ value }) =>
+    Array.isArray(value) && value.every((v) => typeof v === 'number')
+      ? [...value].sort((a, b) => a - b)
+      : value,
+  )
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(MAX_RENTAL_TERM_PACKAGES)
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(60, { each: true })
+  rentalMonthsOptions?: number[] | null;
 
   @ApiPropertyOptional({ example: 'Có xe nâng, cửa cuốn 3m' })
   @IsString()

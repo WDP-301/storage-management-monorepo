@@ -8,8 +8,6 @@ export async function loadClientSettings(
   const [
     rentalMonthsOptions,
     defaultRentalMonths,
-    minRentalMonths,
-    maxRentalMonths,
     leadDays,
     maxUnitsPerBooking,
     noticeDays,
@@ -21,8 +19,6 @@ export async function loadClientSettings(
   ] = await Promise.all([
     settings.getBookingRentalMonthsOptions(),
     settings.getBookingDefaultRentalMonths(),
-    settings.getBookingMinRentalMonths(),
-    settings.getBookingMaxRentalMonths(),
     settings.getBookingLeadDays(),
     settings.getBookingMaxUnitsPerBooking(),
     settings.getReturnNoticeDays(),
@@ -36,8 +32,6 @@ export async function loadClientSettings(
     booking: toClientBookingSettings({
       rentalMonthsOptions,
       defaultRentalMonths,
-      minRentalMonths,
-      maxRentalMonths,
       leadDays,
       maxUnitsPerBooking,
     }),
@@ -53,23 +47,14 @@ export async function loadClientSettings(
 }
 
 /**
- * Settings are validated one key at a time, so an admin can leave them mutually inconsistent
- * (e.g. raise the minimum term above a suggested option). Clients get options that the booking
- * endpoint will actually accept, and a default that is one of them. A default that is in range but
- * missing from the suggestions is added to them rather than dropped — the admin chose it explicitly.
+ * The default term is set apart from the packages, so it may not be one of them; the client then
+ * pre-selects the shortest package instead of offering a term the booking endpoint would refuse.
  */
 export function toClientBookingSettings(raw: ClientBookingSettings): ClientBookingSettings {
-  const { minRentalMonths, maxRentalMonths, defaultRentalMonths } = raw;
-  const inRange = (months: number) => months >= minRentalMonths && months <= maxRentalMonths;
-
-  const candidates = [...raw.rentalMonthsOptions, defaultRentalMonths].filter(inRange);
-  const valid = [...new Set(candidates)].sort((a, b) => a - b);
-  const rentalMonthsOptions = valid.length > 0 ? valid : [minRentalMonths];
-
+  const { rentalMonthsOptions, defaultRentalMonths } = raw;
   return {
     ...raw,
-    rentalMonthsOptions,
-    defaultRentalMonths: inRange(defaultRentalMonths)
+    defaultRentalMonths: rentalMonthsOptions.includes(defaultRentalMonths)
       ? defaultRentalMonths
       : rentalMonthsOptions[0],
   };

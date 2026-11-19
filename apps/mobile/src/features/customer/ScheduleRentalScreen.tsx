@@ -16,7 +16,7 @@ import {
 import { latestStartIso, rentalEndIso, todayIso } from '../../../lib/rental-schedule';
 import { earlyForfeitLabel } from '../../../lib/settlement-format';
 import { rentalName } from '../../../lib/shelf-rental';
-import { warehouseDeposit } from '../../../lib/warehouse-query';
+import { sharedRentalTerms, warehouseDeposit } from '../../../lib/warehouse-query';
 import {
   Button,
   colors,
@@ -48,27 +48,25 @@ type Props = {
  * it stays visible while the customer changes dates and durations.
  */
 export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, onConfirm }: Props) {
-  const { rentalMonthsOptions, defaultRentalMonths, minRentalMonths, maxRentalMonths, leadDays } =
-    useBookingSettings();
+  const { rentalMonthsOptions, defaultRentalMonths, leadDays } = useBookingSettings();
   const earlyForfeit = earlyForfeitLabel(useReturnSettings().earlyForfeitPercent);
   const [pickedStart, setStartDate] = useState(todayIso);
   const [pickedMonths, setPickedMonths] = useState(defaultRentalMonths);
   const [slots, setSlots] = useState<ReceivingDay[]>([]);
   const [requestedStartAt, setRequestedStartAt] = useState<string | null>(null);
   const [isLoadingSlots, setIsLoadingSlots] = useState(true);
-  // Rules can refresh while the screen is open. A pick the API still accepts is kept even when it is
-  // no longer suggested; anything else is pulled back in, so the summary always shows what is sent.
+  // Rules can refresh while the screen is open, so a pick no longer offered is pulled back to the
+  // default (or the shortest package) and the summary always shows what is sent.
   const latestStart = latestStartIso(leadDays);
   const startDate = pickedStart > latestStart ? latestStart : pickedStart;
-  const durationMonths =
-    pickedMonths >= minRentalMonths && pickedMonths <= maxRentalMonths
-      ? pickedMonths
-      : defaultRentalMonths;
-  const durationChoices = rentalMonthsOptions.includes(durationMonths)
-    ? rentalMonthsOptions
-    : [...rentalMonthsOptions, durationMonths].sort((a, b) => a - b);
+  const durationChoices = sharedRentalTerms(warehouses, rentalMonthsOptions);
+  const durationMonths: number | undefined = durationChoices.includes(pickedMonths)
+    ? pickedMonths
+    : durationChoices.includes(defaultRentalMonths)
+      ? defaultRentalMonths
+      : durationChoices[0];
   const dateSheetRef = useRef<BottomSheetModal>(null);
-  const endDate = rentalEndIso(startDate, durationMonths);
+  const endDate = durationMonths ? rentalEndIso(startDate, durationMonths) : null;
   const timeOptions = useMemo(() => timeOptionsForDate(slots, startDate), [slots, startDate]);
   // The pick only counts while it still falls inside the shown day's windows — after a date
   // change it is stale until the refetched slots replace it, so it must not be shown or sent.
@@ -103,7 +101,7 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
 
   const monthlyRent = warehouses.reduce((sum, item) => sum + item.monthlyPrice, 0);
   const deposit = warehouses.reduce((sum, item) => sum + warehouseDeposit(item), 0);
-  const totalRent = monthlyRent * durationMonths;
+  const totalRent = monthlyRent * (durationMonths ?? 0);
   const totalArea = warehouses.reduce((sum, item) => sum + item.areaM2, 0);
 
   const warehouseNames = warehouses.map(rentalName).join(', ');
@@ -207,20 +205,29 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
           <Text className="text-body-md font-semibold text-text-primary">
             Thời hạn thuê dự kiến
           </Text>
-          <View className="flex-row flex-wrap gap-2">
-            {durationChoices.map((months) => (
-              <TabChip
-                key={months}
-                label={`${months} tháng`}
-                selected={durationMonths === months}
-                onPress={() => setPickedMonths(months)}
-              />
-            ))}
-          </View>
-          <Text className="text-body-sm text-text-secondary tabular-nums">
-            Thuê đến{' '}
-            <Text className="font-semibold text-text-primary">{formatIsoDate(endDate)}</Text>
-          </Text>
+          {durationChoices.length === 0 ? (
+            <InlineMessage
+              message="Các kho đã chọn không có chung gói kỳ hạn nào. Vui lòng đặt riêng từng kho."
+              type="error"
+            />
+          ) : (
+            <View className="flex-row flex-wrap gap-2">
+              {durationChoices.map((months) => (
+                <TabChip
+                  key={months}
+                  label={`${months} tháng`}
+                  selected={durationMonths === months}
+                  onPress={() => setPickedMonths(months)}
+                />
+              ))}
+            </View>
+          )}
+          {endDate ? (
+            <Text className="text-body-sm text-text-secondary tabular-nums">
+              Thuê đến{' '}
+              <Text className="font-semibold text-text-primary">{formatIsoDate(endDate)}</Text>
+            </Text>
+          ) : null}
         </View>
 
         <View className="gap-3 rounded-[20px] border border-border-default bg-bg-card p-4">
@@ -257,10 +264,12 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
             />
           ) : null}
 
-          <Text className="text-caption text-text-secondary tabular-nums">
-            Tổng tiền thuê dự kiến {durationMonths} tháng là {formatMoney(totalRent)}, thu theo từng
-            kỳ.
-          </Text>
+          {durationMonths ? (
+            <Text className="text-caption text-text-secondary tabular-nums">
+              Tổng tiền thuê dự kiến {durationMonths} tháng là {formatMoney(totalRent)}, thu theo
+              từng kỳ.
+            </Text>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -272,12 +281,12 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
       >
         {error ? <InlineMessage message={error} type="error" /> : null}
         <Button
-          disabled={isCreating || !receivingTime}
+          disabled={isCreating || !receivingTime || !durationMonths}
           label={isCreating ? 'Đang giữ kho...' : 'Giữ chỗ & Lấy VietQR'}
           loading={isCreating}
           rightIcon="qr-code-2"
           onPress={() => {
-            if (receivingTime) {
+            if (receivingTime && durationMonths) {
               onConfirm({ startDate, durationMonths, requestedStartAt: receivingTime });
             }
           }}

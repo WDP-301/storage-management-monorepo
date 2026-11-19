@@ -35,12 +35,13 @@ export interface UpdateSettingsResponse {
 
 /** Booking rules a client needs to build its booking UI; mirrors the `booking.*` settings. */
 export interface ClientBookingSettings {
-  /** Terms offered as choices — never empty, sorted, each within min/max. */
+  /**
+   * System-wide rental term packages, ascending — the only terms accepted for a warehouse without
+   * its own (`WarehouseView.effectiveRentalMonthsOptions` is the per-warehouse answer).
+   */
   rentalMonthsOptions: number[];
-  /** Pre-selected term — always one of `rentalMonthsOptions`. */
+  /** Pre-selected term — one of `rentalMonthsOptions`; a warehouse lacking it starts at its shortest. */
   defaultRentalMonths: number;
-  minRentalMonths: number;
-  maxRentalMonths: number;
   /** How many days ahead of today the rental start date may be. */
   leadDays: number;
   maxUnitsPerBooking: number;

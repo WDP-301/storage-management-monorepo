@@ -30,7 +30,10 @@ type Props = {
 
 /** Asks the branch to extend the contract at its current price; a manager approves it. */
 export function RenewalRequestForm({ contract, booking, onDone }: Props) {
-  const [months, setMonths] = useState(booking.defaultRentalMonths);
+  const options = contract.renewalMonthsOptions ?? booking.rentalMonthsOptions;
+  const [months, setMonths] = useState(
+    options.includes(booking.defaultRentalMonths) ? booking.defaultRentalMonths : options[0],
+  );
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +64,7 @@ export function RenewalRequestForm({ contract, booking, onDone }: Props) {
       <View className="gap-2">
         <Text className="text-body-sm font-semibold text-text-primary">Thêm bao lâu?</Text>
         <View className="flex-row flex-wrap gap-2">
-          {booking.rentalMonthsOptions.map((option) => (
+          {options.map((option) => (
             <TabChip
               key={option}
               label={`${option} tháng`}

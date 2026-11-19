@@ -27,6 +27,7 @@ import {
   formatShelfSummary,
   formatWarehousePrice,
   isShelfWarehouse,
+  maintenanceStaffLabel,
   WAREHOUSE_STATUS_LABEL,
 } from '../../warehouses/warehouse-display';
 import { MaintenanceToggleButton } from './MaintenanceToggleButton';
@@ -171,6 +172,11 @@ export const ManagedWarehousesTable: React.FC<Props> = ({
                     <Badge variant={WAREHOUSE_STATUS_LABEL[w.status].variant}>
                       {WAREHOUSE_STATUS_LABEL[w.status].label}
                     </Badge>
+                    {maintenanceStaffLabel(w) && (
+                      <div className="mt-1 text-xs text-kumo-subtle">
+                        {maintenanceStaffLabel(w)}
+                      </div>
+                    )}
                   </Table.Cell>
                   <Table.Cell className="whitespace-nowrap text-right">
                     <div className="inline-flex items-center gap-1.5">

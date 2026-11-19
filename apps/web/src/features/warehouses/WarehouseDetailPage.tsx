@@ -72,6 +72,7 @@ import {
   formatWarehouseDeposit,
   formatWarehousePrice,
   isShelfWarehouse,
+  maintenanceStaffLabel,
   WAREHOUSE_STATUS_LABEL,
 } from './warehouse-display';
 import { computeDerived, DEPOSIT_DEFAULT, isIdleStatus } from './warehouse-form';
@@ -551,6 +552,11 @@ export const WarehouseDetailPage: React.FC = () => {
             <Text variant="secondary" size="sm">
               {warehouse.facility.name} ({warehouse.facility.code}) · {warehouse.addressLine}
             </Text>
+            {maintenanceStaffLabel(warehouse) && (
+              <Text variant="secondary" size="sm">
+                {maintenanceStaffLabel(warehouse)}
+              </Text>
+            )}
           </div>
 
           {isShelfWarehouse(warehouse) && (

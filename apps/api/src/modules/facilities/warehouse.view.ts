@@ -29,6 +29,12 @@ export interface WarehouseMaintenanceSummary {
   hasDamages: boolean;
 }
 
+/** The staff member assigned to check a unit that is on maintenance. */
+export interface WarehouseMaintenanceStaff {
+  id: string;
+  fullName: string;
+}
+
 /**
  * A warehouse as clients see it: the storage unit with its owning facility (branch) summary.
  * `id` is the storage unit id — what bookings, change requests and tours reference.
@@ -71,6 +77,8 @@ export interface WarehouseView {
   amenities: WarehouseAmenityView[];
   /** Latest finalized maintenance check of a vacated unit, for managers deciding to reopen it. */
   maintenance: WarehouseMaintenanceSummary | null;
+  /** Who checks the unit while it is on maintenance; null otherwise or when nobody is assigned. */
+  maintenanceStaff: WarehouseMaintenanceStaff | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -86,6 +94,7 @@ export function toWarehouseView(
   shelfSummary: ShelfSummary | null = null,
   amenities: WarehouseAmenityView[] = [],
   maintenance: WarehouseMaintenanceSummary | null = null,
+  maintenanceStaff: WarehouseMaintenanceStaff | null = null,
 ): WarehouseView {
   const { facility, parent } = unit;
   return {
@@ -117,6 +126,7 @@ export function toWarehouseView(
     images,
     amenities,
     maintenance,
+    maintenanceStaff,
     createdAt: unit.createdAt,
     updatedAt: unit.updatedAt,
   };

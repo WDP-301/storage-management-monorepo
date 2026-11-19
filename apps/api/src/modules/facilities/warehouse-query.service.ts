@@ -17,11 +17,13 @@ import type {
   WarehouseListQueryDto,
   WarehouseSort,
 } from './dto/warehouse.dto';
+import { loadMaintenanceStaff } from './maintenance-staff.query';
 import { applySort, applyUnitScope, type ListMode, shelfSearchExists } from './shelf-scope.query';
 import { loadShelfSummaries } from './shelf-summary.query';
 import {
   toWarehouseView,
   type WarehouseImageView,
+  type WarehouseMaintenanceStaff,
   type WarehouseMaintenanceSummary,
   type WarehouseView,
 } from './warehouse.view';
@@ -182,7 +184,7 @@ export class WarehouseQueryService {
       .limit(limit)
       .getMany();
     return {
-      warehouses: await this.toViews(units, query),
+      warehouses: await this.toViews(units, query, { includeMaintenance: mode === 'admin' }),
       meta: buildPaginationMeta(page, limit, total),
     };
   }
@@ -205,6 +207,14 @@ export class WarehouseQueryService {
     const maintenance = options.includeMaintenance
       ? await this.loadMaintenanceSummaries(units.map((unit) => unit.id))
       : new Map<string, WarehouseMaintenanceSummary>();
+    const maintenanceStaff = options.includeMaintenance
+      ? await loadMaintenanceStaff(
+          this.units.manager,
+          units
+            .filter((unit) => unit.status === StorageUnitStatus.MAINTENANCE)
+            .map((unit) => unit.id),
+        )
+      : new Map<string, WarehouseMaintenanceStaff>();
     return Promise.all(
       units.map(async (unit) =>
         toWarehouseView(
@@ -217,6 +227,7 @@ export class WarehouseQueryService {
           summaries.get(unit.id) ?? null,
           amenities.get(unit.id) ?? [],
           maintenance.get(unit.id) ?? null,
+          maintenanceStaff.get(unit.id) ?? null,
         ),
       ),
     );

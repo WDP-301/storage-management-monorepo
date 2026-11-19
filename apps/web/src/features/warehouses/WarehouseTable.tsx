@@ -19,6 +19,7 @@ import {
   formatWarehouseDeposit,
   formatWarehousePrice,
   isShelfWarehouse,
+  maintenanceStaffLabel,
   WAREHOUSE_STATUS_LABEL,
 } from './warehouse-display';
 
@@ -117,6 +118,9 @@ export const WarehouseTable: React.FC<Props> = ({
                 <Badge variant={WAREHOUSE_STATUS_LABEL[w.status].variant}>
                   {WAREHOUSE_STATUS_LABEL[w.status].label}
                 </Badge>
+                {maintenanceStaffLabel(w) && (
+                  <div className="mt-1 text-xs text-kumo-subtle">{maintenanceStaffLabel(w)}</div>
+                )}
               </Table.Cell>
               <Table.Cell className="whitespace-nowrap text-right">
                 <DropdownMenu>

@@ -25,6 +25,16 @@ export const WAREHOUSE_KIND_LABEL: Record<StorageUnitKind, { label: string; badg
 export const isShelfWarehouse = (w: Pick<Warehouse, 'kind'>): boolean =>
   w.kind === 'SHELF_WAREHOUSE';
 
+/** Who maintains a unit on maintenance; null for any other status. */
+export const maintenanceStaffLabel = (
+  w: Pick<Warehouse, 'status' | 'maintenanceStaff'>,
+): string | null => {
+  if (w.status !== 'MAINTENANCE') return null;
+  return w.maintenanceStaff
+    ? `Người bảo trì: ${w.maintenanceStaff.fullName}`
+    : 'Chưa phân công người bảo trì';
+};
+
 const FIELD_LABEL: Record<string, string> = {
   facilityId: 'chi nhánh',
   kind: 'loại hình kho',

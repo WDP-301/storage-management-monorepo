@@ -60,6 +60,12 @@ export interface WarehouseMaintenance {
   hasDamages: boolean;
 }
 
+/** The staff member assigned to check a unit that is on maintenance. */
+export interface WarehouseMaintenanceStaff {
+  id: string;
+  fullName: string;
+}
+
 export interface Warehouse {
   id: string;
   facility: WarehouseFacility;
@@ -90,6 +96,8 @@ export interface Warehouse {
   amenities?: WarehouseAmenity[];
   /** The staff's finished maintenance check; set only while it awaits the manager's decision. */
   maintenance?: WarehouseMaintenance | null;
+  /** Who checks the unit while it is on maintenance; null when nobody is assigned. */
+  maintenanceStaff?: WarehouseMaintenanceStaff | null;
   createdAt: string;
   updatedAt: string;
 }

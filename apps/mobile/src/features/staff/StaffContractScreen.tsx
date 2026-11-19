@@ -9,11 +9,18 @@ import {
 import { handoverBlockedReason } from '../../../lib/contract-files';
 import type { StaffContract } from '../../../lib/staff-contracts-api';
 import { Button, colors, FlowScreen, Icon, InlineMessage, Text } from '../../components/ui';
-import { contractStatusLabel, contractStatusTone, StatusPill } from '../customer/contract-display';
+import {
+  contractStatusLabel,
+  contractStatusTone,
+  isShelfWithoutHandover,
+  StatusPill,
+} from '../customer/contract-display';
 import { ContractDocumentsList } from '../customer/contract-documents-section';
 import { ContractSection, HandoverSection, ReturnSection } from '../customer/contract-sections';
+import { ShelfActivationSection } from '../customer/shelf-activation-section';
 import { ContractDocumentsEditor } from './ContractDocumentsEditor';
 import { FirstRentSection } from './FirstRentSection';
+import { ShelfReturnCloser } from './ShelfReturnCloser';
 import { StaffInspectionSection } from './StaffInspectionSection';
 import type { useInspectionDetail } from './use-inspection-detail';
 
@@ -91,7 +98,16 @@ export function StaffContractScreen({
     />
   ) : null;
 
-  const handoverNode = permissions.handover ? (
+  const isShelf = contract.unit?.kind === 'SHELF';
+  const handoverNode = isShelfWithoutHandover(contract) ? (
+    contract.status === 'DRAFT' ? (
+      <ShelfActivationSection
+        contract={contract}
+        firstRentPaid={contract.firstRent?.status === 'PAID'}
+        viewer="staff"
+      />
+    ) : null
+  ) : permissions.handover ? (
     <StaffInspectionSection
       detail={handover}
       finalizeBlockedReason={handoverBlockedReason(
@@ -106,7 +122,17 @@ export function StaffContractScreen({
     <HandoverSection handover={contract.handover} viewer="staff" />
   );
 
-  const returnNode = permissions.return ? (
+  const openShelfReturn =
+    isShelf && permissions.return && contract.return && !contract.return.finalizedAt
+      ? contract.return
+      : null;
+  const returnNode = isShelf ? (
+    <ReturnSection inspection={contract.return} shelf viewer="staff">
+      {openShelfReturn ? (
+        <ShelfReturnCloser onFinalized={onReload} returnId={openShelfReturn.id} />
+      ) : null}
+    </ReturnSection>
+  ) : permissions.return ? (
     <StaffInspectionSection detail={returnDetail} kind="return" onFinalized={onReload} />
   ) : (
     <ReturnSection inspection={contract.return} viewer="staff" />

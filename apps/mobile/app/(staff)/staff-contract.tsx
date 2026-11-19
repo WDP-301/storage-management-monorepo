@@ -12,12 +12,15 @@ export default function StaffContractRoute() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { contract, error, isLoading, reload } = useStaffContract(id);
-  // Only the records the server lets this user edit are loaded into an editable form.
+  // Only the records the server lets this user edit are loaded into an editable form. A shelf
+  // return has no form — it is closed from the contract's own summary.
   const handover = useInspectionDetail(
     contract?.permissions.handover ? contract.handover?.id : undefined,
   );
   const returnDetail = useInspectionDetail(
-    contract?.permissions.return ? contract.return?.id : undefined,
+    contract?.permissions.return && contract.unit?.kind !== 'SHELF'
+      ? contract.return?.id
+      : undefined,
   );
   const [savingDocuments, setSavingDocuments] = useState(false);
   const leaveSheetRef = useRef<BottomSheetModal>(null);

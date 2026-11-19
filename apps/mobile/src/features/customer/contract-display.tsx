@@ -90,10 +90,18 @@ export function openReturn(contract: ApiContract): ApiInspection | null {
   return contract.return && !contract.return.finalizedAt ? contract.return : null;
 }
 
+/** A shelf rented without a handover: it takes effect on signed files and a paid first month. */
+export function isShelfWithoutHandover(contract: ApiContract): boolean {
+  return contract.unit?.kind === 'SHELF' && contract.handover === null;
+}
+
 /** What the customer cares about — the unit — derived from the contract and its inspections. */
 export function storageState(contract: ApiContract, now: number): StorageState {
   switch (contract.status) {
     case 'DRAFT': {
+      if (isShelfWithoutHandover(contract)) {
+        return { label: 'Đã cọc', tone: 'accent', hint: 'Chờ kích hoạt kệ' };
+      }
       const dayIso = localDayIso(contract.handover?.scheduledAt ?? contract.effectiveAt);
       return { label: 'Đã cọc', tone: 'accent', hint: handoverCountdownLabel(dayIso, now) };
     }

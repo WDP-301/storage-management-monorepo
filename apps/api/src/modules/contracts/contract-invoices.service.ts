@@ -43,6 +43,7 @@ import {
 import { creditDepositTopUp, topUpBookingId } from './deposit-topup';
 import { PAYABLE_INVOICE_STATUSES, sumInvoicePayments } from './first-rent.util';
 import { invoicePaidNotification } from './invoice-notifications';
+import { activateShelfContractSafely } from './shelf-contract.util';
 
 /** Clock skew tolerated between the browser and the server for "received just now". */
 const FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
@@ -190,6 +191,13 @@ export class ContractInvoicesService {
       );
       return { ...locked, status };
     });
+    // A paid first month may complete a shelf contract; activation locks the contract before the
+    // invoice, so it runs after the payment committed.
+    if (invoice.status === InvoiceStatus.PAID) {
+      await this.dataSource.transaction((em) =>
+        activateShelfContractSafely(em, contractId, this.notifications, this.logger),
+      );
+    }
 
     const [record] = await this.toRecords(this.dataSource.manager, [invoice]);
     return record;

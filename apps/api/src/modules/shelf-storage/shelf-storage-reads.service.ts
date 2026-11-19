@@ -6,6 +6,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { buildPaginationMeta, ErrorCode } from '@shared/models/api-response';
 import {
+  type PendingShelfContractView,
   type ShelfContractStorageView,
   type ShelfReceiptPage,
   type ShelfReceiptStatus,
@@ -17,6 +18,7 @@ import {
 } from '@storage/types';
 import { DataSource, type EntityManager } from 'typeorm';
 import { loadDropOffRequests } from './drop-off-request.read';
+import { loadPendingShelfContracts } from './pending-shelf-contract.read';
 import { loadPickupRequests } from './pickup-request.read';
 import { findShelfContracts, loadStock, type ShelfContractRow } from './shelf-contract.query';
 import { loadReceipts, type ReceiptQuery } from './shelf-receipt.read';
@@ -151,6 +153,16 @@ export class ShelfStorageReadsService {
     const em = this.dataSource.manager;
     await this.readableWarehouse(em, actor, warehouseId);
     return loadWarehouseStock(em, warehouseId);
+  }
+
+  /** Shelf contracts of the warehouse still waiting for signed files or the first month. */
+  async listPendingContracts(
+    actor: AuthUser,
+    warehouseId: string,
+  ): Promise<PendingShelfContractView[]> {
+    const em = this.dataSource.manager;
+    await this.readableWarehouse(em, actor, warehouseId);
+    return loadPendingShelfContracts(em, warehouseId);
   }
 
   private async readableWarehouse(

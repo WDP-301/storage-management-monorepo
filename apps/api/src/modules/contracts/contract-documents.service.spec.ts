@@ -46,7 +46,10 @@ describe('ContractDocumentsService.replace', () => {
       getRepository: jest.fn(() => ({ find: jest.fn(async () => inspections) })),
     };
     const dataSource = { transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)) };
-    service = new ContractDocumentsService(dataSource as never);
+    service = new ContractDocumentsService(
+      dataSource as never,
+      { createForUsers: jest.fn() } as never,
+    );
     jest.spyOn(Logger.prototype, 'log').mockImplementation();
   });
 

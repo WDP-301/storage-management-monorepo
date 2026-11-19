@@ -1,6 +1,6 @@
 import type { Contract } from '@entities/contract.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { ContractStatus, InspectionType, UserRole } from '@storage/types';
+import { ContractStatus, InspectionType, StorageUnitKind, UserRole } from '@storage/types';
 import type { EntityManager } from 'typeorm';
 import { computeContractPermissions, resolveContractAccess } from './contract-access.util';
 
@@ -78,6 +78,26 @@ describe('computeContractPermissions', () => {
     expect(
       computeContractPermissions(ContractStatus.ACTIVE, true, inspections, 'fm-1').return,
     ).toBe(true);
+  });
+});
+
+describe('computeContractPermissions for a shelf served at the counter', () => {
+  it('lets counter staff take the files and first month of a DRAFT shelf', () => {
+    expect(computeContractPermissions(ContractStatus.DRAFT, false, {}, 'staff-1', true)).toEqual({
+      documents: true,
+      handover: false,
+      return: false,
+      first_rent: true,
+    });
+  });
+
+  it('stops once the shelf contract took effect', () => {
+    expect(computeContractPermissions(ContractStatus.ACTIVE, false, {}, 'staff-1', true)).toEqual({
+      documents: false,
+      handover: false,
+      return: false,
+      first_rent: false,
+    });
   });
 });
 
@@ -179,6 +199,43 @@ describe('resolveContractAccess', () => {
       STAFF,
     );
     expect(access.canView).toBe(false);
+  });
+
+  const shelf = (status: ContractStatus = ContractStatus.DRAFT) =>
+    ({
+      ...contract(status),
+      bookingItem: { storageUnit: { facilityId: 'fac-hcm', kind: StorageUnitKind.SHELF } },
+    }) as unknown as Contract;
+
+  it('lets staff of the branch serve a shelf contract that has no handover', async () => {
+    const access = await resolveContractAccess(build([]), shelf(), STAFF);
+    expect(access.canView).toBe(true);
+    expect(access.permissions).toMatchObject({ documents: true, first_rent: true });
+  });
+
+  it('keeps a shelf contract from staff of another branch', async () => {
+    const access = await resolveContractAccess(build([], 'fac-hn'), shelf(), STAFF);
+    expect(access.canView).toBe(false);
+    expect(access.permissions).toMatchObject({ documents: false, first_rent: false });
+  });
+
+  it('leaves the files and first month of a shelf that still has a handover to its assignee', async () => {
+    const access = await resolveContractAccess(
+      build([inspection(InspectionType.PRE_HANDOVER, { inspectedBy: 'staff-2' })]),
+      shelf(),
+      STAFF,
+    );
+    expect(access.canView).toBe(true);
+    expect(access.permissions).toMatchObject({ documents: false, first_rent: false });
+  });
+
+  it('lets any staff of the branch close an open shelf return', async () => {
+    const access = await resolveContractAccess(
+      build([inspection(InspectionType.RETURN, { inspectedBy: null })]),
+      shelf(ContractStatus.ACTIVE),
+      STAFF,
+    );
+    expect(access.permissions.return).toBe(true);
   });
 
   it('loads the facility from the booking item when the relation is not loaded', async () => {

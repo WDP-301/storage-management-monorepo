@@ -422,6 +422,8 @@ export const NotificationType = {
   CONTRACT_CANCELLED: 'CONTRACT_CANCELLED',
   /** A return appointment moved: to the customer when the branch moved it, to its inspector always. */
   RETURN_RESCHEDULED: 'RETURN_RESCHEDULED',
+  /** To the customer: a shelf contract took effect (signed files in, first month paid). */
+  CONTRACT_ACTIVATED: 'CONTRACT_ACTIVATED',
   RETURN_FINALIZED: 'RETURN_FINALIZED',
   SETTLEMENT_APPROVED: 'SETTLEMENT_APPROVED',
   REFUND_COMPLETED: 'REFUND_COMPLETED',

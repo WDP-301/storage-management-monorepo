@@ -93,6 +93,21 @@ export interface AbandonedShelfContractView {
   items: ShelfItemView[];
 }
 
+/**
+ * A shelf contract waiting to take effect: no handover, so it turns ACTIVE once the signed files
+ * are in and the first month is paid. Listed at the counter for the customer's first visit.
+ */
+export interface PendingShelfContractView {
+  contractId: string;
+  contractNo: string;
+  shelf: ShelfRef;
+  customer: ShelfPersonRef;
+  /** Booked start; the term never starts earlier. */
+  effectiveAt: string | Date;
+  hasSignedFiles: boolean;
+  firstRentPaid: boolean;
+}
+
 export interface PickupRequestLineView {
   itemId: string;
   name: string;

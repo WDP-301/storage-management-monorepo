@@ -106,7 +106,9 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
   const totalArea = warehouses.reduce((sum, item) => sum + item.areaM2, 0);
 
   const warehouseNames = warehouses.map(rentalName).join(', ');
-  const unitNoun = warehouses.every((item) => item.kind === 'SHELF')
+  // A shelf has no handover: the first month is billed right after the deposit instead.
+  const allShelves = warehouses.every((item) => item.kind === 'SHELF');
+  const unitNoun = allShelves
     ? 'kệ'
     : warehouses.every((item) => item.kind === 'SELF_STORAGE')
       ? 'kho'
@@ -164,7 +166,9 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
           </Pressable>
 
           <View className="flex-row items-center justify-between gap-3 rounded-xl bg-bg-subtle px-3.5 py-2.5">
-            <Text className="text-body-sm text-text-secondary">Nhận bàn giao kho</Text>
+            <Text className="text-body-sm text-text-secondary">
+              {allShelves ? 'Bắt đầu thuê' : 'Nhận bàn giao kho'}
+            </Text>
             <Text className="text-body-sm font-semibold text-text-primary tabular-nums">
               {receivingTime
                 ? `${formatIsoDate(startDate)} · ${formatVnTime(receivingTime)}`
@@ -174,7 +178,9 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
 
           <Dashed />
 
-          <Text className="text-body-md font-semibold text-text-primary">Giờ nhận kho</Text>
+          <Text className="text-body-md font-semibold text-text-primary">
+            {allShelves ? 'Giờ bắt đầu' : 'Giờ nhận kho'}
+          </Text>
           {isLoadingSlots ? (
             <Text className="text-body-sm text-text-secondary">Đang tải khung giờ…</Text>
           ) : timeOptions.length === 0 ? (
@@ -225,7 +231,11 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
           />
           <Dashed />
           <CostRow
-            caption="Thanh toán khi nhận kho — chưa thu hôm nay"
+            caption={
+              allShelves
+                ? 'Thanh toán sau khi cọc xong — chưa thu hôm nay'
+                : 'Thanh toán khi nhận kho — chưa thu hôm nay'
+            }
             label="Tiền thuê tháng đầu"
             value="0 đ"
           />
@@ -246,7 +256,7 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
 
           <Text className="text-caption text-text-secondary tabular-nums">
             Tổng tiền thuê dự kiến {durationMonths} tháng là {formatMoney(totalRent)}, thu theo từng
-            kỳ sau khi nhận kho.
+            kỳ.
           </Text>
         </View>
       </ScrollView>

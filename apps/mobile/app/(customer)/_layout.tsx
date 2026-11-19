@@ -5,7 +5,6 @@ import { View } from 'react-native';
 import { SafeAreaView as RNSafeAreaView } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
 import { BrowseSelectionProvider } from '../../lib/browse-selection';
-import { ClientSettingsProvider } from '../../lib/client-settings';
 import { HoldProvider, useHold } from '../../lib/hold';
 import {
   NotificationsUnreadProvider,
@@ -28,55 +27,54 @@ export default function CustomerTabsLayout() {
   const router = useRouter();
 
   return (
-    <ClientSettingsProvider>
-      <HoldProvider>
-        <NotificationsUnreadProvider>
-          <BrowseSelectionProvider>
-            <SafeAreaView className="flex-1 bg-bg-page" edges={['top']}>
-              <StatusBar style="dark" />
-              <RouterTabs
-                backBehavior="history"
-                screenOptions={{
-                  headerShown: false,
-                  sceneStyle: { backgroundColor: '#FDFDFF' },
-                }}
-                tabBar={({ state }) =>
-                  ['shelves', 'schedule', 'payment'].includes(
-                    state.routes[state.index]?.name ?? '',
-                  ) ? null : (
-                    <CustomerTabBar
-                      activeTab={toCustomerTab(state.routes[state.index]?.name)}
-                      onPaySingleHold={(id) =>
-                        router.navigate(`/(customer)/payment?id=${encodeURIComponent(id)}`)
-                      }
-                      onSelect={(tab) => router.navigate(TAB_HREFS[tab])}
-                    />
-                  )
-                }
-              >
-                <RouterTabs.Screen name="browse" options={{ title: 'Tìm kho' }} />
-                <RouterTabs.Screen name="shelves" options={{ title: 'Chọn kệ' }} />
-                <RouterTabs.Screen name="storage" options={{ title: 'Kho của tôi' }} />
-                <RouterTabs.Screen
-                  name="contract-detail"
-                  options={{ title: 'Chi tiết hợp đồng' }}
-                />
-                <RouterTabs.Screen name="notifications" options={{ title: 'Thông báo' }} />
-                <RouterTabs.Screen name="settings" options={{ title: 'Tài khoản' }} />
-                <RouterTabs.Screen name="schedule" options={{ title: 'Đặt lịch thuê' }} />
-                <RouterTabs.Screen name="payment" options={{ title: 'Thanh toán tiền cọc' }} />
-                <RouterTabs.Screen name="tickets" options={{ title: 'Yêu cầu hỗ trợ' }} />
-                <RouterTabs.Screen name="ticket-detail" options={{ title: 'Chi tiết yêu cầu' }} />
-                <RouterTabs.Screen name="ticket-create" options={{ title: 'Tạo yêu cầu' }} />
-                <RouterTabs.Screen name="tours" options={{ title: 'Lịch hẹn xem kho' }} />
-                <RouterTabs.Screen name="profile-edit" options={{ title: 'Chỉnh sửa hồ sơ' }} />
-                <RouterTabs.Screen name="change-password" options={{ title: 'Đổi mật khẩu' }} />
-              </RouterTabs>
-            </SafeAreaView>
-          </BrowseSelectionProvider>
-        </NotificationsUnreadProvider>
-      </HoldProvider>
-    </ClientSettingsProvider>
+    <HoldProvider>
+      <NotificationsUnreadProvider>
+        <BrowseSelectionProvider>
+          <SafeAreaView className="flex-1 bg-bg-page" edges={['top']}>
+            <StatusBar style="dark" />
+            <RouterTabs
+              backBehavior="history"
+              screenOptions={{
+                headerShown: false,
+                sceneStyle: { backgroundColor: '#FDFDFF' },
+              }}
+              tabBar={({ state }) =>
+                ['shelves', 'schedule', 'payment'].includes(
+                  state.routes[state.index]?.name ?? '',
+                ) ? null : (
+                  <CustomerTabBar
+                    activeTab={toCustomerTab(state.routes[state.index]?.name)}
+                    onPaySingleHold={(id) =>
+                      router.navigate(`/(customer)/payment?id=${encodeURIComponent(id)}`)
+                    }
+                    onSelect={(tab) => router.navigate(TAB_HREFS[tab])}
+                  />
+                )
+              }
+            >
+              <RouterTabs.Screen name="browse" options={{ title: 'Tìm kho' }} />
+              <RouterTabs.Screen name="shelves" options={{ title: 'Chọn kệ' }} />
+              <RouterTabs.Screen name="storage" options={{ title: 'Kho của tôi' }} />
+              <RouterTabs.Screen name="contract-detail" options={{ title: 'Chi tiết hợp đồng' }} />
+              <RouterTabs.Screen name="notifications" options={{ title: 'Thông báo' }} />
+              <RouterTabs.Screen name="settings" options={{ title: 'Tài khoản' }} />
+              <RouterTabs.Screen name="schedule" options={{ title: 'Đặt lịch thuê' }} />
+              <RouterTabs.Screen name="payment" options={{ title: 'Thanh toán tiền cọc' }} />
+              <RouterTabs.Screen name="tickets" options={{ title: 'Yêu cầu hỗ trợ' }} />
+              <RouterTabs.Screen name="ticket-detail" options={{ title: 'Chi tiết yêu cầu' }} />
+              <RouterTabs.Screen name="ticket-create" options={{ title: 'Tạo yêu cầu' }} />
+              <RouterTabs.Screen name="tours" options={{ title: 'Lịch hẹn xem kho' }} />
+              <RouterTabs.Screen name="profile-edit" options={{ title: 'Chỉnh sửa hồ sơ' }} />
+              <RouterTabs.Screen name="change-password" options={{ title: 'Đổi mật khẩu' }} />
+              <RouterTabs.Screen
+                name="warehouse-rules"
+                options={{ title: 'Quy định sử dụng kho' }}
+              />
+            </RouterTabs>
+          </SafeAreaView>
+        </BrowseSelectionProvider>
+      </NotificationsUnreadProvider>
+    </HoldProvider>
   );
 }
 
@@ -183,7 +181,8 @@ function toCustomerTab(routeName: string | undefined): CustomerTab {
     routeName === 'ticket-create' ||
     routeName === 'tours' ||
     routeName === 'profile-edit' ||
-    routeName === 'change-password'
+    routeName === 'change-password' ||
+    routeName === 'warehouse-rules'
   ) {
     return 'settings';
   }

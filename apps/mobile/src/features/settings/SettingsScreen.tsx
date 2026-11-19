@@ -23,6 +23,7 @@ type Props = {
   onShifts?: () => void;
   onEditProfile?: () => void;
   onChangePassword?: () => void;
+  onWarehouseRules?: () => void;
   addressLabel?: string | null;
   companyLabel?: string | null;
   rentalUnitCount?: number | null;
@@ -40,6 +41,7 @@ export function SettingsScreen({
   onShifts,
   onEditProfile,
   onChangePassword,
+  onWarehouseRules,
   addressLabel,
   companyLabel,
   rentalUnitCount,
@@ -157,6 +159,17 @@ export function SettingsScreen({
                 label="Lịch hẹn xem kho"
                 onPress={onTours}
                 subtitle="Theo dõi lịch tham quan kho mẫu và tư vấn"
+              />
+              <Divider />
+            </>
+          ) : null}
+          {onWarehouseRules ? (
+            <>
+              <ActionRow
+                icon="menu-book"
+                label="Quy định sử dụng kho"
+                onPress={onWarehouseRules}
+                subtitle="Các nội dung cần tuân thủ khi thuê và sử dụng kho"
               />
               <Divider />
             </>

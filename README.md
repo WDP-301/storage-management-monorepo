@@ -93,6 +93,15 @@ pnpm --filter @storage/api db:reset-demo --yes --allow-remote=<db>  # remote: ne
 # add --wipe-users to also delete every account (sessions, audit logs) before seeding
 ```
 
+`db:clear-rentals` is the lighter, non-destructive alternative: every run deletes all contracts,
+so no customer is renting any warehouse, and empties the inspections, while leaving warehouses,
+facilities, users, bookings, payments and invoices untouched.
+
+```bash
+pnpm --filter @storage/api db:clear-rentals --yes                      # local database only
+pnpm --filter @storage/api db:clear-rentals --yes --allow-remote=<db>  # any other host
+```
+
 | Account | Role | Scope |
 |---|---|---|
 | `admin@gmail.com` | ADMIN | all |

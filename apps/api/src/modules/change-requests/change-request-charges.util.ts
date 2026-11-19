@@ -44,7 +44,10 @@ export async function settleRentNetOnDeposit(
 
   if (oldDeposit && !depositChange.isZero()) {
     await em.query(
-      `UPDATE "deposits" SET "held_amount" = "held_amount" + $1, "updated_at" = now()
+      `UPDATE "deposits"
+          SET "held_amount" = "held_amount" + $1,
+              "amount_snapshot" = "amount_snapshot" + GREATEST($1::numeric, 0),
+              "updated_at" = now()
         WHERE "id" = $2`,
       [depositChange.toFixed(2), oldDeposit.id],
     );

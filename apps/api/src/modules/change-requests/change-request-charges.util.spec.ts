@@ -27,6 +27,8 @@ describe('settleRentNetOnDeposit', () => {
 
   const depositUpdate = () =>
     em.query.mock.calls.find(([sql]: [string]) => sql.includes('UPDATE "deposits"'))?.[1];
+  const depositSql = () =>
+    em.query.mock.calls.find(([sql]: [string]) => sql.includes('UPDATE "deposits"'))?.[0] as string;
   const savedInvoice = () => em.save.mock.calls.find(([entity]) => entity === Invoice)?.[1];
 
   beforeEach(() => {
@@ -96,6 +98,9 @@ describe('settleRentNetOnDeposit', () => {
 
     expect(invoice).toBeNull();
     expect(depositUpdate()).toEqual(['700000.00', 'dep-1']);
+    // The parked money raises amount_snapshot too, else held_amount would break deposits_check
+    // (held_amount <= amount_snapshot).
+    expect(depositSql()).toContain('"amount_snapshot" = "amount_snapshot" + GREATEST');
     expect(savedInvoice()).toBeUndefined();
   });
 

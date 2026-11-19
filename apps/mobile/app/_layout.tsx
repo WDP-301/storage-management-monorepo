@@ -1,8 +1,10 @@
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import type { ReactNode } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
+import { ClientSettingsProvider } from '../lib/client-settings';
 import { SessionProvider, useSession } from '../lib/session';
 import { useAppFonts } from '../src/features/app/use-app-fonts';
 import { SessionLoadingScreen } from '../src/features/auth/SessionLoadingScreen';
@@ -13,15 +15,27 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <StatusBar style="dark" />
-        {/* Sits above the navigator so sheets render over the tab bar, not inside a tab. */}
-        <BottomSheetModalProvider>
-          <SessionProvider>
-            <RootNavigator />
-          </SessionProvider>
-        </BottomSheetModalProvider>
+        <SessionProvider>
+          <SessionSettingsProvider>
+            {/* Sits above the navigator so sheets render over the tab bar, not inside a tab. */}
+            <BottomSheetModalProvider>
+              <RootNavigator />
+            </BottomSheetModalProvider>
+          </SessionSettingsProvider>
+        </SessionProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
+}
+
+/**
+ * Mounted above BottomSheetModalProvider on purpose: a modal's content is rendered through the
+ * portal hosted there, so a provider placed lower (a tab layout, say) is invisible to it. Keying by
+ * the signed-in account refetches the rules on login instead of reusing signed-out defaults.
+ */
+function SessionSettingsProvider({ children }: { children: ReactNode }) {
+  const { user } = useSession();
+  return <ClientSettingsProvider key={user?.id ?? 'signed-out'}>{children}</ClientSettingsProvider>;
 }
 
 /**

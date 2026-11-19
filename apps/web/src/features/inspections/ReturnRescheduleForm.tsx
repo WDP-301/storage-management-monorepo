@@ -5,11 +5,10 @@ import { DateField } from '../../components/DateField';
 import { OfficeTimeSelect } from '../../components/OfficeTimeSelect';
 import { InspectionsApi } from '../../lib/api';
 import { useOfficeTimeSlots } from '../../lib/use-office-time-slots';
+import { useReturnMaxDaysAhead } from '../../lib/use-return-max-days-ahead';
 import { addDays, vnDay, vnToday } from '../../lib/vn-day';
 import type { InspectionRecord } from '../../types/inspection';
 import { describeApiError } from '../contracts/settlement-display';
-
-const MAX_DAYS_AHEAD = 365;
 
 interface Props {
   inspection: InspectionRecord;
@@ -23,7 +22,8 @@ interface Props {
  */
 export const ReturnRescheduleForm: React.FC<Props> = ({ inspection, disabled, onSaved }) => {
   const today = vnToday();
-  const lastDay = addDays(today, MAX_DAYS_AHEAD);
+  const maxDaysAhead = useReturnMaxDaysAhead();
+  const lastDay = addDays(today, maxDaysAhead);
   const currentAt = inspection.scheduledAt;
   const current = currentAt ? vnDay(currentAt) : '';
   const [day, setDay] = useState(current || today);
@@ -45,7 +45,7 @@ export const ReturnRescheduleForm: React.FC<Props> = ({ inspection, disabled, on
     new Date(slots.chosen).getTime() === new Date(currentAt).getTime();
 
   const save = async () => {
-    if (outOfRange) return setError('Ngày hẹn trả phải từ hôm nay đến 365 ngày tới.');
+    if (outOfRange) return setError(`Ngày hẹn trả phải từ hôm nay đến ${maxDaysAhead} ngày tới.`);
     if (!slots.chosen) return setError('Chọn giờ hẹn trả trong ca hành chính.');
     setBusy(true);
     setError(null);

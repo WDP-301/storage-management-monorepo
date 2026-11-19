@@ -16,7 +16,9 @@ function requestSource(record: SettlementDetailRecord): string {
 /** The facts the settlement rests on: deposit, term, return days, early return and overstay. */
 export const SettlementOverview: React.FC<{ record: SettlementDetailRecord }> = ({ record }) => {
   const { timing } = record;
-  const early = timing?.early ? 'Có — mất tiền cọc' : 'Không';
+  // Older records carry no share: their early returns forfeited the whole deposit.
+  const forfeit = timing?.early_forfeit_percent ?? 100;
+  const early = timing?.early ? `Có — mất ${forfeit < 100 ? `${forfeit}% ` : ''}tiền cọc` : 'Không';
   const overstay =
     timing && timing.overstay_days > 0
       ? `${timing.overstay_days} ngày (từ ${formatVnDay(timing.overstay_from_day)})`

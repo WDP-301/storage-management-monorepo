@@ -57,6 +57,7 @@ export const settlementRecord = (
     scheduled_day: '2026-10-14',
     effective_return_day: '2026-10-14',
     early: false,
+    early_forfeit_percent: 100,
     overstay_from_day: '2026-10-16',
     overstay_days: 0,
     overstay_penalty_per_day: 106_667,

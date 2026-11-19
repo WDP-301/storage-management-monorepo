@@ -14,6 +14,7 @@ import { ContractsApi, InspectionsApi } from '../../lib/api';
 import type { ContractDocument, ContractRecord } from '../../types/contract';
 import type { InspectionRecord } from '../../types/inspection';
 import { InspectionDetailView } from '../inspections/InspectionDetailView';
+import { CancelDraftContractConfirm } from './CancelDraftContractConfirm';
 import { ContractDocumentsPanel } from './ContractDocumentsPanel';
 import { ContractEditDialog } from './ContractEditDialog';
 import { ContractInfoPanel } from './ContractInfoPanel';
@@ -260,12 +261,18 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
 
           {(confirm || hasActions) && (
             <DialogFooter>
-              {confirm ? (
+              {confirm === 'cancel' ? (
+                <CancelDraftContractConfirm
+                  busy={busy === 'cancel'}
+                  onBack={() => setConfirm(null)}
+                  onConfirm={(keepDeposit) =>
+                    run('cancel', () => ContractsApi.cancel(contract.id, keepDeposit))
+                  }
+                />
+              ) : confirm === 'remove' ? (
                 <div className="w-full p-3 bg-kumo-warning-tint rounded-lg space-y-3 text-sm">
                   <p className="text-kumo-default">
-                    {confirm === 'cancel'
-                      ? 'Hủy hợp đồng này? Kho sẽ trở về trạng thái trống để cho thuê lại. Không hoàn tác được.'
-                      : 'Xóa hợp đồng này khỏi danh sách? Không hoàn tác được.'}
+                    Xóa hợp đồng này khỏi danh sách? Không hoàn tác được.
                   </p>
                   <div className="flex justify-end gap-2">
                     <Button variant="secondary" onClick={() => setConfirm(null)}>
@@ -273,14 +280,10 @@ export const ContractDetailDialog: React.FC<Props> = ({ contract, onClose, onCha
                     </Button>
                     <Button
                       variant="primary"
-                      loading={busy === confirm}
-                      onClick={() =>
-                        confirm === 'cancel'
-                          ? run('cancel', () => ContractsApi.cancel(contract.id))
-                          : run('remove', () => ContractsApi.remove(contract.id))
-                      }
+                      loading={busy === 'remove'}
+                      onClick={() => run('remove', () => ContractsApi.remove(contract.id))}
                     >
-                      {confirm === 'cancel' ? 'Xác nhận hủy hợp đồng' : 'Xác nhận xóa'}
+                      Xác nhận xóa
                     </Button>
                   </div>
                 </div>

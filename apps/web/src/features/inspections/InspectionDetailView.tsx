@@ -8,6 +8,7 @@ import { SignedFileGallery } from '../../components/SignedImageLightbox';
 import { StaffSelect } from '../../components/StaffSelect';
 import { ContractsApi, FacilitiesApi, InspectionsApi } from '../../lib/api';
 import type { FacilityStaffMember, InspectionRecord } from '../../types/inspection';
+import { CancelDraftContractConfirm } from '../contracts/CancelDraftContractConfirm';
 import { describeApiError } from '../contracts/settlement-display';
 import { formatVnd } from '../warehouses/warehouse-display';
 import { InspectionFinalizeConfirm } from './InspectionFinalizeConfirm';
@@ -261,27 +262,15 @@ export const InspectionDetailView: React.FC<Props> = ({
               onConfirm={() => run('finalize', () => InspectionsApi.finalize(inspection.id))}
             />
           ) : confirmingCancel ? (
-            <div className="p-3 bg-kumo-warning-tint rounded-lg space-y-3 text-sm">
-              <p className="text-kumo-default">
-                Huỷ hợp đồng nháp này? Kho sẽ được trả về trạng thái trống để cho thuê lại. Không
-                hoàn tác được.
-              </p>
-              <div className="flex justify-end gap-2">
-                <Button variant="secondary" onClick={() => setConfirmingCancel(false)}>
-                  Không huỷ
-                </Button>
-                <Button
-                  variant="primary"
-                  loading={busy === 'cancel'}
-                  onClick={() =>
-                    inspection.contract &&
-                    run('cancel', () => ContractsApi.cancel(inspection.contract?.id ?? ''))
-                  }
-                >
-                  Xác nhận huỷ hợp đồng
-                </Button>
-              </div>
-            </div>
+            <CancelDraftContractConfirm
+              busy={busy === 'cancel'}
+              backLabel="Không huỷ"
+              onBack={() => setConfirmingCancel(false)}
+              onConfirm={(keepDeposit) =>
+                inspection.contract &&
+                run('cancel', () => ContractsApi.cancel(inspection.contract?.id ?? '', keepDeposit))
+              }
+            />
           ) : (
             <div className="flex justify-end gap-2">
               {inspection.type === 'PRE_HANDOVER' && inspection.contract?.status === 'DRAFT' && (

@@ -35,6 +35,7 @@ interface OverdueRow {
   customerId: string;
   customerName: string;
   contractId: string | null;
+  contractNo: string | null;
   unitCode: string | null;
   facilityId: string | null;
   dueAt: Date;
@@ -127,7 +128,7 @@ export class OverdueReminderService {
   private async loadOverdue(em: EntityManager, now: Date): Promise<OverdueInvoice[]> {
     const rows = (await em.query(
       `SELECT i.id AS "invoiceId", i.invoice_no AS "invoiceNo", i.customer_id AS "customerId",
-              u.full_name AS "customerName", i.contract_id AS "contractId",
+              u.full_name AS "customerName", i.contract_id AS "contractId", c.contract_no AS "contractNo",
               su.code AS "unitCode", su.facility_id AS "facilityId", i.due_at AS "dueAt",
               i.total, COALESCE(p.paid, 0) AS paid
          FROM invoices i

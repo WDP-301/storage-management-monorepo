@@ -1,5 +1,6 @@
 import { Badge, Button, Select, Sidebar, Text, useSidebar } from '@cloudflare/kumo';
 import {
+  ArrowsClockwise,
   Buildings,
   CalendarCheck,
   CalendarDots,
@@ -21,6 +22,7 @@ import React from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useFacility } from '../context/FacilityContext';
+import { NotificationBell } from '../features/notifications/NotificationBell';
 import { getRoleDefaultPath, getRoleTitle } from '../lib/roles';
 
 interface NavItem {
@@ -40,6 +42,7 @@ const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { to: '/admin/amenities', label: 'Tiện ích kho', icon: ListChecks },
     { to: '/admin/settings', label: 'Cấu hình tham số', icon: Faders },
     { to: '/contracts', label: 'Hợp đồng', icon: FileText },
+    { to: '/contract-renewals', label: 'Gia hạn hợp đồng', icon: ArrowsClockwise },
     { to: '/facility-manager', label: 'Kho của chi nhánh', icon: Warehouse },
     { to: '/facility-manager/tickets', label: 'Vé sự cố', icon: Lifebuoy },
     { to: '/facility-manager/inspections', label: 'Biên bản', icon: ClipboardText },
@@ -51,6 +54,7 @@ const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { to: '/admin/warehouses', label: 'Quản lý kho', icon: Buildings },
     { to: '/admin/sepay-transfers', label: 'Đối soát chuyển khoản', icon: Money },
     { to: '/contracts', label: 'Hợp đồng', icon: FileText },
+    { to: '/contract-renewals', label: 'Gia hạn hợp đồng', icon: ArrowsClockwise },
     { to: '/facility-manager/tour-appointments', label: 'Lịch xem kho', icon: CalendarCheck },
     { to: '/facility-manager/shifts', label: 'Ca làm việc', icon: CalendarDots },
   ],
@@ -59,6 +63,7 @@ const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { to: '/facility-manager/tickets', label: 'Vé sự cố', icon: Lifebuoy },
     // Handover/return records are part of a contract: managers assign staff from its detail.
     { to: '/contracts', label: 'Hợp đồng', icon: FileText },
+    { to: '/contract-renewals', label: 'Gia hạn hợp đồng', icon: ArrowsClockwise },
     { to: '/facility-manager/tour-appointments', label: 'Lịch xem kho', icon: CalendarCheck },
     { to: '/facility-manager/shifts', label: 'Ca làm việc', icon: CalendarDots },
   ],
@@ -209,6 +214,9 @@ export const AppShell: React.FC = () => {
               />
             </div>
           )}
+          <div className="ml-auto">
+            <NotificationBell />
+          </div>
         </header>
 
         <main

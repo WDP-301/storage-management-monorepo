@@ -13,6 +13,7 @@ export interface OverdueInvoice {
   customerId: string;
   customerName: string;
   contractId: string | null;
+  contractNo: string | null;
   unitCode: string | null;
   facilityId: string | null;
   dueAt: Date;
@@ -42,6 +43,7 @@ function data(invoice: OverdueInvoice, days: number): Record<string, unknown> {
     invoiceId: invoice.invoiceId,
     invoiceNo: invoice.invoiceNo,
     contractId: invoice.contractId,
+    contractNo: invoice.contractNo,
     customerId: invoice.customerId,
     daysOverdue: days,
     amountDue: invoice.amountDue,

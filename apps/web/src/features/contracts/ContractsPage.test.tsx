@@ -1,10 +1,18 @@
 import { UserRole } from '@storage/types';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContractsApi } from '../../lib/api';
 import { contractRecord, mockRole, mockSelectedFacility } from '../../test-utils/contract-fixtures';
 import type { ContractListQuery } from '../../types/contract';
 import { ContractsPage } from './ContractsPage';
+
+const renderPage = (url = '/contracts') =>
+  render(
+    <MemoryRouter initialEntries={[url]}>
+      <ContractsPage />
+    </MemoryRouter>,
+  );
 
 vi.mock('../../lib/toast', () => ({ useAppToast: () => ({ notifyUpdated: vi.fn() }) }));
 
@@ -25,7 +33,7 @@ describe('ContractsPage', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('lists contracts with a short number, customer, unit, term, price and status', async () => {
-    render(<ContractsPage />);
+    renderPage();
     const row = (await screen.findByText('CT-41BF439C')).closest('tr') as HTMLElement;
     expect(within(row).getByText('Khách hàng Demo')).toBeTruthy();
     expect(within(row).getByText('0900000005')).toBeTruthy();
@@ -47,7 +55,7 @@ describe('ContractsPage', () => {
 
   it('scopes the list to the facility picked in the header', async () => {
     mockSelectedFacility({ id: 'fac-dn', name: 'Chi nhánh Đà Nẵng' });
-    render(<ContractsPage />);
+    renderPage();
     await waitFor(() =>
       expect(list).toHaveBeenCalledWith(expect.objectContaining({ facilityId: 'fac-dn' })),
     );
@@ -55,13 +63,13 @@ describe('ContractsPage', () => {
 
   it('waits for a facility manager to have a facility before loading', async () => {
     mockRole(UserRole.FACILITY_MANAGER);
-    render(<ContractsPage />);
+    renderPage();
     await screen.findByText('Không có hợp đồng nào khớp bộ lọc.');
     expect(list).not.toHaveBeenCalled();
   });
 
   it('searches on the server after typing stops', async () => {
-    render(<ContractsPage />);
+    renderPage();
     await screen.findByText('CT-41BF439C');
     fireEvent.change(screen.getByLabelText('Tìm hợp đồng'), { target: { value: ' 0900 ' } });
     await waitFor(() =>
@@ -70,7 +78,7 @@ describe('ContractsPage', () => {
   });
 
   it('filters by status', async () => {
-    render(<ContractsPage />);
+    renderPage();
     await screen.findByText('CT-41BF439C');
     fireEvent.click(screen.getByRole('combobox', { name: 'Lọc trạng thái hợp đồng' }));
     const option = await screen.findByRole('option', { name: 'Đang hiệu lực' });
@@ -93,7 +101,7 @@ describe('ContractsPage', () => {
         }),
       ]),
     );
-    render(<ContractsPage />);
+    renderPage();
     expect(await screen.findByText('15/10/2026 → 14/10/2027')).toBeTruthy();
     expect(screen.getByText('15/10/2026 → 15/01/2027')).toBeTruthy();
   });
@@ -124,7 +132,7 @@ describe('ContractsPage', () => {
         }),
       ]),
     );
-    render(<ContractsPage />);
+    renderPage();
     await screen.findByText('CT-BBBBBBBB');
     const [returning, fresh] = screen.getAllByRole('row').slice(1);
     const cells = (row: HTMLElement) =>
@@ -139,7 +147,7 @@ describe('ContractsPage', () => {
   });
 
   it('opens the detail of a contract', async () => {
-    render(<ContractsPage />);
+    renderPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Xem hợp đồng CT-41BF439C' }));
     expect(screen.getByRole('dialog', { name: 'Hợp đồng CT-41BF439C' })).toBeTruthy();
   });
@@ -150,7 +158,7 @@ describe('ContractsPage', () => {
         ? { contracts: [], meta: { page: 2, limit: 20, total: 20, totalPages: 1 } }
         : page([contractRecord()], 21),
     );
-    render(<ContractsPage />);
+    renderPage();
     await screen.findByText('CT-41BF439C');
     fireEvent.click(screen.getByRole('button', { name: /next/i }));
     await waitFor(() => expect(list).toHaveBeenCalledWith(expect.objectContaining({ page: 2 })));
@@ -162,13 +170,22 @@ describe('ContractsPage', () => {
 
   it('reports a failed load', async () => {
     list.mockRejectedValue(new Error('Máy chủ không phản hồi'));
-    render(<ContractsPage />);
+    renderPage();
     expect((await screen.findByRole('alert')).textContent).toContain('Máy chủ không phản hồi');
+  });
+
+  it('opens filtered by the contract a notification links to', async () => {
+    renderPage('/contracts?search=CT-9&settlement=pending');
+    await waitFor(() =>
+      expect(list).toHaveBeenLastCalledWith(
+        expect.objectContaining({ search: 'CT-9', settlementStatus: 'pending' }),
+      ),
+    );
   });
 
   it('pages through the server results', async () => {
     list.mockResolvedValue(page([contractRecord()], 45));
-    render(<ContractsPage />);
+    renderPage();
     await screen.findByText('CT-41BF439C');
     fireEvent.click(screen.getByRole('button', { name: /next/i }));
     await waitFor(() =>

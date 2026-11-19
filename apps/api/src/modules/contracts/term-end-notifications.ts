@@ -128,6 +128,6 @@ export function managerOverdueNotification(
     body:
       `HĐ ${candidate.contractNo} đã hết hạn mà khách chưa đặt lịch trả — phí quá hạn đang chạy. ` +
       'Liên hệ khách để thu hồi kho.',
-    data: { contractId: candidate.contractId, termEndAt },
+    data: { contractId: candidate.contractId, contractNo: candidate.contractNo, termEndAt },
   };
 }

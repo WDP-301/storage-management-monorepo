@@ -33,6 +33,7 @@ export const LINE_TYPE_LABEL: Record<SettlementLine['type'], string> = {
   DAMAGE: 'Hư hỏng',
   UNUSED_PERIOD_CREDIT: 'Hoàn tiền thuê kỳ không dùng',
   REVIEW_PAYMENT_CREDIT: 'Khoản tiền cần kiểm tra',
+  NO_SHOW_FORFEIT: 'Không đến nhận kho — giữ cọc',
 };
 
 export const REQUEST_SOURCE_LABEL: Record<ReturnRequestSource, string> = {

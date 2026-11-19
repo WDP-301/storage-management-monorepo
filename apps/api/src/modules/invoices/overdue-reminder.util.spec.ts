@@ -17,6 +17,7 @@ const invoice: OverdueInvoice = {
   customerId: 'customer-1',
   customerName: 'Nguyễn Văn A',
   contractId: 'contract-1',
+  contractNo: 'CT-1',
   unitCode: 'A-01',
   facilityId: 'facility-1',
   dueAt: DUE_AT,

@@ -15,6 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import { UserManagementPage } from '../features/admin/UserManagementPage';
 import { AmenityCatalogPage } from '../features/amenities/AmenityCatalogPage';
 import { AuthPage } from '../features/auth/AuthPage';
+import { ContractRenewalsPage } from '../features/contract-renewals/ContractRenewalsPage';
 import { ContractsPage } from '../features/contracts/ContractsPage';
 import { FacilityManagementPage } from '../features/facilities/FacilityManagementPage';
 import { ManagerInspectionsPage } from '../features/inspections/ManagerInspectionsPage';
@@ -130,6 +131,7 @@ export const AppRouter: React.FC = () => {
             >
               <Route path="/admin/warehouses/:id" element={<WarehouseDetailPage />} />
               <Route path="/contracts" element={<ContractsPage />} />
+              <Route path="/contract-renewals" element={<ContractRenewalsPage />} />
               <Route
                 path="/facility-manager/tour-appointments"
                 element={<TourAppointmentsPage />}

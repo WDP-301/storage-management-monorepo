@@ -37,6 +37,15 @@ import type {
 
 const APPOINTMENT_RELATIONS = ['facility', 'customer', 'storageUnit', 'assignee'];
 
+/**
+ * Locks only the appointment row: the optional relations are LEFT JOINs, and PostgreSQL refuses
+ * FOR UPDATE on the nullable side of an outer join.
+ */
+const LOCK_APPOINTMENT_ROW = {
+  mode: 'pessimistic_write' as const,
+  tables: ['tour_appointments'],
+};
+
 /** Roles that can see and operate on appointments of every facility, not only ones they manage. */
 const GLOBAL_APPOINTMENT_ROLES: UserRole[] = [UserRole.ADMIN, UserRole.OPERATIONS_MANAGER];
 
@@ -337,7 +346,7 @@ export class TourAppointmentsService {
       const appointment = await manager.findOne(TourAppointment, {
         where: { id },
         relations: APPOINTMENT_RELATIONS,
-        lock: { mode: 'pessimistic_write' },
+        lock: LOCK_APPOINTMENT_ROW,
       });
       if (!appointment) {
         notFound('Tour appointment');
@@ -401,7 +410,7 @@ export class TourAppointmentsService {
       const appointment = await manager.findOne(TourAppointment, {
         where: { id },
         relations: APPOINTMENT_RELATIONS,
-        lock: { mode: 'pessimistic_write' },
+        lock: LOCK_APPOINTMENT_ROW,
       });
       if (!appointment) {
         notFound('Tour appointment');
@@ -489,7 +498,7 @@ export class TourAppointmentsService {
       const appointment = await manager.findOne(TourAppointment, {
         where: { id },
         relations: APPOINTMENT_RELATIONS,
-        lock: { mode: 'pessimistic_write' },
+        lock: LOCK_APPOINTMENT_ROW,
       });
       if (!appointment) {
         notFound('Tour appointment');
@@ -542,7 +551,7 @@ export class TourAppointmentsService {
       const appointment = await manager.findOne(TourAppointment, {
         where: { id },
         relations: APPOINTMENT_RELATIONS,
-        lock: { mode: 'pessimistic_write' },
+        lock: LOCK_APPOINTMENT_ROW,
       });
       if (!appointment) {
         notFound('Tour appointment');

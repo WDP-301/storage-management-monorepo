@@ -29,6 +29,29 @@ export function handoverAssignedNotification(input: {
   };
 }
 
+/** A shelf has no handover: the assignee meets the customer at the counter to sign and collect. */
+export function shelfContractAssignedNotification(input: {
+  bookingId: string;
+  facilityId: string;
+  contractIds: string[];
+  shelfCodes: string[];
+  firstVisitAt: Date;
+}): NotificationPayload {
+  return {
+    type: NotificationType.HANDOVER_ASSIGNED,
+    title: 'Được giao việc ký hợp đồng kệ',
+    body:
+      `Khách thuê kệ ${input.shelfCodes.join(', ')} hẹn tới quầy lúc ` +
+      `${VIETNAM_TIME.format(input.firstVisitAt)} — nhận file hợp đồng đã ký và thu tiền tháng đầu.`,
+    data: {
+      bookingId: input.bookingId,
+      facilityId: input.facilityId,
+      contractId: input.contractIds[0],
+      contractIds: input.contractIds,
+    },
+  };
+}
+
 export interface ReturnJob {
   inspectionId: string;
   contractId: string;

@@ -1,9 +1,10 @@
+import { Contract } from '@entities/contract.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { StaffShift } from '@entities/staff-shift.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { Logger } from '@nestjs/common';
 import { ContractStatus, InspectionType, NotificationType } from '@storage/types';
-import { Not } from 'typeorm';
+import { In, IsNull, Not } from 'typeorm';
 import { HandoverAssignmentService } from './handover-assignment.service';
 
 const TEN_AM = new Date('2026-11-01T03:00:00Z'); // 10:00 in Vietnam
@@ -56,7 +57,9 @@ describe('HandoverAssignmentService', () => {
     findOne: jest.Mock;
     query: jest.Mock;
     update: jest.Mock;
+    createQueryBuilder: jest.Mock;
   };
+  let shelfContracts: unknown[];
   let notifications: { createForUsers: jest.Mock };
   let service: HandoverAssignmentService;
 
@@ -85,7 +88,17 @@ describe('HandoverAssignmentService', () => {
       ),
       query: jest.fn().mockResolvedValue([]),
       update: jest.fn().mockResolvedValue({ affected: 2 }),
+      // Shelf contract lookups: a chainable builder resolving to `shelfContracts`.
+      createQueryBuilder: jest.fn(() => {
+        const builder: Record<string, jest.Mock> = {};
+        for (const method of ['innerJoinAndSelect', 'where', 'andWhere', 'orderBy']) {
+          builder[method] = jest.fn(() => builder);
+        }
+        builder.getMany = jest.fn(() => Promise.resolve(shelfContracts));
+        return builder;
+      }),
     };
+    shelfContracts = [];
     notifications = { createForUsers: jest.fn().mockResolvedValue(1) };
     service = new HandoverAssignmentService(notifications as never);
   });
@@ -477,6 +490,78 @@ describe('HandoverAssignmentService', () => {
       );
 
       expect(em.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('shelf contracts', () => {
+    const shelfContract = (id: string, code: string) => ({
+      id,
+      effectiveAt: TEN_AM,
+      documents: [],
+      bookingItem: { bookingId: 'booking-1', storageUnit: { facilityId: 'hcm', code } },
+    });
+
+    beforeEach(() => {
+      handovers = [];
+      shelfContracts = [shelfContract('c-1', 'K-01'), shelfContract('c-2', 'K-02')];
+    });
+
+    it('gives the shelves of a confirmed booking to one staff on shift, and notifies them', async () => {
+      await service.assignSafely(em as never, 'booking-1');
+
+      expect(em.query).toHaveBeenCalledWith('SELECT pg_advisory_xact_lock(hashtext($1))', [
+        'shelf_contract_rotation:hcm',
+      ]);
+      expect(em.update).toHaveBeenCalledWith(
+        Contract,
+        { id: In(['c-1', 'c-2']), assignedTo: IsNull() },
+        { assignedTo: 'an', assignedAt: expect.any(Date) },
+      );
+      expect(notifications.createForUsers).toHaveBeenCalledWith(
+        em,
+        ['an'],
+        expect.objectContaining({
+          type: NotificationType.HANDOVER_ASSIGNED,
+          data: expect.objectContaining({ contractId: 'c-1', contractIds: ['c-1', 'c-2'] }),
+        }),
+      );
+    });
+
+    it('continues the rotation after the last shelf assignee', async () => {
+      em.query.mockImplementation((sql: string) =>
+        Promise.resolve(sql.includes('"assigned_to" AS "staffId"') ? [{ staffId: 'an' }] : []),
+      );
+
+      await service.assignSafely(em as never, 'booking-1');
+
+      expect(em.update).toHaveBeenCalledWith(Contract, expect.anything(), {
+        assignedTo: 'binh',
+        assignedAt: expect.any(Date),
+      });
+    });
+
+    it('leaves them unassigned when nobody is on shift at the booked time', async () => {
+      shifts = [];
+
+      await service.assignSafely(em as never, 'booking-1');
+
+      expect(em.update).not.toHaveBeenCalledWith(Contract, expect.anything(), expect.anything());
+      expect(notifications.createForUsers).not.toHaveBeenCalled();
+    });
+
+    it('picks up pending shelf contracts when shifts are added', async () => {
+      const visited = await service.assignPendingForFacility(
+        em as never,
+        'hcm',
+        new Date('2026-10-31T23:00:00Z'),
+        new Date('2026-11-01T05:00:00Z'),
+      );
+
+      expect(visited).toBe(1);
+      expect(em.update).toHaveBeenCalledWith(Contract, expect.anything(), {
+        assignedTo: 'an',
+        assignedAt: expect.any(Date),
+      });
     });
   });
 });

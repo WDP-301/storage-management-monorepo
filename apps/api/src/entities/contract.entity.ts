@@ -89,6 +89,17 @@ export class Contract {
   @Column({ type: 'text', nullable: true })
   note?: string | null;
 
+  /**
+   * Shelf contracts only: the staff member who takes the signed files and the first month at the
+   * counter (a shelf has no handover to carry an assignee). Anyone at the branch may still serve it.
+   */
+  @Column({ type: 'uuid', nullable: true, name: 'assigned_to' })
+  assignedTo?: string | null;
+
+  /** When `assignedTo` was set; the rotation continues after the latest one. */
+  @Column({ type: 'timestamptz', nullable: true, name: 'assigned_at' })
+  assignedAt?: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

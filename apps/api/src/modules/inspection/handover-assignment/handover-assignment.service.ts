@@ -13,11 +13,17 @@ import { facilityStaff, lastAssignedStaffId, staffOnShiftFor } from './assignmen
 import { handoverAssignedNotification } from './handover-assigned.notification';
 import { nextInRotation } from './handover-rotation';
 import { assignReturn } from './return-assignment';
+import {
+  assignShelfContracts,
+  pendingShelfContractBookings,
+  releaseUncoveredShelfContracts,
+} from './shelf-contract-assignment';
 
 /**
  * Gives the handovers of a confirmed booking to one staff member per facility, round robin by
  * name among the staff whose shifts cover every handover time of that booking at that facility.
- * Returns go the same way, one appointment at a time.
+ * Its shelf contracts, which have no handover, go the same way. Returns go the same way, one
+ * appointment at a time.
  */
 @Injectable()
 export class HandoverAssignmentService {
@@ -35,6 +41,17 @@ export class HandoverAssignmentService {
     } catch (err) {
       this.logger.error(
         `Assigning the handovers of booking ${bookingId} failed; left for a manager`,
+        err instanceof Error ? err.stack : String(err),
+      );
+    }
+    // Its own savepoint: a failure here must not undo the handovers assigned above.
+    try {
+      await em.transaction((savepoint) =>
+        assignShelfContracts(savepoint, bookingId, this.notifications),
+      );
+    } catch (err) {
+      this.logger.error(
+        `Assigning the shelf contracts of booking ${bookingId} failed; left for a manager`,
         err instanceof Error ? err.stack : String(err),
       );
     }
@@ -120,11 +137,12 @@ export class HandoverAssignmentService {
   }
 
   /**
-   * Re-runs the round-robin assignment for every still-unassigned handover, open return and open
-   * shelf pick-up / drop-off request of `facilityId` whose appointment falls in `[from, to]`. Called when staff shifts are added, so
-   * an appointment left for a manager while nobody was on shift is taken as soon as the shift
-   * exists. Never throws — a failure only leaves it unassigned — so it cannot undo the shift
-   * write it runs inside. Returns how many bookings and returns were re-visited.
+   * Re-runs the round-robin assignment for every still-unassigned handover, shelf contract, open
+   * return and open shelf pick-up / drop-off request of `facilityId` whose appointment falls in
+   * `[from, to]`. Called when staff shifts are added, so an appointment left for a manager while
+   * nobody was on shift is taken as soon as the shift exists. Never throws — a failure only leaves
+   * it unassigned — so it cannot undo the shift write it runs inside. Returns how many bookings
+   * and returns were re-visited.
    */
   async assignPendingForFacility(
     em: EntityManager,
@@ -159,6 +177,15 @@ export class HandoverAssignmentService {
         err instanceof Error ? err.stack : String(err),
       );
       return 0;
+    }
+    try {
+      const shelfBookingIds = await pendingShelfContractBookings(em, facilityId, from, to);
+      bookingIds = [...new Set([...bookingIds, ...shelfBookingIds])];
+    } catch (err) {
+      this.logger.error(
+        `Listing pending shelf contracts of facility ${facilityId} failed; left for a manager`,
+        err instanceof Error ? err.stack : String(err),
+      );
     }
     for (const bookingId of bookingIds) await this.assignSafely(em, bookingId);
     for (const returnId of returnIds) await this.assignReturnSafely(em, returnId);
@@ -288,6 +315,17 @@ export class HandoverAssignmentService {
         err instanceof Error ? err.stack : String(err),
       );
       return;
+    }
+    try {
+      const released = await em.transaction((savepoint) =>
+        releaseUncoveredShelfContracts(savepoint, facilityId, staffId, from, to),
+      );
+      for (const bookingId of released) bookingIds.add(bookingId);
+    } catch (err) {
+      this.logger.error(
+        `Releasing shelf contracts of staff ${staffId} at facility ${facilityId} failed; left as-is`,
+        err instanceof Error ? err.stack : String(err),
+      );
     }
 
     for (const bookingId of bookingIds) await this.assignSafely(em, bookingId);

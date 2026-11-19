@@ -82,6 +82,22 @@ export class ContractsController {
     return this.contractsService.findMine(user.id);
   }
 
+  @Get('shelf-signings')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.OPERATIONS_MANAGER,
+    UserRole.FACILITY_MANAGER,
+    UserRole.FACILITY_STAFF,
+  )
+  @ApiOperation({
+    summary: 'Shelf contracts waiting at the counter for their signed files and first month',
+    description:
+      'Staff see the ones assigned to them; facility managers every one of their facilities.',
+  })
+  findShelfSignings(@CurrentUser() user: AuthUser) {
+    return this.contractQuery.shelfSignings(user);
+  }
+
   @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
   @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER, UserRole.FACILITY_MANAGER)

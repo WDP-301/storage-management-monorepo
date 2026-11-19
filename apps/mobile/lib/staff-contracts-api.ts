@@ -61,7 +61,24 @@ export type StaffContract = ApiContract & {
   firstRent: FirstRent | null;
 };
 
+/** `GET /contracts/shelf-signings`: a shelf contract waiting at the counter to be signed. */
+export type ShelfSigning = {
+  id: string;
+  contractNo: string;
+  /** The booked start: when the customer said they would come. */
+  effectiveAt: string;
+  unitCode: string;
+  facilityName: string | null;
+  customer: { fullName: string | null; phone: string | null };
+  assignee: { id: string; fullName: string } | null;
+  hasDocuments: boolean;
+  firstRentPaid: boolean;
+};
+
 export const StaffContractsApi = {
+  /** Staff get the ones assigned to them, facility managers every one of their facilities. */
+  shelfSignings: (signal?: AbortSignal): Promise<ShelfSigning[]> =>
+    request<ShelfSigning[]>('/contracts/shelf-signings', { signal }),
   get: async (id: string, signal?: AbortSignal): Promise<StaffContract> =>
     normaliseStaffContract(
       await request<StaffContractResponse>(`/contracts/${id}/staff-view`, { signal }),

@@ -26,7 +26,9 @@ import {
 import type { InspectionKind, StaffInspection } from '../../types/inspection-api';
 import { InspectionListItem } from './InspectionListItem';
 import { groupBySchedule, SCHEDULE_GROUP_LABEL } from './inspection-display';
+import { ShelfSigningListItem } from './ShelfSigningListItem';
 import { StaffTourListItem } from './StaffTourListItem';
+import { useShelfSignings } from './use-shelf-signings';
 import { useStaffInspections } from './use-staff-inspections';
 import { useStaffShifts } from './use-staff-shifts';
 
@@ -64,6 +66,9 @@ export function StaffTodayScreen({ onOpen, onOpenTour, onOpenMaintenance, onOpen
 
   const openInspections = useStaffInspections('open');
   const doneInspections = useStaffInspections('done');
+  // A shelf has no handover: its counter signing is listed under "Nhận kho" instead.
+  const shelfSignings = useShelfSignings();
+  const shelfItems = primaryTab === 'todo' && todoKind === 'handover' ? shelfSignings.items : [];
 
   const [tours, setTours] = useState<TourAppointmentRecord[]>([]);
   const [isToursLoading, setIsToursLoading] = useState(false);
@@ -98,13 +103,14 @@ export function StaffTodayScreen({ onOpen, onOpenTour, onOpenMaintenance, onOpen
       else if (item.type === 'RETURN') ret += 1;
       else if (item.type === 'MAINTENANCE') maintenance += 1;
     }
+    handover += shelfSignings.items.length;
     return {
       handover,
       ret,
       maintenance,
       todoTotal: handover + ret + maintenance,
     };
-  }, [openInspections.items]);
+  }, [openInspections.items, shelfSignings.items]);
 
   const groups = useMemo(() => {
     if (primaryTab === 'tours') return [];
@@ -127,26 +133,31 @@ export function StaffTodayScreen({ onOpen, onOpenTour, onOpenMaintenance, onOpen
   };
 
   const isEmpty =
-    primaryTab === 'tours' ? tours.length === 0 : groups.every((group) => group.items.length === 0);
+    primaryTab === 'tours'
+      ? tours.length === 0
+      : shelfItems.length === 0 && groups.every((group) => group.items.length === 0);
   const activeLoading =
     primaryTab === 'tours'
       ? isToursLoading
       : primaryTab === 'done'
         ? doneInspections.isLoading
-        : openInspections.isLoading;
+        : openInspections.isLoading || shelfSignings.isLoading;
   const activeError =
     primaryTab === 'tours'
       ? toursError
       : primaryTab === 'done'
         ? doneInspections.error
-        : openInspections.error;
+        : (openInspections.error ?? (todoKind === 'handover' ? shelfSignings.error : null));
 
   const handleRefresh = () => {
     setOpenError(null);
     if (isStaff) shifts.refetch();
     if (primaryTab === 'tours') void fetchTours();
     else if (primaryTab === 'done') void doneInspections.refetch();
-    else void openInspections.refetch();
+    else {
+      void openInspections.refetch();
+      shelfSignings.refetch();
+    }
   };
 
   return (
@@ -245,7 +256,7 @@ export function StaffTodayScreen({ onOpen, onOpenTour, onOpenMaintenance, onOpen
             {
               key: 'todo',
               label: 'Cần làm',
-              count: !openInspections.error ? counts.todoTotal : undefined,
+              count: !openInspections.error && !shelfSignings.error ? counts.todoTotal : undefined,
             },
             {
               key: 'tours',
@@ -322,18 +333,34 @@ export function StaffTodayScreen({ onOpen, onOpenTour, onOpenMaintenance, onOpen
             ))}
           </View>
         ) : (
-          groups.map((group) => (
-            <View key={group.title ?? 'all'} className="gap-3">
-              {group.title ? (
+          <>
+            {shelfItems.length > 0 ? (
+              <View className="gap-3">
                 <Text className="text-caption font-semibold text-text-secondary uppercase">
-                  {group.title} · {group.items.length}
+                  Ký hợp đồng kệ · {shelfItems.length}
                 </Text>
-              ) : null}
-              {group.items.map((item) => (
-                <InspectionListItem key={item.id} inspection={item} onPress={() => open(item)} />
-              ))}
-            </View>
-          ))
+                {shelfItems.map((item) => (
+                  <ShelfSigningListItem
+                    key={item.id}
+                    signing={item}
+                    onPress={() => onOpen(item.id)}
+                  />
+                ))}
+              </View>
+            ) : null}
+            {groups.map((group) => (
+              <View key={group.title ?? 'all'} className="gap-3">
+                {group.title ? (
+                  <Text className="text-caption font-semibold text-text-secondary uppercase">
+                    {group.title} · {group.items.length}
+                  </Text>
+                ) : null}
+                {group.items.map((item) => (
+                  <InspectionListItem key={item.id} inspection={item} onPress={() => open(item)} />
+                ))}
+              </View>
+            ))}
+          </>
         )}
       </ScrollView>
 

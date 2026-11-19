@@ -20,6 +20,7 @@ import {
   SETTLEMENT_STATUS_FILTER,
 } from './dto/list-contracts-query.dto';
 import { loadFirstRentSummaries, withPaymentQr } from './first-rent.util';
+import { listShelfSignings, type ShelfSigningRecord } from './shelf-signings.query';
 import {
   type BackOfficeContractRecord,
   type StaffContractRecord,
@@ -152,6 +153,10 @@ export class ContractQueryService {
       firstRent ? withPaymentQr(firstRent, this.config) : null,
       extras.get(contract.id),
     );
+  }
+
+  shelfSignings(actor: AuthUser): Promise<ShelfSigningRecord[]> {
+    return listShelfSignings(this.dataSource, actor);
   }
 
   /** Facility ids the actor may read; undefined means every facility. */

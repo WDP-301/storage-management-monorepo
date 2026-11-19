@@ -203,3 +203,14 @@ test('relative time shows the full date after a week, and tolerates bad or futur
   assert.equal(formatRelativeTime('not a date', NOW), '');
   assert.equal(formatRelativeTime(new Date(NOW + 5 * MINUTE).toISOString(), NOW), 'Vừa xong');
 });
+
+test('overdue debts and renewals have their own labels and filters', () => {
+  assert.equal(notificationDisplay('INVOICE_OVERDUE').label, 'Hóa đơn quá hạn');
+  assert.equal(notificationDisplay('CONTRACT_RENEWAL_APPROVED').tone, 'success');
+  assert.equal(notificationGroup('INVOICE_OVERDUE_ALERT'), 'payment');
+  assert.equal(notificationGroup('CONTRACT_RENEWAL_REQUESTED'), 'contract');
+  assert.equal(
+    notificationHref({ contractId: 'c-1', invoiceId: 'i-1' }, 'customer', 'INVOICE_OVERDUE'),
+    '/(customer)/contract-detail?id=c-1',
+  );
+});

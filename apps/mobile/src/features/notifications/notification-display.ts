@@ -73,6 +73,12 @@ const KNOWN_TYPES: Partial<Record<NotificationType, NotificationDisplay>> = {
   },
   MAINTENANCE_CHECK_DUE: { label: 'Cần kiểm tra kho cũ', icon: 'return', tone: 'warning' },
   MAINTENANCE_COMPLETED: { label: 'Đã kiểm tra kho cũ', icon: 'return', tone: 'success' },
+  DEPOSIT_CHARGED: { label: 'Trừ tiền cọc', icon: 'settlement', tone: 'warning' },
+  INVOICE_OVERDUE: { label: 'Hóa đơn quá hạn', icon: 'overdue', tone: 'danger' },
+  INVOICE_OVERDUE_ALERT: { label: 'Khách nợ quá hạn', icon: 'overdue', tone: 'danger' },
+  CONTRACT_RENEWAL_REQUESTED: { label: 'Yêu cầu gia hạn', icon: 'ending', tone: 'warning' },
+  CONTRACT_RENEWAL_APPROVED: { label: 'Đã gia hạn', icon: 'paid', tone: 'success' },
+  CONTRACT_RENEWAL_REJECTED: { label: 'Gia hạn bị từ chối', icon: 'overdue', tone: 'danger' },
 };
 
 const FALLBACK_DISPLAY: NotificationDisplay = {
@@ -106,6 +112,9 @@ const GROUP_BY_TYPE: Partial<Record<NotificationType, NotificationGroup>> = {
   INVOICE_PAID: 'payment',
   BOOKING_DEPOSIT_PARTIAL: 'payment',
   REFUND_COMPLETED: 'payment',
+  DEPOSIT_CHARGED: 'payment',
+  INVOICE_OVERDUE: 'payment',
+  INVOICE_OVERDUE_ALERT: 'payment',
   HANDOVER_ASSIGNED: 'contract',
   RETURN_ASSIGNED: 'contract',
   RETURN_REASSIGNED: 'contract',
@@ -118,6 +127,9 @@ const GROUP_BY_TYPE: Partial<Record<NotificationType, NotificationGroup>> = {
   SETTLEMENT_APPROVED: 'contract',
   CONTRACT_TERM_ENDING: 'contract',
   CONTRACT_OVERDUE: 'contract',
+  CONTRACT_RENEWAL_REQUESTED: 'contract',
+  CONTRACT_RENEWAL_APPROVED: 'contract',
+  CONTRACT_RENEWAL_REJECTED: 'contract',
   UNIT_CHANGE_APPROVED: 'unitChange',
   UNIT_CHANGE_REJECTED: 'unitChange',
   UNIT_CHANGE_COMPLETED: 'unitChange',

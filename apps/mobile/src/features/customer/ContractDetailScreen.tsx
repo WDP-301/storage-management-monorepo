@@ -1,19 +1,16 @@
-import { BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
-import { Headset, MapPin, SignOut, Swap } from 'phosphor-react-native';
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { Headset, MapPin, Swap } from 'phosphor-react-native';
 import { type ReactNode, useEffect, useRef } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { changeRequestSignature, openChangeForContract } from '../../../lib/change-requests-api';
-import {
-  Button,
-  colors,
-  FlowScreen,
-  InlineMessage,
-  renderCoatBackdrop,
-  Text,
-} from '../../components/ui';
+import { useBookingSettings } from '../../../lib/client-settings';
+import { canRequestRenewal, renewalToShow } from '../../../lib/contract-renewal-state';
+import { todayIso } from '../../../lib/rental-schedule';
+import { vietnamDayIso } from '../../../lib/settlement-format';
+import { Button, colors, FlowScreen, InlineMessage, Text } from '../../components/ui';
 import type { ApiContract } from '../../types/contract-api';
 import { ContractInvoicesSection } from './ContractInvoicesSection';
+import { ContractRequestPicker, type RequestKind } from './ContractRequestPicker';
 import { ContractAmenitiesSection } from './contract-amenities-section';
 import {
   ContractUnitLines,
@@ -25,6 +22,9 @@ import {
 } from './contract-display';
 import { ContractDocumentsList } from './contract-documents-section';
 import { ContractSection, HandoverSection, ReturnSection } from './contract-sections';
+import { RenewalRequestForm } from './RenewalRequestForm';
+import { RenewalStatusCard } from './RenewalStatusCard';
+import { RequestFormSheet } from './RequestFormSheet';
 import { ReturnRequestActions } from './ReturnRequestActions';
 import { ReturnRequestSheet } from './ReturnRequestSheet';
 import { SettlementSection } from './SettlementSection';
@@ -34,6 +34,7 @@ import { TermEndNotice } from './TermEndNotice';
 import { UnitChangeRequestSheet } from './UnitChangeRequestSheet';
 import { UnitChangeStatusCard } from './UnitChangeStatusCard';
 import { type ContractInvoicesState, useContractInvoices } from './use-contract-invoices';
+import { useContractRenewals } from './use-contract-renewals';
 import { useUnitChangeRequests } from './use-unit-change-requests';
 
 type Props = {
@@ -136,7 +137,8 @@ function ContractDetail({
   const returnSheet = useRef<BottomSheetModal>(null);
   const changeSheet = useRef<BottomSheetModal>(null);
   const requestSheet = useRef<BottomSheetModal>(null);
-  const insets = useSafeAreaInsets();
+  const renewSheet = useRef<BottomSheetModal>(null);
+  const booking = useBookingSettings();
   const state = storageState(contract, now);
   const isActive = contract.status === 'ACTIVE';
   const pending = openReturn(contract);
@@ -147,22 +149,44 @@ function ContractDetail({
     isActive || contract.status === 'DRAFT' || contract.status === 'CANCELLED',
   );
   const openChange = openChangeForContract(changeRequests.requests, contract.id);
+  const renewals = useContractRenewals(isActive);
+  const shownRenewal = renewalToShow(renewals.renewals, contract.id);
+  // While the branch weighs a renewal, a return or a move would contradict it.
+  const renewalPending = shownRenewal?.status === 'PENDING';
   // A pending return already blocks a change request server-side; hide the entry point too.
-  const canRequestChange = isActive && !pending && !openChange;
-  const canRequestAny = canRequestChange || canRequestReturn;
+  const canRequestChange = isActive && !pending && !openChange && !renewalPending;
+  const canRenew = canRequestRenewal({
+    isActive,
+    todayIso: vietnamDayIso(new Date(now)) ?? todayIso(),
+    termEndDayIso: contract.termEndAt ? vietnamDayIso(contract.termEndAt) : null,
+    hasOpenReturn: pending !== null,
+    hasOpenChange: openChange !== null,
+    hasPendingRenewal: renewalPending,
+  });
+  const requestKinds = (
+    [
+      canRenew && 'renew',
+      canRequestChange && 'change',
+      canRequestReturn && !renewalPending && 'return',
+    ] as const
+  ).filter((kind): kind is RequestKind => kind !== false);
+  const canRequestAny = requestKinds.length > 0;
+  const sheetFor = { renew: renewSheet, change: changeSheet, return: returnSheet };
 
-  const openRequest = (kind: 'change' | 'return') => {
-    const target = kind === 'change' ? changeSheet : returnSheet;
+  const openRequest = (kind: RequestKind) => {
     requestSheet.current?.dismiss();
     // Let the picker sheet finish closing before the form sheet slides up.
-    setTimeout(() => target.current?.present(), 200);
+    setTimeout(() => sheetFor[kind].current?.present(), 200);
   };
 
-  /** One tile covers both request kinds: direct when only one is possible, picker when both. */
+  /** One tile covers every request kind: direct when only one is possible, a picker otherwise. */
   const onRequestPress = () => {
-    if (canRequestChange && canRequestReturn) requestSheet.current?.present();
-    else if (canRequestChange) changeSheet.current?.present();
-    else if (canRequestReturn) returnSheet.current?.present();
+    if (requestKinds.length === 1) sheetFor[requestKinds[0]].current?.present();
+    else requestSheet.current?.present();
+  };
+  const renewalChanged = () => {
+    renewals.reload();
+    onChanged();
   };
   const changed = () => {
     changeRequests.reload();
@@ -214,7 +238,11 @@ function ContractDetail({
       </View>
 
       {/* 2. Urgent alerts (ending/overdue, due invoices, unit-change status) */}
-      <TermEndNotice contract={contract} />
+      {/* A pending renewal may move the term end, so the ending/overdue banner waits for it. */}
+      {renewalPending ? null : <TermEndNotice contract={contract} />}
+      {shownRenewal && isActive ? (
+        <RenewalStatusCard renewal={shownRenewal} onChanged={renewalChanged} />
+      ) : null}
       {invoices ? (
         <ContractInvoicesSection
           state={invoices}
@@ -262,9 +290,9 @@ function ContractDetail({
         <View className="flex-row justify-around pt-2">
           {canRequestAny ? (
             <QuickAction
-              accessibilityLabel="Yêu cầu đổi kho hoặc trả kho"
+              accessibilityLabel="Yêu cầu gia hạn, đổi kho hoặc trả kho"
               icon={<Swap color={colors.semantic.actionPrimary} size={24} weight="bold" />}
-              label="Đổi / trả kho"
+              label="Yêu cầu"
               onPress={onRequestPress}
             />
           ) : null}
@@ -285,34 +313,13 @@ function ContractDetail({
       {isActive ? (
         <UnitChangeRequestSheet sheetRef={changeSheet} contract={contract} onSubmitted={changed} />
       ) : null}
+      {canRenew ? (
+        <RequestFormSheet sheetRef={renewSheet} onSubmitted={renewalChanged}>
+          {(done) => <RenewalRequestForm contract={contract} booking={booking} onDone={done} />}
+        </RequestFormSheet>
+      ) : null}
       {canRequestAny ? (
-        <BottomSheetModal
-          ref={requestSheet}
-          backdropComponent={renderCoatBackdrop}
-          backgroundStyle={{ backgroundColor: colors.semantic.bgCard }}
-          enablePanDownToClose
-          handleIndicatorStyle={{ backgroundColor: colors.neutral[300] }}
-          snapPoints={['36%']}
-        >
-          <BottomSheetView
-            className="gap-3 px-4"
-            style={{ paddingBottom: Math.max(insets.bottom, 16) }}
-          >
-            <Text className="text-title-sm font-bold text-text-primary">Tạo yêu cầu</Text>
-            <RequestKindRow
-              icon={<Swap color={colors.semantic.actionPrimary} size={22} weight="bold" />}
-              title="Đổi kho"
-              subtitle="Chuyển sang kho khác cùng loại, kèm ngày chuyển đồ"
-              onPress={() => openRequest('change')}
-            />
-            <RequestKindRow
-              icon={<SignOut color={colors.semantic.actionPrimary} size={22} weight="bold" />}
-              title="Trả kho"
-              subtitle="Hẹn ngày dọn đồ và kết thúc hợp đồng"
-              onPress={() => openRequest('return')}
-            />
-          </BottomSheetView>
-        </BottomSheetModal>
+        <ContractRequestPicker sheetRef={requestSheet} kinds={requestKinds} onPick={openRequest} />
       ) : null}
     </View>
   );
@@ -342,35 +349,6 @@ function QuickAction({
         {icon}
       </View>
       <Text className="text-body-sm font-medium text-text-primary">{label}</Text>
-    </Pressable>
-  );
-}
-
-function RequestKindRow({
-  icon,
-  title,
-  subtitle,
-  onPress,
-}: {
-  icon: ReactNode;
-  title: string;
-  subtitle: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      className="flex-row items-center gap-3 rounded-2xl border border-border-default bg-bg-subtle px-3.5 py-3"
-      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-      onPress={onPress}
-    >
-      <View className="size-10 items-center justify-center rounded-full bg-secondary-0">
-        {icon}
-      </View>
-      <View className="flex-1">
-        <Text className="text-body-sm font-semibold text-text-primary">{title}</Text>
-        <Text className="text-caption text-text-secondary">{subtitle}</Text>
-      </View>
     </Pressable>
   );
 }

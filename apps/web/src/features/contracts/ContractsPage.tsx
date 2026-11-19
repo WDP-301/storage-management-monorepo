@@ -3,6 +3,7 @@ import { ArrowsClockwise, Eye, MagnifyingGlass, WarningCircle } from '@phosphor-
 import { UserRole } from '@storage/types';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useFacility } from '../../context/FacilityContext';
 import { ContractsApi } from '../../lib/api';
@@ -53,9 +54,13 @@ export const ContractsPage: React.FC = () => {
   const [rows, setRows] = useState<ContractRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  // A notification links here with ?search=<contract no>&settlement=<filter>.
+  const [searchParams] = useSearchParams();
+  const linkedSearch = searchParams.get('search');
+  const linkedSettlement = searchParams.get('settlement');
   const [status, setStatus] = useState(ALL);
-  const [settlement, setSettlement] = useState(ALL);
-  const [search, setSearch] = useState('');
+  const [settlement, setSettlement] = useState(linkedSettlement ?? ALL);
+  const [search, setSearch] = useState(linkedSearch ?? '');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +77,12 @@ export const ContractsPage: React.FC = () => {
     }, 400);
     return () => clearTimeout(handler);
   }, [search]);
+
+  // Following another notification while already on this page re-applies its filters.
+  useEffect(() => {
+    if (linkedSearch !== null) setSearch(linkedSearch);
+    setSettlement(linkedSettlement ?? ALL);
+  }, [linkedSearch, linkedSettlement]);
 
   // A new facility starts from the first page.
   useEffect(() => {

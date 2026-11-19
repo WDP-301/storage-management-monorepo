@@ -1,3 +1,4 @@
+import { ContractRenewalsModule } from '@modules/contract-renewals/contract-renewals.module';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
@@ -78,6 +79,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
     AnalyticsModule,
     BookingsModule,
     ChangeRequestsModule,
+    ContractRenewalsModule,
     ContractsModule,
     InspectionModule,
     HealthModule,

@@ -1,11 +1,13 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { ContractKind } from '@storage/types';
 import {
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
   IsNumber,
   IsObject,
+  IsOptional,
   IsUUID,
   Max,
   Min,
@@ -65,4 +67,14 @@ export class UpdateContractDto extends PartialType(ContractFieldsDto, {
   @Min(0)
   @Max(999999999999.99)
   monthlyPriceSnapshot?: number;
+}
+
+export class CancelContractDto {
+  @ApiPropertyOptional({
+    description: 'No-show: keep the deposit instead of refunding it (first-month rent is refunded)',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  keepDeposit?: boolean;
 }

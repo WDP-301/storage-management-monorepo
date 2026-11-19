@@ -34,6 +34,7 @@ describe('ContractReturnService', () => {
     save: jest.Mock;
     delete: jest.Mock;
     query: jest.Mock;
+    update: jest.Mock;
   };
   let contract: Partial<Contract> | null;
   /** The open return seen by a new request (no lock). */
@@ -72,6 +73,7 @@ describe('ContractReturnService', () => {
       save: jest.fn(async (_entity, data) => ({ id: 'return-1', ...data })),
       delete: jest.fn().mockResolvedValue({ affected: 1 }),
       query: jest.fn().mockResolvedValue([]),
+      update: jest.fn().mockResolvedValue({ affected: 0 }),
     };
     settings = {
       getReturnNoticeDays: jest.fn().mockResolvedValue(RULES.noticeDays),
@@ -92,6 +94,16 @@ describe('ContractReturnService', () => {
     em.query.mock.calls.filter(([sql]) => String(sql).includes('customer_profiles'));
 
   describe('requestReturn', () => {
+    it('withdraws a renewal still waiting for the branch', async () => {
+      await service.requestReturn('contract-1', 'customer-1', { scheduledAt: inDays(7) } as never);
+
+      expect(em.update).toHaveBeenCalledWith(
+        expect.anything(),
+        { contractId: 'contract-1', status: 'PENDING' },
+        expect.objectContaining({ status: 'CANCELLED', decidedBy: 'customer-1' }),
+      );
+    });
+
     const dto = { scheduledAt: inDays(20), note: '  Trả buổi sáng  ' };
 
     it('opens a RETURN with the notice running from now under the current rules', async () => {

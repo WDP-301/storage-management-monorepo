@@ -325,9 +325,12 @@ export const ContractsApi = {
     return res.data.data;
   },
 
-  /** Drops a DRAFT contract the customer never collected and frees its unit. */
-  cancel: async (id: string): Promise<void> => {
-    await apiClient.post(`/contracts/${id}/cancel`);
+  /**
+   * Drops a DRAFT contract the customer never collected and frees its unit. `keepDeposit`: the
+   * branch keeps the no-show's deposit (rent already paid is still refunded).
+   */
+  cancel: async (id: string, keepDeposit = false): Promise<void> => {
+    await apiClient.post(`/contracts/${id}/cancel`, { keepDeposit });
   },
 
   update: async (id: string, patch: ContractPatch): Promise<void> => {

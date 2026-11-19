@@ -33,8 +33,8 @@ export function bookingNeedsRefundNotification(
     title: 'Booking có tiền đã bị hủy — cần hoàn tiền',
     body:
       `Booking ${booking.bookingNo} ${cause === 'EXPIRED' ? 'hết hạn' : 'bị khách hủy'} ` +
-      `sau khi đã nhận ${vnd(paidAmount)}. Đối soát các giao dịch liên quan (đã đưa về cần xử lý) ` +
-      'và hoàn tiền cho khách.',
+      `sau khi đã nhận ${vnd(paidAmount)}. Các giao dịch liên quan đã được đưa về hàng chờ ` +
+      'đối soát chuyển khoản để hoàn tiền cho khách.',
     data: {
       bookingId: booking.id,
       bookingNo: booking.bookingNo,

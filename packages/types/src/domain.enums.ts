@@ -255,6 +255,8 @@ export const SettlementLineType = {
   UNUSED_PERIOD_CREDIT: 'UNUSED_PERIOD_CREDIT',
   /** Money received that staff must confirm before it is added back to the refund. */
   REVIEW_PAYMENT_CREDIT: 'REVIEW_PAYMENT_CREDIT',
+  /** The customer never collected the unit and the branch kept the deposit when cancelling. */
+  NO_SHOW_FORFEIT: 'NO_SHOW_FORFEIT',
 } as const;
 export type SettlementLineType = (typeof SettlementLineType)[keyof typeof SettlementLineType];
 
@@ -481,6 +483,19 @@ export const NotificationType = {
   MAINTENANCE_COMPLETED: 'MAINTENANCE_COMPLETED',
   /** To the customer: a damage fee found at a check was taken from their deposit. */
   DEPOSIT_CHARGED: 'DEPOSIT_CHARGED',
+  /** To the customer: an invoice is unpaid past its due date. */
+  INVOICE_OVERDUE: 'INVOICE_OVERDUE',
+  /** To facility managers: a customer's invoice has stayed unpaid for a week or more. */
+  INVOICE_OVERDUE_ALERT: 'INVOICE_OVERDUE_ALERT',
+  /** To the back office: a return was finalized and its deposit settlement awaits approval. */
+  SETTLEMENT_PENDING_APPROVAL: 'SETTLEMENT_PENDING_APPROVAL',
+  /** To the back office: a contract cancelled before handover left money to transfer back. */
+  CONTRACT_REFUND_PENDING: 'CONTRACT_REFUND_PENDING',
+  /** To facility managers: a customer asked to extend their contract. */
+  CONTRACT_RENEWAL_REQUESTED: 'CONTRACT_RENEWAL_REQUESTED',
+  /** To the customer: their renewal request was approved (the term is extended) or rejected. */
+  CONTRACT_RENEWAL_APPROVED: 'CONTRACT_RENEWAL_APPROVED',
+  CONTRACT_RENEWAL_REJECTED: 'CONTRACT_RENEWAL_REJECTED',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 
@@ -523,6 +538,16 @@ export const FeedbackStatus = {
   HIDDEN: 'HIDDEN',
 } as const;
 export type FeedbackStatus = (typeof FeedbackStatus)[keyof typeof FeedbackStatus];
+
+/** PENDING → APPROVED (months added to the contract) | REJECTED (manager) | CANCELLED (customer). */
+export const ContractRenewalStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type ContractRenewalStatus =
+  (typeof ContractRenewalStatus)[keyof typeof ContractRenewalStatus];
 
 export const TourAppointmentStatus = {
   PENDING: 'PENDING',

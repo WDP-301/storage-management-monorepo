@@ -365,6 +365,7 @@ export async function unwindSettledChangeRequest(
         now: options.now,
         contractNote: 'Huỷ do rút yêu cầu đổi kho',
         settlementNote: 'Hủy hợp đồng đổi kho trước bàn giao — hoàn lại tiền thuê đã thu',
+        notifications: options.notifications,
       });
       if (refundAmount > 0 && options.notifications) {
         await options.notifications.createForUsers(

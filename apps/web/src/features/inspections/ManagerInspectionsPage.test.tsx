@@ -169,9 +169,13 @@ describe('ManagerInspectionsPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Xem biên bản A-101' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Khách không nhận kho' }));
     expect(cancel).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận huỷ hợp đồng' }));
+    const confirm = screen.getByRole('button', { name: 'Xác nhận hủy hợp đồng' });
+    // Whether the deposit goes back is the manager's explicit call.
+    expect((confirm as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('radio', { name: /Giữ tiền cọc/ }));
+    fireEvent.click(confirm);
 
-    await waitFor(() => expect(cancel).toHaveBeenCalledWith('c-A-101'));
+    await waitFor(() => expect(cancel).toHaveBeenCalledWith('c-A-101', true));
   });
 
   it('assigns a staff member of the facility', async () => {

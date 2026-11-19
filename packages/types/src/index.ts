@@ -1,3 +1,4 @@
+export * from './contract-renewal';
 export * from './domain.enums';
 export * from './invoice-payment';
 export * from './return-request';

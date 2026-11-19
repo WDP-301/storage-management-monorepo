@@ -1,5 +1,6 @@
 import { BookingItem } from '@entities/booking-item.entity';
 import { Contract } from '@entities/contract.entity';
+import { Deposit } from '@entities/deposit.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { Invoice } from '@entities/invoice.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
@@ -9,6 +10,7 @@ import type { AuthUser } from '@modules/auth/types/auth-user';
 import {
   ChangeRequestStatus,
   ContractStatus,
+  DepositStatus,
   InspectionType,
   InvoiceStatus,
   NotificationType,
@@ -184,6 +186,122 @@ describe('ContractCancelService.cancelDraft', () => {
         data: expect.objectContaining({ refundAmount: 7_500_000 }),
       }),
     );
+  });
+
+  describe('no-show with the deposit kept', () => {
+    const opsAssignment = {
+      userId: 'ops-1',
+      role: UserRole.OPERATIONS_MANAGER,
+      facilityId: null,
+      startsAt: new Date('2024-01-01T00:00:00Z'),
+      endsAt: null,
+    };
+    const deposit = { id: 'dep-1', amount: '5000000', heldAmount: '5000000' };
+    const rentPayment = {
+      payment_id: 'pay-1',
+      amount: 2_500_000,
+      invoice_id: 'inv-1',
+      invoice_no: 'INV-1',
+    };
+
+    beforeEach(() => {
+      const managerOnly = em.find.getMockImplementation();
+      em.find.mockImplementation(async (entity, options) =>
+        entity === UserRoleAssignment && !options.where.userId
+          ? [opsAssignment]
+          : managerOnly?.(entity, options),
+      );
+    });
+
+    it('keeps the deposit, refunds the rent paid and tells the back office', async () => {
+      em.query = answeringQuery({ deposit, payments: [rentPayment] });
+
+      await service.cancelDraft(
+        'contract-1',
+        actor('manager-1', [UserRole.FACILITY_MANAGER]),
+        true,
+      );
+
+      expect(em.insert).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          status: 'AWAITING_REFUND',
+          depositAmount: 5_000_000,
+          creditsTotal: 2_500_000,
+          deductionsTotal: 5_000_000,
+          refundAmount: 2_500_000,
+          lines: expect.arrayContaining([
+            expect.objectContaining({
+              type: 'NO_SHOW_FORFEIT',
+              direction: 'DEDUCTION',
+              amount: 5_000_000,
+            }),
+          ]),
+        }),
+      );
+      expect(notifications.createForUsers).toHaveBeenCalledWith(
+        em,
+        ['ops-1'],
+        expect.objectContaining({
+          type: NotificationType.CONTRACT_REFUND_PENDING,
+          data: expect.objectContaining({ refundAmount: 2_500_000 }),
+        }),
+      );
+      expect(notifications.createForUsers).toHaveBeenCalledWith(
+        em,
+        ['customer-1'],
+        expect.objectContaining({
+          type: NotificationType.CONTRACT_CANCELLED,
+          data: expect.objectContaining({ refundAmount: 2_500_000, forfeitedAmount: 5_000_000 }),
+        }),
+      );
+    });
+
+    it('completes the settlement at once when nothing is left to refund', async () => {
+      em.query = answeringQuery({ deposit });
+
+      await service.cancelDraft(
+        'contract-1',
+        actor('manager-1', [UserRole.FACILITY_MANAGER]),
+        true,
+      );
+
+      expect(em.insert).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          status: 'COMPLETED',
+          refundAmount: 0,
+          deductionsTotal: 5_000_000,
+          completedBy: 'manager-1',
+          completedAt: expect.any(Date),
+        }),
+      );
+      expect(em.update).toHaveBeenCalledWith(
+        Deposit,
+        { id: 'dep-1' },
+        { heldAmount: 0, status: DepositStatus.FORFEITED },
+      );
+      expect(notifications.createForUsers).not.toHaveBeenCalledWith(
+        em,
+        expect.anything(),
+        expect.objectContaining({ type: NotificationType.CONTRACT_REFUND_PENDING }),
+      );
+    });
+
+    it('refunds everything when the manager does not keep the deposit', async () => {
+      em.query = answeringQuery({ deposit });
+
+      await service.cancelDraft('contract-1', actor('manager-1', [UserRole.FACILITY_MANAGER]));
+
+      expect(em.insert).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          status: 'AWAITING_REFUND',
+          refundAmount: 5_000_000,
+          deductionsTotal: 0,
+        }),
+      );
+    });
   });
 
   it('skips the settlement but still notifies when nothing was paid', async () => {

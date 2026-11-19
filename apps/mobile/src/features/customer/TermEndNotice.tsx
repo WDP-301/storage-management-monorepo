@@ -26,7 +26,7 @@ export function TermEndNotice({ contract }: { contract: ApiContract }) {
         (perDay !== null
           ? ` Từ ngày ${formatIsoDate(state.penaltyFromDay)}, phí quá hạn ${formatMoney(perDay)}/ngày sẽ trừ vào tiền cọc.`
           : '') +
-        ' Nếu không thuê tiếp, hãy đặt lịch trả kho.'
+        ' Muốn thuê tiếp, hãy gửi yêu cầu gia hạn; nếu không, hãy đặt lịch trả kho.'
       : `Kỳ thuê đã kết thúc hết ngày ${lastDay} (hiện quá ${state.daysOverdue} ngày so với hạn hợp đồng).` +
         (perDay !== null
           ? ` Phí phát sinh ${formatMoney(perDay)}/ngày được tính từ ngày kế tiếp đến khi chốt biên bản trả kho và trừ vào tiền cọc.`

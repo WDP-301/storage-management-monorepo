@@ -115,8 +115,9 @@ describe('ContractDetailDialog', () => {
     expect(cancel).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Hủy hợp đồng' }));
+    fireEvent.click(screen.getByRole('radio', { name: /Hoàn cọc cho khách/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hủy hợp đồng' }));
-    await waitFor(() => expect(cancel).toHaveBeenCalledWith('c-1'));
+    await waitFor(() => expect(cancel).toHaveBeenCalledWith('c-1', false));
     expect(onChanged).toHaveBeenCalled();
   });
 

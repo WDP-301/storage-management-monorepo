@@ -60,11 +60,15 @@ describe('applyReturnFinalize', () => {
     bookingItemId: 'item-1',
     status: 'ACTIVE',
   } as Contract;
-  let em: { query: jest.Mock; transaction: jest.Mock; findOne: jest.Mock };
+  let em: { query: jest.Mock; transaction: jest.Mock; findOne: jest.Mock; find: jest.Mock };
   let notifications: { createForUsers: jest.Mock };
 
   beforeEach(() => {
     em = {
+      // Role assignments: one operations manager whose assignment is in effect.
+      find: jest
+        .fn()
+        .mockResolvedValue([{ userId: 'ops-1', startsAt: new Date('2020-01-01'), endsAt: null }]),
       query: jest.fn(async (sql: string) => {
         if (sql.startsWith('UPDATE invoices')) return [[{ id: 'inv-3', invoiceNo: 'INV-3' }], 1];
         // The contract's ledger row already exists.
@@ -133,7 +137,18 @@ describe('applyReturnFinalize', () => {
     expect(notifications.createForUsers).toHaveBeenCalled();
   });
 
-  it('tells the customer, and only the customer, the deposit is being settled', async () => {
+  it('tells the back office the settlement awaits their approval', async () => {
+    await run(returnInspection(), '2027-04-15');
+
+    expect(notifications.createForUsers).toHaveBeenCalledWith(em, ['ops-1'], {
+      type: NotificationType.SETTLEMENT_PENDING_APPROVAL,
+      title: 'Quyết toán chờ duyệt',
+      body: 'Hợp đồng CT-1 (kho A101) đã chốt trả kho — cần duyệt quyết toán tiền cọc.',
+      data: { contractId: 'contract-1', contractNo: 'CT-1' },
+    });
+  });
+
+  it('tells the customer the deposit is being settled', async () => {
     await run(returnInspection(), '2027-04-15');
 
     expect(em.findOne).toHaveBeenCalledWith(StorageUnit, { where: { id: 'unit-1' } });
@@ -212,6 +227,7 @@ describe('rent owed when a return is finalized', () => {
   beforeEach(() => {
     notifications = { createForUsers: jest.fn().mockResolvedValue(1) };
     em = {
+      find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn(async (entity, { where }) => {
         if (entity === StorageUnit) return { id: 'unit-1', code: 'A101' };
         if (entity !== Invoice) return null;

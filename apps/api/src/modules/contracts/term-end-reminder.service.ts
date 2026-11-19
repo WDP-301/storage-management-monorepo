@@ -5,6 +5,7 @@ import { SettingsService } from '@modules/settings/settings.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import {
+  ContractRenewalStatus,
   ContractStatus,
   InspectionType,
   NotificationType,
@@ -103,7 +104,7 @@ export class TermEndReminderService {
           for (const managerId of managerIdsByFacility.get(candidate.facilityId) ?? []) {
             recipients.push({
               userId: managerId,
-              payload: managerOverdueNotification(candidate),
+              payload: managerOverdueNotification(candidate, payload.data?.termEndAt),
             });
           }
         }
@@ -112,8 +113,19 @@ export class TermEndReminderService {
       const alreadySent = await this.loadSentKeys(em, [...new Set(sends.map((s) => s.userId))]);
 
       for (const { userId, payload } of sends) {
-        const key = sentKey(userId, payload.type, String(payload.data?.contractId));
-        if (alreadySent.has(key)) continue;
+        const key = sentKey(
+          userId,
+          payload.type,
+          payload.data?.contractId,
+          payload.data?.termEndAt,
+        );
+        // Rows written before the term end was recorded count for every term of their contract.
+        if (
+          alreadySent.has(key) ||
+          alreadySent.has(sentKey(userId, payload.type, payload.data?.contractId, null))
+        ) {
+          continue;
+        }
         await this.notifications.createForUsers(em, [userId], payload);
         if (payload.type === NotificationType.CONTRACT_OVERDUE) result.overdue += 1;
         else result.ending += 1;
@@ -139,8 +151,12 @@ export class TermEndReminderService {
                WHERE i.contract_id = c.id AND i.type = $2 AND i.finalized_at IS NULL
                ORDER BY i.created_at DESC
                LIMIT 1) r ON TRUE
-        WHERE c.status = $1 AND c.deleted_at IS NULL`,
-      [ContractStatus.ACTIVE, InspectionType.RETURN],
+        WHERE c.status = $1 AND c.deleted_at IS NULL
+          -- A renewal waiting for the branch may move the term end; remind once it is decided.
+          AND NOT EXISTS (
+              SELECT 1 FROM contract_renewals cr
+               WHERE cr.contract_id = c.id AND cr.status = $3)`,
+      [ContractStatus.ACTIVE, InspectionType.RETURN, ContractRenewalStatus.PENDING],
     )) as CandidateRow[];
     return rows.map((row) => ({
       contractId: row.contractId,
@@ -182,14 +198,21 @@ export class TermEndReminderService {
   private async loadSentKeys(em: EntityManager, customerIds: string[]): Promise<Set<string>> {
     if (customerIds.length === 0) return new Set();
     const rows = (await em.query(
-      `SELECT user_id AS "userId", type, data->>'contractId' AS "contractId"
+      `SELECT user_id AS "userId", type, data->>'contractId' AS "contractId",
+              data->>'termEndAt' AS "termEndAt"
          FROM notifications
         WHERE user_id = ANY($1::uuid[]) AND type = ANY($2::text[])`,
       [customerIds, [...TERM_END_TYPES]],
-    )) as Array<{ userId: string; type: string; contractId: string | null }>;
-    return new Set(rows.map((r) => sentKey(r.userId, r.type, String(r.contractId))));
+    )) as Array<{
+      userId: string;
+      type: string;
+      contractId: string | null;
+      termEndAt: string | null;
+    }>;
+    return new Set(rows.map((r) => sentKey(r.userId, r.type, r.contractId, r.termEndAt)));
   }
 }
 
-const sentKey = (customerId: string, type: string, contractId: string): string =>
-  `${customerId}|${type}|${contractId}`;
+/** One reminder per recipient, type, contract and term end — a renewed term is reminded again. */
+const sentKey = (userId: string, type: string, contractId: unknown, termEndAt: unknown): string =>
+  `${userId}|${type}|${String(contractId)}|${termEndAt == null ? '' : String(termEndAt)}`;

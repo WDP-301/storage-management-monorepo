@@ -13,7 +13,13 @@ const actor = (id: string, roles: UserRole[]): AuthUser => ({ id, roles }) as Au
 const MANAGER = actor('manager-1', [UserRole.FACILITY_MANAGER]);
 
 describe('ManagedReturnService.requestOnBehalf', () => {
-  let em: { find: jest.Mock; findOne: jest.Mock; create: jest.Mock; save: jest.Mock };
+  let em: {
+    find: jest.Mock;
+    findOne: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    update: jest.Mock;
+  };
   let contract: Partial<Contract> | null;
   let openReturn: Partial<Inspection> | null;
   let service: ManagedReturnService;
@@ -34,6 +40,7 @@ describe('ManagedReturnService.requestOnBehalf', () => {
     };
     openReturn = null;
     em = {
+      update: jest.fn().mockResolvedValue({ affected: 0 }),
       // manager-1 manages facility-1 only.
       find: jest.fn(async (entity, { where }) => {
         // The OFFICE shift: 08:00–17:00 Vietnam time.

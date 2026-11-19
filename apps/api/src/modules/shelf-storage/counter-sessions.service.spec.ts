@@ -4,6 +4,11 @@ import { UserRole } from '@storage/types';
 import { buildCounterPanel } from './counter-panel.query';
 import { CounterSessionsService } from './counter-sessions.service';
 
+jest.mock(
+  '@modules/settings/setting-read.util',
+  () => jest.requireActual('../../../test/seeded-settings').seededSettingReader,
+);
+
 jest.mock('./counter-panel.query', () => ({
   buildCounterPanel: jest.fn(async (_em: unknown, session: { id: string }) => ({
     sessionId: session.id,

@@ -24,7 +24,7 @@ const ACCOUNT = {
   accountNo: '0123456789',
   accountName: 'NGUYEN VAN A',
 };
-const RULES = { noticeDays: 30, penaltyPercent: 100 };
+const RULES = { noticeDays: 30, penaltyPercent: 100, earlyForfeitPercent: 100 };
 
 describe('ContractReturnService', () => {
   let em: {
@@ -41,7 +41,7 @@ describe('ContractReturnService', () => {
   let openReturn: Partial<Inspection> | null;
   /** The latest return, locked by a change or a withdrawal. */
   let latestReturn: Inspection | null;
-  let settings: { getReturnNoticeDays: jest.Mock; getOverduePenaltyPercent: jest.Mock };
+  let settings: Record<string, jest.Mock>;
   let assignment: { assignReturnSafely: jest.Mock };
   let service: ContractReturnService;
 
@@ -78,6 +78,8 @@ describe('ContractReturnService', () => {
     settings = {
       getReturnNoticeDays: jest.fn().mockResolvedValue(RULES.noticeDays),
       getOverduePenaltyPercent: jest.fn().mockResolvedValue(RULES.penaltyPercent),
+      getEarlyReturnForfeitPercent: jest.fn().mockResolvedValue(RULES.earlyForfeitPercent),
+      getReturnMaxDaysAhead: jest.fn().mockResolvedValue(365),
     };
     assignment = { assignReturnSafely: jest.fn().mockResolvedValue('staff-1') };
     service = new ContractReturnService(

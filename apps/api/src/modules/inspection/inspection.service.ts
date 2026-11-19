@@ -6,6 +6,7 @@ import { activeFacilityIds } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { officeShiftTemplates } from '@modules/bookings/receiving-window.util';
 import { NotificationsService } from '@modules/notifications/notifications.service';
+import { SettingsService } from '@modules/settings/settings.service';
 import { Injectable } from '@nestjs/common';
 import { fieldValidationError, notFound } from '@shared/exceptions/domain.exception';
 import { ContractStatus, InspectionType, UserRole, UserStatus } from '@storage/types';
@@ -36,6 +37,7 @@ export class InspectionService {
     private readonly dataSource: DataSource,
     private readonly notifications: NotificationsService,
     private readonly assignment: HandoverAssignmentService,
+    private readonly settings: SettingsService,
   ) {}
 
   private get em() {
@@ -154,6 +156,7 @@ export class InspectionService {
           new Date(dto.scheduledAt),
           await managesInspectionFacility(em, inspection, actor),
           await officeShiftTemplates(em),
+          await this.settings.getReturnMaxDaysAhead(),
         );
       if (dto.conditionNotes !== undefined) {
         inspection.conditionNotes = dto.conditionNotes;

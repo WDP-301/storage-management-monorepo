@@ -4,6 +4,7 @@ import { AuthModule } from '@modules/auth/auth.module';
 import { FacilitiesModule } from '@modules/facilities/facilities.module';
 import { InspectionModule } from '@modules/inspection/inspection.module';
 import { NotificationsModule } from '@modules/notifications/notifications.module';
+import { SettingsModule } from '@modules/settings/settings.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AutoScheduleService } from './auto-schedule.service';
@@ -21,6 +22,7 @@ import { StaffShiftsService } from './staff-shifts.service';
     FacilitiesModule,
     InspectionModule,
     NotificationsModule,
+    SettingsModule,
   ],
   controllers: [StaffShiftsController, MyStaffShiftsController],
   providers: [StaffShiftsService, AutoScheduleService, MyStaffShiftsService, StaffShiftAbsenceJob],

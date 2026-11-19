@@ -3,6 +3,7 @@ import { Invoice } from '@entities/invoice.entity';
 import { InvoiceItem } from '@entities/invoice-item.entity';
 import { AuthModule } from '@modules/auth/auth.module';
 import { NotificationsModule } from '@modules/notifications/notifications.module';
+import { SettingsModule } from '@modules/settings/settings.module';
 import { UploadModule } from '@modules/upload/upload.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -18,6 +19,7 @@ import { OverdueReminderService } from './overdue-reminder.service';
     TypeOrmModule.forFeature([Invoice, InvoiceItem, Contract]),
     AuthModule,
     NotificationsModule,
+    SettingsModule,
     UploadModule,
   ],
   controllers: [InvoicesController],

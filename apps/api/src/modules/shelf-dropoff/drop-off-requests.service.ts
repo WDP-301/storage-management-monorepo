@@ -2,6 +2,7 @@ import { DropOffRequest, type DropOffRequestLine } from '@entities/drop-off-requ
 import { findOverdueInvoiceNos } from '@modules/access/overdue-invoices.query';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { NotificationsService } from '@modules/notifications/notifications.service';
+import { SettingsService } from '@modules/settings/settings.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import {
   DomainException,
@@ -9,12 +10,7 @@ import {
   notFound,
 } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
-import {
-  addVietnamDays,
-  fromVietnamDate,
-  startOfVietnamDay,
-  vietnamToday,
-} from '@shared/utils/calendar.util';
+import { startOfVietnamDay } from '@shared/utils/calendar.util';
 import {
   DropOffRequestStatus,
   type DropOffRequestView,
@@ -29,17 +25,13 @@ import { assertUnits } from '../shelf-storage/receipt-stock.util';
 import { findShelfContracts, loadStock } from '../shelf-storage/shelf-contract.query';
 import { assignShelfRequestSafely } from '../shelf-storage/shelf-request-assignment';
 import {
-  DROP_OFF_REQUEST_MAX_DAYS_AHEAD,
+  assertRequestedForInRange,
   dropOffRequestBlock,
   itemNameKey,
 } from '../shelf-storage/shelf-rules';
 import { notifyDropOffCancelled, notifyDropOffCreated } from './drop-off-notifications';
 import type { CreateDropOffRequestDto } from './dto/drop-off-request.dto';
 
-const PAST_GRACE_MS = 5 * 60 * 1000;
-/** The first instant no request may reach: the whole last allowed Vietnam day is open. */
-const lastDayEnd = (now: Date) =>
-  fromVietnamDate(addVietnamDays(vietnamToday(now), DROP_OFF_REQUEST_MAX_DAYS_AHEAD + 1));
 const CONTRACT_LIST_LIMIT = 20;
 const OPEN_STATUSES: readonly DropOffRequestStatus[] = [
   DropOffRequestStatus.PENDING,
@@ -86,6 +78,7 @@ export class DropOffRequestsService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly notifications: NotificationsService,
+    private readonly settings: SettingsService,
   ) {}
 
   async listForContract(contractId: string, actor: AuthUser): Promise<DropOffRequestView[]> {
@@ -106,16 +99,7 @@ export class DropOffRequestsService {
   ): Promise<DropOffRequestView> {
     const requestedFor = new Date(dto.requestedFor);
     const now = new Date();
-    if (
-      requestedFor.getTime() < now.getTime() - PAST_GRACE_MS ||
-      requestedFor.getTime() >= lastDayEnd(now).getTime()
-    ) {
-      throw fieldValidationError(
-        'requestedFor',
-        'outOfRange',
-        `requestedFor must be within the next ${DROP_OFF_REQUEST_MAX_DAYS_AHEAD} days`,
-      );
-    }
+    assertRequestedForInRange(requestedFor, now, await this.settings.getShelfRequestMaxDaysAhead());
     // Same line rules as a drop-off receipt: an existing item or a name, no repeats.
     const lines = normalizeLines(dto.lines, ShelfReceiptType.DROP_OFF);
 

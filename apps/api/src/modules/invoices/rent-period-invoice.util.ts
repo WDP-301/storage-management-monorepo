@@ -5,6 +5,7 @@ import type { NotificationsService } from '@modules/notifications/notifications.
 import type { NotificationPayload } from '@modules/notifications/types/notification';
 import { generateInvoiceNo } from '@modules/payments/invoice-no.util';
 import type { QueueService } from '@modules/queue/queue.service';
+import { readNumberSetting } from '@modules/settings/setting-read.util';
 import { addVietnamCalendarMonths } from '@shared/utils/calendar.util';
 import {
   InvoiceItemType,
@@ -16,9 +17,16 @@ import {
 import Decimal from 'decimal.js';
 import { type EntityManager, Not } from 'typeorm';
 import { formatDateStr, formatVndCurrency } from './invoice-pdf.service';
+import { rentInvoiceAmounts } from './rent-invoice-amounts.util';
 
 /** Period 1 of the INITIAL contract is the first month's rent, collected at handover. */
 const FIRST_MONTH_PERIOD_NO = 1;
+
+const DAY_MS = 86_400_000;
+
+/** A rent period falls due when it starts, plus the configured grace days (Vietnam has no DST). */
+export const rentDueAt = (startAt: Date, graceDays: number): Date =>
+  new Date(startAt.getTime() + graceDays * DAY_MS);
 
 export interface RentPeriod {
   periodNo: number;
@@ -84,9 +92,10 @@ export function invoiceIssuedNotification(invoice: Invoice): NotificationPayload
 
 /**
  * Issues the rent invoice of one period on the caller's transaction, unless a live one exists
- * (a settlement invoice never counts as the period): one month at the contract price, due when
- * the period starts, with its rent line, and the customer is notified. The caller makes sure the
- * contract is ACTIVE and holds a lock on its row, which serializes issuers of the same contract;
+ * (a settlement invoice never counts as the period): one month at the contract price plus VAT,
+ * due when the period starts plus the grace days, with its rent line, and the customer is
+ * notified. The caller makes sure the contract is ACTIVE and holds a lock on its row, which
+ * serializes issuers of the same contract;
  * the partial unique index on (contract_id, period_no) is the last guard.
  */
 export async function issueRentPeriodInvoice(
@@ -109,6 +118,10 @@ export async function issueRentPeriodInvoice(
   if (existing) return null;
 
   const monthlyPrice = new Decimal(contract.monthlyPriceSnapshot).toNumber();
+  const [amounts, graceDays] = await Promise.all([
+    rentInvoiceAmounts(em, monthlyPrice),
+    readNumberSetting(em, 'billing.rent_grace_days'),
+  ]);
   const saved = await em.save(
     Invoice,
     em.create(Invoice, {
@@ -123,11 +136,9 @@ export async function issueRentPeriodInvoice(
       monthlyPriceSnapshot: monthlyPrice,
       status: InvoiceStatus.ISSUED,
       currency: 'VND',
-      subtotal: monthlyPrice,
-      taxAmount: 0,
-      total: monthlyPrice,
+      ...amounts,
       issuedAt: now,
-      dueAt: startAt,
+      dueAt: rentDueAt(startAt, graceDays),
       billingInfo: {},
     }),
   );

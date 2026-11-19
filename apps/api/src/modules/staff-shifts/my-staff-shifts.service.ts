@@ -1,5 +1,6 @@
 import { StaffShift } from '@entities/staff-shift.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { SettingsService } from '@modules/settings/settings.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
@@ -14,9 +15,6 @@ import {
   toStaffShiftRecord,
 } from './types/staff-shift';
 
-/** How early before the start a staff member may check in. */
-export const CHECK_IN_OPENS_BEFORE_MS = 30 * 60 * 1000;
-
 const WITH_NAMES = { staff: true, shiftTemplate: true } as const;
 
 /** A staff member's own schedule and attendance. Someone else's shift reads as not found. */
@@ -25,6 +23,7 @@ export class MyStaffShiftsService {
   constructor(
     @InjectRepository(StaffShift)
     private readonly shifts: Repository<StaffShift>,
+    private readonly settings: SettingsService,
   ) {}
 
   async list(query: DateRangeQueryDto, staff: AuthUser): Promise<StaffShiftListResponse> {
@@ -38,15 +37,16 @@ export class MyStaffShiftsService {
     return { staff_shifts: rows.map(toStaffShiftRecord) };
   }
 
-  /** Opens 30 minutes before the start and closes when the shift ends. */
+  /** Opens the configured minutes before the start and closes when the shift ends. */
   async checkIn(id: string, staff: AuthUser): Promise<StaffShiftResponse> {
     const shift = await this.findOwnShift(id, staff);
     const now = new Date();
-    const opensAt = new Date(shift.startAt.getTime() - CHECK_IN_OPENS_BEFORE_MS);
+    const opensBefore = await this.settings.getCheckInOpensBeforeMinutes();
+    const opensAt = new Date(shift.startAt.getTime() - opensBefore * 60_000);
     if (shift.status !== StaffShiftStatus.SCHEDULED || now < opensAt || now >= shift.endAt) {
       throw new DomainException(
         ErrorCode.STAFF_SHIFT_CHECK_IN_NOT_ALLOWED,
-        'Check-in opens 30 minutes before a scheduled shift and closes when it ends',
+        `Check-in opens ${opensBefore} minutes before a scheduled shift and closes when it ends`,
         HttpStatus.CONFLICT,
       );
     }

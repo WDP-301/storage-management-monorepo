@@ -21,6 +21,11 @@ import {
 } from '@storage/types';
 import { FirstRentService } from './first-rent.service';
 
+jest.mock(
+  '@modules/settings/setting-read.util',
+  () => jest.requireActual('../../../test/seeded-settings').seededSettingReader,
+);
+
 const actor = (id: string, roles: UserRole[] = [UserRole.FACILITY_STAFF]): AuthUser =>
   ({ id, roles }) as AuthUser;
 const STAFF = actor('staff-1');

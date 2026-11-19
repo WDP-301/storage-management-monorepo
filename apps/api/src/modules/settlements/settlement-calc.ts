@@ -159,14 +159,20 @@ export function computeSettlement(
       }),
     );
   };
-  // Leaving before the term ends breaks the contract: the deposit is kept whole, so whatever else
-  // is owed is billed on top of it rather than taken out of it.
+  // Leaving before the term ends breaks the contract: the captured share of the deposit is kept
+  // (all of it by default), so only what that share leaves can cover anything else owed.
   if (timing.early) {
+    const whole = timing.earlyForfeitPercent >= 100;
+    const deposit = new Decimal(input.deposit?.amount ?? 0);
+    const forfeit = whole
+      ? deposit
+      : deposit.mul(timing.earlyForfeitPercent).div(100).toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
+    const share = whole ? '' : `${timing.earlyForfeitPercent}% `;
     waivable(
       SettlementLineType.EARLY_RETURN_FORFEIT,
       1,
-      num(input.deposit?.amount ?? 0),
-      `Trả kho trước hạn hợp đồng (${formatVietnamDate(timing.lastDay)}) — mất tiền cọc`,
+      num(forfeit),
+      `Trả kho trước hạn hợp đồng (${formatVietnamDate(timing.lastDay)}) — mất ${share}tiền cọc`,
     );
   }
   if (timing.overstayDays > 0) {

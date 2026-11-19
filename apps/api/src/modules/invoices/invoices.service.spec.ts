@@ -4,6 +4,11 @@ import { ContractStatus, InvoiceKind, InvoiceStatus } from '@storage/types';
 import { Not } from 'typeorm';
 import { InvoicesService } from './invoices.service';
 
+jest.mock(
+  '@modules/settings/setting-read.util',
+  () => jest.requireActual('../../../test/seeded-settings').seededSettingReader,
+);
+
 describe('InvoicesService', () => {
   let service: InvoicesService;
   let invoicesRepo: any;

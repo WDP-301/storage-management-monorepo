@@ -43,7 +43,12 @@ export class ManagedReturnService {
   ): Promise<Inspection> {
     const now = new Date();
     const scheduledAt = new Date(dto.scheduledAt);
-    assertReturnDayInRange('scheduledAt', scheduledAt, now);
+    assertReturnDayInRange(
+      'scheduledAt',
+      scheduledAt,
+      await this.settings.getReturnMaxDaysAhead(),
+      now,
+    );
     const templates = await officeShiftTemplates(this.dataSource.manager);
     assertReturnTimeInOfficeShift('scheduledAt', scheduledAt, templates, now);
     const rules = await currentReturnRules(this.settings);

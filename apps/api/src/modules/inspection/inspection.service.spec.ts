@@ -94,6 +94,7 @@ describe('InspectionService', () => {
       { manager: em, transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)) } as never,
       notifications as never,
       returnAssignment as never,
+      { getReturnMaxDaysAhead: jest.fn().mockResolvedValue(365) } as never,
     );
   });
 

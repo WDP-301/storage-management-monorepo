@@ -34,6 +34,8 @@ export interface ReturnRules {
   /** How many days before the last day the customer is reminded the term ends. */
   noticeDays: number;
   penaltyPercent: number;
+  /** Share (%) of the deposit an early return forfeits; requests made before it existed keep 100. */
+  earlyForfeitPercent?: number;
 }
 
 /** A file already uploaded under `uploads/` (same shape as inspection evidence). */
@@ -51,8 +53,10 @@ export interface ReturnTimingRecord {
   scheduled_day: string;
   /** Day money is counted to: the finalize day, or the scheduled day until the return is finalized. */
   effective_return_day: string;
-  /** Before the last day of the term: the whole deposit is forfeited. */
+  /** Before the last day of the term: `early_forfeit_percent` of the deposit is forfeited. */
   early: boolean;
+  /** Share (%) of the deposit an early return forfeits under the rules of this return. */
+  early_forfeit_percent: number;
   overstay_from_day: string;
   overstay_days: number;
   overstay_penalty_per_day: number;

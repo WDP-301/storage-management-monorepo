@@ -69,6 +69,8 @@ describe('ManagedReturnService.requestOnBehalf', () => {
     const settings = {
       getReturnNoticeDays: jest.fn().mockResolvedValue(30),
       getOverduePenaltyPercent: jest.fn().mockResolvedValue(100),
+      getEarlyReturnForfeitPercent: jest.fn().mockResolvedValue(100),
+      getReturnMaxDaysAhead: jest.fn().mockResolvedValue(365),
     };
     assignment = { assignReturnSafely: jest.fn().mockResolvedValue('staff-1') };
     service = new ManagedReturnService(

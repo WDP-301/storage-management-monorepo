@@ -3,6 +3,7 @@ import { ContractSettlement } from '@entities/contract-settlement.entity';
 import { Inspection } from '@entities/inspection.entity';
 import { Invoice } from '@entities/invoice.entity';
 import { Payment } from '@entities/payment.entity';
+import { currentReturnRules } from '@modules/contracts/contract-return.util';
 import {
   type LedgerDeposit,
   type ResolvedDeposit,
@@ -106,10 +107,7 @@ export async function loadSettlementInput(
         });
 
   const [rules, goLiveAt] = await Promise.all([
-    inspection.returnRules ??
-      Promise.all([settings.getReturnNoticeDays(), settings.getOverduePenaltyPercent()]).then(
-        ([noticeDays, penaltyPercent]) => ({ noticeDays, penaltyPercent }),
-      ),
+    inspection.returnRules ?? currentReturnRules(settings),
     settings.getReturnRulesEffectiveAt(),
   ]);
   // Returns finalized before the actual day was recorded count the finalize day.

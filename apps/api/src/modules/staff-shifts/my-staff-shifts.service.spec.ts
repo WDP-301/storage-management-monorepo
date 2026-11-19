@@ -43,7 +43,12 @@ describe('MyStaffShiftsService', () => {
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       findOneOrFail: jest.fn(() => Promise.resolve(shift)),
     };
-    service = new MyStaffShiftsService(repo as never);
+    service = new MyStaffShiftsService(
+      repo as never,
+      {
+        getCheckInOpensBeforeMinutes: jest.fn().mockResolvedValue(30),
+      } as never,
+    );
   });
 
   it('lists only my shifts', async () => {

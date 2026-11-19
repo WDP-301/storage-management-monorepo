@@ -5,6 +5,7 @@ import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import { HandoverAssignmentService } from '@modules/inspection/handover-assignment/handover-assignment.service';
 import { NotificationsService } from '@modules/notifications/notifications.service';
+import { SettingsService } from '@modules/settings/settings.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { vietnamDate, vietnamToday } from '@shared/utils/calendar.util';
@@ -25,8 +26,6 @@ import {
 } from './change-request-settle.util';
 
 const LOCK_NAME = 'cron_unit_change_move_day';
-/** How long a move may sit unattended before the sweep cancels it, in days. */
-const MOVE_OVERDUE_DAYS = 7;
 /** The sweep's actor recorded in history entries. */
 const SYSTEM_ACTOR = 'system';
 
@@ -43,7 +42,7 @@ export interface MoveDaySweepResult {
  *
  * - REQUESTED whose proposed move day already passed → auto-cancelled (nobody ever decided).
  * - AWAITING_PAYMENT: a paid top-up whose settle failed is retried (self-heal); past the move day
- *   the managers are reminded, and past MOVE_OVERDUE_DAYS the request is auto-cancelled (hold
+ *   the managers are reminded, and past `contract.unit_change_move_overdue_days` the request is auto-cancelled (hold
  *   released, unpaid invoice voided).
  * - AWAITING_HANDOVER: a destination that is no longer runnable is auto-cancelled (unwound); past
  *   the move day both facilities are reminded daily.
@@ -61,6 +60,7 @@ export class MoveDaySweepService {
     private readonly dataSource: DataSource,
     private readonly notifications: NotificationsService,
     private readonly handoverAssignment: HandoverAssignmentService,
+    private readonly settings: SettingsService,
   ) {}
 
   private settleDeps(): SettleDeps {
@@ -103,10 +103,11 @@ export class MoveDaySweepService {
       });
 
       const today = vietnamToday(now);
+      const overdueDays = await this.settings.getUnitChangeMoveOverdueDays();
       for (const candidate of candidates) {
         try {
           const outcome = await this.dataSource.transaction((em) =>
-            this.handleOne(em, candidate.id, today, now),
+            this.handleOne(em, candidate.id, today, now, overdueDays),
           );
           if (outcome === 'started') result.started += 1;
           else if (outcome === 'reminded') result.reminded += 1;
@@ -134,6 +135,7 @@ export class MoveDaySweepService {
     id: string,
     today: string,
     now: Date,
+    overdueDays: number,
   ): Promise<'started' | 'reminded' | 'cancelled' | null> {
     const request = await em.findOne(UnitChangeRequest, {
       where: { id },
@@ -162,7 +164,7 @@ export class MoveDaySweepService {
         }
       }
       if (!request.moveAt || vietnamDate(request.moveAt) >= today) return null;
-      const overdueAfter = vietnamDate(new Date(now.getTime() - MOVE_OVERDUE_DAYS * 86400_000));
+      const overdueAfter = vietnamDate(new Date(now.getTime() - overdueDays * 86400_000));
       if (vietnamDate(request.moveAt) < overdueAfter) {
         await this.autoCancel(em, request, now, 'Quá hạn ngày chuyển mà chưa thanh toán bù cọc');
         return 'cancelled';

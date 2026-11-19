@@ -1,6 +1,7 @@
 import { activeRoleHolderIds } from '@modules/auth/role-assignment.util';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import type { NotificationPayload } from '@modules/notifications/types/notification';
+import { SettingsService } from '@modules/settings/settings.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { startOfVietnamDay } from '@shared/utils/calendar.util';
@@ -44,8 +45,8 @@ interface OverdueRow {
 }
 
 /**
- * Reminds customers of unpaid invoices past their due day (days 1, 3, 7, then weekly) and, from
- * a week overdue, tells the managers of the unit's branch so someone calls. Nothing is charged
+ * Reminds customers of unpaid invoices past their due day and, from a configured number of days
+ * overdue, tells the managers of the unit's branch so someone calls (see `OverdueReminderSchedule`). Nothing is charged
  * or blocked here — overdue invoices already hold back new bookings, unit changes and shelf
  * counters. A reminder is sent at most once per invoice, recipient and overdue day, so a rerun
  * the same day sends nothing new; a day the job did not run is skipped, not caught up.
@@ -57,6 +58,7 @@ export class OverdueReminderService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly notifications: NotificationsService,
+    private readonly settings: SettingsService,
   ) {}
 
   @Cron('10 8 * * *', { timeZone: 'Asia/Ho_Chi_Minh' })
@@ -70,6 +72,7 @@ export class OverdueReminderService {
   }
 
   async run(now: Date): Promise<OverdueReminderResult> {
+    const schedule = await this.settings.getOverdueReminderSchedule();
     return this.dataSource.transaction(async (em) => {
       const result: OverdueReminderResult = { customer: 0, manager: 0 };
       const lock = (await em.query(`SELECT pg_try_advisory_xact_lock(hashtext($1)) AS acquired`, [
@@ -81,13 +84,13 @@ export class OverdueReminderService {
       const managersByFacility = new Map<string, string[]>();
       for (const invoice of await this.loadOverdue(em, now)) {
         const days = daysOverdue(invoice.dueAt, now);
-        if (isCustomerReminderDay(days)) {
+        if (isCustomerReminderDay(days, schedule)) {
           sends.push({
             userId: invoice.customerId,
             payload: customerOverdueNotification(invoice, days),
           });
         }
-        if (isManagerAlertDay(days) && invoice.facilityId) {
+        if (isManagerAlertDay(days, schedule) && invoice.facilityId) {
           let managers = managersByFacility.get(invoice.facilityId);
           if (!managers) {
             managers = await activeRoleHolderIds(

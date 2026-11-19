@@ -26,8 +26,6 @@ import { persistContract } from './initial-contract.util';
 import { type CustomerContractRecord, toCustomerContractRecord } from './types/customer-contract';
 import { lockUnitClaimedOnlyBy } from './unit-claim.util';
 
-const CONTRACT_CREATION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-
 @Injectable()
 export class ContractsService {
   constructor(
@@ -63,11 +61,12 @@ export class ContractsService {
         );
       }
 
-      const expiresAt = new Date(item.createdAt.getTime() + CONTRACT_CREATION_WINDOW_MS);
+      const windowDays = await this.settings.getContractCreationWindowDays();
+      const expiresAt = new Date(item.createdAt.getTime() + windowDays * 86_400_000);
       if (Date.now() >= expiresAt.getTime()) {
         throw new DomainException(
           ErrorCode.BOOKING_ITEM_CONTRACT_WINDOW_EXPIRED,
-          'The 7-day contract creation window for this booking item has expired',
+          `The ${windowDays}-day contract creation window for this booking item has expired`,
           HttpStatus.CONFLICT,
           {
             bookingItemId: item.id,

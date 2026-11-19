@@ -21,6 +21,11 @@ import {
   returnFinalizedNotification,
 } from './return-finalize.util';
 
+jest.mock(
+  '@modules/settings/setting-read.util',
+  () => jest.requireActual('../../../test/seeded-settings').seededSettingReader,
+);
+
 const NOW = new Date('2027-04-20T05:00:00.000Z'); // 12:00 on 20/04 in Vietnam
 
 const returnInspection = (overrides: Partial<Inspection> = {}): Inspection =>

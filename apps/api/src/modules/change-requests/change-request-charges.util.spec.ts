@@ -4,6 +4,11 @@ import { InvoiceItemType, InvoiceKind, NotificationType } from '@storage/types';
 import Decimal from 'decimal.js';
 import { settleRentNetOnDeposit } from './change-request-charges.util';
 
+jest.mock(
+  '@modules/settings/setting-read.util',
+  () => jest.requireActual('../../../test/seeded-settings').seededSettingReader,
+);
+
 describe('settleRentNetOnDeposit', () => {
   const NOW = new Date('2026-07-01T02:00:00Z');
   const oldContract = { id: 'contract-old', contractNo: 'CT-OLD', customerId: 'customer-1' };

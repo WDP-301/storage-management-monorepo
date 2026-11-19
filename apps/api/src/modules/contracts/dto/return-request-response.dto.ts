@@ -35,9 +35,13 @@ export class ReturnPreviewResponseDto implements ReturnPreviewRecord {
   effective_return_day: string;
 
   @ApiProperty({
-    description: 'Returning before the last day of the term: the whole deposit is forfeited',
+    description:
+      'Returning before the last day of the term forfeits early_forfeit_percent of the deposit',
   })
   early: boolean;
+
+  @ApiProperty({ example: 100, description: 'Share (%) of the deposit an early return forfeits' })
+  early_forfeit_percent: number;
 
   @ApiProperty({ ...DAY, description: 'Overstay is charged for each day after this one' })
   overstay_from_day: string;

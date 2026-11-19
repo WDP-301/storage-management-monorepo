@@ -91,7 +91,13 @@ describe('drop-off requests', () => {
       manager: em,
       transaction: jest.fn((cb: (e: unknown) => unknown) => cb(em)),
     };
-    customerService = new DropOffRequestsService(dataSource as never, notifications as never);
+    customerService = new DropOffRequestsService(
+      dataSource as never,
+      notifications as never,
+      {
+        getShelfRequestMaxDaysAhead: jest.fn().mockResolvedValue(30),
+      } as never,
+    );
     staffService = new DropOffRequestsStaffService(dataSource as never, notifications as never);
     mockedContracts.mockResolvedValue([contractRow()] as never);
     jest

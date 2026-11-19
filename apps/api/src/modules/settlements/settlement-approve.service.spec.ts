@@ -1,3 +1,7 @@
+jest.mock(
+  '@modules/settings/setting-read.util',
+  () => jest.requireActual('../../../test/seeded-settings').seededSettingReader,
+);
 jest.mock('./settlement-input.loader', () => ({
   ...jest.requireActual('./settlement-input.loader'),
   loadEndedContract: jest.fn(),

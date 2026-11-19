@@ -23,6 +23,7 @@ export function rescheduleInspection(
   scheduledAt: Date,
   actorManages: boolean,
   templates: readonly ShiftWindow[],
+  maxDaysAhead: number,
   now: Date = new Date(),
 ): boolean {
   if (inspection.type !== InspectionType.RETURN) {
@@ -45,7 +46,7 @@ export function rescheduleInspection(
       { inspectionId: inspection.id },
     );
   }
-  return moveReturn(inspection, scheduledAt, templates, now);
+  return moveReturn(inspection, scheduledAt, templates, maxDaysAhead, now);
 }
 
 const VIETNAM_TIME = new Intl.DateTimeFormat('vi-VN', {

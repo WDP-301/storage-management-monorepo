@@ -34,7 +34,12 @@ export class ReturnPreviewService {
   ): Promise<ReturnPreviewRecord> {
     const now = new Date();
     const scheduledAt = new Date(scheduledAtInput);
-    assertReturnDayInRange('scheduledAt', scheduledAt, now);
+    assertReturnDayInRange(
+      'scheduledAt',
+      scheduledAt,
+      await this.settings.getReturnMaxDaysAhead(),
+      now,
+    );
     const em = this.dataSource.manager;
 
     const contract = await em.findOne(Contract, { where: { id: contractId, deletedAt: IsNull() } });

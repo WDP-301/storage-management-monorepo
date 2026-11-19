@@ -1,12 +1,18 @@
 import type { Contract } from '@entities/contract.entity';
 import { Invoice } from '@entities/invoice.entity';
 import { InvoiceItem } from '@entities/invoice-item.entity';
+import { readNumberSetting } from '@modules/settings/setting-read.util';
 import { ContractKind, InvoiceItemType, InvoiceStatus, NotificationType } from '@storage/types';
 import {
   issueRentPeriodInvoice,
   queueInvoicePdf,
   recurringRentPeriods,
 } from './rent-period-invoice.util';
+
+jest.mock(
+  '@modules/settings/setting-read.util',
+  () => jest.requireActual('../../../test/seeded-settings').seededSettingReader,
+);
 
 const contract = (overrides: Record<string, unknown> = {}) =>
   ({
@@ -110,6 +116,24 @@ describe('issueRentPeriodInvoice', () => {
         title: 'Hóa đơn tiền thuê kho kỳ 2',
       }),
     );
+  });
+
+  it('adds VAT on top of the rent and moves the due day by the grace days', async () => {
+    const configured: Record<string, number> = {
+      'billing.vat_tax_rate_percent': 10,
+      'billing.rent_grace_days': 3,
+    };
+    const read = async (_em: unknown, key: string) => configured[key] ?? Number.NaN;
+    jest.mocked(readNumberSetting).mockImplementationOnce(read).mockImplementationOnce(read);
+
+    const invoice = await issue();
+
+    expect(invoice).toMatchObject({
+      subtotal: 1500000,
+      taxAmount: 150000,
+      total: 1650000,
+      dueAt: new Date(period.startAt.getTime() + 3 * 86_400_000),
+    });
   });
 
   it('keeps the kind of a renewal contract', async () => {

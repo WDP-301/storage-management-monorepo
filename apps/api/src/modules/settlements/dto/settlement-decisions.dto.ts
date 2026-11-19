@@ -25,7 +25,7 @@ import {
 } from 'class-validator';
 
 const WAIVABLE_LINES = [
-  SettlementLineType.EARLY_RETURN_SHORT_NOTICE,
+  SettlementLineType.EARLY_RETURN_FORFEIT,
   SettlementLineType.OVERSTAY,
 ] as const;
 

@@ -55,7 +55,6 @@ export function planTermEndReminder(
     effectiveAt: candidate.effectiveAt,
     months: candidate.months,
     monthlyPrice: candidate.monthlyPrice,
-    noticeFrom: ctx.now,
     scheduledAt: ctx.now,
     rules,
     goLiveAt: ctx.goLiveAt,
@@ -81,7 +80,7 @@ export function planTermEndReminder(
     termEndAt: timing.termEndAt.toISOString(),
     penaltyPerDay: timing.overstayPenaltyPerDay,
   };
-  return overdue ? overduePayload(facts, data) : endingPayload(facts, rules.noticeDays, data);
+  return overdue ? overduePayload(facts, data) : endingPayload(facts, data);
 }
 
 interface Facts {
@@ -92,18 +91,14 @@ interface Facts {
   penaltyPerDay: string;
 }
 
-function endingPayload(
-  f: Facts,
-  noticeDays: number,
-  data: Record<string, unknown>,
-): NotificationPayload {
+function endingPayload(f: Facts, data: Record<string, unknown>): NotificationPayload {
   return {
     type: NotificationType.CONTRACT_TERM_ENDING,
     title: `Hợp đồng ${f.unitCode} sắp hết hạn`,
     body:
       `HĐ ${f.contractNo} hết hạn ngày ${f.lastDay}. Từ ngày ${f.penaltyFromDay} phí quá hạn ` +
-      `${f.penaltyPerDay}/ngày sẽ trừ vào tiền cọc. Trả kho trước hạn cần đặt lịch trước ít nhất ` +
-      `${noticeDays} ngày để không bị trừ 1 tháng tiền thuê.`,
+      `${f.penaltyPerDay}/ngày sẽ trừ vào tiền cọc. Trả kho trước ngày ${f.lastDay} là trả trước ` +
+      'hạn và sẽ mất tiền cọc.',
     data,
   };
 }

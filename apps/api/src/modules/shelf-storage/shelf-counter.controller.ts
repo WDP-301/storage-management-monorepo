@@ -142,6 +142,17 @@ export class ShelfCounterController {
     return this.reads.listWarehouseStock(user, id);
   }
 
+  @Get('warehouses/:id/pending-contracts')
+  @Roles(...STAFF)
+  @ApiOperation({
+    summary: 'Shelf contracts of a warehouse waiting for signed files or the first month',
+    description:
+      'DRAFT shelf contracts without a handover, earliest start first. They turn ACTIVE once both are in.',
+  })
+  listPendingContracts(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.reads.listPendingContracts(user, id);
+  }
+
   @Get('warehouses/:id/abandoned-contracts')
   @Roles(...MANAGERS)
   @ApiOperation({

@@ -19,13 +19,10 @@ export const MAX_REASON_LENGTH = 500;
 export const MAX_NOTE_LENGTH = 1000;
 /** Older app versions never ask for an account, so it reached the branch some other way. */
 export const DEFAULT_OVERRIDE_REASON = 'Khách cung cấp qua kênh khác';
-export const WAIVABLE_LINES: readonly WaivableLineType[] = [
-  'EARLY_RETURN_SHORT_NOTICE',
-  'OVERSTAY',
-];
+export const WAIVABLE_LINES: readonly WaivableLineType[] = ['EARLY_RETURN_FORFEIT', 'OVERSTAY'];
 
 export const WAIVABLE_LABEL: Record<WaivableLineType, string> = {
-  EARLY_RETURN_SHORT_NOTICE: 'khoản trừ báo trước không đủ',
+  EARLY_RETURN_FORFEIT: 'khoản mất cọc do trả trước hạn',
   OVERSTAY: 'phí quá hạn',
 };
 

@@ -27,6 +27,7 @@ import type {
   Warehouse,
   WarehouseStatus,
 } from '../../types/warehouse';
+import { coversCell, itemsAtCell, type LayoutItemRef, nextSelection } from './layout-cell-stack';
 import { formatArea, formatVnd, WAREHOUSE_STATUS_LABEL } from './warehouse-display';
 
 interface Props {
@@ -48,7 +49,7 @@ type ToolMode =
   | 'LABEL'
   | 'ERASE';
 
-type SelectedItem = { kind: 'shelf'; shelfId: string } | { kind: 'element'; index: number } | null;
+type SelectedItem = LayoutItemRef | null;
 
 const ELEMENT_META: Record<
   LayoutElementType,
@@ -85,9 +86,6 @@ const SHELF_STATUS_CELL_STYLE: Record<WarehouseStatus, string> = {
   MAINTENANCE: 'bg-red-500/15 text-red-900 border-red-500/60',
   INACTIVE: 'bg-neutral-300/60 text-neutral-700 border-neutral-400',
 };
-
-const coversCell = (rect: LayoutRect, r: number, c: number) =>
-  r >= rect.row && r < rect.row + rect.rowSpan && c >= rect.col && c < rect.col + rect.colSpan;
 
 const rectsOverlap = (a: LayoutRect, b: LayoutRect) =>
   a.row < b.row + b.rowSpan &&
@@ -466,30 +464,23 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
       return;
     }
     setError(null);
-    const hitShelf = placements.find((p) => coversCell(p, r, c));
-    const hitElemIdx = elements.findIndex((el) => coversCell(el, r, c));
+    const stack = itemsAtCell(placements, elements, r, c);
 
     if (tool === 'ERASE') {
-      if (hitShelf) {
-        setPlacements((prev) => prev.filter((p) => p.shelfId !== hitShelf.shelfId));
-        setSelected(null);
-        setIsDirty(true);
-      } else if (hitElemIdx !== -1) {
-        setElements((prev) => prev.filter((_, i) => i !== hitElemIdx));
-        setSelected(null);
-        setIsDirty(true);
+      const first = stack[0];
+      if (!first) return;
+      if (first.kind === 'shelf') {
+        setPlacements((prev) => prev.filter((p) => p.shelfId !== first.shelfId));
+      } else {
+        setElements((prev) => prev.filter((_, i) => i !== first.index));
       }
+      setSelected(null);
+      setIsDirty(true);
       return;
     }
 
     if (tool === 'SELECT') {
-      if (hitShelf) {
-        setSelected({ kind: 'shelf', shelfId: hitShelf.shelfId });
-      } else if (hitElemIdx !== -1) {
-        setSelected({ kind: 'element', index: hitElemIdx });
-      } else {
-        setSelected(null);
-      }
+      setSelected(nextSelection(stack, selected));
       return;
     }
 
@@ -656,6 +647,16 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
       ? (placements.find((p) => p.shelfId === selected.shelfId) ?? null)
       : null;
   const selectedElement = selected?.kind === 'element' ? (elements[selected.index] ?? null) : null;
+  const selectedRect = selectedPlacement ?? selectedElement;
+  const stackHint =
+    selectedRect &&
+    [...placements, ...elements].some(
+      (item) => item !== selectedRect && rectsOverlap(item, selectedRect),
+    ) ? (
+      <p className="text-[11px] text-kumo-subtle">
+        Vật này nằm chồng với vật khác. Bấm lại vào ô chung để chọn lần lượt từng vật.
+      </p>
+    ) : null;
 
   const updateSelectedRect = (patch: Partial<LayoutRect & { text?: string }>) => {
     if (selected?.kind === 'shelf') {
@@ -670,6 +671,15 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
       setIsDirty(true);
     }
   };
+
+  const labelTextInput =
+    selectedElement?.type === LayoutElementType.LABEL ? (
+      <Input
+        label="Nội dung nhãn"
+        value={selectedElement.text ?? ''}
+        onChange={(e) => updateSelectedRect({ text: e.target.value })}
+      />
+    ) : null;
 
   const removeSelected = () => {
     if (selected?.kind === 'shelf') {
@@ -804,6 +814,7 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
               />
             </div>
           </div>
+          {stackHint}
           {selectedPlacement && shelfMap.get(selectedPlacement.shelfId) && (
             <div className="text-xs space-y-0.5 text-kumo-subtle">
               <div>
@@ -864,6 +875,7 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
               onChange={(e) => updateSelectedRect({ colSpan: Math.max(1, Number(e.target.value)) })}
             />
           </div>
+          {labelTextInput}
         </div>
       )}
 
@@ -988,13 +1000,13 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
                   (el) => el.type !== LayoutElementType.LABEL && coversCell(el, r, c),
                 );
                 const blockingElem = elemIdx !== -1 ? elements[elemIdx] : undefined;
-                const labelIdx = elements.findIndex(
+                const labelElem = elements.find(
                   (el) => el.type === LayoutElementType.LABEL && coversCell(el, r, c),
                 );
-                const labelElem = labelIdx !== -1 ? elements[labelIdx] : undefined;
 
-                // Merge spanned cells into a single block anchored at (rect.row, rect.col).
-                const primaryRect = shelfPlacement ?? blockingElem ?? labelElem;
+                // Merge spanned cells into a single block anchored at (rect.row, rect.col). Labels
+                // are drawn as overlays below, so they never take a cell from what lies under them.
+                const primaryRect = shelfPlacement ?? blockingElem;
                 if (primaryRect && (r !== primaryRect.row || c !== primaryRect.col)) {
                   return null;
                 }
@@ -1008,16 +1020,13 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
 
                 const isSelected =
                   (selected?.kind === 'shelf' && selected.shelfId === shelfPlacement?.shelfId) ||
-                  (selected?.kind === 'element' &&
-                    (selected.index === elemIdx || selected.index === labelIdx));
+                  (selected?.kind === 'element' && selected.index === elemIdx);
 
                 const cellStyle = shelf
                   ? SHELF_STATUS_CELL_STYLE[shelf.status]
                   : blockingElem
                     ? ELEMENT_META[blockingElem.type].className
-                    : labelElem
-                      ? ELEMENT_META[LayoutElementType.LABEL].className
-                      : 'bg-kumo-base border-kumo-line text-kumo-subtle hover:bg-kumo-tint';
+                    : 'bg-kumo-base border-kumo-line text-kumo-subtle hover:bg-kumo-tint';
 
                 const shortCode = shelf
                   ? shelf.code.startsWith(`${warehouse.code}-`)
@@ -1029,7 +1038,9 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
                   <button
                     key={`${r}-${c}`}
                     type="button"
-                    aria-label={`Ô (${r}, ${c})${shelf ? ` - Kệ ${shelf.code}` : ''}`}
+                    aria-label={`Ô (${r}, ${c})${shelf ? ` - Kệ ${shelf.code}` : ''}${
+                      labelElem ? ` - Nhãn ${labelElem.text}` : ''
+                    }`}
                     onClick={() => handleCellClick(r, c)}
                     style={{
                       gridRow: `${r + 1} / span ${spanR}`,
@@ -1039,11 +1050,6 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
                       isSelected ? 'ring-2 ring-kumo-brand font-semibold' : ''
                     }`}
                   >
-                    {labelElem && (
-                      <span className="text-[10px] font-semibold text-indigo-700 truncate max-w-full">
-                        {labelElem.text}
-                      </span>
-                    )}
                     {shelf ? (
                       <>
                         <span className="font-mono font-semibold truncate max-w-full">
@@ -1070,6 +1076,28 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
                   </button>
                 );
               }),
+            )}
+            {/* Labels sit on top of whatever is under them; clicks pass through to the cells. */}
+            {elements.map((el, index) =>
+              el.type === LayoutElementType.LABEL && el.row < rows && el.col < cols ? (
+                <div
+                  key={`label-${index}`}
+                  aria-hidden="true"
+                  style={{
+                    gridRow: `${el.row + 1} / span ${Math.min(el.rowSpan, rows - el.row)}`,
+                    gridColumn: `${el.col + 1} / span ${Math.min(el.colSpan, cols - el.col)}`,
+                  }}
+                  className={`relative z-10 pointer-events-none rounded border border-dashed border-indigo-400/60 bg-indigo-500/5 ${
+                    selected?.kind === 'element' && selected.index === index
+                      ? 'ring-2 ring-kumo-brand'
+                      : ''
+                  }`}
+                >
+                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 max-w-full truncate rounded border border-indigo-300 bg-indigo-50 px-1.5 text-[10px] font-semibold leading-4 text-indigo-800">
+                    {el.text}
+                  </span>
+                </div>
+              ) : null,
             )}
           </section>
         </div>
@@ -1419,6 +1447,7 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
                     Gỡ khỏi sơ đồ
                   </Button>
                 </div>
+                {stackHint}
 
                 {selectedPlacement && shelfMap.get(selectedPlacement.shelfId) && (
                   <div className="text-xs space-y-1 text-kumo-subtle">
@@ -1490,13 +1519,7 @@ export const ShelfLayoutEditor: React.FC<Props> = ({ warehouse, shelves }) => {
                   />
                 </div>
 
-                {selectedElement?.type === LayoutElementType.LABEL && (
-                  <Input
-                    label="Nội dung nhãn"
-                    value={selectedElement.text ?? ''}
-                    onChange={(e) => updateSelectedRect({ text: e.target.value })}
-                  />
-                )}
+                {labelTextInput}
               </LayerCard>
             )}
           </div>

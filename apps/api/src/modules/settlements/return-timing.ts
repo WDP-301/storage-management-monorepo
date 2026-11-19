@@ -13,8 +13,6 @@ export interface ReturnTimingInput {
   months: number;
   /** Monthly rent as stored (numeric columns arrive as strings). */
   monthlyPrice: number | string;
-  /** Since when the customer's notice runs. */
-  noticeFrom: Date;
   /** The appointment; money only follows it while the return is not finalized (an estimate). */
   scheduledAt: Date;
   /** Vietnam day the return was finalized, once it is (`YYYY-MM-DD`). */
@@ -32,12 +30,8 @@ export interface ReturnTiming {
   lastDay: string;
   scheduledDay: string;
   effectiveReturnDay: string;
-  noticeFrom: Date;
-  noticeDays: number;
-  requiredNoticeDays: number;
+  /** Before the last day of the term: the whole deposit is forfeited. */
   early: boolean;
-  shortNotice: boolean;
-  shortNoticeDeduction: number;
   overstayFromDay: string;
   overstayDays: number;
   overstayPenaltyPerDay: number;
@@ -58,11 +52,10 @@ export function effectiveReturnDay(scheduledDay: string, returnedOn?: string | n
 }
 
 /**
- * Notice and overstay consequences of a return, in Vietnam calendar days, counted to the
+ * Early-return and overstay consequences of a return, in Vietnam calendar days, counted to the
  * effective return day. Returning on the last day of the term or on the day after it (the term
- * end) is on time: overstay is charged from the term end + 1. Early means before the last day; a
- * short notice costs one month of rent, but only when the notice started after the rules went
- * live. Overstay never reaches back before go-live.
+ * end) is on time: overstay is charged from the term end + 1. Early means before the last day,
+ * which forfeits the deposit however long the notice. Overstay never reaches back before go-live.
  */
 export function returnTiming(input: ReturnTimingInput): ReturnTiming {
   const termEndAt = addVietnamMonths(input.effectiveAt, input.months);
@@ -70,14 +63,7 @@ export function returnTiming(input: ReturnTimingInput): ReturnTiming {
   const lastDay = addVietnamDays(termEndDay, -1);
   const scheduledDay = vietnamDate(input.scheduledAt);
   const returnDay = effectiveReturnDay(scheduledDay, input.returnedOn);
-  const monthlyPrice = toDong(input.monthlyPrice);
-
-  const noticeDays = vietnamDayIndex(returnDay) - vietnamDayIndex(input.noticeFrom);
   const early = returnDay < lastDay;
-  const shortNotice =
-    early &&
-    noticeDays < input.rules.noticeDays &&
-    input.noticeFrom.getTime() >= input.goLiveAt.getTime();
 
   const overstayFromDay = maxDay(termEndDay, vietnamDate(input.goLiveAt));
   const overstayDays = Math.max(0, vietnamDayIndex(returnDay) - vietnamDayIndex(overstayFromDay));
@@ -92,12 +78,7 @@ export function returnTiming(input: ReturnTimingInput): ReturnTiming {
     lastDay,
     scheduledDay,
     effectiveReturnDay: returnDay,
-    noticeFrom: input.noticeFrom,
-    noticeDays,
-    requiredNoticeDays: input.rules.noticeDays,
     early,
-    shortNotice,
-    shortNoticeDeduction: shortNotice ? monthlyPrice.toNumber() : 0,
     overstayFromDay,
     overstayDays,
     overstayPenaltyPerDay: penaltyPerDay.toNumber(),
@@ -111,12 +92,7 @@ export function toReturnTimingRecord(timing: ReturnTiming): ReturnTimingRecord {
     last_day: timing.lastDay,
     scheduled_day: timing.scheduledDay,
     effective_return_day: timing.effectiveReturnDay,
-    notice_from: timing.noticeFrom,
-    notice_days: timing.noticeDays,
-    required_notice_days: timing.requiredNoticeDays,
     early: timing.early,
-    short_notice: timing.shortNotice,
-    short_notice_deduction: timing.shortNoticeDeduction,
     overstay_from_day: timing.overstayFromDay,
     overstay_days: timing.overstayDays,
     overstay_penalty_per_day: timing.overstayPenaltyPerDay,

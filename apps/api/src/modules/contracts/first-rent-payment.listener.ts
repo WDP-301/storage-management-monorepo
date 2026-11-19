@@ -32,6 +32,7 @@ import { DataSource, type EntityManager, In } from 'typeorm';
 import { creditDepositTopUp, topUpBookingId } from './deposit-topup';
 import { PAYABLE_INVOICE_STATUSES, sumInvoicePayments } from './first-rent.util';
 import { invoicePaidNotification } from './invoice-notifications';
+import { activateShelfContractSafely } from './shelf-contract.util';
 
 type HandRecordedPayment = {
   id: string;
@@ -242,6 +243,14 @@ export class FirstRentPaymentListener {
         await markSepayOutcome(this.dataSource.manager, providerRef, transferOutcome, {
           invoiceId: invoices[0].id,
         });
+      }
+      // A paid first month may complete a shelf contract. Its own transaction, after the payment
+      // committed: activation locks the contract before the invoice, this delivery the reverse.
+      const contractId = invoices[0].contractId;
+      if ((outcome === InvoiceStatus.PAID || outcome === 'overpaid') && contractId) {
+        await this.dataSource.transaction((em) =>
+          activateShelfContractSafely(em, contractId, this.notificationsService, this.logger),
+        );
       }
     } catch (err) {
       // The partial unique index on provider_ref caught a concurrent duplicate delivery.

@@ -4,10 +4,12 @@ import { Inspection } from '@entities/inspection.entity';
 import { Invoice } from '@entities/invoice.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
+import { worksAtFacility } from '@modules/access/staff-facility.util';
 import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { billMovedUnitDamage } from '@modules/change-requests/change-request-charges.util';
 import { advanceChangeRequestToFinalApproval } from '@modules/change-requests/change-request-handover.util';
+import { isShelfContract } from '@modules/contracts/shelf-contract.util';
 import { lockUnitClaimedOnlyBy } from '@modules/contracts/unit-claim.util';
 import { queueInvoicePdf } from '@modules/invoices/rent-period-invoice.util';
 import { NotificationsService } from '@modules/notifications/notifications.service';
@@ -35,6 +37,7 @@ import { assertReadyForHandover } from './handover-ready.util';
 import {
   assertInspectorOrManager,
   assertNotFinalized,
+  loadInspectionFacilityId,
   withoutRefundAccount,
 } from './inspection-access.util';
 import { applyReturnFinalize, resolveReturnedOn } from './return-finalize.util';
@@ -109,13 +112,22 @@ export class InspectionLifecycleService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!inspection) notFound('Inspection', id);
-      await assertInspectorOrManager(
-        em,
-        inspection,
-        actor,
-        'Only the assigned inspector or a manager can finalize this inspection',
-      );
+      // A shelf return has nothing to inspect — the shelf only has to be empty — so anyone
+      // working at its branch closes it and signs it, assigned or not.
+      const shelfReturn =
+        inspection.type === InspectionType.RETURN &&
+        (await isShelfContract(em, inspection.contractId));
+      const facilityId = shelfReturn ? await loadInspectionFacilityId(em, inspection) : null;
+      if (!facilityId || !(await worksAtFacility(em, actor, facilityId))) {
+        await assertInspectorOrManager(
+          em,
+          inspection,
+          actor,
+          'Only the assigned inspector or a manager can finalize this inspection',
+        );
+      }
       assertNotFinalized(inspection);
+      if (shelfReturn && !inspection.inspectedBy) inspection.inspectedBy = actor.id;
       if (!inspection.inspectedBy) {
         throw conflict('Assign an inspector before finalizing', { inspectionId: id });
       }

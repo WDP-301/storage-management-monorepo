@@ -20,4 +20,4 @@ export type {
 export type SettlementStatusFilter = 'pending' | 'awaiting_refund' | 'completed';
 
 /** Settlement lines a reviewer may waive, with a reason. */
-export type WaivableLineType = 'EARLY_RETURN_SHORT_NOTICE' | 'OVERSTAY';
+export type WaivableLineType = 'EARLY_RETURN_FORFEIT' | 'OVERSTAY';

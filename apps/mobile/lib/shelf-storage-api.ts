@@ -7,6 +7,7 @@ import type {
   CreateShelfRecoveryInput,
   DropOffRequestView,
   OpenCounterSessionInput,
+  PendingShelfContractView,
   PickupRequestView,
   ShelfContractStorageView,
   ShelfReceiptPage,
@@ -154,6 +155,11 @@ export const ShelfStorageApi = {
       json('POST'),
     ),
 
+  /** Shelf contracts waiting for signed files or the first month (customer's first visit). */
+  pendingContracts: (warehouseId: string) =>
+    request<PendingShelfContractView[]>(
+      `/shelf-storage/warehouses/${enc(warehouseId)}/pending-contracts`,
+    ),
   /** Managers: abandoned returns that still have goods on the shelf. */
   abandonedContracts: (warehouseId: string) =>
     request<AbandonedShelfContractView[]>(

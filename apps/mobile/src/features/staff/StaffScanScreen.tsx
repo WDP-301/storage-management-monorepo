@@ -8,13 +8,14 @@ import { FlowScreen, TabChip, Text } from '../../components/ui';
 import { AbandonedShelvesList } from './counter/AbandonedShelvesList';
 import { CounterCustomerPanel } from './counter/CounterCustomerPanel';
 import { CounterScanner } from './counter/CounterScanner';
+import { PendingShelfContractsList } from './counter/PendingShelfContractsList';
 import { useCounterSession } from './counter/use-counter-session';
 import { WarehouseDropOffRequests } from './counter/WarehouseDropOffRequests';
 import { WarehousePickupRequests } from './counter/WarehousePickupRequests';
 import { WarehouseReceiptsList } from './counter/WarehouseReceiptsList';
 import { ScanWarehousePicker } from './ScanWarehousePicker';
 
-type Segment = 'COUNTER' | 'REQUESTS' | 'DROP_OFF_REQUESTS' | 'RECEIPTS' | 'RECOVERY';
+type Segment = 'COUNTER' | 'PENDING' | 'REQUESTS' | 'DROP_OFF_REQUESTS' | 'RECEIPTS' | 'RECOVERY';
 
 const MANAGER_ROLES = ['FACILITY_MANAGER', 'OPERATIONS_MANAGER', 'ADMIN'];
 
@@ -44,6 +45,7 @@ export function StaffScanScreen() {
 
   const segments: [Segment, string][] = [
     ['COUNTER', 'Quầy'],
+    ['PENDING', 'Chờ kích hoạt'],
     ['DROP_OFF_REQUESTS', 'Yêu cầu gửi đồ'],
     ['REQUESTS', 'Yêu cầu lấy đồ'],
     ['RECEIPTS', 'Phiếu'],
@@ -98,6 +100,16 @@ export function StaffScanScreen() {
               />
             </View>
           )
+        ) : segment === 'PENDING' ? (
+          <PendingShelfContractsList
+            onOpen={(contract) =>
+              router.push({
+                pathname: '/(staff)/staff-contract',
+                params: { id: contract.contractId },
+              })
+            }
+            warehouseId={warehouse.id}
+          />
         ) : segment === 'DROP_OFF_REQUESTS' ? (
           <WarehouseDropOffRequests warehouseId={warehouse.id} />
         ) : segment === 'REQUESTS' ? (

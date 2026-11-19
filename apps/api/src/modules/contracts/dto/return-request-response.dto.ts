@@ -35,26 +35,9 @@ export class ReturnPreviewResponseDto implements ReturnPreviewRecord {
   effective_return_day: string;
 
   @ApiProperty({
-    format: 'date-time',
-    description:
-      'Since when the notice runs: now, or the open request’s anchor if not moved earlier',
+    description: 'Returning before the last day of the term: the whole deposit is forfeited',
   })
-  notice_from: string;
-
-  @ApiProperty({ example: 45, description: 'Days between notice_from and the scheduled day' })
-  notice_days: number;
-
-  @ApiProperty({ example: 30 })
-  required_notice_days: number;
-
-  @ApiProperty({ description: 'Returning before the last day of the term' })
   early: boolean;
-
-  @ApiProperty({ description: 'Early with less notice than required' })
-  short_notice: boolean;
-
-  @ApiProperty({ example: 0, description: 'One month of rent when short_notice, VND' })
-  short_notice_deduction: number;
 
   @ApiProperty({ ...DAY, description: 'Overstay is charged for each day after this one' })
   overstay_from_day: string;

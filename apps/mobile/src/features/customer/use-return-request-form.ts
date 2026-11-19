@@ -65,7 +65,10 @@ export function useReturnRequestForm(
   }, [isEdit, saved]);
 
   // No preview yet counts as required: only a known zero deposit leaves nothing to refund.
-  const accountRequired = !isEdit && preview.preview?.deposit_held !== 0;
+  // An early return forfeits the deposit, so there is nothing to send back; the account stays
+  // optional in case unused prepaid rent is refunded.
+  const accountRequired =
+    !isEdit && preview.preview?.deposit_held !== 0 && preview.preview?.early !== true;
 
   const changeAccount = (draft: RefundAccountDraft) => {
     accountTouched.current = true;

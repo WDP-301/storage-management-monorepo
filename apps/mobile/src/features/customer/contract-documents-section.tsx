@@ -8,7 +8,7 @@ export function ContractDocumentsList({ contract }: { contract: ApiContract }) {
   return (
     <Text className="text-body-sm text-text-secondary">
       {contract.status === 'DRAFT'
-        ? 'Hợp đồng sẽ có tại đây sau khi bàn giao kho.'
+        ? 'Hợp đồng sẽ có tại đây sau khi ký.'
         : 'Chưa có bản hợp đồng đã ký — liên hệ chi nhánh.'}
     </Text>
   );

@@ -23,11 +23,11 @@ export function ReturnPreviewNotice({ preview, isLoading, error }: Props) {
   if (!preview) return null;
 
   const warnings: string[] = [];
-  if (preview.short_notice) {
+  if (preview.early) {
+    const deposit = preview.deposit_held === null ? '' : ` (${formatMoney(preview.deposit_held)})`;
     warnings.push(
-      `Trả trước hạn hợp đồng (${formatIsoDate(preview.last_day)}) nhưng mới báo trước ` +
-        `${preview.notice_days}/${preview.required_notice_days} ngày — sẽ trừ ` +
-        `${formatMoney(preview.short_notice_deduction)} (1 tháng tiền thuê) vào tiền cọc.`,
+      `Trả trước hạn hợp đồng (${formatIsoDate(preview.last_day)}) — mất toàn bộ tiền cọc` +
+        `${deposit}. Tiền thuê còn nợ và phí phát sinh vẫn phải trả thêm.`,
     );
   }
   if (preview.overstay_days > 0) {

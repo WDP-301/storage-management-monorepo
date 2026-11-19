@@ -44,8 +44,6 @@ export class ReturnPreviewService {
       where: { contractId, type: InspectionType.RETURN, finalizedAt: IsNull() },
     });
 
-    // A request made before notice anchors existed counts from when it was made.
-    const noticeFrom = open ? (open.noticeFrom ?? open.createdAt) : now;
     const [rules, goLiveAt, deposit, savedAccount] = await Promise.all([
       open?.returnRules ?? currentReturnRules(this.settings),
       this.settings.getReturnRulesEffectiveAt(),
@@ -57,7 +55,6 @@ export class ReturnPreviewService {
       effectiveAt: contract.effectiveAt,
       months: contract.months,
       monthlyPrice: contract.monthlyPriceSnapshot,
-      noticeFrom,
       scheduledAt,
       rules,
       goLiveAt,

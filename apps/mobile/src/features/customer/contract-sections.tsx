@@ -111,10 +111,13 @@ export function HandoverSection({
 export function ReturnSection({
   inspection,
   viewer = 'customer',
+  shelf = false,
   children,
 }: {
   inspection: ApiInspection | null;
   viewer?: Viewer;
+  /** A shelf return has no inspection report, only the close. */
+  shelf?: boolean;
   children?: ReactNode;
 }) {
   const sourceNote = returnSourceNote(inspection?.requestSource);
@@ -127,7 +130,7 @@ export function ReturnSection({
       : 'Chưa yêu cầu';
   return (
     <SectionCard
-      title="Biên bản trả kho"
+      title={shelf ? 'Trả kệ' : 'Biên bản trả kho'}
       badge={badge}
       tone={returned ? 'neutral' : inspection ? 'accent' : 'neutral'}
     >

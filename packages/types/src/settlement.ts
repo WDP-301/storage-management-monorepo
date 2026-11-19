@@ -181,7 +181,7 @@ export interface SettlementCreditDecision {
 }
 
 export interface SettlementWaivedLine {
-  type: typeof SettlementLineType.EARLY_RETURN_SHORT_NOTICE | typeof SettlementLineType.OVERSTAY;
+  type: typeof SettlementLineType.EARLY_RETURN_FORFEIT | typeof SettlementLineType.OVERSTAY;
   reason: string;
 }
 

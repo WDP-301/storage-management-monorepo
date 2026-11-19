@@ -22,12 +22,7 @@ const ON_TIME: ReturnTiming = {
   lastDay: '2027-03-31',
   scheduledDay: E,
   effectiveReturnDay: E,
-  noticeFrom: new Date('2027-02-01T00:00:00+07:00'),
-  noticeDays: 59,
-  requiredNoticeDays: 30,
   early: false,
-  shortNotice: false,
-  shortNoticeDeduction: 0,
   overstayFromDay: E,
   overstayDays: 0,
   overstayPenaltyPerDay: 0,
@@ -84,15 +79,26 @@ describe('computeSettlement', () => {
     expect(outcome(computeSettlement(input()))).toEqual([2000000, 0]);
   });
 
-  it('deducts one month of rent for an early return without enough notice, unless waived', () => {
-    const timing = { ...ON_TIME, early: true, shortNotice: true, shortNoticeDeduction: 1000000 };
-    expect(outcome(computeSettlement(input({ timing })))).toEqual([1000000, 0]);
+  it('forfeits the whole deposit on an early return, unless waived', () => {
+    const timing = { ...ON_TIME, early: true };
+    const result = computeSettlement(input({ timing }));
+    expect(result.lines[0]).toMatchObject({
+      type: SettlementLineType.EARLY_RETURN_FORFEIT,
+      amount: 2000000,
+    });
+    expect(outcome(result)).toEqual([0, 0]);
 
     const waived = computeSettlement(input({ timing }), {
-      waivedLines: [{ type: SettlementLineType.EARLY_RETURN_SHORT_NOTICE, reason: '  Hotline  ' }],
+      waivedLines: [{ type: SettlementLineType.EARLY_RETURN_FORFEIT, reason: '  Hotline  ' }],
     });
     expect(outcome(waived)).toEqual([2000000, 0]);
     expect(waived.lines[0]).toMatchObject({ waived: true, waive_reason: 'Hotline', amount: 0 });
+  });
+
+  it('bills what is still owed on top of a forfeited deposit', () => {
+    const timing = { ...ON_TIME, early: true };
+    const result = computeSettlement(input({ timing, invoices: [invoice()] }));
+    expect(outcome(result)).toEqual([0, 800000]);
   });
 
   it('charges each overstay day at the daily rent times the captured percent', () => {
@@ -100,7 +106,6 @@ describe('computeSettlement', () => {
       effectiveAt: new Date('2026-10-01T09:00:00+07:00'),
       months: 3,
       monthlyPrice: '1500000.00',
-      noticeFrom: new Date('2026-12-01T09:00:00+07:00'),
       scheduledAt: new Date('2026-12-31T09:00:00+07:00'),
       returnedOn: '2027-01-11',
       rules: { noticeDays: 30, penaltyPercent: 100 },

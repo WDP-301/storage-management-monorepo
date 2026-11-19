@@ -18,6 +18,7 @@ import { ContractAmenitiesSection } from './contract-amenities-section';
 import {
   ContractUnitLines,
   contractWarehouseName,
+  isShelfWithoutHandover,
   openReturn,
   StatusPill,
   storageState,
@@ -27,6 +28,7 @@ import { ContractSection, HandoverSection, ReturnSection } from './contract-sect
 import { ReturnRequestActions } from './ReturnRequestActions';
 import { ReturnRequestSheet } from './ReturnRequestSheet';
 import { SettlementSection } from './SettlementSection';
+import { isFirstRentPaid, ShelfActivationSection } from './shelf-activation-section';
 import { ShelfStorageSection } from './shelf-storage-section';
 import { TermEndNotice } from './TermEndNotice';
 import { UnitChangeRequestSheet } from './UnitChangeRequestSheet';
@@ -223,9 +225,16 @@ function ContractDetail({
 
       {/* 3. Operations (shelf goods, handover, return inspections) */}
       <ShelfStorageSection contract={contract} />
-      <HandoverSection handover={contract.handover} />
+      {!isShelfWithoutHandover(contract) ? (
+        <HandoverSection handover={contract.handover} />
+      ) : contract.status === 'DRAFT' ? (
+        <ShelfActivationSection
+          contract={contract}
+          firstRentPaid={isFirstRentPaid(invoices?.invoices ?? [])}
+        />
+      ) : null}
       {showReturnSection ? (
-        <ReturnSection inspection={contract.return}>
+        <ReturnSection inspection={contract.return} shelf={contract.unit?.kind === 'SHELF'}>
           {isActive && pending ? (
             <ReturnRequestActions
               contractId={contract.id}

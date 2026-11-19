@@ -90,8 +90,8 @@ export const ReturnRescheduleForm: React.FC<Props> = ({ inspection, disabled, on
         </Button>
       </div>
       <p className="text-xs text-kumo-subtle">
-        Lịch hẹn chỉ để sắp xếp, không đổi số tiền: tiền thuê và thời hạn báo trước tính tới ngày
-        chốt biên bản. Khách sẽ nhận thông báo khi lịch hẹn thay đổi.
+        Lịch hẹn chỉ để sắp xếp, không đổi số tiền: tiền thuê, trả trước hạn (mất cọc) và quá hạn
+        tính theo ngày chốt biên bản. Khách sẽ nhận thông báo khi lịch hẹn thay đổi.
       </p>
       {error && (
         <p role="alert" className="text-sm text-kumo-danger">

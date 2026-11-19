@@ -11,7 +11,7 @@ import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { findOverdueInvoiceNos } from '@modules/access/overdue-invoices.query';
 import { isAssignmentActive } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
-import { persistContract } from '@modules/contracts/initial-contract.util';
+import { persistBookedContract } from '@modules/contracts/shelf-contract.util';
 import { HandoverAssignmentService } from '@modules/inspection/handover-assignment/handover-assignment.service';
 import { NotificationsService } from '@modules/notifications/notifications.service';
 import { generatePaymentNo } from '@modules/payments/payment-no.util';
@@ -1074,19 +1074,23 @@ export class BookingsService implements OnApplicationBootstrap {
         });
         if (leftoverHolds > 0) throw new LatePaymentError();
 
-        // Deposit settled: each item gets a DRAFT contract + handover inspection and its
-        // unit moves HELD → BOOKED. Any failure rolls back the payment too so the
-        // webhook retry replays the whole confirmation.
+        // Deposit settled: each item gets a DRAFT contract (with a handover inspection, or for
+        // a shelf its first-month invoice) and its unit moves HELD → BOOKED. Any failure rolls
+        // back the payment too so the webhook retry replays the whole confirmation.
         const items = await em.find(BookingItem, { where: { bookingId: booking.id } });
         if (items.length > 0) {
           const customer = await em.findOneOrFail(AppUser, { where: { id: locked.customerId } });
           for (const item of items) {
-            const contract = await persistContract(em, {
-              item,
-              customer,
-              status: ContractStatus.DRAFT,
-              effectiveAt: item.requestedStartAt,
-            });
+            const contract = await persistBookedContract(
+              em,
+              {
+                item,
+                customer,
+                status: ContractStatus.DRAFT,
+                effectiveAt: item.requestedStartAt,
+              },
+              this.notifications,
+            );
             contractNos.push(contract.contractNo);
           }
           // Every item's unit must still be HELD — if one drifted (manual fix, stale

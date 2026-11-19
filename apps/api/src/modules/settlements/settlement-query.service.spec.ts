@@ -43,7 +43,7 @@ const input = (over: Record<string, unknown> = {}) => ({
   timing: {
     effectiveReturnDay: '2027-04-01',
     termEndAt: new Date('2027-04-01'),
-    shortNotice: false,
+    early: false,
     overstayDays: 0,
   } as ReturnTiming,
   depositRecord: {

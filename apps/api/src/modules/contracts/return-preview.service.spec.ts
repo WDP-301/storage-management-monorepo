@@ -5,7 +5,6 @@ import { ContractStatus, DepositStatus, InspectionType } from '@storage/types';
 import { IsNull } from 'typeorm';
 import { ReturnPreviewService } from './return-preview.service';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const inDays = (days: number) => `${addVietnamDays(vietnamToday(), days)}T05:00:00.000Z`;
 const SAVED = { bankBin: '970418', bankName: 'BIDV', accountNo: '1234', accountName: 'LE B' };
 
@@ -55,118 +54,34 @@ describe('ReturnPreviewService.preview', () => {
     service = new ReturnPreviewService({ manager: em } as never, settings as never);
   });
 
-  it('previews a new request: notice from now under the current rules', async () => {
-    const before = Date.now();
-
+  it('previews a new request under the current rules: early, so the deposit is forfeited', async () => {
     const preview = await service.preview('contract-1', 'customer-1', inDays(20));
 
     expect(preview).toMatchObject({
       scheduled_day: addVietnamDays(vietnamToday(), 20),
       effective_return_day: addVietnamDays(vietnamToday(), 20),
-      notice_days: 20,
-      required_notice_days: 30,
       early: true,
-      short_notice: true,
-      short_notice_deduction: 1500000,
       overstay_days: 0,
       overstay_penalty_per_day: 50000,
       deposit_held: 3000000,
       saved_refund_account: SAVED,
     });
-    expect((preview.notice_from as Date).getTime()).toBeGreaterThanOrEqual(before);
     expect(em.findOne).toHaveBeenCalledWith(Inspection, {
       where: { contractId: 'contract-1', type: InspectionType.RETURN, finalizedAt: IsNull() },
     });
   });
 
-  it('keeps the open request’s anchor and rules when the day moves later', async () => {
-    const anchor = new Date(Date.now() - 40 * DAY_MS);
+  it('keeps the rules the open request captured', async () => {
     openReturn = {
       id: 'return-1',
       scheduledAt: new Date(inDays(10)),
-      noticeFrom: anchor,
       returnRules: { noticeDays: 90, penaltyPercent: 200 },
     };
 
     const preview = await service.preview('contract-1', 'customer-1', inDays(20));
 
-    expect(preview).toMatchObject({
-      notice_from: anchor,
-      notice_days: 60,
-      required_notice_days: 90,
-      short_notice: true,
-      overstay_penalty_per_day: 100000,
-    });
+    expect(preview).toMatchObject({ early: true, overstay_penalty_per_day: 100000 });
     expect(settings.getReturnNoticeDays).not.toHaveBeenCalled();
-  });
-
-  it('keeps the notice anchor when the open request moves earlier', async () => {
-    const noticeFrom = new Date(Date.now() - 40 * DAY_MS);
-    openReturn = {
-      id: 'return-1',
-      scheduledAt: new Date(inDays(40)),
-      noticeFrom,
-      returnRules: { noticeDays: 30, penaltyPercent: 100 },
-    };
-
-    const preview = await service.preview('contract-1', 'customer-1', inDays(20));
-
-    expect(preview).toMatchObject({
-      notice_from: noticeFrom,
-      notice_days: 60,
-      short_notice: false,
-    });
-  });
-
-  it('counts an older request without an anchor from when it was made', async () => {
-    const createdAt = new Date(Date.now() - 15 * DAY_MS);
-    openReturn = { id: 'return-1', scheduledAt: new Date(inDays(20)), createdAt, noticeFrom: null };
-
-    await expect(service.preview('contract-1', 'customer-1', inDays(20))).resolves.toMatchObject({
-      notice_from: createdAt,
-      notice_days: 35,
-      short_notice: false,
-    });
-  });
-
-  describe('rules going live', () => {
-    it('charges no short-notice deduction for a request made before the rules went live', async () => {
-      settings.getReturnRulesEffectiveAt.mockResolvedValueOnce(new Date(Date.now() + DAY_MS));
-
-      await expect(service.preview('contract-1', 'customer-1', inDays(20))).resolves.toMatchObject({
-        early: true,
-        notice_days: 20,
-        short_notice: false,
-        short_notice_deduction: 0,
-      });
-    });
-
-    it('keeps an open request anchored before go-live free of the deduction', async () => {
-      // Anchored 20 days ago, rules live 10 days ago: 25 days of notice, short of the 30 required.
-      settings.getReturnRulesEffectiveAt.mockResolvedValueOnce(new Date(Date.now() - 10 * DAY_MS));
-      openReturn = {
-        id: 'return-1',
-        scheduledAt: new Date(inDays(5)),
-        noticeFrom: new Date(Date.now() - 20 * DAY_MS),
-        returnRules: { noticeDays: 30, penaltyPercent: 100 },
-      };
-
-      await expect(service.preview('contract-1', 'customer-1', inDays(5))).resolves.toMatchObject({
-        early: true,
-        notice_days: 25,
-        short_notice: false,
-        short_notice_deduction: 0,
-      });
-    });
-
-    it('deducts one month when the request is made after go-live', async () => {
-      settings.getReturnRulesEffectiveAt.mockResolvedValueOnce(new Date(Date.now() - DAY_MS));
-
-      await expect(service.preview('contract-1', 'customer-1', inDays(20))).resolves.toMatchObject({
-        short_notice: true,
-        short_notice_deduction: 1500000,
-      });
-    });
   });
 
   describe('past the end of the term', () => {
@@ -191,8 +106,6 @@ describe('ReturnPreviewService.preview', () => {
         term_end_at: new Date('2026-10-09T17:00:00.000Z'),
         last_day: '2026-10-09',
         early: false,
-        short_notice: false,
-        short_notice_deduction: 0,
         overstay_from_day: '2026-10-10',
         overstay_days: 15,
         overstay_penalty_per_day: 50000,
@@ -218,7 +131,6 @@ describe('ReturnPreviewService.preview', () => {
       openReturn = {
         id: 'return-1',
         scheduledAt: new Date('2026-10-22T05:00:00.000Z'),
-        noticeFrom: new Date('2026-10-01T00:00:00.000Z'),
         returnRules: { noticeDays: 30, penaltyPercent: 150 },
       };
 

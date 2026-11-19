@@ -1,5 +1,6 @@
 import { Contract, type ContractDocument } from '@entities/contract.entity';
 import type { AuthUser } from '@modules/auth/types/auth-user';
+import { NotificationsService } from '@modules/notifications/notifications.service';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { DomainException, notFound } from '@shared/exceptions/domain.exception';
 import { ErrorCode } from '@shared/models/api-response';
@@ -7,6 +8,7 @@ import { ContractStatus } from '@storage/types';
 import { DataSource, IsNull } from 'typeorm';
 import { resolveContractAccess } from './contract-access.util';
 import type { ContractDocumentDto } from './dto/contract-documents.dto';
+import { activateShelfContractSafely } from './shelf-contract.util';
 
 export const CONTRACT_DOCUMENTS_REQUIRED_MESSAGE =
   'Chưa có file hợp đồng đã ký — tải lên trước khi chốt biên nhận.';
@@ -21,7 +23,10 @@ export interface ContractDocumentsResult {
 export class ContractDocumentsService {
   private readonly logger = new Logger(ContractDocumentsService.name);
 
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   /**
    * Replaces the contract's signed files. Check order matters: 404, then 403 (so a stranger
@@ -79,7 +84,16 @@ export class ContractDocumentsService {
       this.logger.log(
         `Contract ${contract.contractNo} files set to ${documents.length} by ${actor.id}`,
       );
-      return { id: contract.id, status: contract.status, documents };
+      // A shelf has no handover: its signed files may be the last thing it was waiting for.
+      const activated =
+        documents.length > 0 &&
+        (await activateShelfContractSafely(em, contract.id, this.notifications, this.logger)) ===
+          'activated';
+      return {
+        id: contract.id,
+        status: activated ? ContractStatus.ACTIVE : contract.status,
+        documents,
+      };
     });
   }
 }

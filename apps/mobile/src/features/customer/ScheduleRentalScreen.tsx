@@ -2,7 +2,7 @@ import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { CalendarBlank, CaretRight } from 'phosphor-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { useBookingSettings, useReturnSettings } from '../../../lib/client-settings';
+import { useBookingSettings } from '../../../lib/client-settings';
 import { formatIsoDate, formatMoney, formatNumber } from '../../../lib/format-vi';
 import type { RentalSchedule } from '../../../lib/hold';
 import { ReceivingSlotsApi } from '../../../lib/receiving-slots-api';
@@ -49,7 +49,6 @@ type Props = {
 export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, onConfirm }: Props) {
   const { rentalMonthsOptions, defaultRentalMonths, minRentalMonths, maxRentalMonths, leadDays } =
     useBookingSettings();
-  const { noticeDays } = useReturnSettings();
   const [pickedStart, setStartDate] = useState(todayIso);
   const [pickedMonths, setPickedMonths] = useState(defaultRentalMonths);
   const [slots, setSlots] = useState<ReceivingDay[]>([]);
@@ -106,7 +105,9 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
   const totalArea = warehouses.reduce((sum, item) => sum + item.areaM2, 0);
 
   const warehouseNames = warehouses.map(rentalName).join(', ');
-  const unitNoun = warehouses.every((item) => item.kind === 'SHELF')
+  // A shelf has no handover: the first month is billed right after the deposit instead.
+  const allShelves = warehouses.every((item) => item.kind === 'SHELF');
+  const unitNoun = allShelves
     ? 'kệ'
     : warehouses.every((item) => item.kind === 'SELF_STORAGE')
       ? 'kho'
@@ -164,7 +165,9 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
           </Pressable>
 
           <View className="flex-row items-center justify-between gap-3 rounded-xl bg-bg-subtle px-3.5 py-2.5">
-            <Text className="text-body-sm text-text-secondary">Nhận bàn giao kho</Text>
+            <Text className="text-body-sm text-text-secondary">
+              {allShelves ? 'Bắt đầu thuê' : 'Nhận bàn giao kho'}
+            </Text>
             <Text className="text-body-sm font-semibold text-text-primary tabular-nums">
               {receivingTime
                 ? `${formatIsoDate(startDate)} · ${formatVnTime(receivingTime)}`
@@ -174,7 +177,9 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
 
           <Dashed />
 
-          <Text className="text-body-md font-semibold text-text-primary">Giờ nhận kho</Text>
+          <Text className="text-body-md font-semibold text-text-primary">
+            {allShelves ? 'Giờ bắt đầu' : 'Giờ nhận kho'}
+          </Text>
           {isLoadingSlots ? (
             <Text className="text-body-sm text-text-secondary">Đang tải khung giờ…</Text>
           ) : timeOptions.length === 0 ? (
@@ -219,13 +224,17 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
         <View className="gap-3 rounded-[20px] border border-border-default bg-bg-card p-4">
           <Text className="text-body-md font-semibold text-text-primary">Chi tiết thanh toán</Text>
           <CostRow
-            caption="Hoàn khi trả kho, sau khi trừ công nợ/phí phát sinh (nếu có)"
+            caption="Hoàn khi trả kho đúng hạn, sau khi trừ công nợ/phí phát sinh (nếu có)"
             label={`Tiền cọc giữ ${warehouses.length} ${unitNoun}`}
             value={formatMoney(deposit)}
           />
           <Dashed />
           <CostRow
-            caption="Thanh toán khi nhận kho — chưa thu hôm nay"
+            caption={
+              allShelves
+                ? 'Thanh toán sau khi cọc xong — chưa thu hôm nay'
+                : 'Thanh toán khi nhận kho — chưa thu hôm nay'
+            }
             label="Tiền thuê tháng đầu"
             value="0 đ"
           />
@@ -240,13 +249,13 @@ export function ScheduleRentalScreen({ warehouses, isCreating, error, onBack, on
           </View>
 
           <InlineMessage
-            message={`Tiền cọc được giữ an toàn. Trả trước hạn cần báo trước ${noticeDays} ngày, nếu không sẽ trừ 1 tháng tiền thuê.`}
+            message="Trả kho trước ngày hết hạn hợp đồng sẽ mất toàn bộ tiền cọc."
             type="info"
           />
 
           <Text className="text-caption text-text-secondary tabular-nums">
             Tổng tiền thuê dự kiến {durationMonths} tháng là {formatMoney(totalRent)}, thu theo từng
-            kỳ sau khi nhận kho.
+            kỳ.
           </Text>
         </View>
       </ScrollView>

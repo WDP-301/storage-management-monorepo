@@ -32,10 +32,16 @@ export interface PersistContractInput {
    * an existing deposit row itself (a unit change carries the old deposit onto the new contract).
    */
   captureDeposit?: boolean;
+  /**
+   * Create the empty PRE_HANDOVER inspection (default true). A shelf rented from a booking has
+   * none: it turns ACTIVE on signed files and a paid first month instead (shelf-contract.util).
+   */
+  handover?: boolean;
 }
 
 /**
- * Saves a contract for a booking item plus its empty PRE_HANDOVER inspection, then records its
+ * Saves a contract for a booking item plus its empty PRE_HANDOVER inspection (unless `handover`
+ * is false), then records its
  * deposit in the ledger. Plain function over an EntityManager so the caller's transaction covers
  * the rows (inspection failure rolls back the contract) and BookingsModule can use it without
  * depending on ContractsModule. The deposit is recorded inside a savepoint that never fails the
@@ -92,14 +98,16 @@ export async function persistContract(
 
   // Other fields use entity/DB defaults (evidence/damages=[],
   // inspectedBy/conditionNotes/inspectedAt/finalizedAt=NULL).
-  await manager.save(
-    Inspection,
-    manager.create(Inspection, {
-      contractId: saved.id,
-      type: InspectionType.PRE_HANDOVER,
-      scheduledAt: saved.effectiveAt,
-    }),
-  );
+  if (input.handover !== false) {
+    await manager.save(
+      Inspection,
+      manager.create(Inspection, {
+        contractId: saved.id,
+        type: InspectionType.PRE_HANDOVER,
+        scheduledAt: saved.effectiveAt,
+      }),
+    );
+  }
   if (input.captureDeposit !== false) await captureDepositSafely(manager, saved);
   return saved;
 }

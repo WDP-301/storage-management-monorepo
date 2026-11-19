@@ -1,4 +1,6 @@
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { CalendarBlank, Clock, SignIn, SignOut } from 'phosphor-react-native';
+import { useRef } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { formatIsoDate } from '../../../lib/format-vi';
 import {
@@ -7,6 +9,7 @@ import {
   shiftStatusDisplay,
 } from '../../../lib/staff-shift-state';
 import {
+  AlertSheet,
   Button,
   colors,
   Dashed,
@@ -175,6 +178,7 @@ function ShiftCard({
   const status = shiftStatusDisplay(shift.status);
   const hint = shiftAttendanceHint(shift, nowMs);
   const isToday = shift.work_date === todayIso;
+  const checkOutConfirmRef = useRef<BottomSheetModal>(null);
 
   return (
     <View
@@ -251,7 +255,7 @@ function ShiftCard({
               fullWidth
               label={busy ? 'Đang check-out...' : 'Check-out tan ca'}
               loading={busy}
-              onPress={onCheckOut}
+              onPress={() => checkOutConfirmRef.current?.present()}
               size="sm"
               variant="secondary"
             />
@@ -260,6 +264,16 @@ function ShiftCard({
           )}
         </>
       ) : null}
+
+      <AlertSheet
+        ref={checkOutConfirmRef}
+        message="Xác nhận kết thúc ca làm việc của bạn?"
+        onPrimary={onCheckOut}
+        onSecondary={() => checkOutConfirmRef.current?.dismiss()}
+        primaryLabel="Đồng ý"
+        secondaryLabel="Hủy"
+        title="Check-out tan ca?"
+      />
     </View>
   );
 }

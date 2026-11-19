@@ -51,6 +51,7 @@ export default function SettingsRoute() {
       onChangePassword={() => router.navigate('/(customer)/change-password')}
       onSupport={() => router.navigate('/(customer)/tickets')}
       onTours={() => router.navigate('/(customer)/tours')}
+      onWarehouseRules={() => router.navigate('/(customer)/warehouse-rules')}
       accessCard={<ShelfAccessCard contracts={contracts} />}
     />
   );

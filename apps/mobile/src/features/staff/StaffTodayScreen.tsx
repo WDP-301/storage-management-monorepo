@@ -1,6 +1,7 @@
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import type { TourAppointmentRecord } from '@storage/types';
 import { Clock } from 'phosphor-react-native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { todayIso } from '../../../lib/rental-schedule';
 import { useSession } from '../../../lib/session';
@@ -12,6 +13,7 @@ import {
 } from '../../../lib/staff-shift-state';
 import { TourAppointmentsApi } from '../../../lib/tour-appointments-api';
 import {
+  AlertSheet,
   Button,
   CardTabs,
   colors,
@@ -58,6 +60,7 @@ export function StaffTodayScreen({ onOpen, onOpenTour, onOpenMaintenance, onOpen
 
   const [primaryTab, setPrimaryTab] = useState<PrimaryTab>('todo');
   const [todoKind, setTodoKind] = useState<TodoKind>('handover');
+  const checkOutConfirmRef = useRef<BottomSheetModal>(null);
 
   const openInspections = useStaffInspections('open');
   const doneInspections = useStaffInspections('done');
@@ -216,7 +219,7 @@ export function StaffTodayScreen({ onOpen, onOpenTour, onOpenMaintenance, onOpen
                         : 'Check-out tan ca'
                     }
                     loading={shifts.busyShiftId === todayShift.id}
-                    onPress={() => void shifts.checkOut(todayShift.id)}
+                    onPress={() => checkOutConfirmRef.current?.present()}
                     size="sm"
                     variant="secondary"
                   />
@@ -333,6 +336,18 @@ export function StaffTodayScreen({ onOpen, onOpenTour, onOpenMaintenance, onOpen
           ))
         )}
       </ScrollView>
+
+      <AlertSheet
+        ref={checkOutConfirmRef}
+        message="Xác nhận kết thúc ca làm việc của bạn?"
+        onPrimary={() => {
+          if (todayShift) void shifts.checkOut(todayShift.id);
+        }}
+        onSecondary={() => checkOutConfirmRef.current?.dismiss()}
+        primaryLabel="Đồng ý"
+        secondaryLabel="Hủy"
+        title="Check-out tan ca?"
+      />
     </FlowScreen>
   );
 }

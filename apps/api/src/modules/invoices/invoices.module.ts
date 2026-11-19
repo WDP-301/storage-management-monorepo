@@ -11,6 +11,7 @@ import { InvoicePdfWorker } from './invoice-pdf.worker';
 import { InvoiceScheduleService } from './invoice-schedule.service';
 import { InvoicesController } from './invoices.controller';
 import { InvoicesService } from './invoices.service';
+import { OverdueReminderService } from './overdue-reminder.service';
 
 @Module({
   imports: [
@@ -20,7 +21,13 @@ import { InvoicesService } from './invoices.service';
     UploadModule,
   ],
   controllers: [InvoicesController],
-  providers: [InvoicesService, InvoicePdfService, InvoicePdfWorker, InvoiceScheduleService],
+  providers: [
+    InvoicesService,
+    InvoicePdfService,
+    InvoicePdfWorker,
+    InvoiceScheduleService,
+    OverdueReminderService,
+  ],
   exports: [InvoicesService, InvoicePdfService],
 })
 export class InvoicesModule {}

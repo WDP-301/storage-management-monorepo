@@ -98,7 +98,7 @@ function endingPayload(f: Facts, data: Record<string, unknown>): NotificationPay
     body:
       `HĐ ${f.contractNo} hết hạn ngày ${f.lastDay}. Từ ngày ${f.penaltyFromDay} phí quá hạn ` +
       `${f.penaltyPerDay}/ngày sẽ trừ vào tiền cọc. Trả kho trước ngày ${f.lastDay} là trả trước ` +
-      'hạn và sẽ mất tiền cọc.',
+      'hạn và sẽ mất tiền cọc. Muốn thuê tiếp, hãy gửi yêu cầu gia hạn trong ứng dụng.',
     data,
   };
 }
@@ -118,13 +118,16 @@ function overduePayload(f: Facts, data: Record<string, unknown>): NotificationPa
  * Same event, manager side: the branch learns a contract went overdue the day it happens, not
  * only after the abandoned threshold — so it can reach the customer while it is early.
  */
-export function managerOverdueNotification(candidate: TermEndCandidate): NotificationPayload {
+export function managerOverdueNotification(
+  candidate: TermEndCandidate,
+  termEndAt: unknown,
+): NotificationPayload {
   return {
     type: NotificationType.CONTRACT_OVERDUE,
     title: `Kho ${candidate.unitCode} quá hạn trả`,
     body:
       `HĐ ${candidate.contractNo} đã hết hạn mà khách chưa đặt lịch trả — phí quá hạn đang chạy. ` +
       'Liên hệ khách để thu hồi kho.',
-    data: { contractId: candidate.contractId },
+    data: { contractId: candidate.contractId, termEndAt },
   };
 }

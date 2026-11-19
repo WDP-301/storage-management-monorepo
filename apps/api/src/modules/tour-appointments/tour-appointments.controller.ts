@@ -18,6 +18,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { ApiErrorResponseDto } from '@shared/models/api-response';
 import { TourAppointmentStatus, UserRole } from '@storage/types';
 import { AssignTourAppointmentDto } from './dto/assign-tour-appointment.dto';
@@ -36,6 +37,9 @@ import type {
   TourAppointmentResponse,
 } from './types/tour-appointment';
 
+/** The contact form is public and every request notifies the branch managers. */
+const CONTACT_LIMIT = { limit: 5, ttl: 60_000 };
+
 @ApiTags('Tour Appointments')
 @Controller('tour-appointments')
 export class TourAppointmentsController {
@@ -44,6 +48,7 @@ export class TourAppointmentsController {
   @Post('contact')
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(OptionalSessionGuard)
+  @Throttle({ default: CONTACT_LIMIT })
   @ApiOperation({
     summary: 'Khách hàng gửi form liên hệ / đăng ký hẹn xem kho',
     description:
@@ -69,6 +74,7 @@ export class TourAppointmentsController {
     description: 'Không tìm thấy chi nhánh hoặc kho tương ứng',
     type: ApiErrorResponseDto,
   })
+  @ApiResponse({ status: 429, description: 'Gửi quá nhiều yêu cầu', type: ApiErrorResponseDto })
   async createContact(
     @Body() dto: CreateContactTourDto,
     @CurrentUser() user?: AuthUser,

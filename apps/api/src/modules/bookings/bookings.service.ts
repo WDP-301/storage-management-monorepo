@@ -7,9 +7,8 @@ import { Payment } from '@entities/payment.entity';
 import { ShiftTemplate } from '@entities/shift-template.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
 import { UnitHold } from '@entities/unit-hold.entity';
-import { UserRoleAssignment } from '@entities/user-role-assignment.entity';
 import { findOverdueInvoiceNos } from '@modules/access/overdue-invoices.query';
-import { isAssignmentActive } from '@modules/auth/role-assignment.util';
+import { activeRoleHolderIds, BACK_OFFICE_ROLES } from '@modules/auth/role-assignment.util';
 import type { AuthUser } from '@modules/auth/types/auth-user';
 import { persistBookedContract } from '@modules/contracts/shelf-contract.util';
 import { HandoverAssignmentService } from '@modules/inspection/handover-assignment/handover-assignment.service';
@@ -765,8 +764,8 @@ export class BookingsService implements OnApplicationBootstrap {
 
   /**
    * A booking that died with money already paid (customer cancelled or the hold expired): every
-   * SePay transfer that fed it goes back into the reconciliation queue, and the managers of the
-   * booked facilities are told to refund — nothing returns the money automatically.
+   * SePay transfer that fed it goes back into the reconciliation queue, and the back office and the
+   * managers of the booked facilities are told to refund — nothing returns the money automatically.
    * Returns the paid total so the caller can log.
    */
   private async flagPaidBookingForRefund(
@@ -798,17 +797,17 @@ export class BookingsService implements OnApplicationBootstrap {
       [booking.id],
     )) as Array<{ facilityId: string }>;
     const facilityIds = facilityRows.map((row) => row.facilityId);
-    if (facilityIds.length === 0) return paid;
-    const assignments = await em.find(UserRoleAssignment, {
-      where: { role: UserRole.FACILITY_MANAGER, facilityId: In(facilityIds) },
-    });
-    const managerIds = [
-      ...new Set(assignments.filter((a) => isAssignmentActive(a)).map((a) => a.userId)),
+    // The back office reconciles and refunds; the branch managers know the customer.
+    const recipientIds = [
+      ...new Set([
+        ...(await activeRoleHolderIds(em, BACK_OFFICE_ROLES)),
+        ...(await activeRoleHolderIds(em, [UserRole.FACILITY_MANAGER], facilityIds)),
+      ]),
     ];
-    if (managerIds.length > 0) {
+    if (recipientIds.length > 0) {
       await this.notifications.createForUsers(
         em,
-        managerIds,
+        recipientIds,
         bookingNeedsRefundNotification(booking, paid.toFixed(2), cause),
       );
     }

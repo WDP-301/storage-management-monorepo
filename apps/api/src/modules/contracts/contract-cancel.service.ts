@@ -27,8 +27,10 @@ export class ContractCancelService {
    * Drops a DRAFT contract the customer never collected (no-show, withdrawn deposit): the
    * contract becomes CANCELLED and its unit goes back on the market. Only a DRAFT can be
    * cancelled — once handover is signed the contract ends through a return inspection.
+   * `keepDeposit` is the manager's call for a no-show; a unit change's destination has no
+   * deposit of its own, so there is nothing to keep.
    */
-  async cancelDraft(contractId: string, actor: AuthUser): Promise<Contract> {
+  async cancelDraft(contractId: string, actor: AuthUser, keepDeposit = false): Promise<Contract> {
     return this.dataSource.transaction(async (em) => {
       // Lock any linked UnitChangeRequest before Contract so the lock order matches
       // ChangeRequestsService.cancel and MoveDaySweepService (UnitChangeRequest -> Contract).
@@ -78,11 +80,13 @@ export class ContractCancelService {
         await em.save(UnitChangeRequest, changeRequest);
       }
 
-      const { settlementId, refundAmount } = await teardownDraftContract(em, {
+      const { settlementId, refundAmount, forfeitedAmount } = await teardownDraftContract(em, {
         contract,
         storageUnitId: item.storageUnitId,
         actorId: actor.id,
         now,
+        keepDeposit: keepDeposit && !changeRequest,
+        notifications: this.notifications,
         ...(changeRequest
           ? {
               contractNote: 'Huỷ do huỷ hợp đồng đích trước bàn giao',
@@ -111,7 +115,7 @@ export class ContractCancelService {
         await this.notifications.createForUsers(
           em,
           [contract.customerId],
-          contractCancelledNotification(contract, settlementId, refundAmount),
+          contractCancelledNotification(contract, settlementId, refundAmount, forfeitedAmount),
         );
       }
       this.logger.log(`Contract ${contract.contractNo} cancelled by ${actor.id}`);

@@ -25,7 +25,7 @@ import { ContractCancelService } from './contract-cancel.service';
 import { ContractDocumentsService } from './contract-documents.service';
 import { ContractQueryService } from './contract-query.service';
 import { ContractsService } from './contracts.service';
-import { CreateContractDto, UpdateContractDto } from './dto/contract.dto';
+import { CancelContractDto, CreateContractDto, UpdateContractDto } from './dto/contract.dto';
 import { ReplaceContractDocumentsDto } from './dto/contract-documents.dto';
 import { FirstRentResponseDto } from './dto/first-rent-response.dto';
 import { ListContractsQueryDto } from './dto/list-contracts-query.dto';
@@ -87,8 +87,12 @@ export class ContractsController {
   @Roles(UserRole.ADMIN, UserRole.OPERATIONS_MANAGER, UserRole.FACILITY_MANAGER)
   @ApiOperation({ summary: 'Cancel a DRAFT contract the customer never collected' })
   @ApiResponse({ status: 409, description: 'Contract is not DRAFT' })
-  cancel(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
-    return this.contractCancel.cancelDraft(id, user);
+  cancel(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CancelContractDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.contractCancel.cancelDraft(id, user, dto.keepDeposit ?? false);
   }
 
   @Get(':id/staff-view')

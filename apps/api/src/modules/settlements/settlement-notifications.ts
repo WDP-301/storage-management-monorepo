@@ -60,18 +60,26 @@ export function settlementApprovedNotification(
 }
 
 /**
- * Tells the customer the branch cancelled their contract before handover — no return, no
- * deductions — and whether the money already taken is queued for a manual refund.
+ * Tells the customer the branch cancelled their contract before handover, whether the money
+ * already taken is queued for a manual refund, and how much deposit was kept for the no-show.
  */
 export function contractCancelledNotification(
   contract: NotifiedContract,
   settlementId: string | null,
   refundAmount: number,
+  forfeitedAmount = 0,
 ): NotificationPayload {
-  const outcome =
+  const refund =
     refundAmount > 0
-      ? `Số tiền đã đóng ${formatVndCurrency(refundAmount)} đang chờ hoàn lại — nhân viên sẽ liên hệ để xác nhận tài khoản nhận.`
-      : 'Hợp đồng chưa phát sinh khoản thanh toán nào cần hoàn.';
+      ? `Số tiền ${formatVndCurrency(refundAmount)} đang chờ hoàn lại — nhân viên sẽ liên hệ để xác nhận tài khoản nhận.`
+      : forfeitedAmount > 0
+        ? ''
+        : 'Hợp đồng chưa phát sinh khoản thanh toán nào cần hoàn.';
+  const forfeit =
+    forfeitedAmount > 0
+      ? `Tiền cọc ${formatVndCurrency(forfeitedAmount)} không được hoàn do không đến nhận kho.`
+      : '';
+  const outcome = [forfeit, refund].filter(Boolean).join(' ');
   return {
     type: NotificationType.CONTRACT_CANCELLED,
     title: 'Hợp đồng đã được hủy',
@@ -81,7 +89,39 @@ export function contractCancelledNotification(
       contractNo: contract.contractNo,
       settlementId,
       refundAmount,
+      forfeitedAmount,
     },
+  };
+}
+
+/** To the back office: a finalized return's deposit settlement is waiting for their approval. */
+export function settlementPendingNotification(
+  contract: NotifiedContract,
+  unitCode: string | null,
+): NotificationPayload {
+  return {
+    type: NotificationType.SETTLEMENT_PENDING_APPROVAL,
+    title: 'Quyết toán chờ duyệt',
+    body:
+      `Hợp đồng ${contract.contractNo}${unitCode ? ` (kho ${unitCode})` : ''} đã chốt trả kho — ` +
+      'cần duyệt quyết toán tiền cọc.',
+    data: { contractId: contract.id, contractNo: contract.contractNo },
+  };
+}
+
+/** To the back office: a contract cancelled before handover left money to transfer back. */
+export function contractRefundPendingNotification(
+  contract: NotifiedContract,
+  settlementId: string,
+  refundAmount: number,
+): NotificationPayload {
+  return {
+    type: NotificationType.CONTRACT_REFUND_PENDING,
+    title: 'Hợp đồng bị hủy — cần hoàn tiền',
+    body:
+      `Hợp đồng ${contract.contractNo} đã hủy trước bàn giao. Cần chuyển khoản hoàn ` +
+      `${formatVndCurrency(refundAmount)} cho khách và xác nhận hoàn tiền.`,
+    data: { contractId: contract.id, contractNo: contract.contractNo, settlementId, refundAmount },
   };
 }
 

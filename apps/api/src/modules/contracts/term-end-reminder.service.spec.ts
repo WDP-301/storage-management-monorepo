@@ -9,6 +9,7 @@ interface Stored {
   userId: string;
   type: string;
   contractId: string;
+  termEndAt: unknown;
   title: string;
   body: string;
   data: Record<string, unknown>;
@@ -63,7 +64,12 @@ describe('TermEndReminderService.run', () => {
     };
     createForUsers = jest.fn(async (_em, userIds: string[], payload) => {
       for (const userId of userIds) {
-        stored.push({ ...payload, userId, contractId: payload.data.contractId });
+        stored.push({
+          ...payload,
+          userId,
+          contractId: payload.data.contractId,
+          termEndAt: payload.data.termEndAt ?? null,
+        });
       }
       return userIds.length;
     });
@@ -129,6 +135,44 @@ describe('TermEndReminderService.run', () => {
       NotificationType.CONTRACT_OVERDUE,
     ]);
     expect(stored[1].title).toBe('Hợp đồng A-01 đã hết hạn');
+  });
+
+  it('warns again for the new term end once the contract is renewed', async () => {
+    await service.run(at('2026-12-10T01:00:00.000Z'));
+    // Renewed by 6 months: the term now ends on 2027-07-10 (last day 2027-07-09).
+    rows = [row({ months: 18 })];
+    const beforeWindow = await service.run(at('2027-06-08T01:00:00.000Z'));
+    const inWindow = await service.run(at('2027-06-09T01:00:00.000Z'));
+
+    expect(beforeWindow).toEqual({ ending: 0, overdue: 0 });
+    expect(inWindow).toEqual({ ending: 1, overdue: 0 });
+    expect(stored[1].data).toMatchObject({ termEndAt: '2027-07-09T17:00:00.000Z' });
+  });
+
+  it('counts a reminder stored without a term end for every term of its contract', async () => {
+    stored = [
+      {
+        userId: 'customer-1',
+        type: NotificationType.CONTRACT_TERM_ENDING,
+        contractId: 'contract-1',
+        termEndAt: null,
+        title: '',
+        body: '',
+        data: {},
+      },
+    ];
+
+    const result = await service.run(at('2026-12-10T01:00:00.000Z'));
+
+    expect(result).toEqual({ ending: 0, overdue: 0 });
+  });
+
+  it('skips contracts with a renewal waiting for the branch', async () => {
+    await service.run(at('2026-12-10T01:00:00.000Z'));
+
+    const [sql, params] = em.query.mock.calls.find(([q]) => String(q).includes('FROM contracts'));
+    expect(sql).toContain('FROM contract_renewals');
+    expect(params).toContain('PENDING');
   });
 
   it('tells the facility managers on the day a contract goes overdue, once', async () => {

@@ -2,6 +2,7 @@ import type { Contract } from '@entities/contract.entity';
 import type { Inspection } from '@entities/inspection.entity';
 import type { Invoice } from '@entities/invoice.entity';
 import { StorageUnit } from '@entities/storage-unit.entity';
+import { activeRoleHolderIds, BACK_OFFICE_ROLES } from '@modules/auth/role-assignment.util';
 import { captureDepositSafely } from '@modules/contracts/deposit-ledger.util';
 import {
   issueRentPeriodInvoice,
@@ -10,6 +11,7 @@ import {
 } from '@modules/invoices/rent-period-invoice.util';
 import type { NotificationsService } from '@modules/notifications/notifications.service';
 import type { NotificationPayload } from '@modules/notifications/types/notification';
+import { settlementPendingNotification } from '@modules/settlements/settlement-notifications';
 import {
   type VoidedInvoice,
   voidUnstartedInvoices,
@@ -96,7 +98,7 @@ export async function issueOwedRentPeriods(
  * 3. only then are periods starting on or after it voided — a strictly later set, so nothing
  *    issued in step 2 is voided;
  * 4. the deposit ledger row is recorded if still missing, never blocking the finalize;
- * 5. the customer is told the deposit is being settled.
+ * 5. the customer is told the deposit is being settled, and the back office that it awaits approval.
  * Locks follow inspection → contract → invoices → deposit.
  */
 export async function applyReturnFinalize(
@@ -122,6 +124,11 @@ export async function applyReturnFinalize(
     em,
     [contract.customerId],
     returnFinalizedNotification(contract, inspection, unit?.code ?? null, returnedOn),
+  );
+  await notifications.createForUsers(
+    em,
+    await activeRoleHolderIds(em, BACK_OFFICE_ROLES),
+    settlementPendingNotification(contract, unit?.code ?? null),
   );
   return { effectiveReturnDay: countedTo, issuedInvoices, voidedInvoices };
 }
